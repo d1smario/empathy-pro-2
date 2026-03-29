@@ -1,0 +1,20 @@
+{
+  "name": "empathy-pro-2",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0 <25.0.0",
+    "npm": ">=7.0.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tooling/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @empathy/web",
+    "build": "npm run build -w @empathy/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint -w @empathy/web"
+  }
+}

@@ -1,0 +1,10 @@
+---
+description: Engine packages must ship with tests and fixtures
+alwaysApply: true
+---
+
+# Testing — engines & deterministic core
+
+- Any package under `packages/domain-*` that implements **deterministic** computation (physiology, bioenergetics, internal load, twin projection) must include **automated tests** (e.g. Vitest) and **golden or fixture inputs** where outputs are numeric or structured.
+- Regression tests are required when changing formulas or unit assumptions.
+- AI / LLM orchestration layers are not golden-tested for prose; test **contracts**, **tool boundaries**, and **fallback behavior** instead.

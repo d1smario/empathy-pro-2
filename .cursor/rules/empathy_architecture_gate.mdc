@@ -1,0 +1,16 @@
+---
+description: Block requests that violate EMPATHY 2.0 architecture
+alwaysApply: true
+---
+
+# EMPATHY Architecture Gate (Pro 2.0)
+
+- EMPATHY Pro 2.0 must follow **`CONSTITUTION.md`**, **`docs/ARCHITECTURE.md`**, and **`docs/TECHNICAL_BLUEPRINT.md`**. Align with V1 principles in `nextjs-empathy-pro` where domains match.
+- If a user request, proposed refactor, API integration, data model, or UI shortcut would violate that architecture, stop immediately.
+- Do not implement the violating request "just for now", as a temporary workaround, or behind parallel paths.
+- Instead, explicitly warn that the request conflicts with EMPATHY architecture and explain which rule it breaks.
+- Ask for confirmation before any change that touches canonical generation flow, builder centrality, digital athlete model consistency, deterministic engines, protected core modules, or architecture-wide contracts.
+- Reject parallel generation logic, duplicate data flows, duplicate provider stacks, and module-local shortcuts when a canonical EMPATHY path already exists.
+- Never choose an external provider as the conceptual base of EMPATHY when the provider only covers a narrow subset of the domain.
+- Builder remains the canonical single-session generator; downstream modules must consume builder-compatible structured outputs.
+- External APIs may enrich or import data, but they must not redefine EMPATHY's core structure.

@@ -6,7 +6,7 @@
 ## Constitution & docs
 
 - [x] `CONSTITUTION.md` con invarianti tecnici + principi prodotto
-- [ ] `docs/ARCHITECTURE.md` operativo (ingest / compute / interpret / app) quando si inizia il codice
+- [x] `docs/ARCHITECTURE.md` operativo (ingest / compute / interpret / app) — aggiornato con LogMeal + Spline
 - [x] `docs/MIGRATION_FROM_V1.md` stub
 
 ## Monorepo / package
@@ -25,6 +25,11 @@
 
 - [ ] Modello eventi normalizzati (o documento snapshot-only)
 - [ ] Adapter unici per device, lab, BIA
+- [ ] **LogMeal**: route server + mapping → `contracts` / `domain-nutrition` (`docs/INTEGRATIONS_LOGMEAL.md`, `packages/integrations-logmeal`)
+
+## Presentazione 3D (training)
+
+- [ ] **Spline**: catalogo `exerciseKey` → scena, lazy load, fallback 2D (`docs/INTEGRATIONS_SPLINE.md`, `packages/integrations-spline`)
 
 ## Application plane
 

@@ -1,0 +1,26 @@
+---
+description: Official EMPATHY module scope and navigation (2.0)
+alwaysApply: true
+---
+
+# EMPATHY Official Module Scope
+
+Product modules for the platform:
+
+- Dashboard
+- Profile
+- Physiology
+- Training
+- Nutrition
+- Health
+- Biomechanics
+- Aerodynamics
+- Athletes (coach area)
+
+Rules:
+
+- Do not add `prototypes` to product navigation.
+- Keep Physiology naming consistent (no legacy "Metabolic Profile/Lab" in nav).
+- New feature pages must map to one of the official modules or `settings`.
+- Any temporary experimental area must stay out of main navigation.
+- Phase 2 "individual health" expands Health and related modules without breaking the generative loop (`docs/PHASE2_HEALTH.md`).

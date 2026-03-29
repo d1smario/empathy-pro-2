@@ -64,6 +64,8 @@ repo-root/
     domain-knowledge/
     integrations-stripe/
     integrations-supabase/
+    integrations-logmeal/   # diario alimentare AI (solo 2.0)
+    integrations-spline/    # viewer / mapping scene 3D esercizi
   apps/
     web/
     api/                    # opzionale

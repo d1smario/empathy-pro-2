@@ -1,0 +1,26 @@
+---
+description: EMPATHY 2.0 architecture constraints and protected modules
+alwaysApply: true
+---
+
+# EMPATHY Architecture Rule
+
+Enforce constraints in:
+
+- `CONSTITUTION.md`
+- `docs/ARCHITECTURE.md`
+- `docs/TECHNICAL_BLUEPRINT.md`
+
+## Mandatory behavior
+
+- Do not refactor auth, routing, or athlete/coach context unless explicitly requested.
+- Do not alter deterministic physiology engine logic unless explicitly requested.
+- Keep AI role limited to interpretation, recommendations, and validation.
+- Generative modules must be non-invasive: no forced redirects, no auth-side effects.
+- Preserve digital athlete model consistency across modules.
+- Prefer incremental, safe changes over broad cross-module rewrites.
+
+## Delivery strategy
+
+- **Empathy Pro 2.0** is the greenfield code track in this repository; V1 remains operational in `nextjs-empathy-pro` until cutover per domain.
+- UI experiments must not trade away stability of auth, roles, or twin consistency.

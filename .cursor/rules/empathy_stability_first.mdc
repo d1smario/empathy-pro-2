@@ -1,0 +1,40 @@
+---
+description: EMPATHY 2.0 stability-first delivery gate (athlete + coach context)
+alwaysApply: true
+---
+
+# EMPATHY Stability-First Rule
+
+Follow this order strictly:
+
+1. Stabilize auth, routing, and **athlete + coach** context (roles, invitations, active athlete for coach).
+2. Stabilize module data loading and navigation.
+3. Run smoke checks on core routes.
+4. Only after stability is confirmed, apply UI/graphics changes.
+
+## Hard constraints
+
+- Protected modules: auth flow, routing guards, active-athlete / coach-athlete resolution, deterministic engines, core schema (`packages/contracts`).
+- Generative modules must use controlled fallback states, never aggressive redirects.
+- If login loops, redirect flicker, or module lockouts appear, stop all UI work immediately.
+- Revert recent non-stability changes before adding new fixes.
+- Never mix "stability fix" and "graphic restyle" in the same patch series.
+
+## Generative guard (mandatory)
+
+- Gate generative execution on stable auth + stable context + required inputs.
+- If prerequisites fail, render a local "safe fallback" state in-module (no global redirect).
+- Do not mutate auth, routing, or athlete/coach context from generative components.
+- Keep deterministic calculations in engines; generative layer is interpretation only.
+
+## Required validation before visual changes
+
+- Access/login remains stable after refresh.
+- No forced redirects on core product modules (`dashboard`, `training`, `nutrition`, `health`, `physiology`, etc.).
+- Active athlete context remains consistent across modules (and coach sees correct roster).
+- Smoke test passes or has documented known exceptions.
+
+## Delivery policy
+
+- Priority: reliability, reproducibility, data clarity.
+- Visual upgrades are allowed only behind a stable baseline.

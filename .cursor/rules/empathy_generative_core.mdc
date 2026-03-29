@@ -1,0 +1,28 @@
+---
+description: EMPATHY definitive generative core and system hierarchy (2.0)
+alwaysApply: true
+---
+
+# EMPATHY Generative Core
+
+- Treat EMPATHY only as this closed loop:
+  `reality data -> physiology engine -> bioenergetics engine -> digital twin -> training/nutrition/recovery -> execution -> real data -> comparison -> adaptation -> system update`
+- Mandatory hierarchy:
+  `Reality > Plan`, `Physiology > UI`, `Internal Load > External`, `Bioenergetics` is a dominant layer.
+- AI is not the physiological decision maker.
+  Deterministic engines compute; AI interprets, compares, retrieves evidence, validates, and orchestrates.
+- Never generate from page-local state, cards, UI defaults, or exercise lists when canonical physiology/twin inputs should exist.
+- `builder` is the canonical single-session generator, but it must read canonical physiology/twin state instead of inventing local physiological baselines.
+- `virya` generates planning structure and requests single-session materialization from `builder`; do not create a parallel single-session logic.
+- `calendar` is the operational hub for planned/executed training, not the biological source of truth.
+- `nutrition`, `fueling`, `analytics`, `recovery`, and downstream modules must consume structured builder/calendar outputs plus physiology/twin state.
+- The digital twin is the unified athlete state and must stay consistent across modules:
+  `metabolism`, `performance`, `recovery`, `fatigue`, `adaptation`, `bioenergetics`, `health_status`.
+- Health and bio layers are transversal modulators:
+  microbiota, blood markers, epigenetics, hormones, BIA/cellular phase hints, and future bioenergetic inputs must enrich physiology and modulate training, nutrition, and recovery.
+- **Multi-discipline:** when power is not canonical (run, swim, nordic ski), internal-load and session models must use discipline-native metrics; harmonize to twin, do not fake cycling power as truth.
+- EMF / emerging energy claims: only where **validated evidence** exists; no speculative medical claims (see `CONSTITUTION.md`).
+- Future modules remain pre-wired architecturally:
+  `biomechanics`, `aerodynamics`, `neuro`, advanced `bioenergetics`, and additional internal-load/sensor systems.
+- **LogMeal** (diario alimentare da immagine): ingest **reality** nutrizionale in `packages/integrations-logmeal`; verità operativa = correzioni utente/coach; vedi `docs/INTEGRATIONS_LOGMEAL.md`.
+- **Spline** (3D esercizi, stile MyFit Coach): solo **presentazione**; catalogo esercizi e builder restano sorgente dati; vedi `docs/INTEGRATIONS_SPLINE.md`.

@@ -67,21 +67,26 @@ Analisi e interpretazione strutturata (sempre con **tracciabilità** e **limiti 
 - Le basi di calcolo storiche sono orientate alla **potenza** (es. ciclismo).
 - In 2.0 occorrono calcoli e modelli **nativi** per **running**, **sci di fondo**, **nuoto**, ecc., dove il dato principale **non è la potenza**: metriche canoniche per disciplina, armonizzazione verso twin e carico interno.
 
+## 10. Diario alimentare (LogMeal) e contenuti 3D (Spline)
+
+- **LogMeal** ([logmeal.com/it](https://logmeal.com/it/)): diario alimentare con **riconoscimento da immagine**; ingest nel layer **reality** nutrizionale, con correzione utente/coach come verità operativa e ricalcolo dinamico (`docs/INTEGRATIONS_LOGMEAL.md`). **Solo in Empathy Pro 2.0**, non in V1.
+- **Spline** ([spline.design](https://spline.design/)): **scene 3D interattive** per **esercizi in palestra** e asset analoghi (esperienza comparabile per chiarezza visiva a prodotti tipo **MyFit Coach**). Il catalogo esercizi resta la sorgente dati; Spline è **presentazione** + mapping `exerciseId` → scena, con fallback 2D (`docs/INTEGRATIONS_SPLINE.md`). Allineamento UI con **Figma** (`docs/DESIGN_SYSTEM_AND_FIGMA.md`).
+
 ---
 
 ## Collegamento repository GitHub
 
-Se il remote non è ancora configurato, dalla root di questo repo:
+Repository pubblico: [github.com/d1smario/empathy-pro-2](https://github.com/d1smario/empathy-pro-2) (branch predefinita `master`).
+
+Per un clone nuovo o un fork:
 
 ```bash
-gh auth login
-gh repo create empathy-pro-2 --private --source=. --remote=origin --push
+git clone https://github.com/d1smario/empathy-pro-2.git
+cd empathy-pro-2
 ```
 
-(Sostituire nome/org se il repo esiste già.) In assenza di `gh`, creare il repository vuoto dalla UI GitHub e poi:
+Se serve creare un **nuovo** remote (es. organizzazione diversa), dalla root del clone:
 
 ```bash
-git remote add origin https://github.com/TUO_ORG/empathy-pro-2.git
-git branch -M main
-git push -u origin main
+gh repo create NOME_REPO --public --source=. --remote=origin --push
 ```

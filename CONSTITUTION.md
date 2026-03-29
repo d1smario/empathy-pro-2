@@ -46,6 +46,11 @@ Il sistema deve poter modellare, collegare e spiegare (a livello di prodotto) in
 
 La **bioimpedenza** è prevista come ingresso strutturato per **stato cellulare / fase metabolica**, integrata con **carico interno** e bioenergetica — vedi `docs/COMMERCIAL_AND_ROLES.md`.
 
+## H. Integrazioni esterne (LogMeal, Spline, token Figma)
+
+- Devono restare ai **confini** (ingest, presentazione, asset): **non** sostituiscono motori, twin o builder.
+- In caso di errore o indisponibilità: **degradazione controllata** (fallback UI, inserimento manuale), **senza** redirect globali né rottura auth — vedi `docs/ARCHITECTURE_SAFETY_AND_RISKS.md`.
+
 ---
 
-*Versione 1.0 — allineata al charter in `docs/PRODUCT_VISION.md`.*
+*Versione 1.1 — allineata al charter in `docs/PRODUCT_VISION.md`.*
