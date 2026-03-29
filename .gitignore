@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Build / Next (when added)
+.next/
+out/
+dist/
+.turbo/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+*.log
+
+# OneDrive / local sync artifacts
+.next.nosync/
