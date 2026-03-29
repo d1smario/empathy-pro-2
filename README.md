@@ -18,4 +18,4 @@ Il codice operativo attuale resta in **`nextjs-empathy-pro`** (repo sorella). Qu
 
 ## GitHub
 
-Dopo `git push`, collegare il remote creato con `gh repo create` (vedi istruzioni in fondo a `docs/PRODUCT_VISION.md` se il push automatico non è disponibile).
+Repository remoto: [https://github.com/d1smario/empathy-pro-2](https://github.com/d1smario/empathy-pro-2).
