@@ -1,0 +1,14 @@
+---
+description: Single canonical athlete memory per athlete_id; coach is access not fork
+alwaysApply: true
+---
+
+# EMPATHY Athlete memory & coach scope (Pro 2.0)
+
+- **Canonical subject key:** all domain state for an individual is scoped to **`athlete_id`**. Do not introduce a second writable source of truth for the same athlete (no parallel "training memory" vs "nutrition memory" without a single merge contract).
+- **Coach:** access via **membership / permissions** and audit (`docs/COMMERCIAL_AND_ROLES.md`). The coach does **not** own a separate twin or duplicate physiological store for the same `athlete_id`.
+- **Writes:** UI and route handlers do **not** write directly to twin/core tables. Use boundary use cases in `packages/domain-*` and `packages/integrations-*` only.
+- **AI:** persist only **validated structured payloads** into the same pipeline as other ingest; never use free text as the numeric source for engines or twin updates.
+- **Reads:** modules read **projections / snapshots / events** filtered by `athlete_id` and authz. Calendar is **operational**; builder is the **canonical single-session generator** and must read canonical physiology/twin inputs from memory.
+- **Scale:** partition and index by `athlete_id`. The anti-pattern is **duplicate divergent truth** for one athlete, not "many athletes = many rows."
+- **Full spec:** `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md`. Conflicts with this rule are architecture violations — stop and ask before implementing.

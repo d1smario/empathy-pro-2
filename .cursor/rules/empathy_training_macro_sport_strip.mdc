@@ -1,0 +1,11 @@
+---
+description: Layout anteprime sport nei macro settore training builder
+globs: apps/web/modules/training/**/*.tsx,apps/web/components/training/**/*.tsx
+alwaysApply: false
+---
+
+# Macro settore — striscia sport
+
+- Dentro ogni **macro-bottone** settore, le anteprime disciplina devono essere **una sola fila orizzontale**: quadratini fissi **affiancati** (`flex flex-row flex-nowrap`, ogni item `shrink-0` con `w-* h-*` uguali).
+- Se non c’è spazio, usare **`overflow-x-auto`** sulla striscia, **non** `grid` con più colonne che va a capo (evita icone “una sotto l’altra” in più righe).
+- La griglia multi-riga resta ammessa solo nella **sezione dettaglio** sotto (scelta disciplina attiva), non nella preview dentro il macro.

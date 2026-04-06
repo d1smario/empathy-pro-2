@@ -1,0 +1,153 @@
+import { NextRequest, NextResponse } from "next/server";
+import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import {
+  TrainingRouteAuthError,
+  requireTrainingAthleteWriteContext,
+} from "@/lib/auth/training-route-auth";
+import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+const NO_STORE = { "Cache-Control": "no-store" as const };
+
+type PlannedWorkoutPayload = PlannedWorkoutInsertPayload;
+
+function toInsertRecord(row: PlannedWorkoutInsertPayload): Record<string, unknown> {
+  const r = clampPlannedWorkoutRow(row);
+  const p: Record<string, unknown> = {
+    athlete_id: r.athlete_id,
+    date: r.date,
+    type: r.type,
+    duration_minutes: r.duration_minutes,
+    tss_target: r.tss_target,
+    kcal_target: r.kcal_target,
+    notes: r.notes,
+  };
+  if (r.kj_target != null) p.kj_target = r.kj_target;
+  return p;
+}
+
+async function memoryOrNull(athleteId: string) {
+  try {
+    return await resolveAthleteMemory(athleteId);
+  } catch {
+    return null;
+  }
+}
+
+/** V1-parity: batch replace (Virya) o insert singolo; clamp Pro2 al posto del guardrail V1. */
+export async function POST(req: NextRequest) {
+  try {
+    const body = (await req.json()) as {
+      row?: PlannedWorkoutPayload;
+      rows?: PlannedWorkoutPayload[];
+      replaceTag?: string;
+      athleteId?: string;
+    };
+
+    if (Array.isArray(body.rows)) {
+      const athleteId = (body.athleteId ?? body.rows[0]?.athlete_id ?? "").trim();
+      if (!athleteId) {
+        return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
+      }
+      const { db } = await requireTrainingAthleteWriteContext(req, athleteId);
+      const payloads = body.rows.map((row) => toInsertRecord(row));
+      if (!payloads.length) {
+        return NextResponse.json({ error: "rows is empty" }, { status: 400, headers: NO_STORE });
+      }
+      if (body.replaceTag && body.athleteId) {
+        const tag = String(body.replaceTag);
+        const { error: delErr } = await db
+          .from("planned_workouts")
+          .delete()
+          .eq("athlete_id", body.athleteId)
+          .ilike("notes", `${tag}%`);
+        if (delErr) {
+          return NextResponse.json({ error: delErr.message }, { status: 500, headers: NO_STORE });
+        }
+      }
+      const { error: insertErr } = await db.from("planned_workouts").insert(payloads);
+      if (insertErr) {
+        return NextResponse.json({ error: insertErr.message }, { status: 500, headers: NO_STORE });
+      }
+      return NextResponse.json(
+        { status: "ok" as const, athleteMemory: await memoryOrNull(athleteId) },
+        { headers: NO_STORE },
+      );
+    }
+
+    if (!body.row) {
+      return NextResponse.json({ error: "Missing row payload" }, { status: 400, headers: NO_STORE });
+    }
+    const aid = String(body.row.athlete_id ?? "").trim();
+    const { db } = await requireTrainingAthleteWriteContext(req, aid);
+    const insertPayload = toInsertRecord(body.row);
+    const { error } = await db.from("planned_workouts").insert(insertPayload);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
+    }
+    return NextResponse.json(
+      { status: "ok" as const, athleteMemory: await memoryOrNull(aid) },
+      { headers: NO_STORE },
+    );
+  } catch (err) {
+    if (err instanceof TrainingRouteAuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
+    }
+    const message = err instanceof Error ? err.message : "Training planned POST failed";
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_STORE });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = (await req.json()) as {
+      id?: string;
+      athleteId?: string;
+      patch?: Partial<PlannedWorkoutPayload>;
+    };
+    if (!body.id || !body.athleteId || !body.patch) {
+      return NextResponse.json({ error: "Missing id, athleteId or patch" }, { status: 400, headers: NO_STORE });
+    }
+    const { db } = await requireTrainingAthleteWriteContext(req, body.athleteId);
+    const { error } = await db.from("planned_workouts").update(body.patch).eq("id", body.id).eq("athlete_id", body.athleteId);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
+    }
+    return NextResponse.json(
+      { status: "ok" as const, athleteMemory: await memoryOrNull(body.athleteId) },
+      { headers: NO_STORE },
+    );
+  } catch (err) {
+    if (err instanceof TrainingRouteAuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
+    }
+    const message = err instanceof Error ? err.message : "Training planned PATCH failed";
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_STORE });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const body = (await req.json()) as { id?: string; athleteId?: string };
+    if (!body.id || !body.athleteId) {
+      return NextResponse.json({ error: "Missing id or athleteId" }, { status: 400, headers: NO_STORE });
+    }
+    const { db } = await requireTrainingAthleteWriteContext(req, body.athleteId);
+    const { error } = await db.from("planned_workouts").delete().eq("id", body.id).eq("athlete_id", body.athleteId);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
+    }
+    return NextResponse.json(
+      { status: "ok" as const, athleteMemory: await memoryOrNull(body.athleteId) },
+      { headers: NO_STORE },
+    );
+  } catch (err) {
+    if (err instanceof TrainingRouteAuthError) {
+      return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
+    }
+    const message = err instanceof Error ? err.message : "Training planned DELETE failed";
+    return NextResponse.json({ error: message }, { status: 500, headers: NO_STORE });
+  }
+}

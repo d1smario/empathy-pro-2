@@ -51,6 +51,13 @@ La **bioimpedenza** è prevista come ingresso strutturato per **stato cellulare 
 - Devono restare ai **confini** (ingest, presentazione, asset): **non** sostituiscono motori, twin o builder.
 - In caso di errore o indisponibilità: **degradazione controllata** (fallback UI, inserimento manuale), **senza** redirect globali né rottura auth — vedi `docs/ARCHITECTURE_SAFETY_AND_RISKS.md`.
 
+## I. Memoria canonica atleta e ingest
+
+- **Una sola linea di verità per `athlete_id`**: twin, preferenze operative, tracce strutturate e storici coerenti con la pipeline; **nessun fork** di stato duplicato per lo stesso individuo tra moduli.
+- Il **coach** accede tramite **membership e permessi**, non tramite una seconda memoria fisiologica parallela — vedi `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md`.
+- **Device, laboratorio, sensori continui, file** entrano solo tramite **adapter** e **eventi normalizzati** verso la stessa memoria per `athlete_id` — vedi `docs/INGEST_DEVICE_AND_LAB_MATRIX.md`.
+- **Stripe** e **home pubblica** (piani, registrazione) sono layer **Application** e **billing**: non sostituiscono la chiave `athlete_id` né i motori.
+
 ---
 
-*Versione 1.1 — allineata al charter in `docs/PRODUCT_VISION.md`.*
+*Versione 1.2 — memoria atleta + ingest; charter in `docs/PRODUCT_VISION.md`.*

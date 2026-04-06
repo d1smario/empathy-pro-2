@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="52" y1="46" x2="426" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111B2D"/>
+      <stop offset="1" stop-color="#09101D"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="370" cy="98" r="68" fill="#04BE81" opacity=".12"/>
+  <circle cx="104" cy="356" r="88" fill="#6D3AE8" opacity=".08"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <rect x="306" y="198" width="90" height="18" rx="9" fill="#04BE81"/>
+  <circle cx="232" cy="144" r="24" fill="#D7F7EE"/>
+  <path d="M232 172L204 236L268 270" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M206 232L168 314" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M268 270L322 330" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M206 222L314 214" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#6D3AE8"/>
+  <text x="115" y="79" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">HINGE FOUNDATION</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · BLOCK 1 · POSTERIOR CHAIN</text>
+</svg>

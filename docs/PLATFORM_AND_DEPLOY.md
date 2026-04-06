@@ -27,19 +27,21 @@
 
 ## Vercel
 
-1. **New Project** → import da GitHub `empathy-pro-2`.
-2. **Monorepo**: impostare **Root Directory** su `apps/web` **oppure** lasciare root e usare:
-   - **Install Command**: `npm install` (dalla root del repo, per risolvere workspaces; richiede **npm ≥ 7**).
-   - **Build Command**: `npm run build -w @empathy/web` (o equivalente documentato nel `package.json` root).
-3. Aggiungere **Environment Variables** (Production + Preview):
+1. **New Project** → import del repo (es. `empathy-pro-2-cursor` / `empathy-pro-2`).
+2. **Monorepo (consigliato):** **Root Directory** = **`apps/web`**. Il file `apps/web/vercel.json` imposta già:
+   - **Install Command**: `cd ../.. && npm install`
+   - **Build Command**: `cd ../.. && npm run build`  
+   Così si installano tutti i workspace (`packages/*`) e si esegue `next build ./apps/web` dalla root del clone.
+3. **Node.js** 20.x (allineato a `engines` nel `package.json` root).
+4. Aggiungere **Environment Variables** (Production + Preview):
    - Supabase (come sopra)
    - `LOGMEAL_API_KEY`, eventuale `LOGMEAL_API_BASE_URL`
    - Eventuali `NEXT_PUBLIC_*` per Spline solo se la runtime lo richiede
-4. **Figma**: non è una variabile Vercel; il team invita designer/dev al file Figma e automatizza **export token** in repo (script locale/CI).
+5. **Figma**: non è una variabile Vercel; il team invita designer/dev al file Figma e automatizza **export token** in repo (script locale/CI).
 
 ## Ordine operativo consigliato (primo deploy)
 
-1. Repo GitHub aggiornato e build locale `npm run build` OK.  
+1. Repo GitHub aggiornato e build locale dalla root: `npm run build` OK (stesso comando di Vercel).  
 2. Progetto Supabase creato + migrazioni (quando esistono).  
 3. Progetto Vercel collegato + env compilate.  
 4. Figma: file master + convenzione token.  

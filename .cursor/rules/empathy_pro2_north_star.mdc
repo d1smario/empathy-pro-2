@@ -1,0 +1,27 @@
+---
+description: Pro 2 north star — this repo is the product; V1 is absorption source; read guiding docs before material changes
+alwaysApply: true
+---
+
+# EMPATHY — Pro 2.0 north star (this repository)
+
+## Intent
+
+- **This codebase** is **Empathy Pro 2.0**: shell, graphics canon (`empathy_pro2_generative_graphics.mdc`, `empathy_pro2_page_canon.mdc`, `empathy_pro2_ui_language.mdc`), and apps under **`CONSTITUTION.md`** and the shared constitutional rules (generative core, architecture gate, stability-first, schema whole-picture).
+- **V1** (`nextjs-empathy-pro`) remains the **primary absorption source** for contracts, engine shapes, knowledge/reality paths, and proven UI logic — ported **adapted**, not imported as a second runtime. Follow `empathy_v1_pro2_repo_separation.mdc` (no cross-repo code imports; Supabase may be shared; align migration intent across products when one DB backs both).
+
+## Before substantial work
+
+For changes that affect **architecture, schema, contracts, generative pipeline surfaces, or cross-module data flow**, **read or re-skim** at least:
+
+1. `CONSTITUTION.md`
+2. `docs/ARCHITECTURE.md` and `docs/TECHNICAL_BLUEPRINT.md` (sections relevant to the change)
+3. `.cursor/rules/empathy_generative_core.mdc` and `empathy_architecture_gate.mdc`
+4. If schema / SQL: `empathy_schema_whole_picture.mdc` + `supabase/migrations/`
+5. When parity with V1 matters: `nextjs-empathy-pro/ARCHITECTURE_RULES.md` and `nextjs-empathy-pro/SYSTEM_CONTEXT.md` (principles, not copy-paste paths)
+
+Do **not** treat local fixes (single routes, one-off SQL) as isolated from this intent: align with **shared DB reality**, **migration order**, and **generative invariants** (single builder path, no parallel session engines).
+
+## Subordination
+
+This rule **does not** override `empathy_architecture_gate.mdc`, `empathy_stability_first.mdc`, `empathy_generative_core.mdc`, or `empathy_schema_whole_picture.mdc`; it **frames why** Pro 2 work must stay compatible with those gates and with absorption from V1.

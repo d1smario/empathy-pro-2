@@ -1,0 +1,12 @@
+---
+description: Diario alimentare — USDA canonico, foto effimera; allineato a V1
+globs: packages/domain-nutrition/**,packages/integrations-logmeal/**,apps/web/**/nutrition/**
+alwaysApply: false
+---
+
+# EMPATHY Pro 2.0 — Nutrition food diary & USDA
+
+- Nutrienti nel diario: **solo** da **USDA FDC** (`fdcId` + quantità), calcolo deterministico. Visione/AI = proposta, non fonte numerica finale.
+- Foto: storage **temporaneo** → analisi → risoluzione FDC → persist → **delete** blob.
+- Non toccare auth, routing globale, twin da UI generativa senza contratto.
+- Spec dettagliata (condivisa con V1): nel repo `nextjs-empathy-pro`, file `docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md`.

@@ -3,6 +3,8 @@ node_modules/
 
 # Build / Next (when added)
 .next/
+.next-dev/
+apps/.empathy-pro2-next-dev/
 out/
 dist/
 .turbo/
@@ -17,6 +19,8 @@ dist/
 Thumbs.db
 .idea/
 *.log
+*.tsbuildinfo
 
 # OneDrive / local sync artifacts
 .next.nosync/
+.vercel

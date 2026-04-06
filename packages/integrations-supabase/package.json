@@ -12,7 +12,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@empathy/contracts": "0.1.0"
+    "@empathy/contracts": "0.1.0",
+    "@supabase/supabase-js": "^2.49.1"
   },
   "devDependencies": {
     "typescript": "^5.7.0"

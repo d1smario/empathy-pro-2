@@ -1,0 +1,12 @@
+---
+description: All devices and lab data enter via normalized ingest adapters
+alwaysApply: true
+---
+
+# EMPATHY Ingest envelope (Pro 2.0)
+
+- **No device-specific logic** inside product modules (training, nutrition, health UI) that bypasses ingest. Every external source (wearable, CGM, Cosmed/VO₂ export, SmO₂, BIA, files) enters through an **adapter** emitting **normalized events** with quality metadata and **`athlete_id`**.
+- **New hardware or file format** = new **adapter + contract mapping** in `packages/contracts` / ingest domain — not a new parallel memory store.
+- **Continuous streams** (e.g. CGM): use time-series storage and **engine-defined aggregates** for twin consumption; do not flood twin with raw high-frequency rows without a documented aggregation policy.
+- **Public marketing / Stripe checkout** live in the Application layer and do **not** replace ingest rules for athlete data (`docs/INGEST_DEVICE_AND_LAB_MATRIX.md`).
+- Integration failures: **controlled degradation** only — no global auth redirects, no unhandled core-path exceptions (`docs/ARCHITECTURE_SAFETY_AND_RISKS.md`).

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="54" y1="42" x2="424" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111B2B"/>
+      <stop offset="1" stop-color="#09101F"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="380" cy="92" r="72" fill="#04BE81" opacity=".12"/>
+  <circle cx="102" cy="362" r="88" fill="#6D3AE8" opacity=".08"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <circle cx="236" cy="148" r="24" fill="#D7F7EE"/>
+  <path d="M236 176V260" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M236 204L180 238" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M236 204L300 182" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M236 260L206 334" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M236 260L274 334" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="174" cy="240" r="16" fill="#6D3AE8" opacity=".92"/>
+  <circle cx="304" cy="180" r="16" fill="#04BE81" opacity=".92"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#04BE81"/>
+  <text x="115" y="79" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">ACCESSORY / HYPERTROPHY</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · ISOLATION / DETAIL WORK</text>
+</svg>

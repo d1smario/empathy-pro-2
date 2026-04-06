@@ -1,6 +1,6 @@
 # EMPATHY Pro 2.0 — Architettura operativa
 
-**Charter:** `docs/PRODUCT_VISION.md` · **Invarianti:** `CONSTITUTION.md` · **Scheletro repo:** `docs/TECHNICAL_BLUEPRINT.md` · **Sicurezza integrazioni:** `docs/ARCHITECTURE_SAFETY_AND_RISKS.md` · **Deploy:** `docs/PLATFORM_AND_DEPLOY.md`
+**Charter:** `docs/PRODUCT_VISION.md` · **Invarianti:** `CONSTITUTION.md` · **Sintesi struttura:** `docs/PLATFORM_STRUCTURE_SUMMARY.md` · **Memoria atleta / coach:** `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md` · **Ingest device & lab:** `docs/INGEST_DEVICE_AND_LAB_MATRIX.md` · **Scheletro repo:** `docs/TECHNICAL_BLUEPRINT.md` · **Sicurezza integrazioni:** `docs/ARCHITECTURE_SAFETY_AND_RISKS.md` · **Deploy:** `docs/PLATFORM_AND_DEPLOY.md` · **Diario alimentare + USDA (spec condivisa con V1):** repo `nextjs-empathy-pro` → `docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md`
 
 ## Piani (layer)
 
@@ -23,6 +23,7 @@ Flusso logico: ingest → compute → twin; ingest e twin alimentano knowledge; 
 - Un solo generatore canonico di **singola sessione** (builder); calendario operativo; niente motori paralleli per la stessa responsabilità.
 - `Reality > Plan`, `Physiology > UI`, **carico interno > esterno**.
 - Modifiche coach su dati atleta: permessi espliciti, audit (vedi `docs/COMMERCIAL_AND_ROLES.md`).
+- **Memoria:** letture/scritture per `athlete_id` come da `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md`; **ingest** come da `docs/INGEST_DEVICE_AND_LAB_MATRIX.md`.
 
 ---
 

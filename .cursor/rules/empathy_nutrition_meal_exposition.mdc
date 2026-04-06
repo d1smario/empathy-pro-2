@@ -1,0 +1,28 @@
+---
+description: Grafica exposition meal plan EMPATHY (reference PRO 2 / cyber neon, senza foto cibo).
+globs: apps/web/modules/nutrition/**/*, apps/web/lib/nutrition/meal-exposition-helpers.ts, apps/web/app/globals.css, apps/web/styles/tokens.css
+---
+
+# Nutrition · Meal plan exposition
+
+## Obiettivo visivo
+- Tema **dark cyber / glass**: card profonde, bordi luminosi magenta/viola, gradient banner sugli header pasto.
+- **Niente fotografia di cibi**: solo icone (lucide) in tile, tipografia e badge.
+- **Griglia pasti**: 2 righe × 3 colonne (responsive): Colazione, Spuntino, Pranzo, Merenda, Cena, **Pre-sonno** (placeholder fuori solver 5 slot).
+
+## Token (CSS)
+- Variabili in `apps/web/styles/tokens.css`: `--nutri-expo-*`.
+- Classi in `apps/web/app/globals.css`: prefisso `.empathy-meal-expo-*`.
+
+## Struttura componente
+- Vista **meal plan** (composizione pagina): `apps/web/modules/nutrition/views/NutritionMealPlanView.tsx` (`NutritionMealPlanDailyTargets`, `NutritionMealPlanLeadPanels`, `NutritionMealPlanWorkspace`).
+- Griglia slot: `apps/web/modules/nutrition/constants/nutrition-meal-plan-grid.ts` (`NUTRITION_MEAL_GRID`).
+- Card e legenda: `apps/web/modules/nutrition/components/EmpathyMealPlanExpositionCard.tsx`
+- Stime IG / macro: `apps/web/lib/nutrition/meal-exposition-helpers.ts`
+
+## Regole architetturali
+- **Reality > plan**: numeri da `nutrients` item se presenti; altrimenti stime da `macroRole` + kcal.
+- Nessun path generativo parallelo: solo presentazione dati solver / assemblatore.
+
+## Pittura globale Pro 2
+- Vedere **`empathy_pro2_generative_graphics.mdc`** per token, classi `.empathy-meal-*`, `.viz-card.builder-panel`, shell e divieto doppia griglia meal plan.

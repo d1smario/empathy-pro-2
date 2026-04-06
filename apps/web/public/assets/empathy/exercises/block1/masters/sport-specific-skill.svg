@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="58" y1="42" x2="426" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#121C2D"/>
+      <stop offset="1" stop-color="#0A1120"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="380" cy="90" r="78" fill="#6D3AE8" opacity=".15"/>
+  <circle cx="100" cy="362" r="88" fill="#04BE81" opacity=".09"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <circle cx="226" cy="144" r="24" fill="#D7F7EE"/>
+  <path d="M226 172V254" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M226 196L182 224" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M226 196L288 164" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M226 254L194 334" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M226 254L280 322" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <circle cx="338" cy="152" r="10" fill="#04BE81"/>
+  <circle cx="362" cy="186" r="10" fill="#6D3AE8"/>
+  <circle cx="324" cy="214" r="10" fill="#EEEEE3" opacity=".92"/>
+  <path d="M338 152L362 186L324 214" stroke="#97A6B4" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#6D3AE8"/>
+  <text x="115" y="79" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">SPORT SPECIFIC SKILL</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · TECHNIQUE / COMPETITION / TRANSFER</text>
+</svg>

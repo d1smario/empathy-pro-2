@@ -1,0 +1,22 @@
+---
+description: Obiettivo e scaletta generativa prima di tutto; deviazioni solo per sbloccare.
+alwaysApply: true
+---
+
+# EMPATHY Pro 2 — disciplina roadmap
+
+## Ordine di lavoro
+
+1. **Obiettivo attuale** = la fase / milestone definita nella scaletta generativa del progetto (es. card "Roadmap · fasi" in Settings, blueprint `docs/`).
+2. **Andare dritti** verso quell’obiettivo: API thin, modulo dominio, dati reali minimi end-to-end — senza aprire filoni paralleli (UI accessoria, tooling, "nice to have").
+3. **Se serve risolvere un blocco** (auth, env, RLS, build): intervento **minimo** necessario, poi **tornare subito** al punto della scaletta da cui ci si era interrotti — non restare sul tema accessorio.
+4. **Non espandere** feature non richieste dalla fase corrente (es. inviti, billing extra, diagnostiche) salvo che la fase le elenchi esplicitamente o siano **prerequisito stretto** per la fase.
+
+## Riferimento scaletta (alto livello)
+
+- Dopo shell + auth + contesto atleta: **Fase 5 — primo modulo con dati reali** (es. training calendar / nutrition: route API + package dominio + lettura Supabase allineata al twin).
+- Knowledge / traces: fasi successive, non mescolate con Fase 5 salvo dipendenza esplicita.
+
+## Comunicazione all’agente
+
+Quando l’utente chiede "procedi" o "continua", **ricalibrare** sulla fase attiva della scaletta; se l’ultimo messaggio era una deviazione, **chiudere** con una riga di stato e **riprendere** il task della fase.

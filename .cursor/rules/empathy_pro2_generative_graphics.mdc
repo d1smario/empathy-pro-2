@@ -1,0 +1,68 @@
+---
+description: Pro 2 · linea grafica generativa (token, CSS, meal plan exposition, pannelli) — riferimento unico per look cyber/glass.
+globs: apps/web/app/globals.css, apps/web/styles/tokens.css, apps/web/modules/nutrition/**/*, apps/web/lib/nutrition/meal-exposition-helpers.ts, apps/web/components/shell/**/*, apps/web/components/generative/**/*
+alwaysApply: false
+---
+
+# EMPATHY Pro 2 — Grafica generativa (implementazione)
+
+Questa regola descrive **come** rendere l’interfaccia generativa Pro 2: palette, classi CSS, componenti meal plan e cosa **non** reintrodurre. Complementare a `empathy_pro2_ui_language.mdc` (densità/controlli) e `empathy_pro2_page_canon.mdc` (struttura pagina Training Builder).
+
+## 1. Principi visivi
+
+- **Canvas:** nero, glass, accenti **viola → rosa → arancio** (`apps/web/styles/tokens.css`, shell `BrutalistAppBackdrop`).
+- **Profondità:** pannelli con bordo luminoso (magenta/viola), blur leggero, **ombra/glow** coerente con `--empathy-shadow-*` e `--nutri-expo-glow`.
+- **Gerarchia:** headline forte, mono per metadati (orari, badge), pochi blocchi per schermata (vedi anche UI language).
+- **Generativo ≠ confusione:** una sola “superficie” pasti nel meal plan (griglia 2×3 + legenda), non due sistemi grafici affiancati.
+
+## 2. Token (obbligatori)
+
+- **Globale Pro 2:** `apps/web/styles/tokens.css` — `--empathy-*` (viole, pink, orange, bordi, shadow).
+- **Nutrition exposition:** stesso file — `--nutri-expo-*` (banner, CHO/PRO/FAT/KCAL, card, bordo, glow).
+- **Import:** `apps/web/app/globals.css` inizia con `@import "../styles/tokens.css";` — non duplicare valori hex nelle regole se esiste già un token.
+
+## 3. Classi CSS canoniche (`globals.css`)
+
+| Classe / prefisso | Uso |
+|-------------------|-----|
+| `.viz-card.builder-panel` | Sezione modulo (vetro cyber, bordo rosa/magenta): **definita in CSS**, non lasciare “classi vuote”. |
+| `.btn-nutrition-cta` | CTA primaria nutrizione (gradient viola→rosa→arancio). |
+| `.nutrition-ui-chip` / `.active` | Chip / filtri secondari. |
+| `.empathy-meal-plan-expo-shell` | Contenitore unico attorno a griglia pasti + legenda (piano base o generato). |
+| `.empathy-meal-expo-*` | Griglia 2×3, card pasto, banner, macro, barra IG, pods alimenti, **legenda IG**. |
+
+Non introdurre un secondo sistema parallelo (es. vecchie card “4 pill + lista” solo per il piano base) senza aggiornare questa regola.
+
+## 4. Shell pagina prodotto
+
+- **Moduli con contenuto lungo (es. Nutriomics):** `Pro2ModulePageShell` (`apps/web/components/shell/Pro2ModulePageShell.tsx`) — gradient `zinc-950 → black`, header con eyebrow + titolo, `max-w-6xl`.
+- **Layout app:** `(shell)/layout.tsx` → `ShellWithAdaptiveBackdrop` + sidebar; le pagine restano **sopra** il backdrop, non sostituirlo con layout V1 (`app-shell`, temi white/grey non documentati).
+
+## 5. Meal plan — un solo percorso visivo
+
+- **Componente card:** `EmpathyMealPlanExpositionCard` + `EmpathyMealPlanGlycemicLegend`.
+- **Griglia:** `NUTRITION_MEAL_GRID` → `empathy-meal-expo-grid` (3 colonne, 2 righe + pre-sonno).
+- **Dati:**
+  - Piano **generato** (assembler): `buildExpositionItemsFromPlan`, `sumVisibleSlotMacros` su slot API.
+  - Piano **base** (pathway / righe dry): `buildExpositionItemsFromDryLines` in `meal-exposition-helpers.ts` — stessa card, stessi pods/IG stimati (educativi).
+- **Pre-sonno:** sempre card `placeholder` (fuori solver 5 slot).
+- **Pathway / USDA / FDC approfonditi:** non duplicare tre livelli di `<details>` per pasto nella vista principale; rimando a **Integrazione** (`/nutrition/integration`) o a sezioni dedicate, con un solo link/chip coerente.
+- **Vietato nel meal plan:** fotografie alimenti; doppia griglia “exposition + vecchie article gradient”; label “Piano alimentare” come blocco principale al posto di **ALIMENTI DETTAGLIATI** dentro la card exposition.
+
+## 6. IG e macro (solo presentazione)
+
+- IG in UI sono **stime educative** da composizione macro (non tabella IG ufficiale per alimento).
+- Numeri “reali” quando esistono: `nutrients` sugli item del piano assemblato; altrimenti ripartizioni da `macroRole` / dry lines come da helper.
+
+## 7. Checklist per modifiche (agenti)
+
+1. Tocchi `NutritionPageView` meal-plan? Verifica **una** shell `empathy-meal-plan-expo-shell` e **una** griglia `empathy-meal-expo-grid` per stato (base vs generato).
+2. Nuovo pannello nutrizione? Usa `viz-card builder-panel` (o estendi i token in `globals.css` in modo coerente).
+3. Non reintrodurre `data-ui-theme` / temi surface non definiti in token.
+4. Non rompere `empathy_architecture_gate.mdc` / `empathy_generative_core.mdc`: grafica = presentazione; numeri canonici restano pipeline deterministiche.
+
+## 8. Riferimenti incrociati
+
+- Dettaglio solo meal exposition: `empathy_nutrition_meal_exposition.mdc`.
+- Densità e generative hub: `empathy_pro2_ui_language.mdc`.
+- Template pagina training: `empathy_pro2_page_canon.mdc` + `docs/PRO2_UI_PAGE_CANON.md` (se presente nel repo).

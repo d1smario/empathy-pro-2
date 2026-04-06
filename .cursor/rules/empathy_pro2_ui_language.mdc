@@ -1,0 +1,40 @@
+---
+description: Pro 2.0 UI language — minimal density, hi-tech palette, distinct from V1
+alwaysApply: true
+---
+
+# EMPATHY Pro 2.0 — UI language (generative & product)
+
+## Separation from V1
+
+- **Pro 2.0 must not reuse V1’s information architecture or layout habits** (dense side-by-side columns, long label stacks, multi-selector panels, table-first screens).
+- Exposure is **intentionally different**: fewer simultaneous objects on screen, more **step-based** or **overlay** depth.
+
+## Density & controls (hard preference)
+
+- **Default surface**: almost only **primary actions (buttons)**. One clear main action per view when possible.
+- **Secondary**: **dropdowns / selects / tendine** only for mode, context, or discrete choice that cannot be a button row without clutter.
+- **Input**: **short value fields** (numbers, units, compact text) when the user supplies reality — not paragraph forms or long copy blocks in the main flow.
+- **Avoid by default**: wide data tables, multi-column forms, grids of toggles, walls of micro-labels, duplicate text (title + subtitle + helper + caption for the same thing).
+
+## Canonical page template (structure, palette, geometry)
+
+- **Reference implementation:** `apps/web/modules/training/views/TrainingBuilderRichPageView.tsx` (Training · Builder). New Pro 2 product pages should **mirror** its shell (`max-w-6xl`, section cards `rounded-2xl` + accent borders `/25`, KPI grid, compact control tiles, macro 2×2 + horizontal sport strip, multicolor `SportDisciplineGlyph`).
+- **Written spec:** `docs/PRO2_UI_PAGE_CANON.md` — single source for layout, sector colors (`sport-macro-palette.ts`), icon rules, and checklist. Update that doc when the template evolves by design decision.
+
+## Visual line
+
+- **Product chrome** matches **`/preview` marketing demo**: black canvas, matrix/orbs/grid via `BrutalistAppBackdrop`, glass cards `bg-white/5 border-white/10`, gradients purple → pink → orange — see `apps/web/components/shell/BrutalistAppBackdrop.tsx` and `apps/web/styles/tokens.css`.
+- **Generative modules** (`training`, `nutrition`, `physiology`, `health`, `biomechanics`, `aerodynamics`): **matrix off**, main column **minimal** — centered, typographic hierarchy light, **one short line** of copy, then **`GenerativeFocusIsland`** (single `ModeSelect` + one primary `Pro2Button`, further actions as secondary links) — see `apps/web/components/generative/`. Wired via `GenerativeModuleSurface` / `isGenerativeProductModule` in `apps/web/core/navigation/generative-modules.ts`. No dense cards, no multi-section dumps on first paint.
+- Prefer primitives in **`apps/web/components/ui/empathy/`** (`ActionBar`, `Pro2Button`, `Pro2Link`, `ModeSelect`, `CompactValueField`) before inventing new control chrome.
+- New screens and generative layouts must **align with this palette and sparsity**, not bolt on V1-style cards and forms.
+
+## Generative & AI-assisted UI
+
+- When proposing or building UI (including LLM-suggested layouts), **enforce the same rules**: prefer **buttons → optional dropdown → value inputs**; push detail to **second step, sheet, or drill-down**.
+- Do not “fill the page” with controls; **empty space and hierarchy** are part of the product.
+
+## Architecture & stability
+
+- This rule does **not** override `empathy_architecture_gate.mdc`, `empathy_generative_core.mdc`, or `empathy_stability_first.mdc`: no auth/routing side effects, no parallel generation pipelines.
+- **Safe fallbacks** stay **minimal** (short message + one primary action), not dense debug panels.

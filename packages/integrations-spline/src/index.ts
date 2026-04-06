@@ -9,3 +9,9 @@ export type ExerciseSplineSceneRef = {
   exerciseKey: string;
   sceneUrl: string;
 };
+
+export function splineSceneBaseUrlFromEnv(get: (key: string) => string | undefined): string | null {
+  const raw = get("SPLINE_SCENE_BASE_URL");
+  if (!raw?.trim()) return null;
+  return raw.replace(/\/+$/, "");
+}

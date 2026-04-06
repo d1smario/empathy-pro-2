@@ -5,7 +5,7 @@ alwaysApply: true
 
 # EMPATHY Architecture Gate (Pro 2.0)
 
-- EMPATHY Pro 2.0 must follow **`CONSTITUTION.md`**, **`docs/ARCHITECTURE.md`**, and **`docs/TECHNICAL_BLUEPRINT.md`**. Align with V1 principles in `nextjs-empathy-pro` where domains match.
+- EMPATHY Pro 2.0 must follow **`CONSTITUTION.md`**, **`docs/ARCHITECTURE.md`**, **`docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md`**, **`docs/INGEST_DEVICE_AND_LAB_MATRIX.md`**, and **`docs/TECHNICAL_BLUEPRINT.md`** (use what exists in this repo). **V1 alignment:** where domains match, principles in `nextjs-empathy-pro/ARCHITECTURE_RULES.md` and `nextjs-empathy-pro/SYSTEM_CONTEXT.md` apply; do not introduce patterns V1 explicitly forbids (parallel generative paths, provider-as-source-of-truth for core structure).
 - If a user request, proposed refactor, API integration, data model, or UI shortcut would violate that architecture, stop immediately.
 - Do not implement the violating request "just for now", as a temporary workaround, or behind parallel paths.
 - Instead, explicitly warn that the request conflicts with EMPATHY architecture and explain which rule it breaks.

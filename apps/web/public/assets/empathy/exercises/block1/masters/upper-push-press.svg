@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="68" y1="42" x2="420" y2="428" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111B2B"/>
+      <stop offset="1" stop-color="#0B1221"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="382" cy="86" r="76" fill="#6D3AE8" opacity=".12"/>
+  <circle cx="102" cy="360" r="86" fill="#04BE81" opacity=".08"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <circle cx="238" cy="138" r="24" fill="#D7F7EE"/>
+  <path d="M238 166V258" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M238 194L176 174" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M238 194L316 160" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M238 258L204 334" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M238 258L280 332" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <rect x="318" y="136" width="24" height="76" rx="12" fill="#04BE81"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#04BE81"/>
+  <text x="115" y="79" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">UPPER PUSH / PRESS</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · BLOCK 1 · CHEST / SHOULDERS / TRICEPS</text>
+</svg>

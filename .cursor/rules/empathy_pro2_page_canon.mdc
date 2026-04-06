@@ -1,0 +1,13 @@
+---
+description: Pro 2.0 — pagina canone (struttura, palette, icone); allineamento a Training Builder
+globs: apps/web/modules/**/*.tsx,apps/web/components/**/*.tsx
+alwaysApply: false
+---
+
+# Pro 2.0 page canon
+
+- **Model page:** `TrainingBuilderRichPageView` — use it as the template for **page shell**, **section cards** (border accent `/25`, tinted bg), **KPI row**, **compact input tiles**, and **navigation/header** rhythm.
+- **Spec:** read and follow `docs/PRO2_UI_PAGE_CANON.md` before building or refactoring major product views.
+- **Sport macro UI:** macro grid `grid-cols-2`; inside each macro, sport previews = **one horizontal row** of fixed squares + `overflow-x-auto` — see `empathy_training_macro_sport_strip.mdc`.
+- **Discipline icons:** `SportDisciplineGlyph` — filled multicolor SVG, `viewBox 0 0 36 36`, no white-only `currentColor` as the primary look; new glyphs + `SportGlyphId` + palette chip together.
+- **Do not** revert to V1-style dense tables or wall-of-labels on first paint; `empathy_pro2_ui_language.mdc` still governs density and generative surfaces.

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="56" y1="44" x2="428" y2="432" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111C2B"/>
+      <stop offset="1" stop-color="#091120"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="380" cy="88" r="74" fill="#00C9A7" opacity=".14"/>
+  <circle cx="96" cy="364" r="86" fill="#6D3AE8" opacity=".08"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <circle cx="240" cy="146" r="24" fill="#D7F7EE"/>
+  <path d="M240 174L226 246L280 268" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M228 212L180 240" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M280 218L328 240" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M226 246L188 320" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M280 268L336 294" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <rect x="120" y="246" width="50" height="36" rx="8" fill="#00C9A7"/>
+  <rect x="334" y="282" width="64" height="28" rx="8" fill="#00C9A7"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#00C9A7"/>
+  <text x="115" y="79" fill="#081120" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">HYROX LOCOMOTION</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · SLED / RUN / CARRY</text>
+</svg>

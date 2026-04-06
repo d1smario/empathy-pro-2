@@ -1,0 +1,68 @@
+/**
+ * Tema allineato a `/preview`: nero, glass, accenti purple/pink/orange (Tailwind 500).
+ * Canvas animato: `BrutalistAppBackdrop`.
+ */
+:root {
+  --empathy-violet: #a855f7;
+  --empathy-violet-bright: #9333ea;
+  --empathy-violet-deep: #7e22ce;
+  --empathy-violet-soft: #c084fc;
+  --empathy-violet-muted: rgba(168, 85, 247, 0.18);
+  --empathy-pink: #ec4899;
+  --empathy-pink-hot: #db2777;
+  --empathy-orange: #f97316;
+  --empathy-orange-bright: #ea580c;
+
+  --empathy-void: #000000;
+  --empathy-canvas: #000000;
+  --empathy-canvas-mid: #0a0a0a;
+  --empathy-elevated: #111111;
+  --empathy-surface: rgba(255, 255, 255, 0.05);
+  --empathy-surface-solid: rgba(10, 10, 10, 0.85);
+  --empathy-sidebar: rgba(0, 0, 0, 0.55);
+
+  --empathy-border: rgba(255, 255, 255, 0.1);
+  --empathy-border-hot: rgba(236, 72, 153, 0.35);
+  --empathy-border-orange: rgba(249, 115, 22, 0.35);
+
+  --empathy-text: #ffffff;
+  --empathy-text-muted: #9ca3af;
+  --empathy-text-dim: #6b7280;
+
+  --empathy-glow-violet: rgba(168, 85, 247, 0.45);
+  --empathy-glow-pink: rgba(236, 72, 153, 0.35);
+  --empathy-glow-orange: rgba(249, 115, 22, 0.35);
+
+  --empathy-radius: 14px;
+  --empathy-radius-sm: 10px;
+  --empathy-shadow-sm: 0 0 0 1px rgba(168, 85, 247, 0.12), 0 8px 32px rgba(0, 0, 0, 0.5);
+  --empathy-shadow-md: 0 0 0 1px rgba(236, 72, 153, 0.15), 0 12px 48px rgba(0, 0, 0, 0.55),
+    0 0 80px rgba(168, 85, 247, 0.12);
+  --empathy-shadow-glow: 0 0 40px rgba(168, 85, 247, 0.35), 0 0 80px rgba(236, 72, 153, 0.15);
+
+  /* Nutrition · meal plan / fueling (Figma PRO 2: jewel tones, no muddy browns) */
+  --nutri-expo-pink: #f472b6;
+  --nutri-expo-magenta: #e879f9;
+  --nutri-expo-violet: #a78bfa;
+  --nutri-expo-banner0: #d946ef;
+  --nutri-expo-banner1: #fb923c;
+  --nutri-expo-cho: #60a5fa;
+  --nutri-expo-cho-bg: rgba(30, 64, 175, 0.55);
+  --nutri-expo-pro: #ff8a4c;
+  --nutri-expo-pro-bg: rgba(180, 60, 20, 0.42);
+  --nutri-expo-fat: #34d399;
+  --nutri-expo-fat-bg: rgba(6, 95, 70, 0.52);
+  --nutri-expo-kcal: #fb7185;
+  --nutri-expo-kcal-bg: rgba(157, 23, 77, 0.48);
+  --nutri-expo-card: rgba(8, 6, 14, 0.94);
+  --nutri-expo-border: rgba(217, 70, 239, 0.42);
+  --nutri-expo-glow: 0 0 36px rgba(217, 70, 239, 0.18), 0 0 60px rgba(251, 146, 60, 0.08);
+  --nutri-ig-legend-low: #16a34a;
+  --nutri-ig-legend-low-b: #15803d;
+  --nutri-ig-legend-med: #eab308;
+  --nutri-ig-legend-med-b: #ca8a04;
+  --nutri-ig-legend-high: #f97316;
+  --nutri-ig-legend-high-b: #ea580c;
+  --nutri-ig-legend-vhigh: #ec4899;
+  --nutri-ig-legend-vhigh-b: #dc2626;
+}

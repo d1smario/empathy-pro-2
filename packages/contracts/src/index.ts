@@ -1,6 +1,7 @@
 /**
- * Contract-first types shared by apps, domain packages, and (later) API handlers.
- * Port shapes from V1 api module contracts (e.g. api/training/contracts.ts) incrementally; avoid importing V1 at runtime.
+ * Contract-first types shared by apps, domain packages, and API handlers.
+ *
+ * Punto 1 piano Pro 2: modello canonico `./schemas` (no import `@/`), view-model `./api/*`.
  */
 
 export const EMPATHY_PLATFORM_VERSION = "2.0.0-scaffold" as const;
@@ -22,6 +23,24 @@ export type ProductModuleId =
   | "athletes"
   | "settings";
 
+/** Chiavi esaustive: se manca un id del union, TypeScript segnala errore. */
+export const PRODUCT_MODULE_ROUTE_MAP = {
+  dashboard: true,
+  profile: true,
+  physiology: true,
+  training: true,
+  nutrition: true,
+  health: true,
+  biomechanics: true,
+  aerodynamics: true,
+  athletes: true,
+  settings: true,
+} as const satisfies Record<ProductModuleId, unknown>;
+
+export function isProductModuleId(value: string): value is ProductModuleId {
+  return value in PRODUCT_MODULE_ROUTE_MAP;
+}
+
 /** Primary stimulus for internal-load modeling when power is not canonical. */
 export type DisciplineKind =
   | "cycling"
@@ -35,3 +54,8 @@ export type DisciplineContext = {
   kind: DisciplineKind;
   primaryMetricHint?: string;
 };
+
+export * from "./schemas";
+export * from "./api/access";
+export * from "./api/knowledge";
+export * from "./api/profile";

@@ -1,0 +1,24 @@
+---
+description: Schema and SQL changes only after full project + DB structure understanding
+alwaysApply: true
+---
+
+# EMPATHY — Whole-structure gate (Supabase / SQL)
+
+Every change that touches the database, migrations, RLS, paste helpers, or table names **must** start from a deliberate survey of the **entire** relevant structure, not a single file or “strip” in isolation.
+
+## Before writing or editing SQL, migrations, or ad-hoc paste helpers
+
+1. **Read** all migrations under `supabase/migrations/` that relate to the same tables (including ordering and FK targets). If the project shares a Supabase instance with V1, also consider migrations in the V1 repo for tables that exist there.
+2. **Search** the codebase for table/column names (e.g. `orgs`, `coach_athletes`, `org_id`) in `lib/`, `app/api/`, and contracts so app expectations match the DDL.
+3. **Assume** Supabase projects may already carry **non-repo** or **multi-product** tables (FK graphs, composite PKs, shared org models). Do not assume `orgs` is only a minimal scaffold shape.
+4. **Single source of truth**: canonical schema lives in numbered migrations; paste scripts must stay **derivable** from that intent and must document constraints (shared DB, legacy PKs, no `DROP` of referenced PKs).
+5. **No blind paste strips**: if a manual paste diverges from migrations, explain what real-world schemas it supports (empty dev DB vs shared org hub) and what fails otherwise.
+
+## If structure is unknown
+
+- Do not invent repair logic without stating assumptions; prefer asking for `information_schema` / error output / a schema dump, or point to `docs/` + migrations as the contract.
+
+## Relation to other rules
+
+- Does not replace `empathy_stability_first.mdc`, `empathy_architecture_gate.mdc`, or `empathy_secrets_env.mdc`; it **narrows** how schema work is prepared so stability and architecture are not undermined by local fixes.

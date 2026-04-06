@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="480" viewBox="0 0 480 480" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="60" y1="40" x2="420" y2="430" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#101A28"/>
+      <stop offset="1" stop-color="#0A1020"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="480" rx="40" fill="url(#bg)"/>
+  <circle cx="386" cy="92" r="74" fill="#6D3AE8" opacity=".12"/>
+  <circle cx="106" cy="370" r="92" fill="#04BE81" opacity=".09"/>
+  <rect x="38" y="38" width="404" height="404" rx="28" stroke="#D7F7EE" opacity=".12"/>
+  <rect x="82" y="116" width="316" height="14" rx="7" fill="#04BE81"/>
+  <circle cx="240" cy="144" r="26" fill="#D7F7EE"/>
+  <path d="M240 174V262" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M240 210L184 232" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M240 210L302 198" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M240 262L196 316" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M196 316L138 352" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M240 262L286 312" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <path d="M286 312H352" stroke="#D7F7EE" stroke-width="12" stroke-linecap="round"/>
+  <rect x="56" y="58" width="118" height="32" rx="16" fill="#04BE81"/>
+  <text x="115" y="79" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="14" font-weight="700" text-anchor="middle">EMPATHY</text>
+  <text x="56" y="404" fill="#EEEEE3" font-family="Arial, sans-serif" font-size="28" font-weight="700">SQUAT FOUNDATION</text>
+  <text x="56" y="432" fill="#97A6B4" font-family="Arial, sans-serif" font-size="14">MASTER VISUAL · BLOCK 1 · LOWER BODY</text>
+</svg>

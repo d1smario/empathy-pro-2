@@ -1,0 +1,1427 @@
+{
+  "version": 1,
+  "generatedAt": "2026-03-21T12:00:00.000Z",
+  "count": 64,
+  "exercises": [
+    {
+      "id": "empathy-b1-backsquat",
+      "slug": "backsquat",
+      "name": "Back Squat",
+      "category": "strength",
+      "sportTags": ["gym", "crossfit", "hyrox", "powerlifting"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes"],
+      "equipment": ["barbell", "rack"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "high",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength"],
+        "metabolicGoals": ["anaerobic_lactic", "anabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["crossfit", "hyrox", "powerlifting"],
+        "technicalTags": ["strength_sport_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-deadlift",
+      "slug": "deadlift",
+      "name": "Deadlift",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting", "crossfit"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["posterior_chain", "glutes"],
+      "equipment": ["barbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength"],
+        "metabolicGoals": ["anaerobic_alactic", "anabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["powerlifting", "crossfit"],
+        "technicalTags": ["strength_sport_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-bench",
+      "slug": "benchpress",
+      "name": "Bench Press",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting", "crossfit"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "shoulders", "triceps"],
+      "equipment": ["barbell", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "low", "balance": "medium", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength"],
+        "metabolicGoals": ["mixed", "anabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["powerlifting", "crossfit"],
+        "technicalTags": ["strength_sport_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-pause-squat",
+      "slug": "pausesquat",
+      "name": "Paused Squat",
+      "category": "strength",
+      "sportTags": ["powerlifting", "gym"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes", "core"],
+      "equipment": ["barbell", "rack"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "medium", "balance": "high", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength", "skill"],
+        "metabolicGoals": ["anaerobic_lactic", "anabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["powerlifting"],
+        "technicalTags": ["strength_sport_specific", "technical_skill"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-rdl",
+      "slug": "romaniandeadlift",
+      "name": "Romanian Deadlift",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting", "hyrox"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["posterior_chain", "hamstrings"],
+      "equipment": ["barbell", "dumbbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength", "hypertrophy"],
+        "metabolicGoals": ["mixed", "anabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-legpress",
+      "slug": "legpress",
+      "name": "Leg Press",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes"],
+      "equipment": ["leg_press"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["strength", "hypertrophy"],
+        "metabolicGoals": ["anaerobic_lactic", "anabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-latpulldown",
+      "slug": "latpulldown",
+      "name": "Lat Pulldown",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "biceps"],
+      "equipment": ["cable", "machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["strength", "hypertrophy"],
+        "metabolicGoals": ["mixed", "anabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-thruster",
+      "slug": "thruster",
+      "name": "Thruster",
+      "category": "conditioning",
+      "sportTags": ["crossfit"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "shoulders", "full_body"],
+      "equipment": ["barbell", "dumbbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "anaerobic_lactic",
+        "secondarySystem": "neuromuscular_power",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "high",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["power", "muscular_endurance"],
+        "metabolicGoals": ["anaerobic_lactic", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["crossfit"],
+        "technicalTags": ["mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-wallball",
+      "slug": "wallball",
+      "name": "Wall Ball",
+      "category": "conditioning",
+      "sportTags": ["crossfit", "hyrox"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "shoulders", "core"],
+      "equipment": ["medicine_ball", "wall_target"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "anaerobic_lactic",
+        "secondarySystem": "neuromuscular_power",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "high",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["power", "muscular_endurance", "coordination"],
+        "metabolicGoals": ["anaerobic_lactic", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["crossfit", "hyrox"],
+        "technicalTags": ["mixed_modal_specific", "race_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-kbswing",
+      "slug": "kettlebellswing",
+      "name": "Kettlebell Swing",
+      "category": "conditioning",
+      "sportTags": ["crossfit", "gym", "hyrox"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["posterior_chain", "glutes"],
+      "equipment": ["kettlebell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_power",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "high",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["power", "muscular_endurance"],
+        "metabolicGoals": ["anaerobic_lactic", "catabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-ttb",
+      "slug": "toestobar",
+      "name": "Toes-to-Bar",
+      "category": "skill",
+      "sportTags": ["crossfit"],
+      "movementPattern": "pull",
+      "muscleGroups": ["core", "lats", "hip_flexors"],
+      "equipment": ["pullup_bar"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "coordination",
+        "secondarySystem": "neuromuscular_strength",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "low",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["coordination", "skill", "stability_neuro"],
+        "metabolicGoals": ["anaerobic_alactic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["crossfit"],
+        "technicalTags": ["technical_skill", "mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-burpee",
+      "slug": "burpee",
+      "name": "Burpee",
+      "category": "conditioning",
+      "sportTags": ["crossfit", "hyrox", "gym"],
+      "movementPattern": "locomotion",
+      "muscleGroups": ["full_body"],
+      "equipment": ["bodyweight"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "anaerobic_lactic",
+        "secondarySystem": "neuromuscular_power",
+        "energySystem": "anaerobic_lactic",
+        "lactateImpact": "high",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["power", "muscular_endurance"],
+        "metabolicGoals": ["anaerobic_lactic", "catabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-sledpush",
+      "slug": "sledpush",
+      "name": "Sled Push",
+      "category": "conditioning",
+      "sportTags": ["hyrox", "crossfit", "gym"],
+      "movementPattern": "carry",
+      "muscleGroups": ["quadriceps", "glutes", "calves"],
+      "equipment": ["sled"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "aerobic",
+        "energySystem": "mixed",
+        "lactateImpact": "high",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["strength", "muscular_endurance"],
+        "metabolicGoals": ["mixed", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["hyrox", "crossfit"],
+        "technicalTags": ["race_specific", "mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-farmer",
+      "slug": "farmercarry",
+      "name": "Farmer Carry",
+      "category": "conditioning",
+      "sportTags": ["hyrox", "crossfit", "gym"],
+      "movementPattern": "carry",
+      "muscleGroups": ["forearms", "traps", "core"],
+      "equipment": ["dumbbell", "kettlebell", "handles"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "aerobic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["strength", "stability_neuro", "muscular_endurance"],
+        "metabolicGoals": ["mixed", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["hyrox", "crossfit"],
+        "technicalTags": ["race_specific", "mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-skierg",
+      "slug": "skierg",
+      "name": "Ski Erg",
+      "category": "endurance",
+      "sportTags": ["hyrox", "crossfit"],
+      "movementPattern": "locomotion",
+      "muscleGroups": ["back", "lats", "triceps", "core"],
+      "equipment": ["ski_erg"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "aerobic",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "aerobic",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "low", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["muscular_endurance"],
+        "metabolicGoals": ["aerobic", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["hyrox", "crossfit"],
+        "technicalTags": ["race_specific", "mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-rowerg",
+      "slug": "rowerg",
+      "name": "Row Erg",
+      "category": "endurance",
+      "sportTags": ["hyrox", "crossfit", "gym"],
+      "movementPattern": "locomotion",
+      "muscleGroups": ["back", "legs", "full_body"],
+      "equipment": ["rower"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "aerobic",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "aerobic",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "low", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["muscular_endurance"],
+        "metabolicGoals": ["aerobic", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["hyrox", "crossfit"],
+        "technicalTags": ["race_specific", "mixed_modal_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-wlunge",
+      "slug": "walkinglunge",
+      "name": "Walking Lunge",
+      "category": "strength",
+      "sportTags": ["hyrox", "gym", "crossfit"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes"],
+      "equipment": ["dumbbell", "barbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "medium" },
+      "purpose": {
+        "functionalGoals": ["strength", "stability_neuro"],
+        "metabolicGoals": ["mixed", "anabolic"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-plank",
+      "slug": "plank",
+      "name": "Plank",
+      "category": "accessory",
+      "sportTags": ["gym", "hyrox", "crossfit", "powerlifting"],
+      "movementPattern": "push",
+      "muscleGroups": ["core", "shoulders"],
+      "equipment": ["bodyweight"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "mobility",
+        "energySystem": "aerobic",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "high", "technique": "low" },
+      "purpose": {
+        "functionalGoals": ["stability_neuro", "mobility"],
+        "metabolicGoals": ["aerobic", "recovery"],
+        "technicalScope": "generic",
+        "technicalSports": [],
+        "technicalTags": []
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-intervalrun",
+      "slug": "intervalrun",
+      "name": "Interval Run",
+      "category": "endurance",
+      "sportTags": ["hyrox", "running"],
+      "movementPattern": "locomotion",
+      "muscleGroups": ["legs", "full_body"],
+      "equipment": ["shoes"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "aerobic",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "aerobic",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "low", "technique": "low" },
+      "purpose": {
+        "functionalGoals": ["muscular_endurance"],
+        "metabolicGoals": ["aerobic", "catabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["hyrox", "running"],
+        "technicalTags": ["race_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-ohpress",
+      "slug": "overheadpress",
+      "name": "Overhead Press",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting"],
+      "movementPattern": "push",
+      "muscleGroups": ["shoulders", "triceps", "core"],
+      "equipment": ["barbell", "dumbbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "low",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "medium", "balance": "high", "technique": "high" },
+      "purpose": {
+        "functionalGoals": ["strength"],
+        "metabolicGoals": ["anaerobic_alactic", "anabolic"],
+        "technicalScope": "sport_specific",
+        "technicalSports": ["powerlifting"],
+        "technicalTags": ["strength_sport_specific"]
+      },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-inclinedbpress",
+      "slug": "inclinedumbbellpress",
+      "name": "Incline Dumbbell Press",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "shoulders", "triceps"],
+      "equipment": ["dumbbell", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-machinechestpress",
+      "slug": "machinechestpress",
+      "name": "Machine Chest Press",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "triceps", "shoulders"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-cablefly",
+      "slug": "cablefly",
+      "name": "Cable Fly",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "shoulders"],
+      "equipment": ["cable"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-weighteddip",
+      "slug": "weighteddip",
+      "name": "Weighted Dip",
+      "category": "strength",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "triceps", "shoulders"],
+      "equipment": ["bodyweight", "dip_belt"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "high" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-lateralraise",
+      "slug": "lateralraise",
+      "name": "Lateral Raise",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["shoulders"],
+      "equipment": ["dumbbell"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-reardeltfly",
+      "slug": "reardeltfly",
+      "name": "Rear Delt Fly",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["upper_back", "shoulders"],
+      "equipment": ["dumbbell", "machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-barbellrow",
+      "slug": "barbellrow",
+      "name": "Barbell Row",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting", "crossfit"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "upper_back", "biceps"],
+      "equipment": ["barbell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-seatedcablerow",
+      "slug": "seatedcablerow",
+      "name": "Seated Cable Row",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "upper_back", "biceps"],
+      "equipment": ["cable"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-weightedpullup",
+      "slug": "weightedpullup",
+      "name": "Weighted Pull-Up",
+      "category": "strength",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "biceps", "core"],
+      "equipment": ["bodyweight", "dip_belt", "pullup_bar"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "high" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-facepull",
+      "slug": "facepull",
+      "name": "Face Pull",
+      "category": "accessory",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "pull",
+      "muscleGroups": ["upper_back", "shoulders", "forearms"],
+      "equipment": ["cable"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "hypertrophy",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-barbellcurl",
+      "slug": "barbellcurl",
+      "name": "Barbell Curl",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["biceps", "forearms"],
+      "equipment": ["barbell", "e-z_curl_bar"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-hammercurl",
+      "slug": "hammercurl",
+      "name": "Hammer Curl",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["biceps", "forearms"],
+      "equipment": ["dumbbell"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-tricepspushdown",
+      "slug": "tricepspushdown",
+      "name": "Triceps Pushdown",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["triceps"],
+      "equipment": ["cable"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-skullcrusher",
+      "slug": "skullcrusher",
+      "name": "Skull Crusher",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["triceps"],
+      "equipment": ["barbell", "e-z_curl_bar", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-frontsquat",
+      "slug": "frontsquat",
+      "name": "Front Squat",
+      "category": "strength",
+      "sportTags": ["gym", "crossfit", "weightlifting"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "core", "glutes"],
+      "equipment": ["barbell", "rack"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "high" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-bulgarian",
+      "slug": "bulgariansplitsquat",
+      "name": "Bulgarian Split Squat",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes", "core"],
+      "equipment": ["dumbbell", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-legextension",
+      "slug": "legextension",
+      "name": "Leg Extension",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-legcurl",
+      "slug": "lyinglegcurl",
+      "name": "Lying Leg Curl",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["hamstrings"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-hipthrust",
+      "slug": "hipthrust",
+      "name": "Hip Thrust",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting", "hyrox"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["glutes", "hamstrings", "posterior_chain"],
+      "equipment": ["barbell", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-standingcalfraise",
+      "slug": "standingcalfraise",
+      "name": "Standing Calf Raise",
+      "category": "accessory",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "squat",
+      "muscleGroups": ["calves"],
+      "equipment": ["machine", "bodyweight"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "aerobic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-seatedcalfraise",
+      "slug": "seatedcalfraise",
+      "name": "Seated Calf Raise",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "squat",
+      "muscleGroups": ["calves"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "aerobic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-hangingkneeraise",
+      "slug": "hangingkneeraise",
+      "name": "Hanging Knee Raise",
+      "category": "accessory",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "core_control",
+      "muscleGroups": ["core", "hip_flexors"],
+      "equipment": ["pullup_bar", "bodyweight"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "coordination",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-abwheel",
+      "slug": "abwheelrollout",
+      "name": "Ab Wheel Rollout",
+      "category": "accessory",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "core_control",
+      "muscleGroups": ["core", "shoulders"],
+      "equipment": ["ab_wheel", "bodyweight"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "neuromuscular_strength",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "high", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-boxjump",
+      "slug": "boxjump",
+      "name": "Box Jump",
+      "category": "conditioning",
+      "sportTags": ["crossfit", "hyrox", "gym"],
+      "movementPattern": "jump_landing",
+      "muscleGroups": ["quadriceps", "glutes", "calves"],
+      "equipment": ["bodyweight", "plyo_box"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_power",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-pushup",
+      "slug": "pushup",
+      "name": "Push-Up",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox", "crossfit"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest", "triceps", "core"],
+      "equipment": ["bodyweight"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_endurance",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-closegripbench",
+      "slug": "closegripbenchpress",
+      "name": "Close-Grip Bench Press",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting"],
+      "movementPattern": "push",
+      "muscleGroups": ["triceps", "chest", "shoulders"],
+      "equipment": ["barbell", "bench"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-pecdeck",
+      "slug": "pecdeck",
+      "name": "Pec Deck",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "push",
+      "muscleGroups": ["chest"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-chestsupportedrow",
+      "slug": "chestsupportedrow",
+      "name": "Chest-Supported Row",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["upper_back", "lats", "biceps"],
+      "equipment": ["dumbbell", "bench", "machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-tbarrow",
+      "slug": "tbarrow",
+      "name": "T-Bar Row",
+      "category": "strength",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "upper_back", "biceps"],
+      "equipment": ["barbell", "machine"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "low", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-straightarmpulldown",
+      "slug": "straightarmpulldown",
+      "name": "Straight-Arm Pulldown",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["lats", "upper_back"],
+      "equipment": ["cable"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-preachercurl",
+      "slug": "preachercurl",
+      "name": "Preacher Curl",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["biceps", "forearms"],
+      "equipment": ["e-z_curl_bar", "bench", "machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-reversecurl",
+      "slug": "reversecurl",
+      "name": "Reverse Curl",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "pull",
+      "muscleGroups": ["forearms", "biceps"],
+      "equipment": ["barbell", "e-z_curl_bar"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-goodmorning",
+      "slug": "goodmorning",
+      "name": "Good Morning",
+      "category": "strength",
+      "sportTags": ["gym", "powerlifting"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["posterior_chain", "hamstrings", "glutes"],
+      "equipment": ["barbell"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_alactic",
+        "energySystem": "anaerobic_alactic",
+        "lactateImpact": "medium",
+        "cnsLoad": "high"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "high" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-singlelegrdl",
+      "slug": "singlelegrdl",
+      "name": "Single-Leg Romanian Deadlift",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["hamstrings", "glutes", "core"],
+      "equipment": ["dumbbell", "kettlebell"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-glutebridge",
+      "slug": "glutebridge",
+      "name": "Glute Bridge",
+      "category": "accessory",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["glutes", "hamstrings"],
+      "equipment": ["bodyweight", "barbell"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-sissyquat",
+      "slug": "sissyquat",
+      "name": "Sissy Squat",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps"],
+      "equipment": ["bodyweight"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-gobletsquat",
+      "slug": "gobletsquat",
+      "name": "Goblet Squat",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox", "crossfit"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes", "core"],
+      "equipment": ["dumbbell", "kettlebell"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-stepup",
+      "slug": "stepup",
+      "name": "Step-Up",
+      "category": "strength",
+      "sportTags": ["gym", "hyrox"],
+      "movementPattern": "squat",
+      "muscleGroups": ["quadriceps", "glutes", "calves"],
+      "equipment": ["bodyweight", "dumbbell", "bench"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "neuromuscular_endurance",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-seatedabduction",
+      "slug": "seatedhipabduction",
+      "name": "Seated Hip Abduction",
+      "category": "accessory",
+      "sportTags": ["gym"],
+      "movementPattern": "hinge",
+      "muscleGroups": ["glutes"],
+      "equipment": ["machine"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "hypertrophy",
+        "secondarySystem": "stability",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "low", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-copenhagensideplank",
+      "slug": "copenhagensideplank",
+      "name": "Copenhagen Side Plank",
+      "category": "accessory",
+      "sportTags": ["gym", "performance"],
+      "movementPattern": "core_control",
+      "muscleGroups": ["core", "hip_flexors", "glutes"],
+      "equipment": ["bodyweight", "bench"],
+      "difficulty": "advanced",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "coordination",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "high", "balance": "high", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-russiantwist",
+      "slug": "russiantwist",
+      "name": "Russian Twist",
+      "category": "accessory",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "core_control",
+      "muscleGroups": ["core"],
+      "equipment": ["bodyweight", "medicine_ball"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "low", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-vup",
+      "slug": "vup",
+      "name": "V-Up",
+      "category": "accessory",
+      "sportTags": ["gym", "crossfit"],
+      "movementPattern": "core_control",
+      "muscleGroups": ["core", "hip_flexors"],
+      "equipment": ["bodyweight"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "stability",
+        "secondarySystem": "coordination",
+        "energySystem": "mixed",
+        "lactateImpact": "low",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "low" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-jumprope",
+      "slug": "jumprope",
+      "name": "Jump Rope",
+      "category": "conditioning",
+      "sportTags": ["crossfit", "hyrox", "gym"],
+      "movementPattern": "locomotion",
+      "muscleGroups": ["calves", "full_body"],
+      "equipment": ["bodyweight", "rope"],
+      "difficulty": "beginner",
+      "physiology": {
+        "primarySystem": "aerobic",
+        "secondarySystem": "anaerobic_lactic",
+        "energySystem": "aerobic",
+        "lactateImpact": "medium",
+        "cnsLoad": "low"
+      },
+      "skills": { "coordination": "high", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    },
+    {
+      "id": "empathy-b1-sledpull",
+      "slug": "sledpull",
+      "name": "Sled Pull",
+      "category": "conditioning",
+      "sportTags": ["hyrox", "crossfit", "gym"],
+      "movementPattern": "carry",
+      "muscleGroups": ["posterior_chain", "forearms", "upper_back"],
+      "equipment": ["sled", "rope"],
+      "difficulty": "intermediate",
+      "physiology": {
+        "primarySystem": "neuromuscular_strength",
+        "secondarySystem": "aerobic",
+        "energySystem": "mixed",
+        "lactateImpact": "high",
+        "cnsLoad": "medium"
+      },
+      "skills": { "coordination": "medium", "balance": "medium", "technique": "medium" },
+      "provenance": [{ "source": "empathy_seed_block1" }]
+    }
+  ]
+}

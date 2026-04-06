@@ -1,10 +1,26 @@
 # Cursor rules — Empathy Pro 2.0
 
-Al primo scaffold applicativo, copiare o riscrivere qui le policy da V1 (`nextjs-empathy-pro/.cursor/rules/empathy_*.mdc`), adattate a:
+Regole **sempre attive** (generative + architettura + stabilità):
 
-- ruoli **atleta / coach**;
-- **Stripe** e segreti;
-- **multi-disciplina** (non solo potenza);
-- limiti **EMF / claim scientifici** (vedi `CONSTITUTION.md`).
+- **`empathy_pro2_north_star.mdc`** — questo repo è Pro 2; V1 è fonte di assorbimento; cosa leggere prima di cambi strutturali.
+- **`empathy_generative_core.mdc`** — loop chiuso reality→twin→moduli; gerarchia Reality/Physiology/Internal load; **AI ≠ motore** sessioni/piani; pipeline deterministica unica; builder/virya/calendar; twin; ingest LogMeal/Spline/diario.
+- **`empathy_architecture_gate.mdc`** — niente scorciatoie che violano CONSTITUTION/docs; builder canonico; no provider come base concettuale del dominio.
+- **`empathy_stability_first.mdc`** — ordine consegna; generative guard (fallback in-modulo, no redirect aggressivi); non mischiare fix stabilità e restyle.
+- **`empathy_schema_whole_picture.mdc`** — SQL/migrations solo dopo survey completa di `supabase/migrations` e uso nel codice.
+- **`empathy_secrets_env.mdc`** — env e segreti.
 
-Finché questo repo è solo documentazione, le regole possono restare vuote.
+Pro 2 **grafica e linguaggio** (spesso `alwaysApply: false` + globs):
+
+- **`empathy_pro2_ui_language.mdc`** — densità, controlli, palette hi-tech.
+- **`empathy_pro2_generative_graphics.mdc`** — token, `globals.css`, meal plan exposition unico, shell `Pro2ModulePageShell`.
+- **`empathy_pro2_page_canon.mdc`** — template pagine (es. builder).
+
+Dominio / integrazioni:
+
+- **`empathy_nutrition_meal_exposition.mdc`**, **`empathy_nutrition_food_diary.mdc`**, **`empathy_training_macro_sport_strip.mdc`**, **`empathy_athlete_memory.mdc`**, **`empathy_ingest_envelope.mdc`**, **`empathy_v1_pro2_repo_separation.mdc`**, ecc.
+
+V1 (`nextjs-empathy-pro/.cursor/rules/`) resta riferimento per testi aggiuntivi; Pro 2 **importa e unifica** qui le regole generative operative.
+
+## Riallineamento agente (testi per Settings / chat)
+
+Vedi **`docs/CURSOR_REALIGN_HOWTO.md`**, **`docs/CURSOR_REALIGN_DAILY.md`**, **`docs/CURSOR_REALIGN_DEEP.md`** — blocco breve per User rules quotidiane e blocco lungo quando la sessione perde la bussola generativa.

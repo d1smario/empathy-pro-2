@@ -1,0 +1,92 @@
+diff --git a/node_modules/next/dist/esm/lib/recursive-delete.js b/node_modules/next/dist/esm/lib/recursive-delete.js
+index 1396636..aebd47e 100644
+--- a/node_modules/next/dist/esm/lib/recursive-delete.js
++++ b/node_modules/next/dist/esm/lib/recursive-delete.js
+@@ -37,19 +37,34 @@ const unlinkPath = async (p, isDir = false, t = 1)=>{
+     }
+     await Promise.all(result.map(async (part)=>{
+         const absolutePath = join(dir, part.name);
++        const pp = join(previousPath, part.name);
++        const isNotExcluded = !exclude || !exclude.test(pp);
+         // readdir does not follow symbolic links
+         // if part is a symbolic link, follow it using stat
+         let isDirectory = part.isDirectory();
+         const isSymlink = part.isSymbolicLink();
+-        if (isSymlink) {
+-            const linkPath = await promises.readlink(absolutePath);
++        if (isSymlink && isNotExcluded) {
+             try {
+-                const stats = await promises.stat(isAbsolute(linkPath) ? linkPath : join(dirname(absolutePath), linkPath));
+-                isDirectory = stats.isDirectory();
+-            } catch  {}
++                const linkPath = await promises.readlink(absolutePath);
++                try {
++                    const stats = await promises.stat(isAbsolute(linkPath) ? linkPath : join(dirname(absolutePath), linkPath));
++                    isDirectory = stats.isDirectory();
++                } catch  {}
++            } catch (e) {
++                const code = isError(e) && e.code;
++                // Windows / cloud sync: reparse points may report as symlinks but readlink() throws EINVAL
++                if (code === "EINVAL" || code === "UNKNOWN") {
++                    await promises.rm(absolutePath, {
++                        recursive: true,
++                        force: true
++                    }).catch(async ()=>{
++                        await unlinkPath(absolutePath, true);
++                    });
++                    return;
++                }
++                throw e;
++            }
+         }
+-        const pp = join(previousPath, part.name);
+-        const isNotExcluded = !exclude || !exclude.test(pp);
+         if (isNotExcluded) {
+             if (isDirectory) {
+                 await recursiveDelete(absolutePath, exclude, pp);
+diff --git a/node_modules/next/dist/lib/recursive-delete.js b/node_modules/next/dist/lib/recursive-delete.js
+index 52230b1..f0fc4dc 100644
+--- a/node_modules/next/dist/lib/recursive-delete.js
++++ b/node_modules/next/dist/lib/recursive-delete.js
+@@ -50,19 +50,34 @@ async function recursiveDelete(/** Directory to delete the contents of */ dir, /
+     }
+     await Promise.all(result.map(async (part)=>{
+         const absolutePath = (0, _path.join)(dir, part.name);
++        const pp = (0, _path.join)(previousPath, part.name);
++        const isNotExcluded = !exclude || !exclude.test(pp);
+         // readdir does not follow symbolic links
+         // if part is a symbolic link, follow it using stat
+         let isDirectory = part.isDirectory();
+         const isSymlink = part.isSymbolicLink();
+-        if (isSymlink) {
+-            const linkPath = await _fs.promises.readlink(absolutePath);
++        if (isSymlink && isNotExcluded) {
+             try {
+-                const stats = await _fs.promises.stat((0, _path.isAbsolute)(linkPath) ? linkPath : (0, _path.join)((0, _path.dirname)(absolutePath), linkPath));
+-                isDirectory = stats.isDirectory();
+-            } catch  {}
++                const linkPath = await _fs.promises.readlink(absolutePath);
++                try {
++                    const stats = await _fs.promises.stat((0, _path.isAbsolute)(linkPath) ? linkPath : (0, _path.join)((0, _path.dirname)(absolutePath), linkPath));
++                    isDirectory = stats.isDirectory();
++                } catch  {}
++            } catch (e) {
++                const code = (0, _iserror.default)(e) && e.code;
++                // Windows / cloud sync: reparse points may report as symlinks but readlink() throws EINVAL
++                if (code === "EINVAL" || code === "UNKNOWN") {
++                    await _fs.promises.rm(absolutePath, {
++                        recursive: true,
++                        force: true
++                    }).catch(async ()=>{
++                        await unlinkPath(absolutePath, true);
++                    });
++                    return;
++                }
++                throw e;
++            }
+         }
+-        const pp = (0, _path.join)(previousPath, part.name);
+-        const isNotExcluded = !exclude || !exclude.test(pp);
+         if (isNotExcluded) {
+             if (isDirectory) {
+                 await recursiveDelete(absolutePath, exclude, pp);
