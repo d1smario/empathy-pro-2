@@ -43,8 +43,9 @@ export default async function AccessPage({
       >
         <div className="text-center">
           <p className="font-mono text-[0.6rem] uppercase tracking-[0.35em] text-gray-500">Access</p>
-          <h1 className="mt-3 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-3xl font-light tracking-tight text-transparent sm:text-4xl">
-            Empathy Pro 2.0
+          <p className="mt-4 text-2xl font-black tracking-[0.12em] text-white sm:text-3xl">EMPATHY</p>
+          <h1 className="mt-2 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
+            Pro 2.0
           </h1>
           <div className="mx-auto mt-4 h-px w-16 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-80" />
         </div>
@@ -63,8 +64,8 @@ export default async function AccessPage({
           <Pro2Link href={safeNext} variant="primary" className="justify-center">
             Vai al prodotto
           </Pro2Link>
-          <Pro2Link href="/pricing" variant="secondary" className="justify-center">
-            Pricing
+          <Pro2Link href="/#piani" variant="secondary" className="justify-center">
+            Piani e abbonamento
           </Pro2Link>
           <Pro2Link href="/" variant="ghost" className="justify-center">
             Home

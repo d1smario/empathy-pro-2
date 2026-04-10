@@ -25,6 +25,7 @@ import { BuilderLifestyleManualComposer } from "@/components/training/BuilderLif
 import { BuilderManualComposer } from "@/components/training/BuilderManualComposer";
 import { BuilderTechnicalManualComposer } from "@/components/training/BuilderTechnicalManualComposer";
 import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
+import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { ResearchTraceScientificPanel } from "@/components/training/ResearchTraceScientificPanel";
 import { ReplicateStatusStrip } from "@/components/training/ReplicateStatusStrip";
@@ -80,21 +81,16 @@ import {
 import { sessionBlocksToChartSegments } from "@/lib/training/engine/block-chart-segments";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
 import { insertPlannedWorkoutFromEngineSession } from "@/modules/training/services/training-planned-api";
+import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
+import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { fetchNutritionViewModel } from "@/modules/nutrition/services/nutrition-api";
+import { fetchProfileViewModel } from "@/modules/profile/services/profile-api";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 
 function initialManualPlanBlocks(): ManualPlanBlock[] {
   return [{ ...defaultManualPlanBlock("steady", "Blocco 1"), minutes: 20, seconds: 0, intensity: "Z2" }];
 }
-
-type WindowOk = {
-  ok: true;
-  from: string;
-  to: string;
-  athleteId: string;
-  planned: PlannedWorkout[];
-  executed: ExecutedWorkout[];
-};
 
 type WindowErr = { ok: false; error?: string };
 
@@ -354,6 +350,8 @@ export default function TrainingBuilderRichPageView() {
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [calendarRefresh, setCalendarRefresh] = useState(0);
+  const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
+  const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -361,6 +359,8 @@ export default function TrainingBuilderRichPageView() {
       setPlanned([]);
       setExecuted([]);
       setRange(null);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
       setErr("Seleziona un atleta attivo (coach) o completa il profilo.");
       setLoading(false);
       return;
@@ -372,21 +372,30 @@ export default function TrainingBuilderRichPageView() {
       try {
         const res = await fetch(`/api/training/planned-window?athleteId=${encodeURIComponent(athleteId)}`, {
           cache: "no-store",
+          headers: await buildSupabaseAuthHeaders(),
         });
-        const json = (await res.json()) as WindowOk | WindowErr;
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | WindowErr;
         if (c) return;
         if (!res.ok || !json.ok) {
           setPlanned([]);
           setExecuted([]);
           setRange(null);
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
           setErr(("error" in json && json.error) || "Lettura calendario non riuscita.");
           return;
         }
         setPlanned(json.planned);
         setExecuted(json.executed ?? []);
         setRange({ from: json.from, to: json.to });
+        setReadSpineCoverage(json.readSpineCoverage ?? null);
+        setTwinContextStrip(json.twinContextStrip ?? null);
       } catch {
-        if (!c) setErr("Errore di rete.");
+        if (!c) {
+          setErr("Errore di rete.");
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
+        }
       } finally {
         if (!c) setLoading(false);
       }
@@ -560,18 +569,18 @@ export default function TrainingBuilderRichPageView() {
     let c = false;
     (async () => {
       try {
-        const res = await fetch(`/api/physiology/profile-latest?athleteId=${encodeURIComponent(athleteId)}`, {
-          cache: "no-store",
-        });
-        const j = (await res.json()) as {
-          ok?: boolean;
-          profile?: { ftpWatts?: number; lt2HeartRate?: number; lt1HeartRate?: number };
-        };
-        if (c || !j.ok || !j.profile) {
+        const vm = await fetchProfileViewModel(athleteId);
+        if (c || vm.error) {
           if (!c) setPhysioHint(null);
           return;
         }
-        const p = j.profile;
+        const phys =
+          vm.physiologyState?.physiologicalProfile ?? vm.athleteMemory?.physiology?.physiologicalProfile;
+        if (!phys) {
+          if (!c) setPhysioHint(null);
+          return;
+        }
+        const p = phys;
         const hint: string[] = [];
         if (typeof p.ftpWatts === "number" && p.ftpWatts > 0) {
           setFtpW(Math.round(p.ftpWatts));
@@ -935,6 +944,15 @@ export default function TrainingBuilderRichPageView() {
         <div className="scroll-mt-28">
           <TrainingSubnav />
         </div>
+
+        {athleteId && readSpineCoverage ? (
+          <TrainingPlannedWindowContextStrip
+            className="mb-4"
+            label="Builder"
+            readSpineCoverage={readSpineCoverage}
+            twinContextStrip={twinContextStrip}
+          />
+        ) : null}
 
         <section
           aria-label="Contesto generativo e asset"

@@ -124,8 +124,9 @@ In Pro 2: aggiunte in `apps/web/app/globals.css` (blocco “V1 builder viz parit
 | 3 | **Training · sessione profonda** | 🟡 | Strip multilivello ✅ in dettaglio pianificato; completion / hero V1 ⏳. |
 | 4 | **Nutrition** | ⏳ | `NutritionMealPlanView` / `LeadPanels` già allineati a buona parte; diff residuo su export/micronutrienti. |
 | 5 | **Profile** | ✅ batch Pro 2 | Route `/profile`, `GET/POST/PUT /api/profile`, `ProfilePageView` + shell/KPI canone, `coerceProfileViewModel`, twin + coverage. |
-| 6 | **Physiology / Health** | ⏳ | Hub e API dedicate; Profile espone link e segnali; moduli full screen dopo training/nutrition. |
+| 6 | **Physiology** | ✅ import batch | Route `(shell)/physiology`, `PhysiologyPageView` + motori (`engines/`, `lib/engines/`), API `GET/POST` physiology (+ history/profile/snapshot), PubMed `GET /api/knowledge/pubmed`, pannello lactate Pro 2. Shell ancora header V1-compat (`ConsolePageHeader` / `ModuleHeroPanel` shim) — opzionale migrazione a `Pro2ModulePageShell`. |
+| 7 | **Health & Bio** | ✅ batch UI + API | Route `(shell)/health`, `HealthPageView` (`Pro2ModulePageShell`): import PDF 6 canali → `POST /api/health/upload-document` (`biomarker_panels`), `GET /api/health/panels-timeline` (Bearer), score globale, radial epigenetica (template), trend ematici (Recharts, demo se <2 punti reali), archivio. **Prossimi step:** parser PDF, storage file, radar infiammazione/microbiota come Figma. |
 
 ---
 
-*Ultimo aggiornamento: Training session · twin/recovery card + header Profile; Profile + auth Bearer + Vercel build.*
+*Ultimo aggiornamento: Health & Bio Pro 2 (import, timeline, upload, grafici).*

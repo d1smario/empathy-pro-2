@@ -40,6 +40,10 @@ function coerceConnectedDeviceProvider(value: unknown): ConnectedDevice["provide
     provider === "polar" ||
     provider === "wahoo" ||
     provider === "coros" ||
+    provider === "suunto" ||
+    provider === "apple_watch" ||
+    provider === "zwift" ||
+    provider === "hammerhead" ||
     provider === "oura" ||
     provider === "whoop" ||
     provider === "cgm"

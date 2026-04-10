@@ -94,7 +94,7 @@ export function buildExpositionItemsFromPlan(
         proteinG: m.proteinG,
         fatG: m.fatG,
         ig,
-        weightG: parseGramsFromPortion(it.portionHint),
+        weightG: parseGramsFromPortion(`${it.portionHint ?? ""} ${it.name}`.trim()),
       };
     });
 }
@@ -277,11 +277,6 @@ export function EmpathyMealPlanExpositionCard({
                     <span className="empathy-meal-expo-pod-dot" />
                     <span className="empathy-meal-expo-pod-lab">FAT</span>
                     <span className="empathy-meal-expo-pod-val">{food.fatG}g</span>
-                  </div>
-                  <div className="empathy-meal-expo-pod empathy-meal-expo-pod--kcal">
-                    <Flame className="h-3.5 w-3.5 shrink-0 opacity-90" strokeWidth={2} aria-hidden />
-                    <span className="empathy-meal-expo-pod-lab">KCAL</span>
-                    <span className="empathy-meal-expo-pod-val">{food.kcal}</span>
                   </div>
                 </div>
                 {showCoachControls && onCoachRemove && onCoachExcludeProfile ? (

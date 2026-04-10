@@ -147,7 +147,7 @@ export function buildRecoverySummaryFromRows(rows: Array<Record<string, unknown>
   };
 }
 
-export async function resolveLatestRecoverySummary(athleteId: string, lookbackDays = 7): Promise<RecoverySummary | null> {
+export async function resolveLatestRecoverySummary(athleteId: string, lookbackDays = 16): Promise<RecoverySummary | null> {
   const supabase = createServerSupabaseClient();
   const today = toDateOnly(new Date());
   const from = addDays(today, -Math.max(1, lookbackDays));
@@ -157,7 +157,7 @@ export async function resolveLatestRecoverySummary(athleteId: string, lookbackDa
     .eq("athlete_id", athleteId)
     .gte("created_at", `${from}T00:00:00.000Z`)
     .order("created_at", { ascending: false })
-    .limit(12);
+    .limit(24);
 
   if (error) {
     throw new Error(error.message);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { physiologicalProfileFromDbRow, type PhysiologicalProfileDbRow } from "@empathy/domain-physiology";
 import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
+import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import {
   coerceTechnicalModuleFocus,
   generateTrainingSession,
@@ -25,7 +25,7 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
  * Materializzazione sessione canonica (builder engine deterministico).
  * Vyria / piano annuale devono richiamare questo stesso percorso per ogni blocco da materializzare — nessun secondo motore sessione.
  *
- * Fase Pro 2: core `generateTrainingSession` + lettura `physiological_profiles` / `twin_states`.
+ * Fase Pro 2: core `generateTrainingSession` + `resolveCanonicalPhysiologyState` + lettura `twin_states`.
  * Scaling operativo recovery/bioenergetica (V1) si aggiunge in incremento senza duplicare la selezione esercizi.
  */
 function coerceAdaptationTarget(v: string): AdaptationTarget | null {
@@ -150,21 +150,8 @@ export async function POST(req: NextRequest) {
   const domainCoerced = coerceDomain(requestRaw.domain ?? null);
   const technicalModuleFocus = coerceTechnicalModuleFocus(requestRaw.technicalModuleFocus);
 
-  const { data: profileRow, error: profErr } = await client
-    .from("physiological_profiles")
-    .select(
-      "id, athlete_id, ftp_watts, cp_watts, lt1_watts, lt1_heart_rate, lt2_watts, lt2_heart_rate, v_lamax, vo2max_ml_min_kg, economy, baseline_hrv_ms, valid_from, valid_to, updated_at",
-    )
-    .eq("athlete_id", athleteId)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (profErr) {
-    return NextResponse.json({ error: profErr.message }, { status: 500, headers: NO_STORE });
-  }
-
-  const phys = profileRow ? physiologicalProfileFromDbRow(profileRow as PhysiologicalProfileDbRow) : null;
+  const canonPhys = await resolveCanonicalPhysiologyState(athleteId);
+  const phys = canonPhys.physiologicalProfile;
 
   const { data: twinRow } = await client
     .from("twin_states")
@@ -178,10 +165,10 @@ export async function POST(req: NextRequest) {
   const fatigueDb = twinRow ? num((twinRow as { fatigue_acute?: unknown }).fatigue_acute) : null;
 
   const athleteState: AthleteMetabolicState = {
-    ftpW: phys?.ftpWatts ?? null,
-    vo2maxMlKgMin: phys?.vo2maxMlMinKg ?? null,
-    vLamax: phys?.vLamax ?? null,
-    lactateThresholdPowerW: phys?.lt2Watts ?? null,
+    ftpW: phys.ftpWatts ?? null,
+    vo2maxMlKgMin: phys.vo2maxMlMinKg ?? null,
+    vLamax: phys.vLamax ?? null,
+    lactateThresholdPowerW: phys.lt2Watts ?? null,
     readinessScore: Math.max(0, Math.min(100, Math.round(readinessDb ?? 68))),
     fatigueScore: Math.max(0, Math.min(100, Math.round(fatigueDb ?? 35))),
   };
@@ -217,7 +204,7 @@ export async function POST(req: NextRequest) {
       session: generated,
       blockExercises,
       source: "pro2_builder_engine_deterministic",
-      physiologyPresent: Boolean(phys),
+      physiologyPresent: Object.values(canonPhys.sources).some(Boolean),
       twinPresent: Boolean(twinRow),
       /** Vyria / planner annuale: usare questo endpoint (o wrapper server) per materializzare ogni sessione. */
       materializationPolicy: "single_session_via_builder_engine_only",

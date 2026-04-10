@@ -55,11 +55,23 @@ export function physiologicalProfileFromDbRow(row: PhysiologicalProfileDbRow): P
   };
 }
 
+/**
+ * Riga compatta per hub / card (potenza, soglie LT, VO₂, vLamax, HRV, baseline temp/glucosio, economia se presenti).
+ */
 export function formatPhysiologicalProfileStrip(p: PhysiologicalProfile): string {
   const bits: string[] = [];
   if (p.ftpWatts != null) bits.push(`FTP ${Math.round(p.ftpWatts)} W`);
   if (p.cpWatts != null) bits.push(`CP ${Math.round(p.cpWatts)} W`);
-  if (p.vo2maxMlMinKg != null) bits.push(`VO₂max ${p.vo2maxMlMinKg.toFixed(1)}`);
+  if (p.lt2Watts != null) bits.push(`LT2 ${Math.round(p.lt2Watts)} W`);
+  if (p.lt2HeartRate != null) bits.push(`LT2 ${Math.round(p.lt2HeartRate)} bpm`);
+  if (p.lt1Watts != null) bits.push(`LT1 ${Math.round(p.lt1Watts)} W`);
+  if (p.lt1HeartRate != null) bits.push(`LT1 ${Math.round(p.lt1HeartRate)} bpm`);
+  if (p.vo2maxMlMinKg != null) bits.push(`VO₂max ${p.vo2maxMlMinKg.toFixed(1)} ml/kg/min`);
+  if (p.vLamax != null) bits.push(`vLamax ${p.vLamax.toFixed(2)}`);
+  if (p.baselineHrvMs != null) bits.push(`HRV ${Math.round(p.baselineHrvMs)} ms`);
+  if (p.baselineTempC != null) bits.push(`temp ${p.baselineTempC.toFixed(1)} °C`);
+  if (p.baselineGlucoseMmol != null) bits.push(`gluc ${p.baselineGlucoseMmol.toFixed(1)} mmol/L`);
+  if (p.economy != null) bits.push(`economia ${p.economy.toFixed(2)}`);
   return bits.join(" · ") || "Dati fisiologici collegati al profilo atleta.";
 }
 

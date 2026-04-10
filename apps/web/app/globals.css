@@ -221,6 +221,8 @@ body {
 }
 
 .empathy-meal-expo-card {
+  position: relative;
+  isolation: isolate;
   border-radius: 16px;
   border: 1px solid var(--nutri-expo-border);
   background: var(--nutri-expo-card);
@@ -254,14 +256,56 @@ body {
   align-items: stretch;
   gap: 12px;
   padding: 14px 14px 14px 12px;
-  background: linear-gradient(
-    105deg,
-    var(--nutri-expo-banner0) 0%,
-    #a855f7 38%,
-    #f472b6 58%,
-    var(--nutri-expo-banner1) 100%
-  );
+  background: #7c3aed;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.empathy-meal-expo-card--slot-breakfast .empathy-meal-expo-banner {
+  background: #d97706;
+}
+
+.empathy-meal-expo-card--slot-lunch .empathy-meal-expo-banner {
+  background: #0d9488;
+}
+
+.empathy-meal-expo-card--slot-dinner .empathy-meal-expo-banner {
+  background: #6d28d9;
+}
+
+.empathy-meal-expo-card--slot-snack_am .empathy-meal-expo-banner {
+  background: #db2777;
+}
+
+.empathy-meal-expo-card--slot-snack_pm .empathy-meal-expo-banner {
+  background: #2563eb;
+}
+
+.empathy-meal-expo-card--slot-pre_sleep .empathy-meal-expo-banner {
+  background: #475569;
+}
+
+.empathy-meal-expo-card--slot-breakfast {
+  border-color: rgba(217, 119, 6, 0.45);
+}
+
+.empathy-meal-expo-card--slot-lunch {
+  border-color: rgba(13, 148, 136, 0.45);
+}
+
+.empathy-meal-expo-card--slot-dinner {
+  border-color: rgba(109, 40, 217, 0.45);
+}
+
+.empathy-meal-expo-card--slot-snack_am {
+  border-color: rgba(219, 39, 119, 0.45);
+}
+
+.empathy-meal-expo-card--slot-snack_pm {
+  border-color: rgba(37, 99, 235, 0.45);
+}
+
+.empathy-meal-expo-card--slot-pre_sleep {
+  border-color: rgba(71, 85, 105, 0.45);
 }
 
 .empathy-meal-expo-icon-wrap {
@@ -331,12 +375,9 @@ body {
   min-width: 72px;
   padding: 10px 12px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.22);
   text-align: center;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.06);
 }
 
 .empathy-meal-expo-kcal-num {
@@ -372,45 +413,31 @@ body {
 }
 
 .empathy-meal-expo-macro::after {
-  content: "";
-  position: absolute;
-  right: -20px;
-  bottom: -24px;
-  width: 72px;
-  height: 72px;
-  border-radius: 50%;
-  opacity: 0.12;
-  pointer-events: none;
+  content: none;
 }
 
 .empathy-meal-expo-macro--cho {
-  border-color: rgba(96, 165, 250, 0.45);
-  box-shadow: 0 0 24px rgba(37, 99, 235, 0.12);
-  background: linear-gradient(165deg, var(--nutri-expo-cho-bg) 0%, rgba(0, 0, 0, 0.5) 100%);
+  border-color: rgba(56, 189, 248, 0.55);
+  background: var(--nutri-expo-cho-bg);
 }
 .empathy-meal-expo-macro--cho::after {
-  background: var(--nutri-expo-cho);
-  opacity: 0.2;
+  content: none;
 }
 
 .empathy-meal-expo-macro--pro {
-  border-color: rgba(255, 138, 76, 0.5);
-  box-shadow: 0 0 24px rgba(249, 115, 22, 0.12);
-  background: linear-gradient(165deg, var(--nutri-expo-pro-bg) 0%, rgba(15, 8, 6, 0.92) 100%);
+  border-color: rgba(251, 146, 60, 0.55);
+  background: var(--nutri-expo-pro-bg);
 }
 .empathy-meal-expo-macro--pro::after {
-  background: var(--nutri-expo-pro);
-  opacity: 0.22;
+  content: none;
 }
 
 .empathy-meal-expo-macro--fat {
-  border-color: rgba(52, 211, 153, 0.45);
-  box-shadow: 0 0 24px rgba(16, 185, 129, 0.1);
-  background: linear-gradient(165deg, var(--nutri-expo-fat-bg) 0%, rgba(0, 0, 0, 0.55) 100%);
+  border-color: rgba(74, 222, 128, 0.5);
+  background: var(--nutri-expo-fat-bg);
 }
 .empathy-meal-expo-macro--fat::after {
-  background: var(--nutri-expo-fat);
-  opacity: 0.2;
+  content: none;
 }
 
 .empathy-meal-expo-macro-ic {
@@ -454,9 +481,8 @@ body {
   margin: 0 12px 10px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: linear-gradient(95deg, rgba(217, 70, 239, 0.32) 0%, rgba(126, 34, 206, 0.22) 45%, rgba(15, 23, 42, 0.92) 100%);
-  border: 1px solid rgba(244, 114, 182, 0.28);
-  box-shadow: 0 0 28px rgba(217, 70, 239, 0.08);
+  background: rgba(30, 27, 40, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.22);
 }
 
 .empathy-meal-expo-igbar-left {
@@ -502,31 +528,27 @@ body {
 }
 
 .empathy-meal-expo-igpill--low {
-  background: linear-gradient(145deg, var(--nutri-ig-legend-low), var(--nutri-ig-legend-low-b));
+  background: var(--nutri-ig-legend-low-b);
   color: #ecfccb;
-  border-color: rgba(74, 222, 128, 0.65);
-  box-shadow: 0 0 16px rgba(34, 197, 94, 0.22);
+  border-color: rgba(74, 222, 128, 0.55);
 }
 
 .empathy-meal-expo-igpill--med {
-  background: linear-gradient(145deg, var(--nutri-ig-legend-med), var(--nutri-ig-legend-med-b));
+  background: var(--nutri-ig-legend-med-b);
   color: #fef9c3;
-  border-color: rgba(250, 204, 21, 0.55);
-  box-shadow: 0 0 16px rgba(234, 179, 8, 0.2);
+  border-color: rgba(250, 204, 21, 0.5);
 }
 
 .empathy-meal-expo-igpill--high {
-  background: linear-gradient(145deg, var(--nutri-ig-legend-high), var(--nutri-ig-legend-high-b));
+  background: var(--nutri-ig-legend-high-b);
   color: #ffedd5;
-  border-color: rgba(251, 146, 60, 0.6);
-  box-shadow: 0 0 18px rgba(249, 115, 22, 0.22);
+  border-color: rgba(251, 146, 60, 0.5);
 }
 
 .empathy-meal-expo-igpill--vhigh {
-  background: linear-gradient(145deg, var(--nutri-ig-legend-vhigh), var(--nutri-ig-legend-vhigh-b));
+  background: var(--nutri-ig-legend-vhigh-b);
   color: #ffe4e6;
-  border-color: rgba(244, 114, 182, 0.55);
-  box-shadow: 0 0 18px rgba(236, 72, 153, 0.22);
+  border-color: rgba(244, 114, 182, 0.5);
 }
 
 .empathy-meal-expo-stimpill {
@@ -541,20 +563,19 @@ body {
 }
 
 .empathy-meal-expo-stimpill--high {
-  background: linear-gradient(90deg, rgba(220, 38, 38, 0.35), rgba(190, 24, 93, 0.35));
-  color: #ffe4e6;
-  border-color: rgba(248, 113, 113, 0.45);
-  box-shadow: 0 0 14px rgba(244, 63, 94, 0.2);
+  background: rgba(185, 28, 28, 0.88);
+  color: #fff1f2;
+  border-color: rgba(252, 165, 165, 0.45);
 }
 .empathy-meal-expo-stimpill--med {
-  background: linear-gradient(90deg, rgba(234, 179, 8, 0.3), rgba(249, 115, 22, 0.28));
-  color: #fef9c3;
+  background: rgba(180, 83, 9, 0.88);
+  color: #fffbeb;
   border-color: rgba(251, 191, 36, 0.45);
 }
 .empathy-meal-expo-stimpill--low {
-  background: linear-gradient(90deg, rgba(34, 197, 94, 0.22), rgba(56, 189, 248, 0.18));
-  color: #d1fae5;
-  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(21, 128, 61, 0.88);
+  color: #ecfdf5;
+  border-color: rgba(52, 211, 153, 0.45);
 }
 
 .empathy-meal-expo-macro-bar {
@@ -574,19 +595,16 @@ body {
 }
 
 .empathy-meal-expo-macro-seg--cho {
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.45), rgba(15, 23, 42, 0.9));
-  color: #93c5fd;
-  text-shadow: 0 0 12px rgba(96, 165, 250, 0.35);
+  background: rgba(30, 58, 138, 0.92);
+  color: #e0f2fe;
 }
 .empathy-meal-expo-macro-seg--pro {
-  background: linear-gradient(180deg, rgba(234, 88, 12, 0.4), rgba(30, 12, 8, 0.92));
-  color: #fdba74;
-  text-shadow: 0 0 12px rgba(251, 146, 60, 0.3);
+  background: rgba(154, 52, 18, 0.92);
+  color: #ffedd5;
 }
 .empathy-meal-expo-macro-seg--fat {
-  background: linear-gradient(180deg, rgba(5, 150, 105, 0.45), rgba(6, 24, 18, 0.92));
-  color: #6ee7b7;
-  text-shadow: 0 0 12px rgba(52, 211, 153, 0.25);
+  background: rgba(6, 78, 59, 0.92);
+  color: #d1fae5;
 }
 
 .empathy-meal-expo-detail-head {
@@ -604,7 +622,7 @@ body {
   width: 4px;
   height: 18px;
   border-radius: 4px;
-  background: linear-gradient(180deg, var(--nutri-expo-pink), var(--nutri-expo-magenta));
+  background: var(--nutri-expo-pink);
   flex-shrink: 0;
 }
 
@@ -613,10 +631,7 @@ body {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  background: linear-gradient(105deg, #f472b6, #e879f9, #fb923c);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #f9a8d4;
 }
 
 .empathy-meal-expo-food-list {
@@ -635,10 +650,9 @@ body {
 
 .empathy-meal-expo-food-card {
   border-radius: 12px;
-  border: 1px solid rgba(217, 70, 239, 0.28);
-  background: linear-gradient(165deg, rgba(18, 12, 28, 0.95), rgba(6, 4, 12, 0.88));
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(24, 26, 34, 0.98);
   padding: 12px;
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.06);
 }
 
 .empathy-meal-expo-food-top {
@@ -689,21 +703,20 @@ body {
 }
 
 .empathy-meal-expo-pill--wt {
-  background: rgba(167, 139, 250, 0.22);
-  color: #ddd6fe;
-  border: 1px solid rgba(167, 139, 250, 0.35);
+  background: rgba(71, 85, 105, 0.55);
+  color: #f1f5f9;
+  border: 1px solid rgba(148, 163, 184, 0.45);
 }
 
 .empathy-meal-expo-pill--kcal {
-  background: linear-gradient(90deg, rgba(244, 63, 94, 0.28), rgba(190, 24, 93, 0.22));
+  background: rgba(157, 23, 77, 0.55);
   color: #fecdd3;
   border: 1px solid rgba(251, 113, 133, 0.45);
-  box-shadow: 0 0 12px rgba(244, 63, 94, 0.15);
 }
 
 .empathy-meal-expo-food-macros {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
 }
 
@@ -731,41 +744,37 @@ body {
 }
 
 .empathy-meal-expo-pod--cho {
-  background: linear-gradient(135deg, rgba(30, 64, 175, 0.65), rgba(15, 23, 42, 0.9));
-  border: 1px solid rgba(96, 165, 250, 0.35);
-  color: #bfdbfe;
+  background: var(--nutri-expo-cho-bg);
+  border: 1px solid rgba(56, 189, 248, 0.45);
+  color: #bae6fd;
 }
 .empathy-meal-expo-pod--cho .empathy-meal-expo-pod-dot {
   background: var(--nutri-expo-cho);
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.65);
 }
 
 .empathy-meal-expo-pod--pro {
-  background: linear-gradient(135deg, rgba(180, 60, 20, 0.5), rgba(24, 10, 6, 0.92));
-  border: 1px solid rgba(255, 138, 76, 0.4);
+  background: var(--nutri-expo-pro-bg);
+  border: 1px solid rgba(251, 146, 60, 0.45);
   color: #fed7aa;
 }
 .empathy-meal-expo-pod--pro .empathy-meal-expo-pod-dot {
   background: var(--nutri-expo-pro);
-  box-shadow: 0 0 8px rgba(251, 146, 60, 0.55);
 }
 
 .empathy-meal-expo-pod--fat {
-  background: linear-gradient(135deg, rgba(6, 95, 70, 0.55), rgba(6, 24, 18, 0.92));
-  border: 1px solid rgba(52, 211, 153, 0.35);
-  color: #a7f3d0;
+  background: var(--nutri-expo-fat-bg);
+  border: 1px solid rgba(74, 222, 128, 0.45);
+  color: #bbf7d0;
 }
 .empathy-meal-expo-pod--fat .empathy-meal-expo-pod-dot {
   background: var(--nutri-expo-fat);
-  box-shadow: 0 0 8px rgba(52, 211, 153, 0.45);
 }
 
 .empathy-meal-expo-pod--kcal {
-  background: linear-gradient(135deg, rgba(157, 23, 77, 0.55), rgba(30, 6, 18, 0.92));
-  border: 1px solid rgba(251, 113, 133, 0.4);
+  background: var(--nutri-expo-kcal-bg);
+  border: 1px solid rgba(251, 113, 133, 0.45);
   color: #fda4af;
   grid-column: span 1;
-  box-shadow: 0 0 12px rgba(244, 63, 94, 0.12);
 }
 .empathy-meal-expo-pod--kcal .empathy-meal-expo-pod-lab {
   color: #fda4af;
@@ -794,7 +803,7 @@ body {
   padding: 14px;
   border-radius: 16px;
   border: 1px solid var(--nutri-expo-border);
-  background: rgba(10, 8, 16, 0.88);
+  background: rgba(20, 22, 30, 0.98);
 }
 
 .empathy-meal-expo-legend-grid {
@@ -2435,4 +2444,3079 @@ body {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.03),
     0 10px 24px rgba(0, 0, 0, 0.12);
+}
+
+/* --- Physiology · generative Pro 2.0 (lactate threshold board, import V1) --- */
+.physiology-pro2-lactate-card {
+  margin-bottom: 20px;
+  padding: 18px 20px 20px;
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(24, 24, 28, 0.98), rgba(10, 10, 14, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(255, 45, 120, 0.06),
+    0 24px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.physiology-pro2-lactate-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.physiology-pro2-lactate-head-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.physiology-pro2-lactate-head-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.physiology-pro2-lactate-caption {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(180, 180, 190, 0.88);
+  max-width: 62ch;
+}
+
+.physiology-pro2-lactate-caption strong {
+  color: rgba(220, 220, 230, 0.95);
+  font-weight: 700;
+}
+
+.physiology-pro2-lactate-footnote {
+  margin: 14px 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgba(160, 160, 175, 0.88);
+}
+
+.physiology-pro2-lactate-footnote strong {
+  color: #c4b5fd;
+  font-weight: 700;
+}
+
+.physiology-pro2-lactate-ico {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ff6b00, #ff2d55);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(255, 107, 0, 0.35);
+}
+
+.physiology-pro2-lactate-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.physiology-pro2-lactate-vlamax {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(200, 200, 210, 0.85);
+  white-space: nowrap;
+}
+
+.physiology-pro2-lactate-vlamax-value {
+  color: #ff8c42;
+  font-weight: 800;
+}
+
+.physiology-pro2-lactate-vlamax-unit {
+  font-weight: 500;
+  color: rgba(200, 200, 210, 0.78);
+  font-size: 0.72rem;
+  white-space: normal;
+}
+
+.physiology-pro2-lactate-chart-wrap {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto 18px;
+}
+
+.physiology-pro2-lactate-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+.physiology-pro2-lactate-grid-h,
+.physiology-pro2-lactate-grid-v {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+
+.physiology-pro2-lactate-axis-y,
+.physiology-pro2-lactate-axis-x {
+  fill: rgba(180, 180, 190, 0.75);
+  font-size: 9px;
+  font-family: system-ui, sans-serif;
+}
+
+.physiology-pro2-lactate-ylab {
+  fill: rgba(160, 160, 175, 0.8);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: system-ui, sans-serif;
+}
+
+.physiology-pro2-lactate-kpis {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .physiology-pro2-lactate-kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+.physiology-pro2-lactate-kpi {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.physiology-pro2-lactate-kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(160, 160, 175, 0.88);
+  margin-bottom: 6px;
+}
+
+.physiology-pro2-lactate-kpi-value {
+  font-size: 1.65rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.physiology-pro2-lactate-kpi-sub {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(180, 180, 195, 0.75);
+}
+
+.physiology-pro2-lactate-kpi--lt1 .physiology-pro2-lactate-kpi-value {
+  color: #ff8c00;
+  text-shadow: 0 0 24px rgba(255, 140, 0, 0.35);
+}
+
+.physiology-pro2-lactate-kpi--lt2 .physiology-pro2-lactate-kpi-value {
+  color: #ff4d9a;
+  text-shadow: 0 0 24px rgba(255, 77, 154, 0.35);
+}
+
+.physiology-pro2-lactate-kpi--max .physiology-pro2-lactate-kpi-value {
+  color: #c4b5fd;
+  text-shadow: 0 0 22px rgba(196, 181, 253, 0.4);
+}
+
+/* —— Physiology Pro 2 · metabolic lab dashboard (Figma-aligned) —— */
+.physiology-pro2-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.physiology-pro2-lab-hero {
+  text-align: center;
+}
+
+.physiology-pro2-lab-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(180, 180, 195, 0.85);
+}
+
+.physiology-pro2-lab-title {
+  margin: 0;
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  background: linear-gradient(90deg, #c084fc, #f472b6, #fb923c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.physiology-pro2-lab-decode {
+  margin-top: 0.85rem;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  font-size: 0.8rem;
+  color: rgba(220, 252, 231, 0.95);
+}
+
+.physiology-pro2-lab-decode strong {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.physiology-pro2-lab-decode span:not(.physiology-pro2-lab-sessions) {
+  opacity: 0.9;
+}
+
+.physiology-pro2-lab-decode-ico {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: #4ade80;
+  flex-shrink: 0;
+}
+
+.physiology-pro2-lab-sessions strong {
+  display: inline;
+  font-size: 1rem;
+  color: #fff;
+}
+
+.physiology-pro2-lab-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  padding: 0.55rem 1rem;
+  border-radius: 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.physiology-pro2-lab-banner-ico {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.95;
+}
+
+.physiology-pro2-lab-banner--cp {
+  background: linear-gradient(90deg, #dc2626, #ea580c, #f97316);
+}
+
+.physiology-pro2-lab-banner--derived {
+  background: linear-gradient(90deg, #9333ea, #db2777, #f97316);
+}
+
+.physiology-pro2-lab-banner--zones {
+  background: linear-gradient(90deg, #16a34a, #0ea5e9);
+}
+
+.physiology-pro2-lab-banner--report {
+  background: linear-gradient(90deg, #a855f7, #ec4899);
+}
+
+.physiology-pro2-lab-cp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 0.65rem;
+}
+
+@media (min-width: 900px) {
+  .physiology-pro2-lab-cp-grid {
+    grid-template-columns: repeat(8, 1fr);
+  }
+}
+
+.physiology-pro2-lab-cp-card {
+  position: relative;
+  padding: 0.65rem 0.5rem 1.85rem;
+  border-radius: 0.6rem;
+  background: linear-gradient(165deg, rgba(20, 20, 28, 0.98), rgba(10, 10, 14, 0.99));
+  border: 2px solid var(--cp-border, #ef4444);
+  box-shadow: 0 0 20px var(--cp-glow, rgba(239, 68, 68, 0.25));
+  text-align: center;
+}
+
+.physiology-pro2-lab-cp-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+}
+
+.physiology-pro2-lab-cp-dur {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: rgba(200, 200, 215, 0.9);
+}
+
+.physiology-pro2-lab-cp-ico {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.physiology-pro2-lab-cp-watts {
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.physiology-pro2-lab-cp-unit {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(160, 160, 175, 0.85);
+  margin-top: 0.15rem;
+}
+
+.physiology-pro2-lab-cp-edit {
+  position: absolute;
+  left: 0.35rem;
+  right: 0.35rem;
+  bottom: 0.35rem;
+}
+
+.physiology-pro2-lab-cp-input {
+  width: 100%;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.7rem;
+  border-radius: 0.35rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.45);
+  color: #e2e8f0;
+}
+
+.physiology-pro2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.physiology-pro2-lab-chart-card {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(8, 8, 12, 0.92);
+  padding: 0.85rem 1rem 0.5rem;
+}
+
+.physiology-pro2-lab-chart-card--orange {
+  border-color: rgba(251, 146, 60, 0.45);
+}
+
+.physiology-pro2-lab-chart-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #fb923c;
+}
+
+.physiology-pro2-lab-chart-title--orange {
+  color: #fb923c;
+}
+
+.physiology-pro2-lab-chart-hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.7rem;
+  color: rgba(160, 160, 175, 0.85);
+}
+
+.physiology-pro2-lab-chart-wrap {
+  width: 100%;
+}
+
+.physiology-pro2-lab-subsec {
+  margin: 0.25rem 0 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(200, 200, 215, 0.75);
+}
+
+.physiology-pro2-lab-subsec--with-ico {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #7dd3fc;
+}
+
+.physiology-pro2-lab-subsec--with-ico:last-of-type {
+  color: #86efac;
+}
+
+.physiology-pro2-lab-subsec-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.physiology-pro2-lab-metric-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.physiology-pro2-lab-metric-row--3 {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.physiology-pro2-lab-metric-row--4 {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.physiology-pro2-lab-metric {
+  position: relative;
+  padding: 0.85rem 0.85rem 0.85rem 2.5rem;
+  border-radius: 0.65rem;
+  background: rgba(12, 12, 18, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 3px solid rgba(251, 146, 60, 0.85);
+}
+
+.physiology-pro2-lab-metric--compact {
+  padding-left: 2.35rem;
+  border-top-color: rgba(56, 189, 248, 0.75);
+}
+
+.physiology-pro2-lab-metric--ftp {
+  border-top-color: rgba(249, 115, 22, 0.95);
+}
+
+.physiology-pro2-lab-metric--lt1 {
+  border-top-color: #22c55e;
+}
+
+.physiology-pro2-lab-metric--lt2 {
+  border-top-color: rgba(249, 115, 22, 0.9);
+}
+
+.physiology-pro2-lab-metric--fatmax {
+  border-top-color: #eab308;
+}
+
+.physiology-pro2-lab-metric--vla {
+  border-top-color: #ec4899;
+}
+
+.physiology-pro2-lab-metric-ico {
+  position: absolute;
+  left: 0.65rem;
+  top: 0.75rem;
+  width: 1.1rem;
+  height: 1.1rem;
+  color: rgba(196, 181, 253, 0.85);
+}
+
+.physiology-pro2-lab-metric-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(160, 160, 175, 0.9);
+}
+
+.physiology-pro2-lab-metric-value {
+  margin-top: 0.25rem;
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.physiology-pro2-lab-metric-value--ftp {
+  background: linear-gradient(90deg, #f97316, #ef4444);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.physiology-pro2-lab-metric-value--lt1 {
+  color: #4ade80;
+  text-shadow: 0 0 18px rgba(74, 222, 128, 0.35);
+}
+
+.physiology-pro2-lab-metric-value--lt2 {
+  background: linear-gradient(90deg, #fb923c, #facc15);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.physiology-pro2-lab-metric-value--fatmax {
+  color: #fb923c;
+}
+
+.physiology-pro2-lab-metric-value--vla {
+  color: #f472b6;
+  text-shadow: 0 0 20px rgba(244, 114, 182, 0.35);
+}
+
+.physiology-pro2-lab-metric-value--red {
+  color: #f87171;
+}
+
+.physiology-pro2-lab-metric-value--purple {
+  color: #c084fc;
+}
+
+.physiology-pro2-lab-metric-value--cyan {
+  color: #38bdf8;
+}
+
+.physiology-pro2-lab-metric-value--pink {
+  color: #f472b6;
+}
+
+.physiology-pro2-lab-metric-value--green {
+  color: #4ade80;
+}
+
+.physiology-pro2-lab-metric-value--blue {
+  color: #38bdf8;
+  font-size: 1.05rem;
+}
+
+.physiology-pro2-lab-metric-value--violet {
+  color: #a78bfa;
+  font-size: 1.1rem;
+}
+
+.physiology-pro2-lab-table-wrap {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  overflow: hidden;
+  background: rgba(6, 8, 10, 0.95);
+}
+
+.physiology-pro2-lab-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.physiology-pro2-lab-table th {
+  padding: 0.55rem 0.45rem;
+  text-align: left;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(160, 170, 185, 0.9);
+  background: rgba(15, 20, 24, 0.98);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.physiology-pro2-lab-table td {
+  padding: 0.5rem 0.45rem;
+  vertical-align: middle;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(220, 225, 235, 0.92);
+}
+
+.physiology-pro2-lab-zone-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-weight: 700;
+  font-size: 0.68rem;
+  white-space: nowrap;
+}
+
+.physiology-pro2-lab-td-power {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.physiology-pro2-lab-td-hr,
+.physiology-pro2-lab-td-lac {
+  font-weight: 700;
+  color: #fca5a5;
+  font-variant-numeric: tabular-nums;
+}
+
+.physiology-pro2-lab-bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  margin-bottom: 0.2rem;
+}
+
+.physiology-pro2-lab-bar {
+  height: 100%;
+  border-radius: 4px;
+  min-width: 2px;
+  transition: width 0.35s ease;
+}
+
+.physiology-pro2-lab-bar-label {
+  font-size: 0.62rem;
+  color: rgba(180, 185, 200, 0.88);
+}
+
+/* Lactate / MaxOx lab shells */
+.physiology-pro2-lab-title--amber {
+  background: linear-gradient(90deg, #fbbf24, #f97316, #fb7185);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.physiology-pro2-lab-title--rose {
+  background: linear-gradient(90deg, #fb7185, #f43f5e, #c026d3);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.physiology-pro2-lab-decode--amber {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+.physiology-pro2-lab-decode--rose {
+  background: rgba(244, 63, 94, 0.12);
+  border-color: rgba(244, 63, 94, 0.38);
+}
+
+.physiology-pro2-lab-banner--lactate-overview {
+  background: linear-gradient(90deg, #b45309, #ea580c, #f59e0b);
+}
+
+.physiology-pro2-lab-banner--lactate-curve {
+  background: linear-gradient(90deg, #0ea5e9, #6366f1, #a855f7);
+}
+
+.physiology-pro2-lab-banner--lactate-inputs {
+  background: linear-gradient(90deg, #78716c, #57534e, #44403c);
+}
+
+.physiology-pro2-lab-banner--maxox-cap {
+  background: linear-gradient(90deg, #be123c, #e11d48, #f43f5e);
+}
+
+.physiology-pro2-lab-banner--maxox-bottle {
+  background: linear-gradient(90deg, #7c3aed, #db2777, #f97316);
+}
+
+.physiology-pro2-lab-banner--maxox-inputs {
+  background: linear-gradient(90deg, #4c1d95, #6b21a8, #7e22ce);
+}
+
+.physiology-pro2-lab-chart-card--lactate {
+  border-color: rgba(56, 189, 248, 0.45);
+  padding: 1rem 1rem 1.25rem;
+  display: flex;
+  justify-content: center;
+}
+
+.physiology-pro2-lab-hint-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.5rem;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.22);
+  font-size: 0.72rem;
+  color: rgba(220, 220, 230, 0.92);
+}
+
+.physiology-pro2-lab-hint-strip strong {
+  color: #fcd34d;
+  margin-right: 0.25rem;
+}
+
+.physiology-pro2-lab-advanced {
+  margin-top: 0.25rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 8, 12, 0.55);
+}
+
+.physiology-pro2-lab-metric--lac,
+.physiology-pro2-lab-metric--mox {
+  border-top-color: rgba(251, 191, 36, 0.75);
+}
+
+.physiology-pro2-lab-metric--mox {
+  border-top-color: rgba(244, 63, 94, 0.65);
+}
+
+.physiology-pro2-lab-metric--wide {
+  padding-left: 1rem;
+}
+
+.physiology-pro2-lab-metric-sub {
+  margin-top: 0.35rem;
+  font-size: 0.65rem;
+  color: rgba(160, 165, 180, 0.88);
+  line-height: 1.35;
+}
+
+.physiology-pro2-lab-metric-value--amber {
+  color: #fb923c;
+}
+
+.physiology-pro2-lab-metric-value--lac-acc {
+  color: #f472b6;
+}
+
+.physiology-pro2-lab-metric-value--cho-gap {
+  color: #fcd34d;
+}
+
+.physiology-pro2-lab-metric-value--cyan-soft {
+  color: #7dd3fc;
+  font-size: 0.95rem;
+}
+
+.physiology-pro2-lab-metric-value--rose {
+  color: #fb7185;
+}
+
+.physiology-pro2-lab-metric-value--rose-soft {
+  color: #fda4af;
+}
+
+.physiology-pro2-lab-metric-value--rose-lg {
+  color: #fda4af;
+  font-size: 1.15rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.physiology-pro2-lab-metric-value--red-soft {
+  color: #f87171;
+}
+
+/* Pro2 lab: full-page stack under hero (Lactate / MaxOx) */
+.physiology-pro2-lab-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 0.35rem;
+}
+
+.physiology-pro2-lab-page-panel {
+  padding: 1rem 1.1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(8, 10, 16, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.physiology-pro2-lab--lactate .physiology-pro2-lab-page-panel {
+  border-color: rgba(251, 191, 36, 0.14);
+}
+
+.physiology-pro2-lab--maxox .physiology-pro2-lab-page-panel {
+  border-color: rgba(244, 63, 94, 0.14);
+}
+
+.physiology-pro2-lab-page-panel--notes {
+  padding-top: 0.7rem;
+}
+
+.physiology-pro2-lab-mini-banner {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(175, 180, 195, 0.92);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.physiology-pro2-lab-mini-banner--lac,
+.physiology-pro2-lab-mini-banner--lac-device,
+.physiology-pro2-lab-mini-banner--lac-input,
+.physiology-pro2-lab-mini-banner--lac-out,
+.physiology-pro2-lab-mini-banner--lac-out2,
+.physiology-pro2-lab-mini-banner--lac-gut,
+.physiology-pro2-lab-mini-banner--lac-strat {
+  color: rgba(252, 211, 77, 0.92);
+  border-bottom-color: rgba(251, 191, 36, 0.2);
+}
+
+.physiology-pro2-lab-mini-banner--mox,
+.physiology-pro2-lab-mini-banner--mox-device,
+.physiology-pro2-lab-mini-banner--mox-input,
+.physiology-pro2-lab-mini-banner--mox-out,
+.physiology-pro2-lab-mini-banner--mox-delivery {
+  color: rgba(251, 113, 133, 0.95);
+  border-bottom-color: rgba(244, 63, 94, 0.22);
+}
+
+.physiology-pro2-lab-device-inner {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.physiology-pro2-lab-kpi-board {
+  gap: 0.5rem;
+}
+
+.physiology-pro2-lab-kpi-board .kpi-card {
+  min-height: auto;
+}
+
+.physiology-pro2-lab-inline-vo2 {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 960px) {
+  .physiology-pro2-lab-inline-vo2 {
+    grid-column: span 2;
+  }
+}
+
+.physiology-pro2-lab-panel-btn {
+  align-self: end;
+}
+
+.physiology-pro2-lab-page-panel .collapsible-card,
+.physiology-pro2-lab-details.collapsible-card {
+  margin: 0;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.physiology-pro2-lab-compliance {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.physiology-pro2-lab-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(10, 12, 20, 0.88);
+}
+
+.physiology-pro2-lab-footer-actions .btn-primary {
+  margin-left: auto;
+}
+
+/* —— Physiology Pro 2 · engine report viz (Lactate / MaxOx Figma-aligned) —— */
+.physiology-pro2-eng-report {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.physiology-pro2-lab-banner--lactate-metabolism {
+  background: linear-gradient(90deg, #f43f5e, #ec4899, #fb7185);
+}
+
+.physiology-pro2-lab-banner--lactate-engine-params {
+  background: linear-gradient(90deg, #be185d, #db2777, #f97316);
+}
+
+/* Lactate analysis · workout picker (single control) */
+.physiology-pro2-lac-pick {
+  position: relative;
+}
+
+.physiology-pro2-lac-pick-pop {
+  position: absolute;
+  z-index: 40;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.45rem);
+  padding: 0.75rem 0.8rem 0.85rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  background: rgba(10, 8, 6, 0.97);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+
+.physiology-pro2-lac-pick-pop-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: rgba(200, 195, 185, 0.9);
+}
+
+.physiology-pro2-lac-pick-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-height: min(52vh, 320px);
+  overflow-y: auto;
+}
+
+.physiology-pro2-lac-pick-chip {
+  text-align: left;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.14), rgba(234, 88, 12, 0.08));
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: rgba(255, 248, 235, 0.95);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.physiology-pro2-lac-pick-chip:hover {
+  border-color: rgba(251, 191, 36, 0.45);
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}
+
+.physiology-pro2-lac-pick-chip--on {
+  border-color: rgba(52, 211, 153, 0.5);
+  box-shadow: 0 0 18px rgba(52, 211, 153, 0.2);
+}
+
+.physiology-pro2-lac-pick-pop--maxox {
+  border-color: rgba(251, 113, 133, 0.42);
+  background: rgba(12, 6, 10, 0.98);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55), 0 0 32px rgba(225, 29, 72, 0.12);
+}
+
+.physiology-pro2-lac-pick-chip--maxox {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.16), rgba(190, 24, 93, 0.09));
+  color: rgba(255, 241, 242, 0.96);
+}
+
+.physiology-pro2-lac-pick-chip--maxox:hover {
+  border-color: rgba(251, 113, 133, 0.48);
+  box-shadow: 0 0 22px rgba(244, 63, 94, 0.18);
+}
+
+.physiology-pro2-lab-page-panel--lac-pick {
+  padding-bottom: 0.25rem;
+}
+
+.physiology-pro2-lab-page-panel--lac-ctx {
+  padding-top: 0.35rem;
+}
+
+/* Metabolic context · 6 tiles + options row */
+.physiology-pro2-ctx-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.5rem 0.45rem 0.75rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  background: rgba(6, 6, 10, 0.88);
+}
+
+.physiology-pro2-ctx-shell--maxox {
+  border-color: rgba(6, 182, 212, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 28px rgba(34, 211, 238, 0.06);
+}
+
+.physiology-pro2-lab-banner--maxox-context {
+  background: linear-gradient(90deg, #0e7490, #0891b2, #22d3ee);
+}
+
+.physiology-pro2-ctx-shell .physiology-pro2-lab-banner {
+  margin-bottom: 0;
+}
+
+.physiology-pro2-ctx-grid {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 720px) {
+  .physiology-pro2-ctx-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1100px) {
+  .physiology-pro2-ctx-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+}
+
+.physiology-pro2-ctx-grid--maxox {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 1100px) {
+  .physiology-pro2-ctx-grid--maxox {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.physiology-pro2-ctx-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  text-align: left;
+  padding: 0.5rem 0.55rem 0.45rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  color: #fff;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+  min-height: 4.85rem;
+}
+
+.physiology-pro2-ctx-tile:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.physiology-pro2-ctx-tile:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.physiology-pro2-ctx-tile--dim:not(:disabled) {
+  opacity: 0.5;
+}
+
+.physiology-pro2-ctx-tile--open {
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+}
+
+.physiology-pro2-ctx-tile--indigo {
+  background: linear-gradient(145deg, #4f46e5, #3730a3);
+  box-shadow: 0 0 20px rgba(79, 70, 229, 0.25);
+}
+
+.physiology-pro2-ctx-tile--cyan {
+  background: linear-gradient(145deg, #0891b2, #0e7490);
+  box-shadow: 0 0 20px rgba(8, 145, 178, 0.25);
+}
+
+.physiology-pro2-ctx-tile--violet {
+  background: linear-gradient(145deg, #7c3aed, #5b21b6);
+  box-shadow: 0 0 20px rgba(124, 58, 237, 0.25);
+}
+
+.physiology-pro2-ctx-tile--amber {
+  background: linear-gradient(145deg, #d97706, #b45309);
+  box-shadow: 0 0 20px rgba(217, 119, 6, 0.25);
+}
+
+.physiology-pro2-ctx-tile--rose {
+  background: linear-gradient(145deg, #e11d48, #be123c);
+  box-shadow: 0 0 20px rgba(225, 29, 72, 0.22);
+}
+
+.physiology-pro2-ctx-tile--emerald {
+  background: linear-gradient(145deg, #059669, #047857);
+  box-shadow: 0 0 20px rgba(5, 150, 105, 0.22);
+}
+
+.physiology-pro2-ctx-tile-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.2rem;
+}
+
+.physiology-pro2-ctx-tile-ico-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border-radius: 0.45rem;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.physiology-pro2-ctx-tile-ico {
+  width: 0.95rem;
+  height: 0.95rem;
+  opacity: 0.92;
+}
+
+.physiology-pro2-ctx-tile-chev {
+  width: 0.85rem;
+  height: 0.85rem;
+  opacity: 0.75;
+}
+
+.physiology-pro2-ctx-tile-k {
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.2;
+}
+
+.physiology-pro2-ctx-tile-v {
+  margin-top: 0.15rem;
+  font-size: 0.95rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  word-break: break-word;
+}
+
+.physiology-pro2-ctx-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.5rem 0.35rem 0.15rem;
+}
+
+.physiology-pro2-ctx-opt {
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: rgba(245, 245, 250, 0.95);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.physiology-pro2-ctx-opt:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(251, 113, 133, 0.45);
+}
+
+.physiology-pro2-ctx-opt:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.physiology-pro2-ctx-opt--on {
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(52, 211, 153, 0.14);
+}
+
+.physiology-pro2-ctx-fatox {
+  padding: 0.55rem 0.45rem 0.35rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  background: rgba(6, 20, 14, 0.65);
+}
+
+.physiology-pro2-ctx-fatox-lab {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-size: 0.65rem;
+  line-height: 1.35;
+  color: rgba(200, 230, 210, 0.88);
+}
+
+.physiology-pro2-ctx-fatox-range {
+  width: 100%;
+  accent-color: #34d399;
+}
+
+.physiology-pro2-ctx-fatox-readout {
+  margin-top: 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #a7f3d0;
+  text-align: center;
+}
+
+.physiology-pro2-ctx-vo2-card {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.7rem;
+  border: 1px solid rgba(56, 189, 248, 0.35);
+  background: linear-gradient(120deg, rgba(8, 47, 73, 0.9), rgba(12, 74, 110, 0.75));
+  box-shadow: 0 0 28px rgba(56, 189, 248, 0.12);
+}
+
+.physiology-pro2-ctx-vo2-ico {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  color: #7dd3fc;
+}
+
+.physiology-pro2-ctx-vo2-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.physiology-pro2-ctx-vo2-k {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(186, 230, 253, 0.85);
+}
+
+.physiology-pro2-ctx-vo2-main {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  line-height: 1.1;
+}
+
+.physiology-pro2-ctx-vo2-sub {
+  font-size: 0.68rem;
+  color: rgba(224, 242, 254, 0.82);
+}
+
+.physiology-pro2-ctx-vo2-card--maxox {
+  border-color: rgba(251, 113, 133, 0.4);
+  background: linear-gradient(120deg, rgba(55, 12, 28, 0.92), rgba(24, 10, 22, 0.88));
+  box-shadow: 0 0 28px rgba(244, 63, 94, 0.14);
+}
+
+.physiology-pro2-ctx-vo2-card--maxox .physiology-pro2-ctx-vo2-ico {
+  color: #fda4af;
+}
+
+.physiology-pro2-ctx-vo2-card--maxox .physiology-pro2-ctx-vo2-k {
+  color: rgba(253, 164, 175, 0.88);
+}
+
+.physiology-pro2-ctx-vo2-card--maxox .physiology-pro2-ctx-vo2-sub {
+  color: rgba(254, 205, 211, 0.82);
+}
+
+.physiology-pro2-ctx-opt--maxox:hover:not(:disabled) {
+  border-color: rgba(251, 113, 133, 0.45);
+}
+
+/* Numeric engine params · plain value + overlay editor */
+.physiology-pro2-eng-param-tile-hit {
+  margin: 0;
+  margin-top: 0.1rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  border-radius: 0.35rem;
+}
+
+.physiology-pro2-eng-param-tile-hit:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.45);
+  outline-offset: 2px;
+}
+
+.physiology-pro2-eng-param-tile-num {
+  display: block;
+  font-size: 1.45rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+}
+
+.physiology-pro2-eng-param-editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.physiology-pro2-eng-param-editor {
+  width: 100%;
+  max-width: 320px;
+  padding: 1.1rem 1.15rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(14, 14, 22, 0.98);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.physiology-pro2-eng-param-editor-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #fda4af;
+  letter-spacing: 0.02em;
+}
+
+.physiology-pro2-eng-param-editor-input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.physiology-pro2-eng-param-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.85rem;
+}
+
+.physiology-pro2-eng-param-editor-btn {
+  padding: 0.4rem 0.85rem;
+  border-radius: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.physiology-pro2-eng-param-editor-btn--ghost {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(220, 220, 230, 0.9);
+}
+
+.physiology-pro2-eng-param-editor-btn--ok {
+  background: linear-gradient(135deg, #db2777, #be185d);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.physiology-pro2-eng-param-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.65rem 0.55rem 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  background: rgba(6, 6, 10, 0.92);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 32px rgba(219, 39, 119, 0.08);
+}
+
+.physiology-pro2-eng-param-shell--maxox {
+  border-color: rgba(34, 211, 238, 0.32);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 36px rgba(6, 182, 212, 0.1);
+}
+
+.physiology-pro2-lab-banner--maxox-engine-params {
+  background: linear-gradient(90deg, #0f766e, #0d9488, #14b8a6);
+}
+
+.physiology-pro2-eng-param-editor-title--maxox {
+  color: #67e8f9;
+}
+
+.physiology-pro2-eng-param-editor-btn--ok-maxox {
+  background: linear-gradient(135deg, #0e7490, #0891b2);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.physiology-pro2-eng-param-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+}
+
+@media (min-width: 1100px) {
+  .physiology-pro2-eng-param-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+.physiology-pro2-eng-param-tile {
+  position: relative;
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.6rem 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  min-height: 5.4rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.physiology-pro2-eng-param-tile--locked {
+  opacity: 0.62;
+  filter: saturate(0.75);
+}
+
+.physiology-pro2-eng-param-tile-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.3rem;
+}
+
+.physiology-pro2-eng-param-tile-label {
+  font-size: 0.52rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.25;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.physiology-pro2-eng-param-tile-ico {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.82);
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.2));
+}
+
+.physiology-pro2-eng-param-tile-input {
+  width: 100%;
+  margin-top: 0.2rem;
+  padding: 0.28rem 0.4rem;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  background: rgba(0, 0, 0, 0.32);
+  font-size: 1.28rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: #fff;
+  outline: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.physiology-pro2-eng-param-tile-input:focus:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 2px rgba(255, 255, 255, 0.12);
+}
+
+.physiology-pro2-eng-param-tile-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.95;
+}
+
+.physiology-pro2-eng-param-tile-input::-webkit-outer-spin-button,
+.physiology-pro2-eng-param-tile-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.physiology-pro2-eng-param-tile-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.physiology-pro2-eng-param-tile-unit {
+  margin-top: 0.12rem;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+/* Max Oxidate · card sintesi + barre (mirror V1) */
+.physiology-pro2-maxox-card {
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.15rem 1.2rem;
+  border-radius: 1rem;
+  background: linear-gradient(165deg, rgba(28, 12, 20, 0.98), rgba(10, 8, 12, 0.99));
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(244, 63, 94, 0.08),
+    0 24px 48px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.physiology-pro2-maxox-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.physiology-pro2-maxox-head-left {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.physiology-pro2-maxox-head-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.physiology-pro2-maxox-caption {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(180, 180, 190, 0.88);
+  max-width: 58ch;
+}
+
+.physiology-pro2-maxox-caption strong {
+  color: rgba(255, 228, 232, 0.96);
+  font-weight: 700;
+}
+
+.physiology-pro2-maxox-footnote {
+  margin: 1rem 0 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgba(160, 160, 175, 0.88);
+}
+
+.physiology-pro2-maxox-footnote strong {
+  color: #fda4af;
+  font-weight: 700;
+}
+
+.physiology-pro2-maxox-ico {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fb7185, #9f1239);
+  color: #fff;
+  box-shadow: 0 0 20px rgba(251, 113, 133, 0.35);
+}
+
+.physiology-pro2-maxox-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+.physiology-pro2-maxox-strip {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(200, 200, 210, 0.85);
+  white-space: nowrap;
+}
+
+.physiology-pro2-maxox-strip-value {
+  color: #fda4af;
+  font-weight: 800;
+}
+
+.physiology-pro2-maxox-strip-value--pink {
+  color: #fb7185;
+}
+
+.physiology-pro2-maxox-strip-unit {
+  font-weight: 500;
+}
+
+.physiology-pro2-maxox-viz-wrap {
+  margin: 0 -0.25rem;
+}
+
+.physiology-pro2-maxox-steady-note {
+  margin: 0.65rem 0 0;
+  max-width: 62ch;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgba(186, 200, 218, 0.9);
+}
+
+.physiology-pro2-maxox-steady-note strong {
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+}
+
+.maxox-engine-viz {
+  display: grid;
+  gap: 0.85rem;
+  margin: 0 0 0.25rem;
+}
+
+@media (min-width: 900px) {
+  .maxox-engine-viz {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .maxox-engine-viz-card--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+.maxox-engine-viz-card {
+  padding: 0.85rem 1rem 1rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(155deg, rgba(28, 14, 22, 0.94), rgba(10, 8, 12, 0.98));
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.maxox-engine-viz-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(253, 164, 175, 0.96);
+}
+
+.maxox-engine-viz-sub {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(190, 195, 210, 0.88);
+}
+
+.maxox-engine-viz-sub strong {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.maxox-engine-viz-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.72rem;
+  color: rgba(160, 165, 180, 0.88);
+  line-height: 1.45;
+}
+
+.maxox-engine-viz-state {
+  color: #fda4af;
+  font-weight: 600;
+}
+
+.maxox-engine-viz-bar-track {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.maxox-engine-viz-bar-seg {
+  min-width: 0;
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+.maxox-engine-viz-bar-seg--rose {
+  background: linear-gradient(180deg, #fb7185, #be123c);
+}
+
+.maxox-engine-viz-bar-seg--cyan {
+  background: linear-gradient(180deg, #22d3ee, #0e7490);
+}
+
+.maxox-engine-viz-bar-seg--amber {
+  background: linear-gradient(180deg, #fbbf24, #c2410c);
+}
+
+.maxox-engine-viz-bar-seg--slate {
+  background: linear-gradient(180deg, rgba(100, 116, 139, 0.95), rgba(51, 65, 85, 0.98));
+}
+
+.maxox-engine-viz-legend {
+  list-style: none;
+  margin: 0.65rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.maxox-engine-viz-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: rgba(200, 205, 220, 0.9);
+}
+
+.maxox-engine-viz-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.maxox-engine-viz-dot--rose {
+  background: #fb7185;
+}
+
+.maxox-engine-viz-dot--cyan {
+  background: #22d3ee;
+}
+
+.maxox-engine-viz-dot--amber {
+  background: #fbbf24;
+}
+
+.maxox-engine-viz-dot--slate {
+  background: #64748b;
+}
+
+.maxox-engine-viz-legend-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.maxox-engine-viz-legend-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.maxox-engine-viz-meter-grid {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.25rem;
+}
+
+@media (min-width: 640px) {
+  .maxox-engine-viz-meter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.maxox-engine-viz-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.72rem;
+  color: rgba(190, 195, 210, 0.9);
+  margin-bottom: 0.25rem;
+}
+
+.maxox-engine-viz-meter-pct {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.maxox-engine-viz-meter-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.maxox-engine-viz-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.35s ease;
+}
+
+.maxox-engine-viz-meter-fill--rose {
+  background: linear-gradient(90deg, #fb7185, #9f1239);
+}
+
+.maxox-engine-viz-meter-fill--cyan {
+  background: linear-gradient(90deg, #22d3ee, #155e75);
+}
+
+.maxox-engine-viz-meter-fill--amber {
+  background: linear-gradient(90deg, #fbbf24, #9a3412);
+}
+
+.maxox-engine-viz-meter-fill--violet {
+  background: linear-gradient(90deg, #a78bfa, #5b21b6);
+}
+
+/* Metabolic Profile — stacked aerobic / PCr / glycolytic share by duration */
+.metabolic-comp-stack-card {
+  margin-bottom: 18px;
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, rgba(18, 28, 24, 0.98), rgba(8, 14, 12, 0.99));
+  border: 1px solid rgba(52, 211, 153, 0.16);
+  max-width: 640px;
+}
+
+.metabolic-comp-stack-head {
+  margin-bottom: 12px;
+}
+
+.metabolic-comp-stack-title {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #d1fae5;
+}
+
+.metabolic-comp-stack-caption {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.45;
+  color: rgba(180, 210, 200, 0.9);
+  max-width: 62ch;
+}
+
+.metabolic-comp-stack-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.metabolic-comp-stack-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 56px;
+  align-items: center;
+  gap: 10px;
+}
+
+.metabolic-comp-stack-lab {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(200, 230, 210, 0.88);
+}
+
+.metabolic-comp-stack-track {
+  display: flex;
+  height: 22px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.metabolic-comp-stack-seg {
+  height: 100%;
+  min-width: 0;
+}
+
+.metabolic-comp-stack-seg--aer {
+  background: linear-gradient(180deg, #34d399, #059669);
+}
+
+.metabolic-comp-stack-seg--pcr {
+  background: linear-gradient(180deg, #7dd3fc, #0ea5e9);
+}
+
+.metabolic-comp-stack-seg--gly {
+  background: linear-gradient(180deg, #fbbf24, #d97706);
+}
+
+.metabolic-comp-stack-total {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: rgba(226, 245, 236, 0.92);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.metabolic-comp-stack-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 20px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.72rem;
+  color: rgba(190, 220, 205, 0.88);
+}
+
+.metabolic-comp-stack-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.metabolic-comp-stack-dot--aer {
+  background: #34d399;
+}
+
+.metabolic-comp-stack-dot--pcr {
+  background: #38bdf8;
+}
+
+.metabolic-comp-stack-dot--gly {
+  background: #fbbf24;
+}
+
+.physiology-pro2-lab-banner--maxox-engine {
+  background: linear-gradient(90deg, #059669, #14b8a6, #22d3ee);
+}
+
+.physiology-pro2-eng-section {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  padding: 1rem 1rem 1.15rem;
+  background: rgba(6, 6, 10, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.physiology-pro2-eng-section--energy {
+  border-color: rgba(244, 63, 94, 0.28);
+}
+
+.physiology-pro2-eng-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.physiology-pro2-eng-section-title--pink {
+  color: #fda4af;
+  text-shadow: 0 0 18px rgba(251, 113, 133, 0.35);
+}
+
+.physiology-pro2-eng-section-title--magenta {
+  color: #e879f9;
+}
+
+.physiology-pro2-eng-section-title--strat {
+  color: #d946ef;
+  margin-bottom: 0.75rem;
+}
+
+.physiology-pro2-eng-section-ico {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+
+.physiology-pro2-eng-kpi-grid-6 {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+@media (min-width: 900px) {
+  .physiology-pro2-eng-kpi-grid-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.physiology-pro2-eng-kpi {
+  position: relative;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.75rem 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  min-height: 5.5rem;
+}
+
+.physiology-pro2-eng-kpi-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+}
+
+.physiology-pro2-eng-kpi-label {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.physiology-pro2-eng-kpi-ico {
+  width: 0.9rem;
+  height: 0.9rem;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.physiology-pro2-eng-kpi-value {
+  margin-top: 0.35rem;
+  font-size: 1.65rem;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  line-height: 1.05;
+}
+
+.physiology-pro2-eng-kpi-unit {
+  margin-top: 0.15rem;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.physiology-pro2-eng-donut-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .physiology-pro2-eng-donut-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.physiology-pro2-eng-donut-card {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(8, 8, 14, 0.92);
+  padding: 0.75rem 0.85rem 1rem;
+}
+
+.physiology-pro2-eng-donut-title {
+  margin: 0 0 0.25rem;
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #93c5fd;
+}
+
+.physiology-pro2-eng-donut-svg-wrap {
+  width: 100%;
+  min-height: 160px;
+}
+
+.physiology-pro2-eng-donut-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem 1rem;
+  margin-top: 0.25rem;
+  font-size: 0.72rem;
+}
+
+.physiology-pro2-eng-chart-block {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(244, 63, 94, 0.28);
+  background: rgba(6, 6, 10, 0.92);
+  padding: 0.85rem 1rem 0.5rem;
+}
+
+.physiology-pro2-eng-chart-block--lac-flow {
+  box-shadow: 0 0 32px rgba(244, 63, 94, 0.08);
+}
+
+.physiology-pro2-eng-chart-h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.physiology-pro2-eng-chart-h3--pink {
+  color: #fda4af;
+}
+
+.physiology-pro2-eng-chart-h3--cyan {
+  color: #7dd3fc;
+}
+
+.physiology-pro2-eng-chart-h3--amber {
+  color: #fcd34d;
+}
+
+.physiology-pro2-eng-chart-caption {
+  margin: -0.2rem 0 0.55rem;
+  text-align: center;
+  font-size: 0.72rem;
+  color: rgba(148, 163, 184, 0.95);
+  line-height: 1.35;
+}
+
+.physiology-pro2-eng-pipeline-footnote {
+  margin: 0.55rem 0 0;
+  font-size: 0.7rem;
+  color: rgba(148, 163, 184, 0.9);
+  line-height: 1.35;
+}
+
+.physiology-pro2-eng-chart-inner {
+  width: 100%;
+  min-height: 200px;
+}
+
+.physiology-pro2-eng-shuttle-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .physiology-pro2-eng-shuttle-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.physiology-pro2-eng-shuttle-card {
+  border-radius: 0.75rem;
+  padding: 0.65rem 0.7rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.physiology-pro2-eng-shuttle-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.92);
+  line-height: 1.25;
+}
+
+.physiology-pro2-eng-shuttle-ico {
+  width: 0.85rem;
+  height: 0.85rem;
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.physiology-pro2-eng-shuttle-value {
+  margin-top: 0.4rem;
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.physiology-pro2-eng-shuttle-unit {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.physiology-pro2-eng-two-col {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .physiology-pro2-eng-two-col {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.physiology-pro2-eng-pipeline-card,
+.physiology-pro2-eng-micro-card {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(6, 8, 14, 0.9);
+  padding: 0.85rem 1rem;
+}
+
+.physiology-pro2-eng-micro-card {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.physiology-pro2-eng-pipeline-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.physiology-pro2-eng-pipeline-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr 3.25rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.physiology-pro2-eng-pipeline-label {
+  font-size: 0.65rem;
+  color: rgba(186, 200, 220, 0.9);
+}
+
+.physiology-pro2-eng-pipeline-val {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #e2e8f0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.physiology-pro2-eng-micro-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.physiology-pro2-eng-micro-list li span:first-child {
+  font-size: 0.65rem;
+  color: rgba(200, 200, 215, 0.88);
+  display: block;
+}
+
+.physiology-pro2-eng-micro-list li span:nth-child(2) {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #fef3c7;
+  float: right;
+  margin-top: -1rem;
+}
+
+.physiology-pro2-eng-pathway-box {
+  margin-top: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.physiology-pro2-eng-pathway-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: rgba(167, 243, 208, 0.9);
+}
+
+.physiology-pro2-eng-pathway-pill {
+  display: inline-block;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+
+.physiology-pro2-eng-pathway--low {
+  background: #22c55e;
+  color: #fff;
+}
+
+.physiology-pro2-eng-pathway--mod {
+  background: #f59e0b;
+  color: #1a1008;
+}
+
+.physiology-pro2-eng-pathway--high {
+  background: #ef4444;
+  color: #fff;
+}
+
+.physiology-pro2-eng-strategia {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+  padding: 1rem 1.05rem 1.1rem;
+  background: rgba(10, 6, 18, 0.9);
+  box-shadow: 0 0 28px rgba(168, 85, 247, 0.12);
+}
+
+.physiology-pro2-eng-strategia-kpis {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .physiology-pro2-eng-strategia-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.physiology-pro2-eng-strat-kpi {
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: 2px solid transparent;
+}
+
+.physiology-pro2-eng-strat-kpi--purple {
+  border-color: rgba(192, 132, 252, 0.55);
+  background: linear-gradient(165deg, rgba(88, 28, 135, 0.35), rgba(10, 10, 16, 0.95));
+  box-shadow: 0 0 24px rgba(168, 85, 247, 0.15);
+}
+
+.physiology-pro2-eng-strat-kpi--orange {
+  border-color: rgba(251, 146, 60, 0.55);
+  background: linear-gradient(165deg, rgba(154, 52, 18, 0.3), rgba(10, 10, 16, 0.95));
+  box-shadow: 0 0 24px rgba(251, 146, 60, 0.12);
+}
+
+.physiology-pro2-eng-strat-label {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(216, 180, 254, 0.9);
+  margin-bottom: 0.35rem;
+}
+
+.physiology-pro2-eng-strat-kpi--orange .physiology-pro2-eng-strat-label {
+  color: rgba(254, 215, 170, 0.95);
+}
+
+.physiology-pro2-eng-strat-kpi strong {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #fdf4ff;
+  letter-spacing: -0.03em;
+}
+
+.physiology-pro2-eng-strat-kpi--orange strong {
+  color: #fff7ed;
+}
+
+.physiology-pro2-eng-strat-unit {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  color: rgba(226, 232, 240, 0.75);
+}
+
+/* MaxOx report */
+.physiology-pro2-eng-vo2-trio {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  background: rgba(6, 12, 18, 0.92);
+  padding: 0.85rem 1rem 1rem;
+}
+
+.physiology-pro2-eng-vo2-trio-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #a5f3fc;
+}
+
+.physiology-pro2-eng-vo2-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.physiology-pro2-eng-vo2-cell {
+  border-radius: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  text-align: center;
+}
+
+.physiology-pro2-eng-vo2-cell--cyan {
+  border-color: rgba(34, 211, 238, 0.45);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.12);
+}
+
+.physiology-pro2-eng-vo2-cell--blue {
+  border-color: rgba(59, 130, 246, 0.45);
+  box-shadow: 0 0 20px rgba(59, 130, 246, 0.1);
+}
+
+.physiology-pro2-eng-vo2-cell--violet {
+  border-color: rgba(167, 139, 250, 0.45);
+  box-shadow: 0 0 20px rgba(167, 139, 250, 0.1);
+}
+
+.physiology-pro2-eng-vo2-lab {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.75);
+  margin-bottom: 0.35rem;
+}
+
+.physiology-pro2-eng-vo2-cell strong {
+  font-size: 1.85rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.physiology-pro2-eng-vo2-unit {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.62rem;
+  color: rgba(203, 213, 225, 0.85);
+}
+
+.physiology-pro2-eng-vo2-hint {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: rgba(103, 232, 249, 0.9);
+  line-height: 1.3;
+}
+
+.physiology-pro2-eng-maxox-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem 1.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.physiology-pro2-eng-maxox-sum-lab {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.95);
+}
+
+.physiology-pro2-eng-maxox-sum-val {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.physiology-pro2-eng-maxox-sum-val--cyan {
+  color: #22d3ee;
+}
+
+.physiology-pro2-eng-maxox-sum-val--green {
+  color: #4ade80;
+}
+
+.physiology-pro2-eng-maxox-sum-val--amber {
+  color: #fcd34d;
+}
+
+.physiology-pro2-eng-maxox-sum-sub {
+  margin: 0;
+  font-size: 0.68rem;
+  color: rgba(148, 163, 184, 0.88);
+  line-height: 1.4;
+}
+
+.physiology-pro2-eng-section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fb923c;
+}
+
+.physiology-pro2-eng-section-title-row--warn {
+  color: #fdba74;
+  text-shadow: 0 0 14px rgba(251, 146, 60, 0.25);
+}
+
+.physiology-pro2-eng-section-title-row--cyan {
+  color: #67e8f9;
+  margin-top: 0.25rem;
+}
+
+.physiology-pro2-eng-maxox-gauges {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 960px) {
+  .physiology-pro2-eng-maxox-gauges {
+    grid-template-columns: 1.4fr 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.physiology-pro2-eng-gauge {
+  border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 0.35rem 0.25rem;
+  background: rgba(8, 8, 12, 0.88);
+}
+
+.physiology-pro2-eng-gauge--rose {
+  border-color: rgba(244, 63, 94, 0.28);
+}
+
+.physiology-pro2-eng-gauge--amber {
+  border-color: rgba(251, 146, 60, 0.3);
+}
+
+.physiology-pro2-eng-gauge--emerald {
+  border-color: rgba(52, 211, 153, 0.28);
+}
+
+.physiology-pro2-eng-gauge-label {
+  margin: 0 0 0.15rem;
+  text-align: center;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fda4af;
+}
+
+.physiology-pro2-eng-gauge--amber .physiology-pro2-eng-gauge-label {
+  color: #fdba74;
+}
+
+.physiology-pro2-eng-gauge--emerald .physiology-pro2-eng-gauge-label {
+  color: #6ee7b7;
+}
+
+.physiology-pro2-eng-gauge-svg {
+  width: 100%;
+  max-width: 220px;
+  margin: 0 auto;
+  display: block;
+}
+
+.physiology-pro2-eng-gauge-value {
+  fill: #fff;
+  font-size: 22px;
+  font-weight: 900;
+  font-family: system-ui, sans-serif;
+}
+
+.physiology-pro2-eng-gauge-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.physiology-pro2-eng-oversat {
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.45rem;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.physiology-pro2-eng-sat-ok {
+  font-size: 0.62rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.physiology-pro2-eng-sat-foot {
+  margin: 0.15rem 0 0;
+  max-width: 17rem;
+  text-align: center;
+  font-size: 0.58rem;
+  line-height: 1.35;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.physiology-pro2-eng-sat-foot strong {
+  color: rgba(226, 232, 240, 0.95);
+}
+
+.physiology-pro2-eng-maxox-bottom-kpis {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.physiology-pro2-eng-mbkpi {
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.physiology-pro2-eng-mbkpi--violet {
+  border-color: rgba(167, 139, 250, 0.45);
+}
+
+.physiology-pro2-eng-mbkpi--green {
+  border-color: rgba(52, 211, 153, 0.45);
+}
+
+.physiology-pro2-eng-mbkpi--rose {
+  border-color: rgba(251, 113, 133, 0.45);
+}
+
+.physiology-pro2-eng-mbkpi-lab {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(196, 181, 253, 0.95);
+  margin-bottom: 0.25rem;
+}
+
+.physiology-pro2-eng-mbkpi--green .physiology-pro2-eng-mbkpi-lab {
+  color: rgba(167, 243, 208, 0.95);
+}
+
+.physiology-pro2-eng-mbkpi--rose .physiology-pro2-eng-mbkpi-lab {
+  color: #fecdd3;
+}
+
+.physiology-pro2-eng-mbkpi strong {
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #fff;
+}
+
+.physiology-pro2-eng-mbkpi--green strong {
+  color: #6ee7b7;
+}
+
+.physiology-pro2-eng-mbkpi--rose strong {
+  color: #fda4af;
+}
+
+.physiology-pro2-eng-mbkpi-sub {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.6rem;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.physiology-pro2-eng-maxox-delivery-grid {
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.physiology-pro2-eng-del-card {
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+}
+
+.physiology-pro2-eng-del-card--green {
+  border-color: rgba(34, 197, 94, 0.4);
+}
+
+.physiology-pro2-eng-del-card--cyan {
+  border-color: rgba(34, 211, 238, 0.4);
+}
+
+.physiology-pro2-eng-del-ico {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 1rem;
+  height: 1rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.physiology-pro2-eng-del-lab {
+  display: block;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(186, 230, 253, 0.88);
+  padding-right: 1.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.physiology-pro2-eng-del-card strong {
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: #4ade80;
+}
+
+.physiology-pro2-eng-del-card--cyan strong {
+  color: #22d3ee;
+}
+
+.physiology-pro2-eng-nadh-row {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 900px) {
+  .physiology-pro2-eng-nadh-row {
+    grid-template-columns: 1fr 1.1fr;
+  }
+}
+
+.physiology-pro2-eng-nadh-card {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: rgba(12, 8, 20, 0.9);
+  padding: 0.85rem 1rem;
+}
+
+.physiology-pro2-eng-nadh-title {
+  margin: 0 0 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #d8b4fe;
+}
+
+.physiology-pro2-eng-nadh-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.physiology-pro2-eng-nadh-row-h {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: rgba(226, 232, 240, 0.88);
+  margin-bottom: 0.2rem;
+}
+
+.physiology-pro2-eng-nadh-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.physiology-pro2-eng-nadh-pill {
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.4rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+}
+
+.physiology-pro2-eng-nadh-pill--pur {
+  background: #7c3aed;
+  color: #fff;
+}
+
+.physiology-pro2-eng-nadh-pill--gr {
+  background: rgba(6, 20, 12, 0.95);
+  border: 1px solid rgba(34, 197, 94, 0.45);
+  color: #4ade80;
+}
+
+.physiology-pro2-eng-del-chart-card {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  background: rgba(6, 10, 16, 0.92);
+  padding: 0.75rem 0.85rem 0.5rem;
+}
+
+.physiology-pro2-eng-maxox-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.72rem;
+  color: rgba(203, 213, 225, 0.92);
+  line-height: 1.45;
+}
+
+/* --- Lactate engine output · Pro2 bar / meter viz (`LactateEnginePro2Viz`) --- */
+.lactate-engine-viz {
+  display: grid;
+  gap: 14px;
+  margin: 16px 0 20px;
+}
+
+@media (min-width: 900px) {
+  .lactate-engine-viz {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .lactate-engine-viz-card--gut {
+    grid-column: 1 / -1;
+  }
+}
+
+.lactate-engine-viz-card {
+  padding: 14px 16px 16px;
+  border-radius: 14px;
+  background: linear-gradient(155deg, rgba(28, 22, 12, 0.92), rgba(12, 10, 8, 0.97));
+  border: 1px solid rgba(251, 191, 36, 0.18);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.lactate-engine-viz-card--gut {
+  background: linear-gradient(155deg, rgba(24, 14, 18, 0.94), rgba(10, 8, 10, 0.98));
+  border-color: rgba(244, 63, 94, 0.2);
+}
+
+.lactate-engine-viz-title {
+  margin: 0 0 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(252, 211, 77, 0.95);
+}
+
+.lactate-engine-viz-card--gut .lactate-engine-viz-title {
+  color: rgba(253, 164, 175, 0.95);
+}
+
+.lactate-engine-viz-sub {
+  margin: 0 0 12px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(190, 195, 210, 0.88);
+}
+
+.lactate-engine-viz-sub strong {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.lactate-engine-viz-hint {
+  margin: 10px 0 0;
+  font-size: 0.72rem;
+  color: rgba(160, 165, 180, 0.85);
+  line-height: 1.4;
+}
+
+.lactate-engine-viz-bar-wrap {
+  width: 100%;
+}
+
+.lactate-engine-viz-bar-track {
+  display: flex;
+  width: 100%;
+  height: 14px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+
+.lactate-engine-viz-bar-seg {
+  min-width: 0;
+  height: 100%;
+  transition: width 0.35s ease;
+}
+
+.lactate-engine-viz-bar-seg--amber {
+  background: linear-gradient(180deg, #fbbf24, #d97706);
+}
+
+.lactate-engine-viz-bar-seg--cyan {
+  background: linear-gradient(180deg, #22d3ee, #0891b2);
+}
+
+.lactate-engine-viz-bar-seg--rose {
+  background: linear-gradient(180deg, #fb7185, #e11d48);
+}
+
+.lactate-engine-viz-bar-seg--violet {
+  background: linear-gradient(180deg, #a78bfa, #7c3aed);
+}
+
+.lactate-engine-viz-bar-seg--slate {
+  background: linear-gradient(180deg, rgba(100, 110, 130, 0.95), rgba(55, 60, 75, 0.98));
+}
+
+.lactate-engine-viz-legend {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lactate-engine-viz-legend li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: rgba(200, 205, 220, 0.9);
+}
+
+.lactate-engine-viz-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.lactate-engine-viz-dot--amber {
+  background: #fbbf24;
+}
+
+.lactate-engine-viz-dot--cyan {
+  background: #22d3ee;
+}
+
+.lactate-engine-viz-dot--rose {
+  background: #fb7185;
+}
+
+.lactate-engine-viz-dot--violet {
+  background: #a78bfa;
+}
+
+.lactate-engine-viz-dot--slate {
+  background: #64748b;
+}
+
+.lactate-engine-viz-legend-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.lactate-engine-viz-legend-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.lactate-engine-viz-risk {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lactate-engine-viz-risk--green {
+  color: #00e08d;
+}
+
+.lactate-engine-viz-risk--amber {
+  color: #ffd60a;
+}
+
+.lactate-engine-viz-risk--rose {
+  color: #ff5d5d;
+}
+
+.lactate-engine-viz-meter-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+@media (min-width: 640px) {
+  .lactate-engine-viz-meter-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.lactate-engine-viz-meter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.72rem;
+  color: rgba(190, 195, 210, 0.9);
+  margin-bottom: 4px;
+}
+
+.lactate-engine-viz-meter-pct {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.lactate-engine-viz-meter-track {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.lactate-engine-viz-meter-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.35s ease;
+}
+
+.lactate-engine-viz-meter-fill--rose {
+  background: linear-gradient(90deg, #fb7185, #e11d48);
+}
+
+.lactate-engine-viz-meter-fill--amber {
+  background: linear-gradient(90deg, #fbbf24, #ea580c);
+}
+
+.lactate-engine-viz-meter-fill--violet {
+  background: linear-gradient(90deg, #a78bfa, #6d28d9);
+}
+
+.lactate-engine-viz-meter-fill--green {
+  background: linear-gradient(90deg, #00e08d, #059669);
+}
+
+.lactate-engine-viz-mini-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+@media (min-width: 720px) {
+  .lactate-engine-viz-mini-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.lactate-engine-viz-mini-label {
+  display: block;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(160, 165, 180, 0.85);
+  margin-bottom: 2px;
+}
+
+.lactate-engine-viz-mini-val {
+  font-size: 0.9rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
 }

@@ -1,0 +1,1080 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  AlertTriangle,
+  Dna,
+  Droplets,
+  Flame,
+  Heart,
+  HeartPulse,
+  Sparkles,
+  Upload,
+  Zap,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  PolarAngleAxis,
+  PolarGrid,
+  PolarRadiusAxis,
+  Radar,
+  RadarChart,
+  RadialBar,
+  RadialBarChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
+import { Pro2Button } from "@/components/ui/empathy";
+import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
+import { useActiveAthlete } from "@/lib/use-active-athlete";
+import {
+  fetchHealthPanelsTimeline,
+  uploadHealthDocument,
+  type HealthPanelTimelineRow,
+} from "@/modules/health/services/health-module-api";
+
+const DEMO_INFLAMMATION_RADAR = [
+  { subject: "PCR-us", A: 78, fullMark: 100 },
+  { subject: "IL-6", A: 72, fullMark: 100 },
+  { subject: "TNF-α", A: 68, fullMark: 100 },
+  { subject: "Omocisteina", A: 74, fullMark: 100 },
+  { subject: "LDL-ox", A: 70, fullMark: 100 },
+];
+
+const DEMO_MICROBIOTA_RADAR = [
+  { subject: "Firmicutes", A: 44, fullMark: 100 },
+  { subject: "Bacteroidetes", A: 38, fullMark: 100 },
+  { subject: "Proteobacteria", A: 8, fullMark: 100 },
+  { subject: "Actinobacteria", A: 6, fullMark: 100 },
+  { subject: "Diversità", A: 72, fullMark: 100 },
+];
+
+const DEMO_HORMONES_BAR = [
+  { name: "Cortisolo AM", val: 16 },
+  { name: "Cortisolo PM", val: 11 },
+  { name: "Testosterone", val: 520 },
+  { name: "TSH", val: 1.6 },
+  { name: "T3 libera", val: 3.9 },
+  { name: "T4 libera", val: 1.2 },
+];
+
+const DEMO_BLOOD_TREND = [
+  { label: "Ott 2025", emoglobina: 15.2, ferritina: 78, vit_d: 32, b12: 380, glicemia: 88 },
+  { label: "Nov 2025", emoglobina: 15.8, ferritina: 82, vit_d: 38, b12: 400, glicemia: 86 },
+  { label: "Dic 2025", emoglobina: 16.1, ferritina: 90, vit_d: 42, b12: 430, glicemia: 85 },
+  { label: "Gen 2026", emoglobina: 16.3, ferritina: 95, vit_d: 45, b12: 450, glicemia: 84 },
+  { label: "Feb 2026", emoglobina: 16.4, ferritina: 97, vit_d: 47, b12: 465, glicemia: 83 },
+  { label: "Mar 2026", emoglobina: 16.5, ferritina: 98, vit_d: 48, b12: 470, glicemia: 83 },
+];
+
+const EPIGENETIC_RINGS = [
+  { name: "Metilazione", value: 85, fill: "#a855f7" },
+  { name: "Età biologica", value: 72, fill: "#ec4899" },
+  { name: "Stress oss.", value: 65, fill: "#f97316" },
+  { name: "Detox", value: 78, fill: "#22c55e" },
+  { name: "Riparazione", value: 88, fill: "#3b82f6" },
+];
+
+/** Radar “pathway” epigenetici (0–100, score qualitativo). */
+const DEMO_EPIGENETIC_RADAR = [
+  { subject: "Metilazione", A: 82, fullMark: 100 },
+  { subject: "Longevità", A: 76, fullMark: 100 },
+  { subject: "Infiamm. cronica", A: 71, fullMark: 100 },
+  { subject: "Detox genico", A: 79, fullMark: 100 },
+  { subject: "Riparazione DNA", A: 86, fullMark: 100 },
+];
+
+const DEMO_EPIGENETIC_TREND = [
+  { label: "Set", metilazione: 78, detox: 72, riparazione: 84 },
+  { label: "Ott", metilazione: 80, detox: 74, riparazione: 85 },
+  { label: "Nov", metilazione: 81, detox: 76, riparazione: 86 },
+  { label: "Dic", metilazione: 83, detox: 77, riparazione: 87 },
+  { label: "Gen", metilazione: 84, detox: 78, riparazione: 87 },
+  { label: "Feb", metilazione: 85, detox: 78, riparazione: 88 },
+];
+
+/** Stress ossidativo — assi da referto (d-ROMs, BAP, glutatione, …). */
+const DEMO_OXIDATIVE_RADAR = [
+  { subject: "d-ROMs ↓", A: 68, fullMark: 100 },
+  { subject: "BAP ↑", A: 74, fullMark: 100 },
+  { subject: "Glutatione", A: 70, fullMark: 100 },
+  { subject: "SOD", A: 72, fullMark: 100 },
+  { subject: "Catalasi", A: 69, fullMark: 100 },
+];
+
+/** Equilibrio endocrino (assi funzionali, 0–100). */
+const DEMO_ENDOCRINE_RADAR = [
+  { subject: "Asse HPA", A: 73, fullMark: 100 },
+  { subject: "Asse HPG", A: 78, fullMark: 100 },
+  { subject: "Tiroide", A: 81, fullMark: 100 },
+  { subject: "Surreni / DHEA", A: 75, fullMark: 100 },
+  { subject: "GH / IGF-1", A: 71, fullMark: 100 },
+];
+
+function readNum(obj: Record<string, unknown> | null | undefined, keys: string[]): number | null {
+  if (!obj) return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+    if (typeof v === "string" && v.trim()) {
+      const n = Number(String(v).replace(",", "."));
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+
+/** Più basso è il marker infiammatorio, più alto è lo score (0–100, euristica). */
+function inflammationAxisScore(value: number | null, refHigh: number, demo: number): number {
+  if (value == null) return demo;
+  const ratio = value / refHigh;
+  return Math.max(8, Math.min(100, 100 - ratio * 85));
+}
+
+function capPercentDisplay(value: number | null, demo: number): number {
+  if (value == null) return demo;
+  return Math.max(0, Math.min(100, value));
+}
+
+function inflammationRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const crp = readNum(v, ["crp_mg_l", "pcr", "hs_crp", "hs-crp"]);
+  const il6 = readNum(v, ["il6", "il_6"]);
+  const tnf = readNum(v, ["tnf_alpha", "tnf"]);
+  const hcy = readNum(v, ["homocysteine", "omocisteina"]);
+  const ox = readNum(v, ["oxidized_ldl", "ldl_ox"]);
+  const hasAny = [crp, il6, tnf, hcy, ox].some((x) => x != null);
+  const d = DEMO_INFLAMMATION_RADAR;
+  if (!hasAny) return { rows: d, isDemo: true as const };
+  return {
+    rows: [
+      { subject: "PCR-us", A: inflammationAxisScore(crp, 5, d[0].A), fullMark: 100 },
+      { subject: "IL-6", A: inflammationAxisScore(il6, 10, d[1].A), fullMark: 100 },
+      { subject: "TNF-α", A: inflammationAxisScore(tnf, 25, d[2].A), fullMark: 100 },
+      { subject: "Omocisteina", A: inflammationAxisScore(hcy, 20, d[3].A), fullMark: 100 },
+      { subject: "LDL-ox", A: inflammationAxisScore(ox, 80, d[4].A), fullMark: 100 },
+    ],
+    isDemo: false as const,
+  };
+}
+
+function microbiotaRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const f = readNum(v, ["firmicutes_pct", "firmicutes"]);
+  const b = readNum(v, ["bacteroidetes_pct", "bacteroidetes"]);
+  const p = readNum(v, ["proteobacteria_pct", "proteobacteria"]);
+  const a = readNum(v, ["actinobacteria_pct", "actinobacteria"]);
+  const div = readNum(v, ["diversity_shannon", "diversity", "alpha_diversity"]);
+  const hasAny = [f, b, p, a, div].some((x) => x != null);
+  const d = DEMO_MICROBIOTA_RADAR;
+  if (!hasAny) return { rows: d, isDemo: true as const };
+  const divScore = div != null ? Math.max(0, Math.min(100, (div / 4.5) * 100)) : d[4].A;
+  return {
+    rows: [
+      { subject: "Firmicutes", A: capPercentDisplay(f, d[0].A), fullMark: 100 },
+      { subject: "Bacteroidetes", A: capPercentDisplay(b, d[1].A), fullMark: 100 },
+      { subject: "Proteobacteria", A: capPercentDisplay(p, d[2].A), fullMark: 100 },
+      { subject: "Actinobacteria", A: capPercentDisplay(a, d[3].A), fullMark: 100 },
+      { subject: "Diversità", A: divScore, fullMark: 100 },
+    ],
+    isDemo: false as const,
+  };
+}
+
+function hormonesBarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const am = readNum(v, ["cortisol_am", "cortisol_morning"]);
+  const pm = readNum(v, ["cortisol_pm", "cortisol_evening"]);
+  const tt = readNum(v, ["testosterone", "testosterone_ng_dl"]);
+  const tsh = readNum(v, ["tsh"]);
+  const t3 = readNum(v, ["t3", "ft3", "t3_libera"]);
+  const t4 = readNum(v, ["t4", "ft4", "t4_libera"]);
+  const d = DEMO_HORMONES_BAR;
+  const hasAny = [am, pm, tt, tsh, t3, t4].some((x) => x != null);
+  if (!hasAny) return { rows: d, isDemo: true as const };
+  return {
+    rows: [
+      { name: "Cortisolo AM", val: am ?? d[0].val },
+      { name: "Cortisolo PM", val: pm ?? d[1].val },
+      { name: "Testosterone", val: tt ?? d[2].val },
+      { name: "TSH", val: tsh ?? d[3].val },
+      { name: "T3 libera", val: t3 ?? d[4].val },
+      { name: "T4 libera", val: t4 ?? d[5].val },
+    ],
+    isDemo: false as const,
+  };
+}
+
+function biologicalAgeRingScore(deltaYears: number | null, demo: number): number {
+  if (deltaYears == null) return demo;
+  return Math.max(12, Math.min(100, 100 - Math.abs(deltaYears) * 9));
+}
+
+function epigeneticRingsFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const meth = readNum(v, ["methylation_score", "metilazione", "methylation", "score_metilazione"]);
+  const delta = readNum(v, ["biological_age_delta", "epigenetic_age_delta", "eta_bio_vs_crono"]);
+  const ox = readNum(v, ["epigenetic_oxidative_stress", "stress_oss_epigenetico", "oxidative_epigenetic"]);
+  const detox = readNum(v, ["epigenetic_detox", "detox_score", "detox_epigenetico"]);
+  const repair = readNum(v, ["epigenetic_repair", "repair_score", "dna_repair"]);
+  return EPIGENETIC_RINGS.map((r) => {
+    if (r.name === "Metilazione") return { ...r, value: Math.round(capPercentDisplay(meth, r.value)) };
+    if (r.name === "Età biologica") return { ...r, value: Math.round(biologicalAgeRingScore(delta, r.value)) };
+    if (r.name === "Stress oss.") return { ...r, value: Math.round(capPercentDisplay(ox, r.value)) };
+    if (r.name === "Detox") return { ...r, value: Math.round(capPercentDisplay(detox, r.value)) };
+    if (r.name === "Riparazione") return { ...r, value: Math.round(capPercentDisplay(repair, r.value)) };
+    return r;
+  });
+}
+
+function epigeneticRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const rings = epigeneticRingsFromPanel(panel);
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const hasNumeric = [
+    readNum(v, ["methylation_score", "metilazione", "methylation"]),
+    readNum(v, ["biological_age_delta", "epigenetic_age_delta"]),
+    readNum(v, ["epigenetic_oxidative_stress", "stress_oss_epigenetico"]),
+    readNum(v, ["epigenetic_detox", "detox_score"]),
+    readNum(v, ["epigenetic_repair", "repair_score"]),
+  ].some((x) => x != null);
+  const d = DEMO_EPIGENETIC_RADAR;
+  if (!hasNumeric) return { rows: d, isDemo: true as const };
+  const subjects = ["Metilazione", "Longevità", "Infiamm. cronica", "Detox genico", "Riparazione DNA"];
+  return {
+    rows: rings.map((r, i) => ({
+      subject: subjects[i] ?? r.name,
+      A: capPercentDisplay(r.value, d[i]?.A ?? 72),
+      fullMark: 100,
+    })),
+    isDemo: false as const,
+  };
+}
+
+function rowFromEpigeneticTrendPanel(panel: HealthPanelTimelineRow): {
+  label: string;
+  metilazione: number | null;
+  detox: number | null;
+  riparazione: number | null;
+} | null {
+  const v = panel.values;
+  if (!v || typeof v !== "object") return null;
+  const rec = v as Record<string, unknown>;
+  const metilazione = readNum(rec, ["methylation_score", "metilazione", "methylation"]);
+  const detox = readNum(rec, ["epigenetic_detox", "detox_score"]);
+  const riparazione = readNum(rec, ["epigenetic_repair", "repair_score"]);
+  if (metilazione == null && detox == null && riparazione == null) return null;
+  const label = panel.sample_date
+    ? new Date(panel.sample_date).toLocaleDateString("it-IT", { month: "short", year: "2-digit" })
+    : (panel.created_at?.slice(0, 7) ?? "n/d");
+  return { label, metilazione, detox, riparazione };
+}
+
+/** d-ROMs più basso = migliore (score alto). */
+function oxidativeRomsScore(val: number | null, demo: number): number {
+  if (val == null) return demo;
+  return Math.max(10, Math.min(100, 100 - val * 2.2));
+}
+
+function oxidativeBapScore(val: number | null, demo: number): number {
+  if (val == null) return demo;
+  return Math.max(15, Math.min(100, (val / 3500) * 100));
+}
+
+function oxidativeStressRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const roms = readNum(v, ["roms_carr", "d_roms", "roms", "d_rom"]);
+  const bap = readNum(v, ["bap_umol", "bap"]);
+  const gsh = readNum(v, ["glutathione", "glutatione", "gsh"]);
+  const sod = readNum(v, ["sod"]);
+  const cat = readNum(v, ["catalase", "catalasi"]);
+  const hasAny = [roms, bap, gsh, sod, cat].some((x) => x != null);
+  const d = DEMO_OXIDATIVE_RADAR;
+  if (!hasAny) return { rows: d, isDemo: true as const };
+  return {
+    rows: [
+      { subject: "d-ROMs ↓", A: oxidativeRomsScore(roms, d[0].A), fullMark: 100 },
+      { subject: "BAP ↑", A: oxidativeBapScore(bap, d[1].A), fullMark: 100 },
+      { subject: "Glutatione", A: capPercentDisplay(gsh, d[2].A), fullMark: 100 },
+      { subject: "SOD", A: capPercentDisplay(sod, d[3].A), fullMark: 100 },
+      { subject: "Catalasi", A: capPercentDisplay(cat, d[4].A), fullMark: 100 },
+    ],
+    isDemo: false as const,
+  };
+}
+
+function hpaAxisScore(am: number | null, pm: number | null, demo: number): number {
+  if (am == null && pm == null) return demo;
+  const base = am ?? pm ?? 12;
+  const dist = Math.abs(base - 14);
+  return Math.max(22, Math.min(100, 100 - dist * 5));
+}
+
+function hpgAxisScore(testNgDl: number | null, demo: number): number {
+  if (testNgDl == null) return demo;
+  if (testNgDl < 200) return 38;
+  if (testNgDl > 1000) return 78;
+  return Math.min(100, 48 + (testNgDl - 200) / 25);
+}
+
+function thyroidAxisScore(tsh: number | null, demo: number): number {
+  if (tsh == null) return demo;
+  const dist = Math.abs(tsh - 1.4);
+  return Math.max(20, Math.min(100, 100 - dist * 28));
+}
+
+function dheaAxisScore(dhea: number | null, demo: number): number {
+  if (dhea == null) return demo;
+  return Math.max(18, Math.min(100, (dhea / 350) * 100));
+}
+
+function igfAxisScore(igf: number | null, demo: number): number {
+  if (igf == null) return demo;
+  return Math.max(20, Math.min(100, (igf / 280) * 100));
+}
+
+function endocrineRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
+  const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const am = readNum(v, ["cortisol_am", "cortisol_morning"]);
+  const pm = readNum(v, ["cortisol_pm", "cortisol_evening"]);
+  const tt = readNum(v, ["testosterone", "testosterone_ng_dl"]);
+  const tsh = readNum(v, ["tsh"]);
+  const dhea = readNum(v, ["dhea", "dhea_s", "dehydroepiandrosterone"]);
+  const igf = readNum(v, ["igf1", "igf_1", "igf-1"]);
+  const hasAny = [am, pm, tt, tsh, dhea, igf].some((x) => x != null);
+  const d = DEMO_ENDOCRINE_RADAR;
+  if (!hasAny) return { rows: d, isDemo: true as const };
+  return {
+    rows: [
+      { subject: "Asse HPA", A: hpaAxisScore(am, pm, d[0].A), fullMark: 100 },
+      { subject: "Asse HPG", A: hpgAxisScore(tt, d[1].A), fullMark: 100 },
+      { subject: "Tiroide", A: thyroidAxisScore(tsh, d[2].A), fullMark: 100 },
+      { subject: "Surreni / DHEA", A: dheaAxisScore(dhea, d[3].A), fullMark: 100 },
+      { subject: "GH / IGF-1", A: igfAxisScore(igf, d[4].A), fullMark: 100 },
+    ],
+    isDemo: false as const,
+  };
+}
+
+function rowFromBloodPanel(panel: HealthPanelTimelineRow): {
+  label: string;
+  emoglobina: number | null;
+  ferritina: number | null;
+  vit_d: number | null;
+  b12: number | null;
+  glicemia: number | null;
+} | null {
+  const v = panel.values;
+  if (!v || typeof v !== "object") return null;
+  const rec = v as Record<string, unknown>;
+  const emoglobina = readNum(rec, ["emoglobina", "hemoglobin", "hb_g_dl", "hb"]);
+  const ferritina = readNum(rec, ["ferritina", "ferritin", "ferritina_ng_ml"]);
+  const vit_d = readNum(rec, ["vitamina_d", "vit_d", "vitamin_d", "25_oh_d"]);
+  const b12 = readNum(rec, ["b12", "cobalamin", "vit_b12"]);
+  const glicemia = readNum(rec, ["glicemia", "glucose", "glucosio", "fasting_glucose_mg_dl"]);
+  if (emoglobina == null && ferritina == null && vit_d == null && b12 == null && glicemia == null) return null;
+  const label = panel.sample_date
+    ? new Date(panel.sample_date).toLocaleDateString("it-IT", { month: "short", year: "numeric" })
+    : (panel.created_at?.slice(0, 7) ?? "n/d");
+  return { label, emoglobina, ferritina, vit_d, b12, glicemia };
+}
+
+const IMPORT_CARDS = [
+  {
+    panelType: "blood",
+    title: "Esami del Sangue",
+    desc: "Emocromo, metaboliti, vitamine, minerali",
+    tags: ["Emoglobina", "Ferritina", "Vitamina D", "B12", "Glicemia", "HbA1c"],
+    gradient: "from-rose-600 via-rose-500 to-pink-600",
+    icon: Droplets,
+  },
+  {
+    panelType: "microbiota",
+    title: "Analisi Microbiota",
+    desc: "Flora batterica intestinale, disbiosi",
+    tags: ["Firmicutes", "Bacteroidetes", "Proteobacteria", "Diversità α", "SCFA"],
+    gradient: "from-emerald-600 to-teal-500",
+    icon: HeartPulse,
+  },
+  {
+    panelType: "epigenetics",
+    title: "Test Epigenetico",
+    desc: "Metilazione DNA, espressione genica",
+    tags: ["Metilazione", "Età biologica", "Stress ossidativo", "Detox"],
+    gradient: "from-violet-600 to-fuchsia-600",
+    icon: Dna,
+  },
+  {
+    panelType: "hormones",
+    title: "Profilo Ormonale",
+    desc: "Cortisolo, testosterone, ormoni tiroidei",
+    tags: ["Cortisolo", "Testosterone", "TSH", "T3", "T4", "DHEA"],
+    gradient: "from-orange-600 to-red-600",
+    icon: Heart,
+  },
+  {
+    panelType: "inflammation",
+    title: "Markers Infiammazione",
+    desc: "PCR, citochine, omocisteina",
+    tags: ["PCR-us", "IL-6", "TNF-α", "Omocisteina", "LDL-ox"],
+    gradient: "from-amber-500 to-orange-600",
+    icon: AlertTriangle,
+  },
+  {
+    panelType: "oxidative_stress",
+    title: "Stress Ossidativo",
+    desc: "Radicali liberi, capacità antiossidante",
+    tags: ["d-ROMs", "BAP", "Glutatione", "SOD", "Catalasi"],
+    gradient: "from-sky-600 to-indigo-700",
+    icon: Zap,
+  },
+] as const;
+
+export default function HealthPageView() {
+  const { athleteId, loading: ctxLoading } = useActiveAthlete();
+  const [panels, setPanels] = useState<HealthPanelTimelineRow[]>([]);
+  const [timelineErr, setTimelineErr] = useState<string | null>(null);
+  const [loadingTimeline, setLoadingTimeline] = useState(true);
+  const [uploadBusy, setUploadBusy] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [sampleDate, setSampleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const loadTimeline = useCallback(async () => {
+    if (!athleteId) {
+      setPanels([]);
+      setTimelineErr(null);
+      setLoadingTimeline(false);
+      return;
+    }
+    setLoadingTimeline(true);
+    const { panels: next, error } = await fetchHealthPanelsTimeline(athleteId);
+    setPanels(next);
+    setTimelineErr(error);
+    setLoadingTimeline(false);
+  }, [athleteId]);
+
+  useEffect(() => {
+    if (ctxLoading) return;
+    void loadTimeline();
+  }, [ctxLoading, loadTimeline]);
+
+  const bloodChartRows = useMemo(() => {
+    const fromDb = panels
+      .filter((p) => p.type === "blood")
+      .map(rowFromBloodPanel)
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .reverse();
+    if (fromDb.length >= 2) return fromDb;
+    return DEMO_BLOOD_TREND.map((r) => ({
+      label: r.label,
+      emoglobina: r.emoglobina,
+      ferritina: r.ferritina,
+      vit_d: r.vit_d,
+      b12: r.b12,
+      glicemia: r.glicemia,
+    }));
+  }, [panels]);
+
+  const usingDemoTrend = useMemo(() => {
+    const fromDb = panels
+      .filter((p) => p.type === "blood")
+      .map(rowFromBloodPanel)
+      .filter((r): r is NonNullable<typeof r> => r != null);
+    return fromDb.length < 2;
+  }, [panels]);
+
+  const latestInflammation = useMemo(() => panels.find((p) => p.type === "inflammation"), [panels]);
+  const latestMicrobiota = useMemo(() => panels.find((p) => p.type === "microbiota"), [panels]);
+  const latestHormones = useMemo(() => panels.find((p) => p.type === "hormones"), [panels]);
+  const latestEpigenetics = useMemo(() => panels.find((p) => p.type === "epigenetics"), [panels]);
+  const latestOxidative = useMemo(() => panels.find((p) => p.type === "oxidative_stress"), [panels]);
+
+  const inflammationRadar = useMemo(() => inflammationRadarFromPanel(latestInflammation), [latestInflammation]);
+  const microbiotaRadar = useMemo(() => microbiotaRadarFromPanel(latestMicrobiota), [latestMicrobiota]);
+  const hormonesBar = useMemo(() => hormonesBarFromPanel(latestHormones), [latestHormones]);
+  const epigeneticRings = useMemo(() => epigeneticRingsFromPanel(latestEpigenetics), [latestEpigenetics]);
+  const epigeneticRadar = useMemo(() => epigeneticRadarFromPanel(latestEpigenetics), [latestEpigenetics]);
+  const epigeneticTrend = useMemo(() => {
+    const fromDb = panels
+      .filter((p) => p.type === "epigenetics")
+      .map(rowFromEpigeneticTrendPanel)
+      .filter((r): r is NonNullable<typeof r> => r != null)
+      .reverse();
+    if (fromDb.length >= 2) return { rows: fromDb, isDemo: false as const };
+    return { rows: DEMO_EPIGENETIC_TREND, isDemo: true as const };
+  }, [panels]);
+  const oxidativeRadar = useMemo(() => oxidativeStressRadarFromPanel(latestOxidative), [latestOxidative]);
+  const endocrineRadar = useMemo(() => endocrineRadarFromPanel(latestHormones), [latestHormones]);
+
+  const globalScores = useMemo(() => {
+    const blood = panels.find((p) => p.type === "blood");
+    const micro = panels.find((p) => p.type === "microbiota");
+    const epi = panels.find((p) => p.type === "epigenetics");
+    const pick = (row: HealthPanelTimelineRow | undefined, keys: string[], fallback: number) => {
+      const n = readNum((row?.values as Record<string, unknown>) ?? null, keys);
+      return n != null ? Math.round(Math.min(100, Math.max(0, n))) : fallback;
+    };
+    return {
+      ematici: pick(blood, ["health_score_ematici", "score_ematici"], 92),
+      microbiota: pick(micro, ["health_score_microbiota", "score_microbiota", "diversity_score"], 88),
+      epigenetica: pick(epi, ["health_score_epigenetica", "score_epigenetica"], 85),
+      totale: pick(blood, ["health_score_totale", "score_totale"], 90),
+    };
+  }, [panels]);
+
+  async function onPickFile(panelType: string, file: File | null) {
+    if (!file || !athleteId) return;
+    setUploadBusy(panelType);
+    setToast(null);
+    const res = await uploadHealthDocument({
+      athleteId,
+      panelType,
+      sampleDate,
+      file,
+    });
+    setUploadBusy(null);
+    if (!res.ok) {
+      setToast(res.error ?? "Errore upload");
+      return;
+    }
+    setToast(res.message ?? "Caricamento registrato.");
+    void loadTimeline();
+  }
+
+  if (ctxLoading) {
+    return (
+      <div className="min-h-[40vh] px-6 py-16 text-center text-sm text-zinc-500">Caricamento contesto atleta…</div>
+    );
+  }
+
+  if (!athleteId) {
+    return (
+      <Pro2ModulePageShell
+        eyebrow="Health & Bio"
+        eyebrowClassName={moduleEyebrowClass("health")}
+        title="Diagnostica e longevità"
+        description="Seleziona un atleta attivo (Accesso / Athletes) per importare esami e vedere l’archivio."
+      >
+        <p className="text-sm text-amber-200/90">Nessun atleta attivo.</p>
+      </Pro2ModulePageShell>
+    );
+  }
+
+  return (
+    <Pro2ModulePageShell
+      eyebrow="EMPATHY PRO 2.0"
+      eyebrowClassName="bg-gradient-to-r from-fuchsia-400 to-orange-400 bg-clip-text text-transparent"
+      title="Health & Bio Analysis"
+      description={
+        <span className="flex flex-wrap items-center gap-2 text-zinc-400">
+          <Heart className="inline h-4 w-4 text-rose-400" strokeWidth={2} />
+          <span>Diagnostica avanzata · memoria atleta · trend</span>
+          <Sparkles className="inline h-4 w-4 text-violet-400" strokeWidth={2} />
+        </span>
+      }
+    >
+      <p className="text-center font-mono text-[0.6rem] font-bold uppercase tracking-[0.35em] text-fuchsia-300/90">
+        Sangue · Microbiota · Epigenetica · Ormoni · Infiammazione · Stress
+      </p>
+
+      <div id="health-import" className="scroll-mt-24">
+        <button
+          type="button"
+          className="flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-violet-600 via-fuchsia-600 to-orange-500 py-4 text-sm font-black uppercase tracking-widest text-white shadow-[0_0_40px_rgba(168,85,247,0.35)] transition hover:brightness-110"
+          onClick={() => document.getElementById("health-import-grid")?.scrollIntoView({ behavior: "smooth" })}
+        >
+          <Upload className="h-5 w-5" strokeWidth={2.5} />
+          Importazione esami
+          <Upload className="h-5 w-5" strokeWidth={2.5} />
+        </button>
+
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-3 text-xs text-zinc-500">
+          <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2">
+            Data campione
+            <input
+              type="date"
+              className="rounded border border-white/10 bg-zinc-900 px-2 py-1 text-white"
+              value={sampleDate}
+              onChange={(e) => setSampleDate(e.target.value)}
+            />
+          </label>
+          {timelineErr ? <span className="text-amber-400">{timelineErr}</span> : null}
+          {loadingTimeline ? <span>Sync archivio…</span> : null}
+        </div>
+      </div>
+
+      {/* Health score globale */}
+      <section
+        className="rounded-2xl border border-purple-500/40 bg-gradient-to-b from-purple-950/20 to-black/80 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+        aria-label="Health score globale"
+      >
+        <h2 className="text-center font-mono text-[0.7rem] font-bold uppercase tracking-[0.28em] text-fuchsia-300">
+          Health score globale
+        </h2>
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { k: "Ematici", v: globalScores.ematici, border: "border-red-500/50", bg: "bg-red-950/40", text: "text-rose-200" },
+            { k: "Microbiota", v: globalScores.microbiota, border: "border-emerald-500/50", bg: "bg-emerald-950/40", text: "text-emerald-200" },
+            { k: "Epigenetica", v: globalScores.epigenetica, border: "border-violet-500/50", bg: "bg-violet-950/40", text: "text-violet-200" },
+            { k: "Score totale", v: globalScores.totale, border: "border-orange-500/50", bg: "bg-orange-950/40", text: "text-orange-200" },
+          ].map((c) => (
+            <div
+              key={c.k}
+              className={`rounded-xl border ${c.border} ${c.bg} px-4 py-5 text-center shadow-inner`}
+            >
+              <div className={`text-3xl font-black ${c.text}`}>{c.v}</div>
+              <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{c.k}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Griglia importazione */}
+      <div id="health-import-grid" className="grid gap-5 md:grid-cols-2 lg:grid-cols-3 scroll-mt-24">
+        {IMPORT_CARDS.map((card) => {
+          const Icon = card.icon;
+          return (
+            <article
+              key={card.panelType}
+              className="flex flex-col overflow-hidden rounded-2xl border border-purple-500/25 bg-black/50 shadow-[0_0_0_1px_rgba(168,85,247,0.08)]"
+            >
+              <div
+                className={`flex items-center gap-2 bg-gradient-to-r px-4 py-3 ${card.gradient}`}
+              >
+                <Icon className="h-5 w-5 text-white" strokeWidth={2} />
+                <h3 className="text-sm font-bold uppercase tracking-wide text-white">{card.title}</h3>
+              </div>
+              <div className="flex flex-1 flex-col p-4">
+                <p className="text-xs text-zinc-400">{card.desc}</p>
+                <p className="mt-3 font-mono text-[0.55rem] font-bold uppercase tracking-wider text-zinc-500">
+                  Parametri analizzati
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {card.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-md border border-purple-500/30 bg-purple-950/30 px-2 py-0.5 text-[10px] text-zinc-300"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+                <input
+                  ref={(el) => {
+                    fileRefs.current[card.panelType] = el;
+                  }}
+                  type="file"
+                  accept=".pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    void onPickFile(card.panelType, f ?? null);
+                    e.target.value = "";
+                  }}
+                />
+                <Pro2Button
+                  type="button"
+                  variant="secondary"
+                  className="mt-auto w-full justify-center border-fuchsia-500/40 bg-gradient-to-r from-fuchsia-600/80 to-pink-600/80 text-white hover:brightness-110"
+                  disabled={uploadBusy === card.panelType}
+                  onClick={() => fileRefs.current[card.panelType]?.click()}
+                >
+                  {uploadBusy === card.panelType ? (
+                    "Invio…"
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Carica esame
+                    </>
+                  )}
+                </Pro2Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      {toast ? (
+        <p className="rounded-lg border border-emerald-500/30 bg-emerald-950/30 px-4 py-2 text-center text-sm text-emerald-200">
+          {toast}
+        </p>
+      ) : null}
+
+      {/* Epigenetica — anelli + radar pathway + trend */}
+      <section className="space-y-6 rounded-2xl border border-violet-500/30 bg-black/40 p-6">
+        <div>
+          <div className="mb-1 flex items-center gap-2 bg-gradient-to-r from-violet-600 to-blue-600 bg-clip-text text-transparent">
+            <Dna className="h-5 w-5 text-violet-400" />
+            <h2 className="text-lg font-bold text-violet-200">Epigenetica · metilazione e pathway</h2>
+          </div>
+          <p className="text-xs text-zinc-500">
+            Anelli percentuali, radar sintetico e trend temporale (da panel <code className="text-violet-300/90">epigenetics</code>).
+            {epigeneticRadar.isDemo && epigeneticTrend.isDemo ? " Dati demo finché mancano valori strutturati." : ""}
+          </p>
+        </div>
+
+        <div className="grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-violet-300/90">
+              Profilo a ciambelle
+            </h3>
+            <div className="h-[260px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadialBarChart
+                  cx="50%"
+                  cy="50%"
+                  innerRadius="20%"
+                  outerRadius="100%"
+                  data={epigeneticRings.map((r) => ({ ...r, fill: r.fill }))}
+                  startAngle={90}
+                  endAngle={-270}
+                >
+                  <RadialBar background dataKey="value" cornerRadius={6} />
+                  <Tooltip
+                    formatter={(v: number) => [`${v}%`, ""]}
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(167,139,250,0.35)" }}
+                  />
+                </RadialBarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {epigeneticRings.map((r) => (
+                <div
+                  key={r.name}
+                  className="rounded-lg border border-white/10 px-2 py-2 text-center"
+                  style={{ borderColor: `${r.fill}55` }}
+                >
+                  <div className="text-[10px] uppercase text-zinc-500">{r.name}</div>
+                  <div className="text-lg font-black" style={{ color: r.fill }}>
+                    {r.value}%
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-violet-300/90">
+              Pathway · radar
+            </h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={epigeneticRadar.rows}>
+                  <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: "#c4b5fd", fontSize: 9 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                  <Radar
+                    name="Score"
+                    dataKey="A"
+                    stroke="#a855f7"
+                    fill="#a855f7"
+                    fillOpacity={0.35}
+                    strokeWidth={2}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(168,85,247,0.4)" }}
+                    formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-fuchsia-300/90">
+            Trend metilazione / detox / riparazione
+            {epigeneticTrend.isDemo ? " (demo)" : ""}
+          </h3>
+          <div className="h-[260px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={epigeneticTrend.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="epiMeth" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.55} />
+                    <stop offset="100%" stopColor="#a855f7" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="epiDetox" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#22c55e" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                  </linearGradient>
+                  <linearGradient id="epiRep" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.5} />
+                    <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                <YAxis domain={[0, 100]} tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(217,70,239,0.35)" }}
+                />
+                <Legend />
+                <Area
+                  type="monotone"
+                  dataKey="metilazione"
+                  name="Metilazione"
+                  stroke="#a855f7"
+                  fill="url(#epiMeth)"
+                  strokeWidth={2}
+                  connectNulls
+                />
+                <Area
+                  type="monotone"
+                  dataKey="detox"
+                  name="Detox"
+                  stroke="#22c55e"
+                  fill="url(#epiDetox)"
+                  strokeWidth={2}
+                  connectNulls
+                />
+                <Area
+                  type="monotone"
+                  dataKey="riparazione"
+                  name="Riparazione"
+                  stroke="#3b82f6"
+                  fill="url(#epiRep)"
+                  strokeWidth={2}
+                  connectNulls
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* Endocrino — radar equilibrio + bar referto */}
+      <section className="rounded-2xl border border-orange-500/35 bg-black/40 p-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Heart className="h-5 w-5 text-orange-400" />
+          <h2 className="text-lg font-bold text-orange-200">Sistema endocrino</h2>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Radar funzionale (HPA, HPG, tiroide, DHEA, IGF-1) e barre con valori di referto dal panel{" "}
+          <code className="text-orange-300/90">hormones</code>.
+          {endocrineRadar.isDemo && hormonesBar.isDemo ? " Dati demo finché mancano numeri." : ""}
+        </p>
+        <div className="mt-6 grid gap-8 lg:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-orange-300/90">
+              Equilibrio assi
+            </h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={endocrineRadar.rows}>
+                  <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: "#fdba74", fontSize: 9 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                  <Radar
+                    name="Score"
+                    dataKey="A"
+                    stroke="#fb923c"
+                    fill="#fb923c"
+                    fillOpacity={0.32}
+                    strokeWidth={2}
+                  />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(251,146,60,0.4)" }}
+                    formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+          <div>
+            <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-orange-300/90">
+              Valori ormonali (referto)
+            </h3>
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={hormonesBar.rows} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 9 }} angle={-20} textAnchor="end" height={64} />
+                  <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(249,115,22,0.35)" }}
+                    formatter={(v: number) => [v, ""]}
+                  />
+                  <Bar dataKey="val" name="Valore" fill="#ea580c" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stress ossidativo — radar */}
+      <section className="rounded-2xl border border-sky-500/35 bg-black/40 p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <Zap className="h-5 w-5 text-sky-400" />
+          <h2 className="text-lg font-bold text-sky-200">Stress ossidativo · capacità antiossidante</h2>
+        </div>
+        <p className="text-xs text-zinc-500">
+          d-ROMs, BAP, glutatione, enzimi (panel <code className="text-sky-300/90">oxidative_stress</code>).{" "}
+          {oxidativeRadar.isDemo ? "Demo finché mancano valori." : ""}
+        </p>
+        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={oxidativeRadar.rows}>
+              <PolarGrid stroke="rgba(255,255,255,0.12)" />
+              <PolarAngleAxis dataKey="subject" tick={{ fill: "#7dd3fc", fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+              <Radar
+                name="Score"
+                dataKey="A"
+                stroke="#38bdf8"
+                fill="#38bdf8"
+                fillOpacity={0.35}
+                strokeWidth={2}
+              />
+              <Tooltip
+                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(56,189,248,0.4)" }}
+                formatter={(v: number) => [`${Math.round(v)}`, ""]}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Infiammazione — radar */}
+      <section className="rounded-2xl border border-amber-500/30 bg-black/40 p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <Flame className="h-5 w-5 text-amber-400" />
+          <h2 className="text-lg font-bold text-amber-200">Markers infiammatori</h2>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Radar · score sintetico (valori bassi = migliore){" "}
+          {inflammationRadar.isDemo ? "— demo finché manca un panel `inflammation` con numeri" : ""}
+        </p>
+        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={inflammationRadar.rows}>
+              <PolarGrid stroke="rgba(255,255,255,0.12)" />
+              <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+              <Radar
+                name="Score"
+                dataKey="A"
+                stroke="#f59e0b"
+                fill="#f59e0b"
+                fillOpacity={0.35}
+                strokeWidth={2}
+              />
+              <Tooltip
+                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(245,158,11,0.35)" }}
+                formatter={(v: number) => [`${Math.round(v)}`, ""]}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Microbiota — radar */}
+      <section className="rounded-2xl border border-emerald-500/30 bg-black/40 p-6">
+        <div className="mb-2 flex items-center gap-2">
+          <HeartPulse className="h-5 w-5 text-emerald-400" />
+          <h2 className="text-lg font-bold text-emerald-200">Composizione microbiota</h2>
+        </div>
+        <p className="text-xs text-zinc-500">
+          Percentuali / diversità (asse 0–100){" "}
+          {microbiotaRadar.isDemo ? "— demo finché manca un panel `microbiota` con numeri" : ""}
+        </p>
+        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+          <ResponsiveContainer width="100%" height="100%">
+            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={microbiotaRadar.rows}>
+              <PolarGrid stroke="rgba(255,255,255,0.12)" />
+              <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
+              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+              <Radar
+                name="Valore"
+                dataKey="A"
+                stroke="#34d399"
+                fill="#34d399"
+                fillOpacity={0.35}
+                strokeWidth={2}
+              />
+              <Tooltip
+                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(52,211,153,0.35)" }}
+                formatter={(v: number) => [`${Math.round(v)}`, ""]}
+              />
+            </RadarChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+
+      {/* Storico + andamento ematici */}
+      <section id="health-storico" className="scroll-mt-24 space-y-4">
+        <div className="rounded-2xl bg-gradient-to-r from-rose-600 to-red-600 px-4 py-3 text-center shadow-lg">
+          <h2 className="flex items-center justify-center gap-3 text-sm font-black uppercase tracking-widest text-white">
+            <Activity className="h-5 w-5" />
+            Storico esami del sangue
+            <Activity className="h-5 w-5" />
+          </h2>
+        </div>
+
+        <div className="rounded-2xl border border-rose-500/25 bg-black/50 p-5">
+          <h3 className="text-base font-bold text-pink-400">Andamento parametri ematici</h3>
+          <p className="text-xs text-zinc-500">Ultimi 6 mesi · valori principali {usingDemoTrend ? "(demo finché mancano ≥2 punti reali)" : ""}</p>
+          <div className="mt-4 h-[320px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={bloodChartRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(244,63,94,0.35)" }}
+                  labelStyle={{ color: "#fda4af" }}
+                />
+                <Legend />
+                <Line type="monotone" dataKey="emoglobina" name="Emoglobina (g/dL)" stroke="#f87171" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="ferritina" name="Ferritina (ng/mL)" stroke="#fb923c" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="vit_d" name="Vit. D (ng/mL)" stroke="#eab308" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="b12" name="B12 (pg/mL)" stroke="#4ade80" strokeWidth={2} dot />
+                <Line type="monotone" dataKey="glicemia" name="Glicemia (mg/dL)" stroke="#60a5fa" strokeWidth={2} dot />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </section>
+
+      {/* Archivio */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
+        <h3 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-400">Archivio test</h3>
+        <p className="mt-1 text-xs text-zinc-500">Memoria laboratorio collegata a biomarker_panels</p>
+        <ul className="mt-4 divide-y divide-white/10">
+          {panels.length === 0 ? (
+            <li className="py-6 text-center text-sm text-zinc-500">Nessun documento ancora. Usa «Carica esame» sopra.</li>
+          ) : (
+            panels.map((p) => {
+              const imp = (p.values as {
+                import?: { filename?: string; status?: string; storage_path?: string };
+              } | null)?.import;
+              return (
+                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                  <span className="font-medium text-white">{p.type}</span>
+                  <span className="text-zinc-500">{p.sample_date ?? p.created_at?.slice(0, 10) ?? "—"}</span>
+                  <span className="text-xs text-zinc-400">
+                    {imp?.filename
+                      ? `${imp.filename} · ${imp.status ?? "—"}${imp.storage_path ? ` · ${imp.storage_path}` : ""}`
+                      : "Valori strutturati"}
+                  </span>
+                </li>
+              );
+            })
+          )}
+        </ul>
+      </section>
+    </Pro2ModulePageShell>
+  );
+}

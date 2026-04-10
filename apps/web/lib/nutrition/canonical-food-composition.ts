@@ -191,6 +191,36 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     eaa_val: 0.18,
     eaa_his: 0.09,
   }),
+  /** Latte di capra (stime educative / USDA-like, per 100 ml ≈ 100 g). */
+  milk_goat: row({
+    kcalPer100g: 69,
+    proteinG: 3.6,
+    carbsG: 4.5,
+    fatG: 4.1,
+    fiberG: 0,
+    saturatedFatG: 2.7,
+    monoFatG: 1,
+    polyFatG: 0.15,
+    omega3G: 0.04,
+    vitA_mcg_RAE: 28,
+    vitD_mcg: 0.6,
+    vitB12_mcg: 0.05,
+    riboflavinB2_mg: 0.14,
+    ca_mg: 134,
+    p_mg: 111,
+    k_mg: 135,
+    na_mg: 50,
+    zn_mg: 0.34,
+    eaa_leu: 0.29,
+    eaa_lys: 0.24,
+    eaa_met: 0.09,
+    eaa_phe: 0.17,
+    eaa_thr: 0.15,
+    eaa_trp: 0.05,
+    eaa_ile: 0.16,
+    eaa_val: 0.19,
+    eaa_his: 0.1,
+  }),
   oat_dry: row({
     kcalPer100g: 389,
     proteinG: 13,
@@ -412,6 +442,66 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     eaa_ile: 0.2,
     eaa_val: 0.28,
     eaa_his: 0.12,
+  }),
+  pasta_dry: row({
+    kcalPer100g: 371,
+    proteinG: 13,
+    carbsG: 75,
+    fatG: 1.5,
+    fiberG: 3.2,
+    folate_mcg: 237,
+    fe_mg: 3.3,
+    mg_mg: 53,
+    p_mg: 189,
+    eaa_leu: 0.85,
+    eaa_lys: 0.35,
+    eaa_met: 0.22,
+    eaa_phe: 0.58,
+    eaa_thr: 0.42,
+    eaa_trp: 0.16,
+    eaa_ile: 0.52,
+    eaa_val: 0.58,
+    eaa_his: 0.28,
+  }),
+  rice_dry: row({
+    kcalPer100g: 365,
+    proteinG: 7.1,
+    carbsG: 80,
+    fatG: 0.7,
+    fiberG: 1.3,
+    folate_mcg: 8,
+    mg_mg: 25,
+    p_mg: 115,
+    k_mg: 115,
+    na_mg: 5,
+    eaa_leu: 0.55,
+    eaa_lys: 0.28,
+    eaa_met: 0.18,
+    eaa_phe: 0.38,
+    eaa_thr: 0.26,
+    eaa_trp: 0.1,
+    eaa_ile: 0.32,
+    eaa_val: 0.48,
+    eaa_his: 0.22,
+  }),
+  farro_dry: row({
+    kcalPer100g: 338,
+    proteinG: 14,
+    carbsG: 70,
+    fatG: 2.2,
+    fiberG: 10,
+    mg_mg: 60,
+    zn_mg: 2.5,
+    fe_mg: 2.5,
+    eaa_leu: 0.95,
+    eaa_lys: 0.42,
+    eaa_met: 0.28,
+    eaa_phe: 0.58,
+    eaa_thr: 0.38,
+    eaa_trp: 0.14,
+    eaa_ile: 0.48,
+    eaa_val: 0.62,
+    eaa_his: 0.3,
   }),
   chicken_breast: row({
     kcalPer100g: 165,
@@ -703,16 +793,29 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   { test: /avocado/i, key: "avocado" },
   { test: /gallette|cracker/i, key: "crackers_whole" },
   { test: /bresaola|prosciutto|affettato|mortadella|salame/i, key: "deli_lean" },
+  { test: /latte di capra|latte caprina|goat milk|latte\s+di\s+capra/i, key: "milk_goat" },
   { test: /latte\b|milk/i, key: "milk_2pct" },
-  { test: /yogurt|yoghurt/i, key: "yogurt_plain" },
+  { test: /yogurt|yoghurt|kefir/i, key: "yogurt_plain" },
   { test: /cereal|muesli|avena|fiocchi/i, key: "oat_dry" },
   { test: /banana/i, key: "banana" },
   { test: /uov|egg/i, key: "egg_whole" },
   { test: /pane|focaccia|bread|toast/i, key: "bread_white" },
-  { test: /pasta|spaghetti|penne|tagliatelle/i, key: "pasta_cooked" },
-  { test: /riso|rice|basmati|jasmine/i, key: "rice_cooked" },
+  {
+    test: /(pasta|spaghetti|penne|tagliatelle).*(cotto|cottura|peso\s*cotto|già\s*cotta|cooked)/i,
+    key: "pasta_cooked",
+  },
+  { test: /pasta|spaghetti|penne|tagliatelle/i, key: "pasta_dry" },
+  {
+    test: /(riso|rice|basmati|jasmine).*(cotto|cottura|peso\s*cotto|già\s*cotto|cooked)/i,
+    key: "rice_cooked",
+  },
+  { test: /riso|rice|basmati|jasmine/i, key: "rice_dry" },
   { test: /patat|potato/i, key: "potato_cooked" },
-  { test: /farro|orzo|grano/i, key: "farro_cooked" },
+  {
+    test: /(farro|orzo|grano).*(cotto|cottura|peso\s*cotto|già\s*cotto|cooked)/i,
+    key: "farro_cooked",
+  },
+  { test: /farro|orzo/i, key: "farro_dry" },
   { test: /pollo|chicken|tacchino|turkey|petto/i, key: "chicken_breast" },
   { test: /pesce|salmone|merluzz|tonno|fish|tuna|salmon/i, key: "fish_white" },
   { test: /manzo|beef|maiale|pork|agnello|lamb|carne/i, key: "beef_lean" },
@@ -777,6 +880,84 @@ export function scaleCanonicalNutrientsToKcal(row: CanonicalFoodNutrients, targe
   };
 }
 
+/** Massa edibile da porzione testuale quando è esplicita (g o ml con densità nota per olio). */
+const OLIVE_OIL_G_PER_ML = 0.92;
+
+function parseExplicitGramsFromPortionHint(hint: string): number | undefined {
+  const m = hint.match(/(\d+(?:[.,]\d+)?)\s*g(?:rammi?)?\b/i);
+  if (!m) return undefined;
+  const v = parseFloat(m[1].replace(",", "."));
+  if (!Number.isFinite(v) || v <= 0) return undefined;
+  return v;
+}
+
+function parseMlFromPortionHint(hint: string): number | undefined {
+  const m = hint.match(/(\d+(?:[.,]\d+)?)\s*ml\b/i);
+  if (!m) return undefined;
+  const v = parseFloat(m[1].replace(",", "."));
+  if (!Number.isFinite(v) || v <= 0) return undefined;
+  return v;
+}
+
+function resolveServingGramsFromPortionHint(portionHint: string, compositionKey: string): number | undefined {
+  const hint = portionHint.trim();
+  if (!hint) return undefined;
+  const g = parseExplicitGramsFromPortionHint(hint);
+  if (g != null) return g;
+  const ml = parseMlFromPortionHint(hint);
+  if (ml == null) return undefined;
+  if (compositionKey === "olive_oil") return ml * OLIVE_OIL_G_PER_ML;
+  return undefined;
+}
+
+/** Scala il profilo per 100 g su una massa edibile nota (g). */
+export function scaleCanonicalNutrientsToGrams(row: CanonicalFoodNutrients, gramsEdible: number): ScaledMealItemNutrients {
+  const g = Math.max(0.1, gramsEdible);
+  const f = g / 100;
+  const num = (v: number) => Math.round(v * f * 1000) / 1000;
+  const numMicro = (v: number) => Math.round(v * f * 10) / 10;
+  const kcal = Math.max(1, Math.round(row.kcalPer100g * f));
+  return {
+    kcal,
+    proteinG: num(row.proteinG),
+    carbsG: num(row.carbsG),
+    fatG: num(row.fatG),
+    fiberG: num(row.fiberG),
+    saturatedFatG: num(row.saturatedFatG),
+    monoFatG: num(row.monoFatG),
+    polyFatG: num(row.polyFatG),
+    omega3G: num(row.omega3G),
+    vitA_mcg_RAE: numMicro(row.vitA_mcg_RAE),
+    vitC_mg: numMicro(row.vitC_mg),
+    vitD_mcg: numMicro(row.vitD_mcg),
+    vitE_mg: numMicro(row.vitE_mg),
+    vitK_mcg: numMicro(row.vitK_mcg),
+    thiamineB1_mg: numMicro(row.thiamineB1_mg),
+    riboflavinB2_mg: numMicro(row.riboflavinB2_mg),
+    niacinB3_mg: numMicro(row.niacinB3_mg),
+    vitB6_mg: numMicro(row.vitB6_mg),
+    folate_mcg: numMicro(row.folate_mcg),
+    vitB12_mcg: numMicro(row.vitB12_mcg),
+    ca_mg: numMicro(row.ca_mg),
+    fe_mg: numMicro(row.fe_mg),
+    mg_mg: numMicro(row.mg_mg),
+    p_mg: numMicro(row.p_mg),
+    k_mg: numMicro(row.k_mg),
+    na_mg: numMicro(row.na_mg),
+    zn_mg: numMicro(row.zn_mg),
+    se_mcg: numMicro(row.se_mcg),
+    eaa_leu: num(row.eaa_leu),
+    eaa_lys: num(row.eaa_lys),
+    eaa_met: num(row.eaa_met),
+    eaa_phe: num(row.eaa_phe),
+    eaa_thr: num(row.eaa_thr),
+    eaa_trp: num(row.eaa_trp),
+    eaa_ile: num(row.eaa_ile),
+    eaa_val: num(row.eaa_val),
+    eaa_his: num(row.eaa_his),
+  };
+}
+
 export function nutrientsForMealPlanItem(item: { name: string; portionHint: string; approxKcal: number }): {
   compositionKey: string;
   nutrients: ScaledMealItemNutrients;
@@ -784,7 +965,12 @@ export function nutrientsForMealPlanItem(item: { name: string; portionHint: stri
   const hay = `${item.name} ${item.portionHint}`;
   const compositionKey = inferCanonicalFoodKey(hay);
   const row = CANONICAL_FOOD_TABLE[compositionKey] ?? CANONICAL_FOOD_TABLE.generic_mixed;
-  const nutrients = scaleCanonicalNutrientsToKcal(row, item.approxKcal);
+  const hintForServing = `${item.portionHint} ${item.name}`.trim();
+  const gramsFromHint = resolveServingGramsFromPortionHint(hintForServing, compositionKey);
+  const nutrients =
+    gramsFromHint != null
+      ? scaleCanonicalNutrientsToGrams(row, gramsFromHint)
+      : scaleCanonicalNutrientsToKcal(row, item.approxKcal);
   return { compositionKey, nutrients };
 }
 

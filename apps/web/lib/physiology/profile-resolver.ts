@@ -288,9 +288,20 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
     version: pickString(performanceValues, ["version", "model_version"]) ?? undefined,
     vo2maxMlMinKg,
     intensityPctFtp: pickNumber(performanceValues, ["intensityPctFtp", "intensity_pct_ftp"]) ?? undefined,
+    oxidativeCapacityKcalMinGross:
+      pickNumber(performanceValues, ["oxidativeCapacityKcalMinGross", "oxidative_capacity_kcal_min_gross"]) ?? undefined,
     oxidativeCapacityKcalMin: pickNumber(performanceValues, ["oxidativeCapacityKcalMin", "oxidative_capacity_kcal_min"]) ?? undefined,
     requiredKcalMin: pickNumber(performanceValues, ["requiredKcalMin", "required_kcal_min"]) ?? undefined,
+    oxidativeDemandKcalMin:
+      pickNumber(performanceValues, ["oxidativeDemandKcalMin", "oxidative_demand_kcal_min"]) ?? undefined,
+    aerobicPowerDemandW: pickNumber(performanceValues, ["aerobicPowerDemandW", "aerobic_power_demand_w"]) ?? undefined,
+    glycolyticPowerDemandW:
+      pickNumber(performanceValues, ["glycolyticPowerDemandW", "glycolytic_power_demand_w"]) ?? undefined,
     utilizationRatioPct: pickNumber(performanceValues, ["utilizationRatioPct", "utilization_ratio_pct"]) ?? undefined,
+    utilizationVo2CoherencePct:
+      pickNumber(performanceValues, ["utilizationVo2CoherencePct", "utilization_vo2_coherence_pct"]) ?? undefined,
+    utilizationDeliveryStressPct:
+      pickNumber(performanceValues, ["utilizationDeliveryStressPct", "utilization_delivery_stress_pct"]) ?? undefined,
     oxidativeBottleneckIndex: pickNumber(performanceValues, ["oxidativeBottleneckIndex", "oxidative_bottleneck_index"]) ?? undefined,
     redoxStressIndex: pickNumber(performanceValues, ["redoxStressIndex", "redox_stress_index"]) ?? undefined,
     centralDeliveryIndex: pickNumber(performanceValues, ["centralDeliveryIndex", "central_delivery_index"]) ?? undefined,

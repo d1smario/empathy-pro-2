@@ -30,6 +30,10 @@ export async function fetchTrainingAnalyticsRows(input: {
       recoverySummary: null,
       operationalContext: null,
       bioenergeticModulation: null,
+      adaptationGuidance: null,
+      nutritionPerformanceIntegration: null,
+      crossModuleDynamicsLines: [],
+      readSpineCoverage: null,
       error: error instanceof Error ? error.message : "Training analytics fetch failed",
     };
   }
@@ -49,6 +53,10 @@ export async function fetchTrainingAnalyticsRows(input: {
       recoverySummary: null,
       operationalContext: null,
       bioenergeticModulation: null,
+      adaptationGuidance: null,
+      nutritionPerformanceIntegration: null,
+      crossModuleDynamicsLines: [],
+      readSpineCoverage: null,
       error: payload.error ?? "Training analytics fetch failed",
     };
   }
@@ -67,6 +75,10 @@ export async function fetchTrainingAnalyticsRows(input: {
     recoverySummary: payload.recoverySummary ?? null,
     operationalContext: payload.operationalContext ?? null,
     bioenergeticModulation: payload.bioenergeticModulation ?? null,
+    adaptationGuidance: payload.adaptationGuidance ?? null,
+    nutritionPerformanceIntegration: payload.nutritionPerformanceIntegration ?? null,
+    crossModuleDynamicsLines: payload.crossModuleDynamicsLines ?? [],
+    readSpineCoverage: payload.readSpineCoverage ?? null,
     error: payload.error,
     athleteId: payload.athleteId,
     from: payload.from,

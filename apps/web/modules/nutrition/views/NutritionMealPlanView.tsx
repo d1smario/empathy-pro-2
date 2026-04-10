@@ -503,6 +503,24 @@ export function NutritionMealPlanWorkspace({
                     bundle.pathwayTargets ?? [],
                   );
                   const expoItems = buildExpositionItemsFromDryLines(dryLines, totals);
+                  const expoSum = expoItems.reduce(
+                    (a, it) => ({
+                      kcal: a.kcal + it.kcal,
+                      carbsG: a.carbsG + it.carbsG,
+                      proteinG: a.proteinG + it.proteinG,
+                      fatG: a.fatG + it.fatG,
+                    }),
+                    { kcal: 0, carbsG: 0, proteinG: 0, fatG: 0 },
+                  );
+                  const slotTotals =
+                    expoItems.length > 0
+                      ? {
+                          kcal: Math.round(expoSum.kcal),
+                          carbsG: Math.round(expoSum.carbsG * 10) / 10,
+                          proteinG: Math.round(expoSum.proteinG * 10) / 10,
+                          fatG: Math.round(expoSum.fatG * 10) / 10,
+                        }
+                      : totals;
 
                   return (
                     <EmpathyMealPlanExpositionCard
@@ -510,10 +528,10 @@ export function NutritionMealPlanWorkspace({
                       slot={slotKey}
                       titleUpper={meal.label.toUpperCase()}
                       subline={meal.portionHint?.trim() || meal.time}
-                      totalKcal={totals.kcal}
-                      carbsG={totals.carbsG}
-                      proteinG={totals.proteinG}
-                      fatG={totals.fatG}
+                      totalKcal={slotTotals.kcal}
+                      carbsG={slotTotals.carbsG}
+                      proteinG={slotTotals.proteinG}
+                      fatG={slotTotals.fatG}
                       items={expoItems}
                     />
                   );

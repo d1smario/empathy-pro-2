@@ -34,3 +34,11 @@ export function readOptionalServiceRoleKey(): string | null {
   const key = normalizeSupabaseEnvValue(raw);
   return key.length > 0 ? key : null;
 }
+
+/** Bucket Storage per PDF esami Health (opzionale). */
+export function readOptionalHealthUploadsBucket(): string | null {
+  const raw = process.env.HEALTH_UPLOADS_BUCKET;
+  if (!raw?.trim()) return null;
+  const name = normalizeSupabaseEnvValue(raw);
+  return name.length > 0 ? name : null;
+}

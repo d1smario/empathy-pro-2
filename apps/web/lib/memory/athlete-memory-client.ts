@@ -1,9 +1,10 @@
 import type { AthleteMemory } from "@/lib/empathy/schemas";
+import { buildSupabaseAuthHeaders } from "@/lib/auth/client-auth";
 
 export async function fetchAthleteMemory(athleteId: string): Promise<AthleteMemory> {
   const response = await fetch(`/api/athlete-memory?athleteId=${encodeURIComponent(athleteId)}`, {
     method: "GET",
-    headers: { "Content-Type": "application/json" },
+    headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
     cache: "no-store",
   });
 

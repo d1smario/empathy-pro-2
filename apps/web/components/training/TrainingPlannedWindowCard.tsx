@@ -7,18 +7,13 @@ import {
   type PlannedWorkout,
 } from "@empathy/domain-training";
 import { useEffect, useState } from "react";
-import { cn } from "@/lib/cn";
-import { useActiveAthlete } from "@/lib/use-active-athlete";
+import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
+import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
 import { Pro2Link } from "@/components/ui/empathy";
-
-type ApiOk = {
-  ok: true;
-  from: string;
-  to: string;
-  athleteId: string;
-  planned: PlannedWorkout[];
-  executed: ExecutedWorkout[];
-};
+import { cn } from "@/lib/cn";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
+import { useActiveAthlete } from "@/lib/use-active-athlete";
 
 type ApiErr = { ok: false; error?: string; planned?: []; executed?: [] };
 
@@ -32,6 +27,8 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
   const [range, setRange] = useState<{ from: string; to: string } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
+  const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -39,6 +36,8 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
       setPlanned([]);
       setExecuted([]);
       setRange(null);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
       setErr("No active athlete: open Settings or complete profile (private / coach).");
       setLoading(false);
       return;
@@ -50,21 +49,32 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
       setErr(null);
       try {
         const q = new URLSearchParams({ athleteId });
-        const res = await fetch(`/api/training/planned-window?${q.toString()}`, { cache: "no-store" });
-        const json = (await res.json()) as ApiOk | ApiErr;
+        const res = await fetch(`/api/training/planned-window?${q.toString()}`, {
+          cache: "no-store",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | ApiErr;
         if (cancelled) return;
         if (!res.ok || !json.ok) {
           setPlanned([]);
           setExecuted([]);
           setRange(null);
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
           setErr(("error" in json && json.error) || "Could not load data.");
           return;
         }
         setPlanned(json.planned);
         setExecuted(json.executed ?? []);
         setRange({ from: json.from, to: json.to });
+        setReadSpineCoverage(json.readSpineCoverage ?? null);
+        setTwinContextStrip(json.twinContextStrip ?? null);
       } catch {
-        if (!cancelled) setErr("Network error.");
+        if (!cancelled) {
+          setErr("Network error.");
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -91,6 +101,15 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
         <p className="mt-1 font-mono text-xs text-gray-500">
           {range.from} → {range.to}
         </p>
+      ) : null}
+
+      {readSpineCoverage && !err ? (
+        <TrainingPlannedWindowContextStrip
+          className="mt-4"
+          label="Calendar"
+          readSpineCoverage={readSpineCoverage}
+          twinContextStrip={twinContextStrip}
+        />
       ) : null}
 
       {ctxLoading || loading ? (

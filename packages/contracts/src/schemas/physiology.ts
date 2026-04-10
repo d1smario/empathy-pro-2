@@ -16,7 +16,7 @@ export type PhysiologicalProfile = {
   lt2HeartRate?: number;
   /** Zone (percentuali o assolute); definizione dipende da dominio */
   zones?: PowerZone[] | HeartRateZone[];
-  /** Stima capacità glicolitica (mmol/L/s o simile) */
+  /** Proxy adimensionale glicolitico da motore CP (~0.3–0.8), non V̇La max di laboratorio */
   vLamax?: number;
   vo2maxMlMinKg?: number;
   /** Economia (es. W/L O2) */
@@ -87,6 +87,12 @@ export type LactateProfile = {
   lactateOxidizedG?: number;
   lactateCoriG?: number;
   lactateAccumG?: number;
+  lactateFromAnaerobicGlycolysisG?: number;
+  lactateFromAerobicGlycolysisG?: number;
+  lactateFateOxidationPct?: number;
+  lactateFateCoriPct?: number;
+  lactateFateAccumPct?: number;
+  gutAbsorptionYieldPctOfIngested?: number;
   glucoseFromCoriG?: number;
   glucoseNetFromCoriG?: number;
   coriCostKcal?: number;
@@ -111,9 +117,15 @@ export type PerformanceProfile = {
   version?: string;
   vo2maxMlMinKg?: number;
   intensityPctFtp?: number;
+  oxidativeCapacityKcalMinGross?: number;
   oxidativeCapacityKcalMin?: number;
   requiredKcalMin?: number;
+  oxidativeDemandKcalMin?: number;
+  aerobicPowerDemandW?: number;
+  glycolyticPowerDemandW?: number;
   utilizationRatioPct?: number;
+  utilizationVo2CoherencePct?: number;
+  utilizationDeliveryStressPct?: number;
   oxidativeBottleneckIndex?: number;
   redoxStressIndex?: number;
   centralDeliveryIndex?: number;

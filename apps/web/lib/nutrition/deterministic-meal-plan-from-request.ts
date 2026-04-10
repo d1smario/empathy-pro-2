@@ -5,10 +5,23 @@ import type {
   IntelligentMealPlanRequestSlot,
   IntelligentMealPlanSlotOut,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { MEAL_SLOT_ORDER, rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import type { MediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
+
+/** Allinea `approxKcal` alla stima canonica da nome + porzione (grammi/ml dove parsabili), non a ripartizioni uguali sulle voci. */
+function syncItemsApproxKcalFromCanonical(items: IntelligentMealPlanItemOut[]): IntelligentMealPlanItemOut[] {
+  return items.map((it) => {
+    const { nutrients } = nutrientsForMealPlanItem({
+      name: it.name,
+      portionHint: it.portionHint,
+      approxKcal: it.approxKcal,
+    });
+    return { ...it, approxKcal: Math.max(8, Math.round(nutrients.kcal)) };
+  });
+}
 
 function pickItemsForSlot(slot: IntelligentMealPlanRequestSlot, dayCtx: MediterraneanDayContext): IntelligentMealPlanItemOut[] {
   const slotMacros = {
@@ -22,14 +35,17 @@ function pickItemsForSlot(slot: IntelligentMealPlanRequestSlot, dayCtx: Mediterr
   const bridgePrefix = groupTitles
     ? `Target funzionali (solver): ${groupTitles.slice(0, 180)}${groupTitles.length > 180 ? "…" : ""}. `
     : "";
-  return composed.items.map((it) => ({
+  const bridged = composed.items.map((it) => ({
     ...it,
     functionalBridge: `${bridgePrefix}Composizione mediterranea semplice: ${it.functionalBridge}`.slice(0, 500),
   }));
+  return syncItemsApproxKcalFromCanonical(bridged);
 }
 
 /**
- * Piano pasti assemblato solo da dati già nel request (gruppi funzionali + candidati), senza OpenAI.
+ * Piano pasti assemblato solo da dati già nel request, senza OpenAI.
+ * Flusso: fabbisogno e macro per slot (solver × profilo × training) → scelta fonti (CHO / PRO / grassi / fibre-vitamine)
+ * → porzioni stimati dal composer → kcal voce da banca canonica + quantità (mai ripartizione uguale sul numero di voci).
  */
 export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRequest): IntelligentMealPlanAssembledCore {
   const slotByKey = new Map(req.slots.map((s) => [s.slot, s] as const));
@@ -46,16 +62,15 @@ export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRe
       req.pathwayTimingLines[0] ??
       `Orario pasto ${slot.scheduledTimeLocal || "—"}; allinea al carico del giorno.`;
 
-    let row: IntelligentMealPlanSlotOut = {
+    const row: IntelligentMealPlanSlotOut = {
       slot: slot.slot,
       targetKcalEcho: slot.targetKcal,
       items,
       slotCoherence: groupTitles
         ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
-        : `Pasto da candidati con target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot.`,
+        : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`,
       slotTimingRationale: timing.slice(0, 400),
     };
-    row = rescaleSlotKcalToTarget(row, slot.targetKcal);
     return row;
   });
 
@@ -70,7 +85,7 @@ export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRe
   const core: IntelligentMealPlanAssembledCore = {
     layer: "deterministic_meal_assembly_v1",
     disclaimer:
-      "Piano mediterraneo semplice: porzioni scalate sui target kcal/macro dello slot (solver); pasti principali con un solo amido e una sola fonte proteica. I gruppi funzionali/USDA restano per contesto metabolico, non per elenchi casuali. Non sostituisce parere medico.",
+      "Piano da motore deterministico: per ogni pasto si scelgono fonti di carboidrati, proteine, grassi e fibre (verdura/frutta), poi si stimano le quantità e le kcal per voce dalla banca composizione (non ripartizione uguale tra alimenti). Target pasto = output solver; la somma delle voci può discostarsi leggermente se le porzioni sono arrotondate. Non sostituisce parere medico.",
     slots,
     dayInteractionSummary:
       dayBits.join(" · ").slice(0, 800) ||

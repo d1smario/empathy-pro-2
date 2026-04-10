@@ -41,3 +41,10 @@ export function hostedCheckoutAvailability(): HostedCheckoutAvailability {
     coachOlimpic: stripePriceIdForCoachAddOn("olimpic") != null,
   };
 }
+
+/** True se un checkout abbonamento può completarsi (anon + secret + almeno un prezzo base). */
+export function checkoutPayReady(): boolean {
+  if (!isAnonymousStripeCheckoutEnabled()) return false;
+  if (readStripeSecretKey() == null) return false;
+  return stripePriceIdForBasePlan("silver") != null || stripePriceIdForBasePlan("gold") != null;
+}

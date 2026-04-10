@@ -125,6 +125,18 @@ export default function TrainingViryaPageView() {
         <TrainingSubnav />
       </div>
 
+      {ctx?.readSpineCoverage && !err ? (
+        <details className="mb-4 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
+          <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-violet-300/90">
+            Spina lettura (athlete-memory) · {ctx.readSpineCoverage.spineScore}%
+          </summary>
+          <p className="mt-2 text-xs text-slate-500">
+            Allineato alla dashboard hub: verifica rapida di profilo, fisiologia, twin e moduli collegati prima di
+            pianificare con Virya.
+          </p>
+        </details>
+      ) : null}
+
       {err ? (
         <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
           {err}
@@ -151,8 +163,16 @@ export default function TrainingViryaPageView() {
                 <dd className="text-right text-xs text-slate-400">
                   Profilo {ctx.connectedModules?.profile ? "sì" : "no"} · Fisiologia{" "}
                   {ctx.connectedModules?.physiology ? "sì" : "no"} · Salute {ctx.connectedModules?.health ? "sì" : "no"}
+                  {" · "}
+                  Twin {ctx.twinState ? "sì" : "no"}
                 </dd>
               </div>
+              {!ctx.twinState ? (
+                <p className="text-xs text-amber-200/80">
+                  Digital twin non ancora risolto in memoria: contesto fisiologia da resolver canonico; modulazione
+                  bioenergetica disattivata finché non c&apos;è uno stato twin.
+                </p>
+              ) : null}
               {ctx.operationalContext ? (
                 <div className="rounded-lg border border-white/10 bg-black/30 p-3 text-xs text-slate-400">
                   <p className="font-semibold text-violet-200/90">Contesto operativo giorno</p>
@@ -214,6 +234,16 @@ export default function TrainingViryaPageView() {
               <p className="mt-2 font-mono text-[0.65rem] text-slate-500">
                 scala {Math.round(ctx.bioenergeticModulation.loadScalePct)}% · {ctx.bioenergeticModulation.state}
               </p>
+            </Pro2SectionCard>
+          ) : null}
+
+          {ctx.crossModuleDynamicsLines?.length ? (
+            <Pro2SectionCard accent="cyan" title="Dinamica Nutrition ↔ Training" subtitle="Ponte deterministico cross-modulo" icon={LineChart}>
+              <ul className="list-inside list-disc space-y-1 text-xs leading-relaxed text-slate-400">
+                {ctx.crossModuleDynamicsLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
             </Pro2SectionCard>
           ) : null}
 

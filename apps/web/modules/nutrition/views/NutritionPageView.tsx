@@ -9,11 +9,13 @@ import { NutritionSubnav } from "@/components/nutrition/NutritionSubnav";
 import { SessionKnowledgeSummary } from "@/components/nutrition/SessionKnowledgeSummary";
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
 import type {
+  AdaptationGuidance,
   AthleteMemory,
   LifestyleActivityClass,
   NutritionDailyEnergyModel,
   PhysiologyState,
 } from "@/lib/empathy/schemas";
+import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 import {
   computeNutritionDailyEnergyModel,
   normalizeLifestyleActivityClass,

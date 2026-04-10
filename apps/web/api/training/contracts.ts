@@ -1,4 +1,4 @@
-import type { PlannedWorkout } from "@empathy/domain-training";
+import type { ExecutedWorkout, PlannedWorkout } from "@empathy/domain-training";
 import type {
   AdaptationGuidance,
   AthleteMemory,
@@ -16,6 +16,29 @@ import type { TrainingDayOperationalContext } from "@/lib/training/day-operation
 import type { CanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import type { DailyLoadPoint } from "@/lib/training/analytics/load-series";
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
+
+/** Strip twin per contesto operativo su calendario / giornata (senza payload twin completo). */
+export type TrainingTwinContextStripViewModel = {
+  asOf: string | null;
+  readiness: number | null;
+  fatigueAcute: number | null;
+  glycogenStatus: number | null;
+  adaptationScore: number | null;
+};
+
+/** `ok: true` da `GET /api/training/planned-window` (esteso roadmap: spina + twin). */
+export type TrainingPlannedWindowOkViewModel = {
+  ok: true;
+  from: string;
+  to: string;
+  athleteId: string;
+  planned: PlannedWorkout[];
+  executed: ExecutedWorkout[];
+  /** `null` se `includeAthleteContext=0` (solo planned/executed, meno latenza). */
+  readSpineCoverage: ReadSpineCoverageSummary | null;
+  twinContextStrip: TrainingTwinContextStripViewModel | null;
+};
 
 export type TrainingAdaptationLoopViewModel = {
   windowDays: number;
@@ -67,6 +90,9 @@ export type TrainingPlannerContextViewModel = {
   operationalContext?: TrainingDayOperationalContext | null;
   adaptationLoop?: TrainingAdaptationLoopViewModel | null;
   bioenergeticModulation?: TrainingBioenergeticModulationViewModel | null;
+  adaptationGuidance?: AdaptationGuidance | null;
+  nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
+  crossModuleDynamicsLines?: string[];
   knowledgeModulation?: KnowledgeModulationSnapshot | null;
   researchPlans?: ResearchPlan[];
   researchTraces?: KnowledgeResearchTraceSummary[];
@@ -77,6 +103,8 @@ export type TrainingPlannerContextViewModel = {
     physiology: boolean;
     health: boolean;
   };
+  /** Copertura read-spine su `AthleteMemory` (stesso schema dashboard hub). */
+  readSpineCoverage?: ReadSpineCoverageSummary | null;
   error?: string | null;
 };
 
@@ -282,6 +310,10 @@ export type TrainingAnalyticsViewModel = {
   recoverySummary: RecoverySummary | null;
   operationalContext: TrainingDayOperationalContext | null;
   bioenergeticModulation: TrainingBioenergeticModulationViewModel | null;
+  adaptationGuidance?: AdaptationGuidance | null;
+  nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
+  crossModuleDynamicsLines?: string[];
+  readSpineCoverage?: ReadSpineCoverageSummary | null;
   error?: string | null;
 };
 

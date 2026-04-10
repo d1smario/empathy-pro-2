@@ -10,20 +10,18 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { BuilderDayKpiPanel } from "@/components/training/BuilderDayKpiPanel";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
+import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
+import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
+import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-type WindowOk = {
-  ok: true;
-  planned: PlannedWorkout[];
-  executed: ExecutedWorkout[];
-};
 
 type WindowErr = { ok: false; error?: string };
 
@@ -41,6 +39,8 @@ export default function TrainingSessionPageView() {
   const [err, setErr] = useState<string | null>(null);
   const [planned, setPlanned] = useState<PlannedWorkout[]>([]);
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
+  const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
+  const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
 
   useEffect(() => {
     if (!dateValid) {
@@ -48,6 +48,8 @@ export default function TrainingSessionPageView() {
       setErr(null);
       setPlanned([]);
       setExecuted([]);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
       return;
     }
     if (ctxLoading) return;
@@ -55,6 +57,8 @@ export default function TrainingSessionPageView() {
       setLoading(false);
       setPlanned([]);
       setExecuted([]);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
       setErr("Nessun atleta attivo.");
       return;
     }
@@ -65,22 +69,31 @@ export default function TrainingSessionPageView() {
       setErr(null);
       try {
         const q = new URLSearchParams({ athleteId, from: date, to: date });
-        const res = await fetch(`/api/training/planned-window?${q}`, { cache: "no-store" });
-        const json = (await res.json()) as WindowOk | WindowErr;
+        const res = await fetch(`/api/training/planned-window?${q}`, {
+          cache: "no-store",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | WindowErr;
         if (cancelled) return;
         if (!res.ok || !json.ok) {
           setPlanned([]);
           setExecuted([]);
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
           setErr(("error" in json && json.error) || "Lettura non riuscita.");
           return;
         }
         setPlanned(json.planned);
         setExecuted(json.executed);
+        setReadSpineCoverage(json.readSpineCoverage ?? null);
+        setTwinContextStrip(json.twinContextStrip ?? null);
       } catch {
         if (!cancelled) {
           setErr("Errore di rete.");
           setPlanned([]);
           setExecuted([]);
+          setReadSpineCoverage(null);
+          setTwinContextStrip(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -182,6 +195,15 @@ export default function TrainingSessionPageView() {
       <div className="scroll-mt-28">
         <TrainingSubnav />
       </div>
+
+      {dateValid && readSpineCoverage && athleteId ? (
+        <TrainingPlannedWindowContextStrip
+          className="mb-4"
+          label="Giornata"
+          readSpineCoverage={readSpineCoverage}
+          twinContextStrip={twinContextStrip}
+        />
+      ) : null}
 
       {dateValid && dayKpi && !ctxLoading && !loading && !err ? (
         <BuilderDayKpiPanel

@@ -24,3 +24,6 @@ export type {
 export function countResearchPlanHops(plan: ResearchPlan): number {
   return plan.hops.length;
 }
+
+/** Multiscale biological engine (ontology seed, graph, bindings, bottleneck view). */
+export * from "./multiscale";

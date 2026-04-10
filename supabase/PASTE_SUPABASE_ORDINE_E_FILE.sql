@@ -1,0 +1,25 @@
+-- =============================================================================
+-- ISTRUZIONI (NON sono comandi da eseguire come unica query utile):
+-- Questo file è solo commenti: puoi incollarlo nel SQL Editor senza errori.
+-- Per i dati veri usa i file .sql elencati sotto (uno alla volta o il seed intero).
+-- =============================================================================
+--
+-- Ordine consigliato (cartella supabase/ di empathy-pro-2-cursor):
+--
+-- Verifica / diagnostica (stesso DB dell’app: URL progetto vs .env):
+--   • PASTE_VERIFY_M_EMAIL_DATA.sql — identità m@d1s.ch + conteggi seed demo
+--   • PASTE_DIAGNOSTIC_DATA_PIPELINE.sql — Whoop/device_sync, import jobs, knowledge, twin, …
+--
+-- 0 (opz.)  PASTE_VERIFY_ATHLETE_BY_EMAIL.sql
+-- 0b        PASTE_LINK_APP_USER_ATHLETE.sql  — solo se athlete_id è NULL
+-- 1         migrations/005_device_sync_exports_provider_ecosystem.sql
+--           (OPZIONALE se esegui il passo 2 intero)
+-- 2         PASTE_DEMO_SEED_MARIO_ROVALETTI.sql — INTERO (include già ALTER provider)
+--
+-- V1 equivalente: nextjs-empathy-pro/supabase/PASTE_DEMO_SEED_MARIO_ROVALETTI.sql
+--               migration 028_device_sync_exports_provider_ecosystem.sql
+--
+-- Pro 2 e V1 condividono gli stessi dati solo se .env punta allo STESSO progetto Supabase.
+-- =============================================================================
+
+select 1 as paste_readme_only_no_data_changes;

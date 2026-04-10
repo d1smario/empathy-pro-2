@@ -9,7 +9,10 @@ export const runtime = "nodejs";
 const NO_STORE = { "Cache-Control": "no-store" as const };
 
 /**
- * Fase 5 — ultima riga `physiological_profiles` per atleta.
+ * Ultima riga grezza `physiological_profiles` (solo cookie session).
+ *
+ * @deprecated Preferire `GET /api/physiology/profile` (`resolveCanonicalPhysiologyState`) o
+ * `fetchCanonicalPhysiologyProfile` lato client per allineamento twin/builder.
  */
 export async function GET(req: NextRequest) {
   const client = createSupabaseCookieClient();

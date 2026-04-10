@@ -36,9 +36,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "STRIPE_SECRET_KEY non configurata." }, { status: 503 });
   }
 
-  let body: { basePlanId?: unknown; coachAddOnId?: unknown; email?: unknown };
+  let body: { basePlanId?: unknown; coachAddOnId?: unknown; email?: unknown; withTrial?: unknown };
   try {
-    body = (await req.json()) as { basePlanId?: unknown; coachAddOnId?: unknown; email?: unknown };
+    body = (await req.json()) as {
+      basePlanId?: unknown;
+      coachAddOnId?: unknown;
+      email?: unknown;
+      withTrial?: unknown;
+    };
   } catch {
     return NextResponse.json({ error: "Body JSON non valido." }, { status: 400 });
   }
@@ -77,7 +82,21 @@ export async function POST(req: NextRequest) {
     lineItems.push({ price: addonPriceId, quantity: 1 });
   }
 
-  const trialDays = readCheckoutTrialDays();
+  const trialDaysEnv = readCheckoutTrialDays();
+  /** `true` = forza prova se configurata; `false` = abbonamento da subito; assente = compat legacy (prova se env valorizzata). */
+  const withTrialReq = body.withTrial;
+  if (withTrialReq === true && trialDaysEnv == null) {
+    return NextResponse.json({ error: "Prova gratuita non configurata sul server." }, { status: 400 });
+  }
+  let applyTrial = false;
+  if (withTrialReq === true) {
+    applyTrial = true;
+  } else if (withTrialReq === false) {
+    applyTrial = false;
+  } else {
+    applyTrial = trialDaysEnv != null;
+  }
+
   const metadata = {
     empathy_pro2: "anon_checkout",
     base_plan_id: body.basePlanId,
@@ -98,7 +117,7 @@ export async function POST(req: NextRequest) {
       metadata,
       subscription_data: {
         metadata,
-        ...(trialDays != null ? { trial_period_days: trialDays } : {}),
+        ...(applyTrial && trialDaysEnv != null ? { trial_period_days: trialDaysEnv } : {}),
       },
     });
 

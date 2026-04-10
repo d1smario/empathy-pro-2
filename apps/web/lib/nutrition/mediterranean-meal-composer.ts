@@ -1,7 +1,9 @@
 /**
  * Composizione deterministica “piano alimentare” stile mediterraneo:
- * porzioni scalate sui target kcal/macro dello slot, pasti principali con
- * una sola fonte di carboidrato complesso e una sola fonte proteica.
+ * per slot si fissano target kcal/macro (dal solver), poi si compone il pasto con
+ * una fonte principale di CHO, una di proteine, grassi (olio / formaggio), fibre (verdura),
+ * eventuale pane — porzioni iterate su densità indicative; nessuna ripartizione uniforme
+ * delle kcal sul numero di voci (le kcal per riga restano legate alle quantità stimati).
  */
 
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
@@ -73,15 +75,17 @@ const D = {
   wheyKcalPerG: 4.0,
   wheyProtPerG: 0.8,
   wheyChoPerG: 0.06,
-  pastaCookedKcalPerG: 1.35,
-  pastaCookedChoPerG: 0.28,
-  pastaCookedProtPerG: 0.05,
-  riceCookedKcalPerG: 1.3,
-  riceCookedChoPerG: 0.28,
+  pastaDryKcalPerG: 3.71,
+  pastaDryChoPerG: 0.75,
+  pastaDryProtPerG: 0.13,
+  riceDryKcalPerG: 3.65,
+  riceDryChoPerG: 0.8,
+  riceDryProtPerG: 0.071,
   potatoCookedKcalPerG: 0.9,
   potatoCookedChoPerG: 0.2,
-  farroCookedKcalPerG: 1.28,
-  farroCookedChoPerG: 0.26,
+  farroDryKcalPerG: 3.38,
+  farroDryChoPerG: 0.7,
+  farroDryProtPerG: 0.14,
   chickenKcalPerG: 1.65,
   chickenProtPerG: 0.31,
   fishKcalPerG: 1.55,
@@ -265,17 +269,8 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
     lines.push(`${clamp(wheyG, 10, 35)} g proteine in polvere (sciolte nel latte)`);
   }
 
-  let total = items.reduce((a, i) => a + i.approxKcal, 0);
-  const bf = K / Math.max(1, total);
-  const scaledItems = items.map((it) => ({ ...it, approxKcal: Math.max(15, Math.round(it.approxKcal * bf)) }));
-  let s2 = scaledItems.reduce((a, i) => a + i.approxKcal, 0);
-  const d2 = Math.round(K - s2);
-  if (scaledItems.length) {
-    const li = scaledItems.length - 1;
-    scaledItems[li] = { ...scaledItems[li]!, approxKcal: Math.max(15, scaledItems[li]!.approxKcal + d2) };
-  }
-  total = scaledItems.reduce((a, i) => a + i.approxKcal, 0);
-  return { lines, items: scaledItems, totalApproxKcal: total };
+  const total = items.reduce((a, i) => a + i.approxKcal, 0);
+  return { lines, items, totalApproxKcal: total };
 }
 
 type CarbKey = "pasta" | "riso" | "patate" | "farro";
@@ -288,7 +283,7 @@ type FishKind = "merluzzo" | "spigola" | "salmone";
 
 const FISH_KINDS: FishKind[] = ["merluzzo", "spigola", "salmone"];
 
-/** Densità indicative (peso netto cotto, g) — una sola specie per pasto; grammatura si adatta al target kcal. */
+/** Densità indicative: pasta/riso/farro in g a crudo; patate e pesce cotti al consumo. */
 const FISH: Record<FishKind, { labelIt: string; kcalPerG: number; protPerG: number; fatPerG: number }> = {
   merluzzo: { labelIt: "merluzzo", kcalPerG: 0.82, protPerG: 0.18, fatPerG: 0.008 },
   spigola: { labelIt: "spigola", kcalPerG: 1.22, protPerG: 0.24, fatPerG: 0.028 },
@@ -356,25 +351,29 @@ function pickProtAndFish(
 }
 
 function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: number; prot: number; fat: number } {
-  const gc = clamp(g, 80, 320);
   switch (key) {
-    case "pasta":
+    case "pasta": {
+      const gc = clamp(g, 45, 140);
       return {
-        line: `${gc} g pasta (peso cotto), condimento a parte`,
-        kcal: gc * D.pastaCookedKcalPerG,
-        cho: gc * D.pastaCookedChoPerG,
-        prot: gc * D.pastaCookedProtPerG,
-        fat: gc * 0.02,
+        line: `${gc} g pasta secca (peso a crudo), condimento a parte`,
+        kcal: gc * D.pastaDryKcalPerG,
+        cho: gc * D.pastaDryChoPerG,
+        prot: gc * D.pastaDryProtPerG,
+        fat: gc * 0.015,
       };
-    case "riso":
+    }
+    case "riso": {
+      const gc = clamp(g, 40, 120);
       return {
-        line: `${gc} g riso (peso cotto)`,
-        kcal: gc * D.riceCookedKcalPerG,
-        cho: gc * D.riceCookedChoPerG,
-        prot: gc * 0.03,
-        fat: gc * 0.02,
+        line: `${gc} g riso (peso a crudo)`,
+        kcal: gc * D.riceDryKcalPerG,
+        cho: gc * D.riceDryChoPerG,
+        prot: gc * D.riceDryProtPerG,
+        fat: gc * 0.006,
       };
-    case "patate":
+    }
+    case "patate": {
+      const gc = clamp(g, 80, 320);
       return {
         line: `${gc} g patate (cotte al forno/bollite)`,
         kcal: gc * D.potatoCookedKcalPerG,
@@ -382,14 +381,17 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
         prot: gc * 0.02,
         fat: gc * 0.01,
       };
-    case "farro":
+    }
+    case "farro": {
+      const gc = clamp(g, 45, 130);
       return {
-        line: `${gc} g farro/orzo (peso cotto)`,
-        kcal: gc * D.farroCookedKcalPerG,
-        cho: gc * D.farroCookedChoPerG,
-        prot: gc * 0.04,
-        fat: gc * 0.02,
+        line: `${gc} g farro o orzo (peso a crudo/secco)`,
+        kcal: gc * D.farroDryKcalPerG,
+        cho: gc * D.farroDryChoPerG,
+        prot: gc * D.farroDryProtPerG,
+        fat: gc * 0.022,
       };
+    }
     default:
       return carbLine("pasta", g);
   }
@@ -491,7 +493,11 @@ function composeMainMeal(
   let carbG =
     carbKey === "patate"
       ? clamp(K * 0.32 / D.potatoCookedKcalPerG, 140, 320)
-      : clamp(K * 0.38 / D.pastaCookedKcalPerG, 120, 280);
+      : carbKey === "riso"
+        ? clamp(K * 0.38 / D.riceDryKcalPerG, 45, 120)
+        : carbKey === "farro"
+          ? clamp(K * 0.38 / D.farroDryKcalPerG, 50, 130)
+          : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
   let protG =
     protKey === "uova"
       ? 0
@@ -522,11 +528,19 @@ function composeMainMeal(
     );
   };
 
+  const carbGClamp = (): { lo: number; hi: number } => {
+    if (carbKey === "patate") return { lo: 90, hi: 340 };
+    if (carbKey === "riso") return { lo: 38, hi: 125 };
+    if (carbKey === "farro") return { lo: 40, hi: 135 };
+    return { lo: 42, hi: 145 };
+  };
+
   for (let i = 0; i < 12; i++) {
     const t = totalKcal();
     const f = K / Math.max(180, t);
     if (Math.abs(f - 1) < 0.04) break;
-    carbG = clamp(carbG * Math.pow(f, 0.55), 90, 340);
+    const { lo, hi } = carbGClamp();
+    carbG = clamp(carbG * Math.pow(f, 0.55), lo, hi);
     if (protKey !== "uova") protG = clamp(protG * Math.pow(f, 0.45), 95, 260);
     vegG = clamp(vegG * Math.pow(f, 0.15), 130, 280);
     oilMl = clamp(oilMl * Math.pow(f, 0.2), 6, 26);
@@ -611,23 +625,25 @@ function composeMainMeal(
     lines.push("Opzionale: omega-3 EPA/DHA (integrazione se concordata)");
   }
 
-  let total = items.reduce((a, i) => a + i.approxKcal, 0);
-  const bf = K / Math.max(1, total);
-  const scaledItems = items.map((it) => ({ ...it, approxKcal: Math.max(15, Math.round(it.approxKcal * bf)) }));
-  let s2 = scaledItems.reduce((a, i) => a + i.approxKcal, 0);
-  const d2 = Math.round(K - s2);
-  if (scaledItems.length) {
-    const li = scaledItems.length - 1;
-    scaledItems[li] = { ...scaledItems[li]!, approxKcal: Math.max(15, scaledItems[li]!.approxKcal + d2) };
-  }
-  total = scaledItems.reduce((a, i) => a + i.approxKcal, 0);
+  const total = items.reduce((a, i) => a + i.approxKcal, 0);
 
   if (used && (slot === "lunch" || slot === "dinner")) {
     used.add(stapleCarb(carbKey));
     used.add(stapleProt(protKey));
   }
 
-  return { lines, items: scaledItems, totalApproxKcal: total };
+  return { lines, items, totalApproxKcal: total };
+}
+
+/** kcal stimate da grammatura nell’etichetta affettato (educativo, allineato a ordini di grandezza comuni). */
+function kcalFromDeliLine(line: string): number {
+  const m = line.match(/(\d+(?:[.,]\d+)?)\s*g/i);
+  const g = m ? parseFloat(m[1]!.replace(",", ".")) : 50;
+  if (!Number.isFinite(g) || g <= 0) return 85;
+  if (/bresaola/i.test(line)) return Math.round(g * 1.28);
+  if (/cotto/i.test(line)) return Math.round(g * 1.22);
+  if (/crudo/i.test(line)) return Math.round(g * 2.65);
+  return Math.round(g * 1.5);
 }
 
 function composeSnack(m: MealMacroTargets, seed: number, variant: "snack_am" | "snack_pm"): MediterraneanComposedMeal {
@@ -661,7 +677,7 @@ function composeSnack(m: MealMacroTargets, seed: number, variant: "snack_am" | "
     lines.push(`${crG} g gallette o pane tostato`);
 
     const cold = seed % 3 === 0 ? "60 g prosciutto cotto magro" : seed % 3 === 1 ? "50 g bresaola" : "45 g prosciutto crudo";
-    const pk = cold.includes("bresaola") ? 90 : cold.includes("cotto") ? 85 : 95;
+    const pk = kcalFromDeliLine(cold);
     items.push(item("Affettato", cold, pk, "protein", "Proteina magra in spuntino salato."));
     lines.push(cold);
 
@@ -673,17 +689,8 @@ function composeSnack(m: MealMacroTargets, seed: number, variant: "snack_am" | "
     lines.push(fatPick.line);
   }
 
-  const total0 = items.reduce((a, i) => a + i.approxKcal, 0);
-  const factor = K / Math.max(1, total0);
-  const scaled = items.map((it) => ({ ...it, approxKcal: Math.max(12, Math.round(it.approxKcal * factor)) }));
-  let s = scaled.reduce((a, i) => a + i.approxKcal, 0);
-  const drift = Math.round(K - s);
-  if (scaled.length) {
-    const last = scaled.length - 1;
-    scaled[last] = { ...scaled[last]!, approxKcal: Math.max(12, scaled[last]!.approxKcal + drift) };
-  }
-  s = scaled.reduce((a, i) => a + i.approxKcal, 0);
-  return { lines, items: scaled, totalApproxKcal: s };
+  const s = items.reduce((a, i) => a + i.approxKcal, 0);
+  return { lines, items, totalApproxKcal: s };
 }
 
 /** Piano mediterraneo: porzioni e kcal coerenti con il target dello slot. */

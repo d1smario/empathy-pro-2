@@ -7,12 +7,17 @@ import {
 import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
+import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { buildViryaResearchPlans } from "@/lib/knowledge/training-research-context";
 import { persistCanonicalResearchTracePlan } from "@/lib/knowledge/knowledge-research-flow";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
 import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
+import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
+import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
+import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,14 +47,9 @@ export async function GET(req: NextRequest) {
     }
 
     const athleteMemory = await resolveAthleteMemory(athleteId);
-    const canonicalState = athleteMemory.physiology;
+    const canonicalState = athleteMemory.physiology ?? (await resolveCanonicalPhysiologyState(athleteId));
     const twinState = athleteMemory.twin;
-    if (!canonicalState || !twinState) {
-      return NextResponse.json(
-        { error: "Missing canonical athlete memory" },
-        { status: 500, headers: NO_STORE },
-      );
-    }
+    const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
 
     let recoverySummary: Awaited<ReturnType<typeof resolveLatestRecoverySummary>> = null;
     try {
@@ -59,9 +59,9 @@ export async function GET(req: NextRequest) {
     }
 
     const adaptationGuidance = buildAdaptationGuidance({
-      expectedAdaptation: twinState.expectedAdaptation ?? twinState.adaptationScore ?? 0,
-      observedAdaptation: twinState.realAdaptation ?? twinState.adaptationScore ?? 0,
-      likelyDrivers: twinState.likelyDrivers ?? [],
+      expectedAdaptation: twinState?.expectedAdaptation ?? twinState?.adaptationScore ?? 0,
+      observedAdaptation: twinState?.realAdaptation ?? twinState?.adaptationScore ?? 0,
+      likelyDrivers: twinState?.likelyDrivers ?? [],
     });
     const operationalContext = buildTrainingDayOperationalContext({
       recoveryStatus: recoverySummary?.status ?? "unknown",
@@ -76,10 +76,31 @@ export async function GET(req: NextRequest) {
       recoverySummary,
       operationalContext,
     });
-    const bioenergeticModulation = buildBioenergeticModulation({
-      physiologyState: canonicalState,
-      twinState,
-      recoverySummary,
+    const bioenergeticModulation =
+      twinState != null
+        ? buildBioenergeticModulation({
+            physiologyState: canonicalState,
+            twinState,
+            recoverySummary,
+          })
+        : null;
+
+    const diarySignals = extractDiaryAdaptiveSignals({
+      profile: athleteMemory.profile,
+      diaryEntries: athleteMemory.nutrition.diary ?? [],
+    });
+    const nutritionPerformanceIntegration = buildNutritionPerformanceIntegration({
+      bioenergeticModulation,
+      adaptationGuidance,
+      adaptationLoop: adaptationLoop ? { status: adaptationLoop.status, nextAction: adaptationLoop.nextAction } : null,
+      operationalContext,
+      diarySignals,
+    });
+    const crossModuleDynamicsLines = buildOperationalDynamicsLines({
+      adaptationGuidance,
+      operationalContext,
+      nutritionPerformanceIntegration,
+      adaptationLoop: adaptationLoop ? { status: adaptationLoop.status, nextAction: adaptationLoop.nextAction } : null,
     });
 
     const profile = athleteMemory.profile;
@@ -127,8 +148,8 @@ export async function GET(req: NextRequest) {
     if ((canonicalState.lactateProfile.bloodDeliveryPctOfIngested ?? 100) <= 75) {
       strategyHints.push("cho_delivery_ceiling_management");
     }
-    if ((twinState.glycogenStatus ?? 100) < 40) strategyHints.push("glycogen_restoration_priority");
-    if ((twinState.readiness ?? 100) < 45) strategyHints.push("readiness_protection_microcycle");
+    if ((twinState?.glycogenStatus ?? 100) < 40) strategyHints.push("glycogen_restoration_priority");
+    if ((twinState?.readiness ?? 100) < 45) strategyHints.push("readiness_protection_microcycle");
     if (!strategyHints.length) strategyHints.push("balanced_periodization");
 
     const knowledgeModulation =
@@ -185,12 +206,16 @@ export async function GET(req: NextRequest) {
           lactate: latestLactate,
           maxOx: latestMaxOx,
         },
-        twinState,
+        twinState: athleteMemory.twin,
         athleteMemory,
+        readSpineCoverage,
         recoverySummary,
         operationalContext,
         adaptationLoop,
         bioenergeticModulation,
+        adaptationGuidance,
+        nutritionPerformanceIntegration,
+        crossModuleDynamicsLines,
         knowledgeModulation,
         researchPlans,
         researchTraces,

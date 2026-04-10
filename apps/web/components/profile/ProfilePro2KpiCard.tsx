@@ -79,7 +79,8 @@ const ACCENT_KPI: Record<
 export function profileMetricLabelToAccent(label: string): ProfileKpiAccent {
   const normalized = label.toLowerCase();
   if (normalized.includes("vo2") || normalized.includes("ftp") || normalized.includes("lt")) return "cyan";
-  if (normalized.includes("vlamax") || normalized.includes("body fat")) return "orange";
+  if (normalized.includes("vlamax") || normalized.includes("indice glic") || normalized.includes("glicolitico") || normalized.includes("body fat"))
+    return "orange";
   if (normalized.includes("fc") || normalized.includes("hr") || normalized.includes("heart")) return "violet";
   if (normalized.includes("peso") || normalized.includes("altezza")) return "slate";
   return "cyan";
@@ -100,7 +101,7 @@ export function profileMetricIcon(label: string): LucideIcon {
   if (n.includes("peso") || n.includes("weight")) return Scale;
   if (n.includes("altezza") || n.includes("height")) return Ruler;
   if (n.includes("ftp") || n.includes("lt") || n.includes("vo2")) return Zap;
-  if (n.includes("vla")) return Flame;
+  if (n.includes("vla") || n.includes("indice glic") || n.includes("glicolitico")) return Flame;
   if (n.includes("body fat") || n.includes("bf")) return Percent;
   if (n.includes("fc") || n.includes("bpm")) return Heart;
   return Activity;

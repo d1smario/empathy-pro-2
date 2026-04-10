@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2Link } from "@/components/ui/empathy";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import type { RecoverySummary } from "@/lib/reality/recovery-summary";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
@@ -159,6 +160,8 @@ export default function TrainingAnalyticsPageView() {
   const [recoverySummary, setRecoverySummary] = useState<RecoverySummary | null>(null);
   const [operationalContext, setOperationalContext] = useState<TrainingDayOperationalContext | null>(null);
   const [bioenergeticModulation, setBioenergeticModulation] = useState<TrainingBioenergeticModulationViewModel | null>(null);
+  const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
+  const [crossModuleDynamicsLines, setCrossModuleDynamicsLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>(() => {
@@ -185,6 +188,8 @@ export default function TrainingAnalyticsPageView() {
         setRecoverySummary(null);
         setOperationalContext(null);
         setBioenergeticModulation(null);
+        setReadSpineCoverage(null);
+        setCrossModuleDynamicsLines([]);
         setLoading(false);
         return;
       }
@@ -214,6 +219,8 @@ export default function TrainingAnalyticsPageView() {
         setRecoverySummary(null);
         setOperationalContext(null);
         setBioenergeticModulation(null);
+        setReadSpineCoverage(null);
+        setCrossModuleDynamicsLines([]);
       } else {
         setRows(payload.rows ?? []);
         setPlannedRows(payload.plannedRows ?? []);
@@ -227,6 +234,8 @@ export default function TrainingAnalyticsPageView() {
         setRecoverySummary(payload.recoverySummary ?? null);
         setOperationalContext(payload.operationalContext ?? null);
         setBioenergeticModulation(payload.bioenergeticModulation ?? null);
+        setReadSpineCoverage(payload.readSpineCoverage ?? null);
+        setCrossModuleDynamicsLines(payload.crossModuleDynamicsLines ?? []);
       }
       setLoading(false);
     }
@@ -339,6 +348,18 @@ export default function TrainingAnalyticsPageView() {
       <div className="scroll-mt-28">
         <TrainingSubnav />
       </div>
+
+      {readSpineCoverage && athleteId && !error ? (
+        <details className="mb-4 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
+          <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
+            Spina lettura (athlete-memory) · {readSpineCoverage.spineScore}%
+          </summary>
+          <p className="mt-2 text-xs text-slate-500">
+            Stesso riepilogo della dashboard hub: copertura aggregata su profilo, fisiologia, twin, nutrizione, health,
+            ingest, evidence.
+          </p>
+        </details>
+      ) : null}
 
       {error ? (
         <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
@@ -494,6 +515,21 @@ export default function TrainingAnalyticsPageView() {
                   Suggested inputs: {bioenergeticModulation.recommendedInputs.join(" · ")}.
                 </>
               ) : null}
+            </div>
+          ) : null}
+
+          {crossModuleDynamicsLines.length ? (
+            <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4 text-sm text-slate-200">
+              <h2 className="text-sm font-bold text-cyan-100">Dinamica incrociata (Training → Nutrition / fueling)</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Stesso ponte deterministico della dashboard e del meal-plan: adattamento, carico operativo, loop calendario,
+                dial nutrizione.
+              </p>
+              <ul className="mt-2 list-inside list-disc text-xs leading-relaxed text-slate-400">
+                {crossModuleDynamicsLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
             </div>
           ) : null}
 

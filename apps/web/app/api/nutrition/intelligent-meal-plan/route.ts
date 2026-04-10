@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
 import { buildDeterministicMealPlanFromRequest } from "@/lib/nutrition/deterministic-meal-plan-from-request";
-import { generateIntelligentMealPlanWithOpenAI } from "@/lib/nutrition/intelligent-meal-plan-openai";
 import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
 import { attachSolverBasisToAssembled } from "@/lib/nutrition/meal-plan-solver-basis";
@@ -64,17 +63,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "plan.mealPlanSolverMeta obbligatorio (dailyMealsKcalTotal + integrationLeverLines)" }, { status: 400 });
     }
 
-    const result = await generateIntelligentMealPlanWithOpenAI(request);
-    if (!result.ok) {
-      const missingKey = result.error.includes("OPENAI_API_KEY");
-      if (missingKey) {
-        const assembled = buildDeterministicMealPlanFromRequest(request);
-        return NextResponse.json(attachSolverBasisToAssembled(assembled, request));
-      }
-      return NextResponse.json({ error: result.error }, { status: 422 });
-    }
-
-    return NextResponse.json(result.body);
+    /** Solo assemblaggio deterministico: nessun LLM (generative core EMPATHY — AI non genera piani pasto). */
+    const assembled = buildDeterministicMealPlanFromRequest(request);
+    return NextResponse.json(attachSolverBasisToAssembled(assembled, request));
   } catch (err) {
     if (err instanceof RequestAuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

@@ -80,14 +80,11 @@ export function ProductSidebar() {
             <span className="absolute inline-flex h-full w-full animate-pulse rounded-full bg-orange-400 opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-gradient-to-br from-orange-400 to-pink-500" />
           </span>
-          <Link
-            href="/"
-            className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.28em] text-purple-300"
-          >
-            Empathy
+          <Link href="/" className="text-lg font-black tracking-[0.1em] text-white sm:text-xl">
+            EMPATHY
           </Link>
         </div>
-        <p className="mt-2 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-lg font-black tracking-tight text-transparent">
+        <p className="mt-1 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-base font-black tracking-tight text-transparent sm:text-lg">
           Pro 2.0
         </p>
         <p className="mt-1 font-mono text-[0.65rem] text-gray-500">SYS · NAV</p>
@@ -107,7 +104,7 @@ export function ProductSidebar() {
           className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-purple-500/35 hover:text-purple-200"
         >
           <span className="h-1.5 w-1.5 rounded-full bg-purple-500/60" aria-hidden />
-          Pricing
+          Piani
         </Link>
         <Link
           href="/preview"

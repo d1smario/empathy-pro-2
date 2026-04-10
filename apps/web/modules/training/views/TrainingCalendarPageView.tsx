@@ -8,6 +8,7 @@ import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
+import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
@@ -15,7 +16,9 @@ import { Pro2Link } from "@/components/ui/empathy";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
 
 function toDateKey(d: Date): string {
@@ -154,6 +157,8 @@ export default function TrainingCalendarPageView() {
   const [saving, setSaving] = useState(false);
   const [planned, setPlanned] = useState<PlannedWorkout[]>([]);
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
+  const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
+  const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
   const [showFileImport, setShowFileImport] = useState(false);
   const [fileImportForm, setFileImportForm] = useState({
     mode: "executed" as "executed" | "planned",
@@ -171,6 +176,8 @@ export default function TrainingCalendarPageView() {
     if (!athleteId) {
       setPlanned([]);
       setExecuted([]);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
       setErr("Nessun atleta attivo.");
       setLoading(false);
       return;
@@ -183,21 +190,25 @@ export default function TrainingCalendarPageView() {
         cache: "no-store",
         headers: await buildSupabaseAuthHeaders(),
       });
-      const json = (await res.json()) as
-        | { ok: true; planned: PlannedWorkout[]; executed: ExecutedWorkout[] }
-        | { ok: false; error?: string };
+      const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
       if (!res.ok || !json.ok) {
         setPlanned([]);
         setExecuted([]);
+        setReadSpineCoverage(null);
+        setTwinContextStrip(null);
         setErr(("error" in json && json.error) || "Lettura calendario non riuscita.");
         return;
       }
       setPlanned(json.planned ?? []);
       setExecuted(json.executed ?? []);
+      setReadSpineCoverage(json.readSpineCoverage ?? null);
+      setTwinContextStrip(json.twinContextStrip ?? null);
     } catch {
       setErr("Errore di rete.");
       setPlanned([]);
       setExecuted([]);
+      setReadSpineCoverage(null);
+      setTwinContextStrip(null);
     } finally {
       setLoading(false);
     }
@@ -326,6 +337,15 @@ export default function TrainingCalendarPageView() {
       <div className="scroll-mt-28">
         <TrainingSubnav />
       </div>
+
+      {readSpineCoverage && athleteId ? (
+        <TrainingPlannedWindowContextStrip
+          className="mb-4"
+          label="Calendario"
+          readSpineCoverage={readSpineCoverage}
+          twinContextStrip={twinContextStrip}
+        />
+      ) : null}
 
       {success ? (
         <p className="mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100" role="status">
@@ -530,15 +550,20 @@ export default function TrainingCalendarPageView() {
                       onChange={(e) => setFileImportForm((f) => ({ ...f, device: e.target.value }))}
                       disabled={fileImportForm.mode === "planned"}
                     >
-                      <option value="auto">Auto</option>
-                      <option value="trainingpeaks">TrainingPeaks</option>
+                      <option value="auto">Auto (da nome file)</option>
                       <option value="garmin">Garmin</option>
-                      <option value="strava">Strava</option>
-                      <option value="wahoo">Wahoo</option>
+                      <option value="wahoo">Wahoo (ELEMNT / RIVAL)</option>
+                      <option value="suunto">Suunto</option>
                       <option value="polar">Polar</option>
-                      <option value="whoop">Whoop</option>
+                      <option value="coros">COROS</option>
+                      <option value="hammerhead">Hammerhead Karoo</option>
+                      <option value="apple_watch">Apple Watch / Health</option>
+                      <option value="zwift">Zwift</option>
+                      <option value="strava">Strava</option>
+                      <option value="trainingpeaks">TrainingPeaks</option>
+                      <option value="whoop">WHOOP</option>
                       <option value="oura">Oura</option>
-                      <option value="other">Other</option>
+                      <option value="other">Altro</option>
                     </select>
                   </label>
                 </div>
@@ -575,7 +600,7 @@ export default function TrainingCalendarPageView() {
                 <p className="text-xs text-slate-500">
                   {fileImportForm.mode === "planned"
                     ? "Programmazione: CSV/JSON (export TrainingPeaks). Righe → planned_workouts."
-                    : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX. Se manca la data nel file, usa l’override."}
+                    : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX (Garmin, Wahoo, Suunto, Polar, COROS, Karoo, Apple export, Zwift, Strava, TP…). Device: auto o manuale. Se manca la data, usa override."}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button

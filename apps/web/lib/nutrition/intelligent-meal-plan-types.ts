@@ -1,6 +1,6 @@
 /**
- * Piano pasto assistito da LLM: input = output motori + pathway (reality > interpretazione).
- * Il modello linguistico non ricalcola fabbisogni; incastra alimenti coerenti con target già fissati.
+ * Piano pasto da motore deterministico: input = solver pasti + pathway (reality > interpretazione).
+ * Nessun LLM genera la struttura del piano; le kcal per voce seguono porzioni e banca composizione canonica.
  */
 
 import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
@@ -157,9 +157,10 @@ export type IntelligentMealPlanSlotOut = {
   slotTimingRationale: string;
 };
 
-export type IntelligentMealPlanResponseLayer = "llm_orchestration_v1" | "deterministic_meal_assembly_v1";
+/** Unico layer attivo: piano pasti sempre da motore deterministico (nessun orchestratore LLM). */
+export type IntelligentMealPlanResponseLayer = "deterministic_meal_assembly_v1";
 
-/** Corpo assemblato (LLM o deterministico), prima dell’eco solver aggiunta in API. */
+/** Corpo assemblato (deterministico), prima dell’eco solver aggiunta in API. */
 export type IntelligentMealPlanAssembledCore = {
   layer: IntelligentMealPlanResponseLayer;
   disclaimer: string;
@@ -190,7 +191,7 @@ function isMacroRole(s: string): s is IntelligentMealPlanItemOut["macroRole"] {
 export function parseIntelligentMealPlanJson(raw: unknown): IntelligentMealPlanAssembledCore | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
-  if (o.layer !== "llm_orchestration_v1") return null;
+  if (o.layer !== "deterministic_meal_assembly_v1") return null;
   const disclaimer = typeof o.disclaimer === "string" ? o.disclaimer : "";
   const dayInteractionSummary = typeof o.dayInteractionSummary === "string" ? o.dayInteractionSummary : "";
   const slotsIn = o.slots;
@@ -237,7 +238,7 @@ export function parseIntelligentMealPlanJson(raw: unknown): IntelligentMealPlanA
   }
 
   const assembled: IntelligentMealPlanAssembledCore = {
-    layer: "llm_orchestration_v1",
+    layer: "deterministic_meal_assembly_v1",
     disclaimer: disclaimer.slice(0, 500),
     slots,
     dayInteractionSummary: dayInteractionSummary.slice(0, 800),

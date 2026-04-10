@@ -12,6 +12,10 @@ import {
 import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
 import { mapAthleteProfileRow } from "@/lib/profile/map-athlete-profile-row";
 import { formatAthleteProfileStrip } from "@/lib/profile/athlete-profile-strip";
+import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
+import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
+import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +82,7 @@ export async function GET(req: NextRequest) {
     physRes,
     healthPanelsTotal,
     healthLastPanel,
+    athleteMemory,
   ] = await Promise.all([
     client.from("athlete_profiles").select(PROFILE_SELECT).eq("id", athleteId).maybeSingle(),
     client
@@ -117,6 +122,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    resolveAthleteMemory(athleteId).catch(() => null),
   ]);
 
   const errMsg =
@@ -148,6 +154,33 @@ export async function GET(req: NextRequest) {
       ? lastRow.type.trim()
       : null;
 
+  const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
+
+  const includeOperationalSignals =
+    (req.nextUrl.searchParams.get("includeOperationalSignals") ?? "").trim() === "1";
+
+  let operationalSignals: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>> | null = null;
+  if (includeOperationalSignals && athleteMemory) {
+    try {
+      operationalSignals = await resolveOperationalSignalsBundle({ athleteId, athleteMemory });
+    } catch {
+      operationalSignals = null;
+    }
+  }
+
+  const crossModuleDynamicsLines =
+    operationalSignals != null
+      ? buildOperationalDynamicsLines({
+          adaptationGuidance: operationalSignals.adaptationGuidance,
+          operationalContext: operationalSignals.operationalContext,
+          nutritionPerformanceIntegration: operationalSignals.nutritionPerformanceIntegration,
+          adaptationLoop: {
+            status: operationalSignals.adaptationLoop.status,
+            nextAction: operationalSignals.adaptationLoop.nextAction,
+          },
+        })
+      : [];
+
   const payload = {
     ok: true as const,
     athleteId,
@@ -166,6 +199,9 @@ export async function GET(req: NextRequest) {
       panelsCount: healthPanelsTotal.count ?? 0,
       lastPanelLabel: lastLabel,
     },
+    readSpineCoverage,
+    operationalSignals,
+    crossModuleDynamicsLines,
   };
 
   return NextResponse.json(payload, { headers: NO_STORE });

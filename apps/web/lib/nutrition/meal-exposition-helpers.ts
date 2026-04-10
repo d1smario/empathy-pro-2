@@ -1,52 +1,31 @@
 import type { IntelligentMealPlanItemOut, IntelligentMealPlanSlotOut } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 
-/** Stime educative quando `nutrients` non è ancora materializzato lato finalize. */
+/**
+ * Macro per voce: sempre da banca canonica (nome+porzione+approxKcal), coerente con finalize server.
+ * Non usare `item.nutrients` qui: evita righe tutte uguali se il client riceve blob omogenei o path «dry» senza item strutturati.
+ */
 export function approxMacrosForPlanItem(item: IntelligentMealPlanItemOut): {
   kcal: number;
   carbsG: number;
   proteinG: number;
   fatG: number;
 } {
-  if (item.nutrients) {
-    const n = item.nutrients;
-    return {
-      kcal: Math.round(n.kcal),
-      carbsG: round1(n.carbsG),
-      proteinG: round1(n.proteinG),
-      fatG: round1(n.fatG),
-    };
-  }
-  const k = Math.max(1, item.approxKcal);
-  const { carbKcalPct, proKcalPct, fatKcalPct } = roleToKcalSplit(item.macroRole);
+  const { nutrients } = nutrientsForMealPlanItem({
+    name: item.name,
+    portionHint: item.portionHint ?? "",
+    approxKcal: item.approxKcal,
+  });
   return {
-    kcal: Math.round(k),
-    carbsG: round1((k * carbKcalPct) / 4),
-    proteinG: round1((k * proKcalPct) / 4),
-    fatG: round1((k * fatKcalPct) / 9),
+    kcal: Math.round(nutrients.kcal),
+    carbsG: round1(nutrients.carbsG),
+    proteinG: round1(nutrients.proteinG),
+    fatG: round1(nutrients.fatG),
   };
 }
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
-}
-
-function roleToKcalSplit(role: IntelligentMealPlanItemOut["macroRole"]): {
-  carbKcalPct: number;
-  proKcalPct: number;
-  fatKcalPct: number;
-} {
-  switch (role) {
-    case "cho_heavy":
-      return { carbKcalPct: 0.72, proKcalPct: 0.12, fatKcalPct: 0.16 };
-    case "protein":
-      return { carbKcalPct: 0.22, proKcalPct: 0.48, fatKcalPct: 0.3 };
-    case "fat":
-      return { carbKcalPct: 0.15, proKcalPct: 0.2, fatKcalPct: 0.65 };
-    case "veg":
-      return { carbKcalPct: 0.52, proKcalPct: 0.2, fatKcalPct: 0.28 };
-    default:
-      return { carbKcalPct: 0.48, proKcalPct: 0.28, fatKcalPct: 0.24 };
-  }
 }
 
 /** IG stimato (non clinico): da ripartizione energia e ruolo macro. */
@@ -94,9 +73,13 @@ export function weightedAvgGlycemicIndex(items: Array<{ ig: number; kcal: number
 
 export function parseGramsFromPortion(hint: string | undefined | null): number | undefined {
   if (!hint) return undefined;
-  const m = hint.match(/(\d+(?:[.,]\d+)?)\s*g(?:rammi?)?/i);
-  if (!m) return undefined;
-  return Math.round(Number(parseFloat(m[1].replace(",", "."))));
+  const gm = hint.match(/(\d+(?:[.,]\d+)?)\s*g(?:rammi?)?\b/i);
+  if (gm) return Math.round(Number(parseFloat(gm[1].replace(",", "."))));
+  const ml = hint.match(/(\d+(?:[.,]\d+)?)\s*ml\b/i);
+  if (ml && /olio|evo|olive\s+oil/i.test(hint)) {
+    return Math.round(Number(parseFloat(ml[1].replace(",", "."))) * 0.92);
+  }
+  return undefined;
 }
 
 export function stimulusLabelFromAvgGi(avg: GiBand): { text: string; tone: "alto" | "medio" | "basso" } {
@@ -122,8 +105,8 @@ export function estimatedGlycemicIndexFromMacros(
 }
 
 /**
- * Converte righe testuali del piano deterministico (pathway) in voci exposition:
- * ripartizione uniforme dei macro del pasto sulla lista (stima educativa).
+ * Righe testuali del piano base (pathway): stesse kcal per voce (quota sul totale pasto),
+ * ma CHO/PRO/FAT/IG da inferenza canonica sulla stringa (non ripartizione uniforme dei macro).
  */
 export function buildExpositionItemsFromDryLines(
   lines: string[],
@@ -142,23 +125,26 @@ export function buildExpositionItemsFromDryLines(
   const trimmed = lines.map((l) => l.trim()).filter(Boolean);
   const n = Math.max(1, trimmed.length);
   const kEach = Math.max(0, totals.kcal) / n;
-  const cEach = totals.carbsG / n;
-  const pEach = totals.proteinG / n;
-  const fEach = totals.fatG / n;
   return trimmed.map((line, ii) => {
     const kcal = Math.max(1, Math.round(kEach));
-    const carbsG = round1(cEach);
-    const proteinG = round1(pEach);
-    const fatG = round1(fEach);
-    const ig = estimatedGlycemicIndexFromMacros(carbsG, proteinG, fatG, "balanced");
+    const stub: IntelligentMealPlanItemOut = {
+      name: line,
+      portionHint: "",
+      functionalBridge: "",
+      approxKcal: kcal,
+      macroRole: "mixed",
+    };
+    const m = approxMacrosForPlanItem(stub);
+    const ig = estimatedItemGlycemicIndex(stub);
     return {
       sourceIndex: ii,
       name: line,
-      kcal,
-      carbsG,
-      proteinG,
-      fatG,
+      kcal: m.kcal,
+      carbsG: m.carbsG,
+      proteinG: m.proteinG,
+      fatG: m.fatG,
       ig,
+      weightG: parseGramsFromPortion(line),
     };
   });
 }

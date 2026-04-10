@@ -22,7 +22,7 @@ function round(value: number, digits = 2) {
  * targets. Does not replace engines; amplifies or tempers planned training energy and CHO delivery.
  */
 export type NutritionPerformanceIntegrationDials = {
-  /** Scales planned training kcal contribution into daily totals (0.82–1.02). */
+  /** Scales planned training kcal in fabbisogno giornaliero: bioenergetica × carico operativo (recovery+adattamento), tipicamente 0.35–1.02. */
   trainingEnergyScale: number;
   /** Share of training kcal allocated to meals vs fueling window (base 0.4 → meals get BMR+lifestyle+this*trainingKcal). */
   mealTrainingFraction: number;
@@ -71,14 +71,23 @@ export function buildNutritionPerformanceIntegration(input: {
         confidence: diary.confidence,
       }
     : null;
-  const loadScale = bio?.loadScale ?? 1;
+  const bioScale = bio?.loadScale ?? 1;
+  const opScale = input.operationalContext?.loadScale ?? 1;
+  /** Stesso principio del motore training: scala combinata recovery+adattamento × modulazione bioenergetica. */
+  const combinedLoad = round(clamp(bioScale * opScale, 0.35, 1.02), 4);
   const mito = bio?.mitochondrialReadinessScore ?? 72;
   const fuel = bio?.fuelAvailabilityScore ?? 65;
   const tl = input.adaptationGuidance.trafficLight;
   const loop = input.adaptationLoop;
-  const protectiveOp = input.operationalContext?.mode === "protective";
+  const opMode = input.operationalContext?.mode;
 
-  let trainingEnergyScale = loadScale;
+  if (opScale < 0.999) {
+    rationale.push(
+      "Carico operativo training <100% (recovery + adattamento a fasce): energia da seduta nel fabbisogno scalata in parallelo al piano training.",
+    );
+  }
+
+  let trainingEnergyScale = combinedLoad;
 
   if (diary && diary.loggedDays >= 2 && diary.energyAdequacyRatio != null) {
     const ratio = diary.energyAdequacyRatio;
@@ -102,47 +111,43 @@ export function buildNutritionPerformanceIntegration(input: {
     rationale.push("Diario: proteine medie sotto ~1,2 g/kg — bias proteico pasti rafforzato.");
   }
 
-  if (tl === "yellow") {
-    trainingEnergyScale *= 0.97;
-    rationale.push("Adattamento giallo: energia da training nel piano giornaliero leggermente ridotta.");
-  } else if (tl === "red") {
-    trainingEnergyScale *= 0.91;
-    rationale.push("Adattamento rosso: energia da training ridotta per priorità recupero e allineamento.");
-  }
+  /* Semaforo e fasce min–max sono già in operationalContext.loadScale: non moltiplicare di nuovo qui. */
   if (loop?.status === "regenerate") {
     trainingEnergyScale *= 0.96;
-    rationale.push("Loop rigenerazione: ulteriore cautela sul carico energetico atteso dalla seduta.");
+    rationale.push("Loop rigenerazione (pianificato vs eseguito / twin): ulteriore cautela sul carico energetico atteso dalla seduta.");
   } else if (loop?.status === "watch") {
     trainingEnergyScale *= 0.985;
+    rationale.push("Loop in osservazione: leggera riduzione del contributo energetico training nel giorno.");
   }
-  if (protectiveOp) {
-    trainingEnergyScale *= 0.97;
-    rationale.push("Contesto operativo protettivo: coerenza con scaling carico lato training.");
-  }
-  trainingEnergyScale = round(clamp(trainingEnergyScale, 0.82, 1.02), 3);
+  trainingEnergyScale = round(clamp(trainingEnergyScale, 0.35, 1.02), 3);
   if (!rationale.length) {
     rationale.push("Segnali allineati: scala energetica training vicina al neutro.");
   }
 
   let mealTrainingFraction = 0.4;
-  if (bio?.state === "protective" || mito < 50 || fuel < 42) {
+  if (bio?.state === "protective" || mito < 50 || fuel < 42 || opMode === "protective") {
     mealTrainingFraction = 0.48;
     rationale.push("Maggiore quota pasti rispetto al fueling intra: stabilità glicemica e carico intestinale.");
-  } else if (bio?.state === "watch") {
+  } else if (bio?.state === "watch" || opMode === "cautious") {
     mealTrainingFraction = 0.44;
+    rationale.push("Modalità cauta: più energia ancorata ai pasti rispetto alla finestra intra per coerenza col carico ridotto.");
   }
 
   let fuelingChoScale = 1;
   if (fuel < 45 && mito >= 48) {
     fuelingChoScale = 1.06;
     rationale.push("Disponibilità substrati bassa: leggero incremento CHO/h intra (entro evidenza).");
-  } else if (mito >= 72 && tl === "green" && loop?.status === "aligned") {
+  } else if (mito >= 72 && tl === "green" && loop?.status === "aligned" && combinedLoad >= 0.92) {
     fuelingChoScale = 1.03;
     rationale.push("Readiness favorevole: margine controllato su oxidazione exogena.");
   }
   if (bio?.state === "protective" || mito < 45) {
     fuelingChoScale = Math.min(fuelingChoScale, 0.92);
     rationale.push("Modulazione protettiva: riduzione CHO/h intra per ridurre stress gastro-metabolico.");
+  }
+  if (combinedLoad < 0.85) {
+    fuelingChoScale = Math.min(fuelingChoScale, 0.94);
+    rationale.push("Volume operativo seduta ridotto: CHO/h intra temperati in linea con meno costo energetico atteso.");
   }
   fuelingChoScale = round(clamp(fuelingChoScale, 0.82, 1.12), 3);
 
@@ -159,10 +164,16 @@ export function buildNutritionPerformanceIntegration(input: {
 
   let hydrationFloorMultiplier = 1;
   let sessionFluidMultiplier = 1;
-  if (bio?.state !== "supported" || tl !== "green") {
-    hydrationFloorMultiplier = round(clamp(1.04 + (1 - loadScale) * 0.15, 1.02, 1.12), 3);
-    sessionFluidMultiplier = round(clamp(1.02 + (1 - loadScale) * 0.12, 1, 1.08), 3);
-    rationale.push("Idratazione: incremento pavimento giornaliero e fluido/ora seduta per stress termico/metabolico.");
+  const stressHydration =
+    combinedLoad < 0.92 ||
+    bio?.state !== "supported" ||
+    tl !== "green" ||
+    opMode === "protective" ||
+    opMode === "cautious";
+  if (stressHydration) {
+    hydrationFloorMultiplier = round(clamp(1.04 + (1 - combinedLoad) * 0.15, 1.02, 1.12), 3);
+    sessionFluidMultiplier = round(clamp(1.02 + (1 - combinedLoad) * 0.12, 1, 1.08), 3);
+    rationale.push("Idratazione: pavimento giornaliero e fluido/ora seduta modulati su carico combinato e stress metabolico.");
   }
 
   return {

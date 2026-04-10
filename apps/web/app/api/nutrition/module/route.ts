@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { toCanonicalPlannedWorkout } from "@/lib/empathy/adapters/training";
+import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { listKnowledgeExpansionTraceSummaries } from "@/lib/knowledge/knowledge-research-trace-store";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
-import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
-import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
-import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
-import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
-import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
 
 export const runtime = "nodejs";
 
@@ -88,49 +83,23 @@ export async function GET(req: NextRequest) {
       : null;
     const physiologyState = athleteMemory.physiology;
     const twinState = athleteMemory.twin;
-    const adaptationGuidance = buildAdaptationGuidance({
-      expectedAdaptation: twinState?.expectedAdaptation ?? twinState?.adaptationScore ?? 0,
-      observedAdaptation: twinState?.realAdaptation ?? twinState?.adaptationScore ?? 0,
-      likelyDrivers: twinState?.likelyDrivers ?? [],
-    });
-    const operationalContext = buildTrainingDayOperationalContext({
-      recoveryStatus: recoverySummary?.status ?? "unknown",
-      trafficLight: adaptationGuidance.trafficLight,
-      keepProgramUnchanged: adaptationGuidance.keepProgramUnchanged,
-      reductionMinPct: adaptationGuidance.reductionMinPct,
-      reductionMaxPct: adaptationGuidance.reductionMaxPct,
-    });
-    const adaptationLoop = await resolveAdaptationRegenerationLoop({
-      athleteId,
-      twinState,
-      recoverySummary,
+    const {
+      adaptationGuidance,
       operationalContext,
+      adaptationLoop,
+      bioenergeticModulation,
+      nutritionPerformanceIntegration,
+    } = await resolveOperationalSignalsBundle({
+      athleteId,
+      athleteMemory,
+      recoverySummary,
     });
-    const bioenergeticModulation =
-      physiologyState && twinState
-        ? buildBioenergeticModulation({
-            physiologyState,
-            twinState,
-            recoverySummary,
-          })
-        : null;
 
     const metabolicEfficiencyGenerativeModel = buildMetabolicEfficiencyGenerativeModel({
       adaptationGuidance,
       bioenergeticModulation,
       adaptationLoop,
       researchTraceSummaries,
-    });
-    const diarySignals = extractDiaryAdaptiveSignals({
-      profile: athleteMemory.profile,
-      diaryEntries: athleteMemory.nutrition.diary ?? [],
-    });
-    const nutritionPerformanceIntegration = buildNutritionPerformanceIntegration({
-      bioenergeticModulation,
-      adaptationGuidance,
-      adaptationLoop,
-      operationalContext,
-      diarySignals,
     });
 
     const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();

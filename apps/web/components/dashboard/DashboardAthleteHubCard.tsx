@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
+import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { Pro2Link } from "@/components/ui/empathy";
 
@@ -14,6 +16,9 @@ type HubOk = {
   nutrition: { constraintsLine: string | null; plansCount: number };
   physiology: { line: string } | null;
   health: { panelsCount: number; lastPanelLabel: string | null };
+  readSpineCoverage: ReadSpineCoverageSummary;
+  operationalSignals: OperationalSignalsBundle | null;
+  crossModuleDynamicsLines: string[];
 };
 
 type HubErr = { ok: false; error?: string };
@@ -58,9 +63,10 @@ export function DashboardAthleteHubCard() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch(`/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}`, {
-          cache: "no-store",
-        });
+        const res = await fetch(
+          `/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}&includeOperationalSignals=1`,
+          { cache: "no-store" },
+        );
         const json = (await res.json()) as HubOk | HubErr;
         if (c) return;
         if (!res.ok || !json.ok) {
@@ -103,6 +109,96 @@ export function DashboardAthleteHubCard() {
 
       {!ctxLoading && !loading && !err && hub ? (
         <div className="mt-6">
+          {hub.operationalSignals ? (
+            <details
+              open
+              className="mb-4 rounded-xl border border-orange-400/25 bg-orange-950/20 px-4 py-3 text-sm text-gray-200"
+            >
+              <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-orange-300/90">
+                Segnali operativi · twin → loop adattamento → dial nutrizione
+              </summary>
+              <div className="mt-3 space-y-2 text-xs leading-relaxed">
+                <p>
+                  <span className="text-gray-500">Adattamento (twin):</span> atteso{" "}
+                  {hub.operationalSignals.adaptationGuidance.expectedAdaptation.toFixed(2)} · osservato{" "}
+                  {hub.operationalSignals.adaptationGuidance.observedAdaptation.toFixed(2)} · semaforo{" "}
+                  <span className="font-mono text-amber-200">{hub.operationalSignals.adaptationGuidance.trafficLight}</span> ·
+                  score {hub.operationalSignals.adaptationGuidance.scorePct}%
+                </p>
+                <p>
+                  <span className="text-gray-500">Loop piano:</span>{" "}
+                  <span className="font-mono text-cyan-200/90">{hub.operationalSignals.adaptationLoop.status}</span> ·
+                  prossima azione{" "}
+                  <span className="font-mono text-cyan-200/90">{hub.operationalSignals.adaptationLoop.nextAction}</span>
+                  <span className="text-gray-500">
+                    {" "}
+                    · divergenza {hub.operationalSignals.adaptationLoop.divergenceScore.toFixed(2)}
+                  </span>
+                </p>
+                <p>
+                  <span className="text-gray-500">Dial nutrizione/fueling:</span> energia training ×
+                  {hub.operationalSignals.nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)} · CHO fueling ×
+                  {hub.operationalSignals.nutritionPerformanceIntegration.fuelingChoScale.toFixed(2)} · bias proteine +
+                  {hub.operationalSignals.nutritionPerformanceIntegration.proteinBiasPctPoints.toFixed(1)} pt
+                </p>
+                {hub.operationalSignals.nutritionPerformanceIntegration.rationale.length > 0 ? (
+                  <ul className="list-inside list-disc text-gray-400">
+                    {hub.operationalSignals.nutritionPerformanceIntegration.rationale.slice(0, 4).map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </details>
+          ) : null}
+          {hub.crossModuleDynamicsLines.length > 0 ? (
+            <div className="mb-4 rounded-xl border border-cyan-500/25 bg-cyan-950/15 px-4 py-3 text-sm text-gray-200">
+              <p className="font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
+                Dinamica incrociata · training ↔ nutrizione
+              </p>
+              <ul className="mt-2 list-inside list-disc text-xs leading-relaxed text-gray-400">
+                {hub.crossModuleDynamicsLines.slice(0, 8).map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <details className="mb-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-300">
+            <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
+              Spina lettura (athlete-memory) · copertura {hub.readSpineCoverage.spineScore}%
+            </summary>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(
+                [
+                  ["Profilo", hub.readSpineCoverage.hasProfile],
+                  ["Fisiologia", hub.readSpineCoverage.hasPhysiology],
+                  ["Twin", hub.readSpineCoverage.hasTwin],
+                  ["Nutrizione", hub.readSpineCoverage.hasNutritionConstraints || hub.readSpineCoverage.hasNutritionDiary],
+                  ["Health panels", hub.readSpineCoverage.hasHealthPanels],
+                  ["Reality ingest", hub.readSpineCoverage.hasRealityIngestions],
+                  ["Evidence items", hub.readSpineCoverage.hasEvidenceItems],
+                ] as const
+              ).map(([label, on]) => (
+                <span
+                  key={label}
+                  className={`rounded-full px-2 py-0.5 font-mono text-[0.6rem] ${
+                    on ? "bg-emerald-500/20 text-emerald-200" : "bg-white/5 text-gray-500"
+                  }`}
+                >
+                  {label}
+                </span>
+              ))}
+            </div>
+            {hub.readSpineCoverage.physiologySources ? (
+              <p className="mt-2 text-xs text-gray-500">
+                Fonti fisiologia: profilo {hub.readSpineCoverage.physiologySources.physiologicalProfile ? "✓" : "—"} · metabolic lab{" "}
+                {hub.readSpineCoverage.physiologySources.metabolicRun ? "✓" : "—"} · lactate{" "}
+                {hub.readSpineCoverage.physiologySources.lactateRun ? "✓" : "—"} · max ox{" "}
+                {hub.readSpineCoverage.physiologySources.performanceRun ? "✓" : "—"} · biomarkers{" "}
+                {hub.readSpineCoverage.physiologySources.biomarkerPanel ? "✓" : "—"}
+              </p>
+            ) : null}
+          </details>
           <p className="mb-2 font-mono text-[0.6rem] text-gray-500">
             Finestra training: {hub.window.from} → {hub.window.to}
           </p>

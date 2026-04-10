@@ -6,12 +6,16 @@ import {
 } from "@/lib/auth/training-route-auth";
 import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
 import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
+import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
+import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
+import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -155,6 +159,7 @@ export async function GET(req: NextRequest) {
     const compareSeries = buildCompareSeries(from, to, plannedRows, series);
     const latest = series.at(-1) ?? null;
     const twinState = athleteMemory.twin;
+    const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
     const last7 = summarizeWindow(series, 7);
     const last28 = summarizeWindow(series, 28);
     const planLast7 = summarizePlanWindow(compareSeries, 7);
@@ -192,6 +197,24 @@ export async function GET(req: NextRequest) {
           })
         : null;
 
+    const diarySignals = extractDiaryAdaptiveSignals({
+      profile: athleteMemory.profile,
+      diaryEntries: athleteMemory.nutrition.diary ?? [],
+    });
+    const nutritionPerformanceIntegration = buildNutritionPerformanceIntegration({
+      bioenergeticModulation,
+      adaptationGuidance,
+      adaptationLoop: adaptationLoop ? { status: adaptationLoop.status, nextAction: adaptationLoop.nextAction } : null,
+      operationalContext,
+      diarySignals,
+    });
+    const crossModuleDynamicsLines = buildOperationalDynamicsLines({
+      adaptationGuidance,
+      operationalContext,
+      nutritionPerformanceIntegration,
+      adaptationLoop: adaptationLoop ? { status: adaptationLoop.status, nextAction: adaptationLoop.nextAction } : null,
+    });
+
     return NextResponse.json(
       {
         athleteId,
@@ -217,6 +240,10 @@ export async function GET(req: NextRequest) {
         recoverySummary,
         operationalContext,
         bioenergeticModulation,
+        adaptationGuidance,
+        nutritionPerformanceIntegration,
+        crossModuleDynamicsLines,
+        readSpineCoverage,
         source: "analytics_v3_planned_real_internal_external",
       },
       { headers: NO_STORE },

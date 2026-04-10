@@ -23,12 +23,16 @@ export async function fetchTrainingPlannerContext(athleteId: string): Promise<Tr
       operationalContext: null,
       adaptationLoop: null,
       bioenergeticModulation: null,
+      adaptationGuidance: null,
+      nutritionPerformanceIntegration: null,
+      crossModuleDynamicsLines: [],
       knowledgeModulation: null,
       researchPlans: [],
       researchTraces: [],
       flags: {},
       strategyHints: [],
       connectedModules: { profile: false, physiology: false, health: false },
+      readSpineCoverage: null,
       error: payload.error ?? "Virya context fetch failed",
     };
   }

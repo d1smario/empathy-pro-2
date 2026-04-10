@@ -838,7 +838,7 @@ export default function ProfilePage() {
             value: physiologyState.metabolicProfile.fatmaxWatts != null ? `${Math.round(physiologyState.metabolicProfile.fatmaxWatts)} W` : "—",
           },
           {
-            label: "VLaMax",
+            label: "Indice glic. (proxy)",
             value: physiologyState.metabolicProfile.vLamax != null ? physiologyState.metabolicProfile.vLamax.toFixed(2) : "—",
           },
         ],
@@ -874,7 +874,7 @@ export default function ProfilePage() {
         cards: [
           {
             label: "VO2max",
-            value: derivedVo2max != null ? `${derivedVo2max}` : "—",
+            value: derivedVo2max != null ? `${derivedVo2max.toFixed(1)} ml/kg/min` : "—",
           },
           {
             label: "Oxidative bottleneck",
@@ -956,8 +956,8 @@ export default function ProfilePage() {
           label: "LT1 / LT2",
           value: resolvedLt1 != null || resolvedLt2 != null ? `${resolvedLt1 ?? "—"} / ${resolvedLt2 ?? "—"} W` : "—",
         },
-        { label: "VLaMax", value: resolvedVLamax != null ? `${resolvedVLamax.toFixed(2)}` : "—" },
-        { label: "VO2max", value: derivedVo2max != null ? `${derivedVo2max}` : "—" },
+        { label: "Indice glic. (proxy)", value: resolvedVLamax != null ? `${resolvedVLamax.toFixed(2)}` : "—" },
+        { label: "VO2max", value: derivedVo2max != null ? `${derivedVo2max.toFixed(1)} ml/kg/min` : "—" },
         { label: "FC riposo", value: currentProfile.resting_hr_bpm != null ? `${currentProfile.resting_hr_bpm} bpm` : "—" },
         { label: "FC max", value: currentProfile.max_hr_bpm != null ? `${currentProfile.max_hr_bpm} bpm` : "—" },
       ].map((m) => ({ ...m, accent: profileMetricLabelToAccent(m.label) }))
@@ -1084,6 +1084,10 @@ export default function ProfilePage() {
               subtitle="Profilo tabellare + merge fisiologia (reality > plan)"
             >
               <ProfilePro2KpiGrid items={keyMetricItems} />
+              <p className="mt-3 text-[0.8rem] leading-relaxed text-gray-500">
+                FTP / indice glicolitico / VO₂max qui sono dall&apos;ultimo dato salvato su Supabase (snapshot Physiology). Per numeri col motore
+                attuale, apri Physiology → Metabolic Profile e premi &quot;Salva snapshot&quot;.
+              </p>
             </Pro2SectionCard>
 
             {physiologySummarySections.length ? (
@@ -1127,7 +1131,7 @@ export default function ProfilePage() {
                       {`Profilo fisiologico ${physiologyCoverage.physiologicalProfile ? "ok" : "mancante"} · run metabolico ${physiologyCoverage.metabolicRun ? "ok" : "mancante"} · lattato ${physiologyCoverage.lactateRun ? "ok" : "mancante"} · performance ${physiologyCoverage.performanceRun ? "ok" : "mancante"} · bioenergetica ${physiologyCoverage.biomarkerPanel ? "ok" : "mancante"}`}
                     </p>
                     <p>
-                      {`VO2max · ${vo2maxSourceLabel}${derivedVo2max != null ? ` · ${derivedVo2max} ml/kg/min` : ""}`}
+                      {`VO2max · ${vo2maxSourceLabel}${derivedVo2max != null ? ` · ${derivedVo2max.toFixed(1)} ml/kg/min` : ""}`}
                     </p>
                   </div>
                 </details>

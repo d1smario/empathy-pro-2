@@ -909,6 +909,8 @@ export async function parseTrainingFile(input: {
   if (inferredName.endsWith(".json")) return parseJson(text);
   if (inferredName.endsWith(".tcx")) return parseTcx(text);
   if (inferredName.endsWith(".gpx")) return parseGpx(text);
-  throw new Error("Formato non supportato. Usa FIT/FIT.GZ, CSV, JSON, TCX o GPX.");
+  throw new Error(
+    "Formato non supportato. Usa FIT/FIT.GZ, CSV, JSON, TCX o GPX (export tipici Garmin, Wahoo, Suunto, Polar, COROS, Karoo, Apple, Zwift, Strava, TrainingPeaks).",
+  );
 }
 

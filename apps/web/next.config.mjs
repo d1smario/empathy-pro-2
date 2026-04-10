@@ -36,6 +36,8 @@ const nextConfig = {
     optimizePackageImports: ["lucide-react"],
     /** Monorepo (Next 14.2): tracing fino alla root repo per `packages/*` su Vercel. */
     outputFileTracingRoot: path.join(__dirname, "..", ".."),
+    /** `pdf-parse` (fs nativo) — Next 14: chiave sotto `experimental`, non `serverExternalPackages`. */
+    serverComponentsExternalPackages: ["pdf-parse"],
   },
   /** Alias URL (V1 / naming): virya → vyria, analyzer → analytics. */
   async redirects() {

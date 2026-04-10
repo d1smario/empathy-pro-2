@@ -32,7 +32,8 @@ export function dryPortionLineForFoodLabel(label: string, slot: DryMealSlotMacro
   if (/\blatte\b/.test(l) && !/cereal/.test(l)) return `${clamp(180 + itemIndex * 20, 150, 280)} ml latte`;
   if (/cereal|avena|oat|muesli/.test(l)) return `${clamp(slot.carbsG * 0.12 + 25, 35, 65)} g cereali`;
   if (/pane|bread/.test(l)) return `${clamp(40 + slot.carbsG * 0.08, 40, 90)} g pane`;
-  if (/pasta|riso|rice|orzo|farro/.test(l)) return `${clamp(55 + slot.carbsG * 0.15, 60, 120)} g ${raw.split(/[,(]/)[0]?.trim() ?? "carboidrato"} (peso cotto dove applicabile)`;
+  if (/pasta|riso|rice|orzo|farro/.test(l))
+    return `${clamp(55 + slot.carbsG * 0.15, 60, 120)} g ${raw.split(/[,(]/)[0]?.trim() ?? "carboidrato"} (peso a crudo/secco per pasta, riso, farro e orzo)`;
   if (/banana/.test(l)) return "1 banana media (matura se post-workout)";
   if (/mela|apple/.test(l)) return "1 mela media";
   if (/mirtill|blueberry/.test(l)) return `${clamp(30 + itemIndex * 15, 30, 80)} g mirtilli`;
