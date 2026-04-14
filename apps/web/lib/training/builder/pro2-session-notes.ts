@@ -81,3 +81,41 @@ export function effectiveTssDisplayFromPro2Contract(
   const t = estimatedTssFromPro2Contract(contract);
   return t > 0 ? t : Math.max(0, Math.round(fallbackTss));
 }
+
+function asFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Allinea durata / TSS / kcal del giorno al **contratto builder in notes** quando le colonne
+ * `planned_workouts` sono vuote o stale (stesso problema del calendario training).
+ * Usato da Nutrizione (meal plan, solver energetico) per non restare su “giorno a riposo” falso.
+ */
+export function effectivePlannedWorkoutNutritionMetrics(input: {
+  durationMinutesDb?: number | null;
+  tssTargetDb?: number | null;
+  kcalTargetDb?: number | null;
+  builderSession?: Pro2BuilderSessionContract | null;
+  /** Scala TSS→kcal come negli altri piani manuali Pro 2 (~9.3 kcal/TSS a 70 kg). */
+  weightKg?: number | null;
+}): { durationMinutes: number; tss: number; kcal: number } {
+  const fallbackDur = Math.max(0, asFiniteNumber(input.durationMinutesDb) ?? 0);
+  const duration = effectiveDurationMinutesFromPro2Contract(input.builderSession ?? null, fallbackDur);
+  const fallbackTss = Math.max(0, asFiniteNumber(input.tssTargetDb) ?? 0);
+  const tss = effectiveTssDisplayFromPro2Contract(input.builderSession ?? null, fallbackTss);
+  const dbKcal = Math.max(0, asFiniteNumber(input.kcalTargetDb) ?? 0);
+  const summaryKcal = asFiniteNumber(input.builderSession?.summary?.kcal);
+  let kcal = dbKcal;
+  if (summaryKcal != null && summaryKcal > 0) {
+    kcal = Math.round(summaryKcal);
+  } else if (kcal <= 0 && tss > 0) {
+    const w = input.weightKg != null && input.weightKg > 30 ? input.weightKg : 70;
+    kcal = Math.round(tss * 9.3 * (w / 70));
+  }
+  return { durationMinutes: duration, tss, kcal };
+}

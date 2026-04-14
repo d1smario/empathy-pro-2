@@ -153,6 +153,7 @@ export async function GET(req: NextRequest) {
           ...row,
           builderSession,
           canonicalPlannedWorkout,
+          plannedSessionName: builderSession?.sessionName ?? null,
           plannedDiscipline: builderSession?.discipline ?? row.type ?? null,
           plannedFamily: builderSession?.family ?? null,
           plannedAdaptationTarget: builderSession?.adaptationTarget ?? null,

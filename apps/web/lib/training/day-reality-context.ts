@@ -114,7 +114,12 @@ export function buildEffectiveDayTrainingContext(input: {
     avgPowerW: pickMetric(session.trace_summary, ["power_avg_w", "power_avg", "avg_power", "powerAvg"]),
   }));
 
-  if (executedSessions.length > 0) {
+  /** Eseguito “stub” (0 TSS / 0 kcal) non deve mascherare il calendario: resta il piano. */
+  const executedHasEnergySignal = executedSessions.some(
+    (s) => (s.durationMin > 0 && (s.tss > 0 || s.kcal > 0)) || s.tss > 0 || s.kcal > 0,
+  );
+
+  if (executedSessions.length > 0 && executedHasEnergySignal) {
     return {
       mode: "executed",
       sessions: executedSessions,
@@ -126,7 +131,15 @@ export function buildEffectiveDayTrainingContext(input: {
     return {
       mode: "planned",
       sessions: plannedSessions,
-      summary: summarize(plannedSessions, true, false),
+      summary: summarize(plannedSessions, true, executedSessions.length > 0),
+    };
+  }
+
+  if (executedSessions.length > 0) {
+    return {
+      mode: "executed",
+      sessions: executedSessions,
+      summary: summarize(executedSessions, false, true),
     };
   }
 

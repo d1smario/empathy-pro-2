@@ -63,6 +63,7 @@ import {
 } from "@/modules/nutrition/services/nutrition-actions-api";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { effectivePlannedWorkoutNutritionMetrics } from "@/lib/training/builder/pro2-session-notes";
 import { FoodDiaryPanel } from "@/modules/nutrition/components/FoodDiaryPanel";
 import {
   NutritionMicronutrientGrid,
@@ -657,16 +658,26 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const effectiveDayContext = useMemo(
     () =>
       buildEffectiveDayTrainingContext({
-        planned: selectedPlanSessions.map((session) => ({
-          id: session.id,
-          title: session.plannedSessionName ?? session.plannedDiscipline ?? session.type ?? "Sessione",
-          duration_minutes: session.duration_minutes,
-          tss_target: session.tss_target,
-          kcal_target: session.kcal_target,
-        })),
+        planned: selectedPlanSessions.map((session) => {
+          const bs = (session.builderSession as Pro2BuilderSessionContract | null | undefined) ?? null;
+          const m = effectivePlannedWorkoutNutritionMetrics({
+            durationMinutesDb: session.duration_minutes as number | null | undefined,
+            tssTargetDb: session.tss_target as number | null | undefined,
+            kcalTargetDb: session.kcal_target as number | null | undefined,
+            builderSession: bs,
+            weightKg: profile?.weight_kg ?? null,
+          });
+          return {
+            id: String(session.id),
+            title: session.plannedSessionName ?? session.plannedDiscipline ?? session.type ?? "Sessione",
+            duration_minutes: m.durationMinutes,
+            tss_target: m.tss,
+            kcal_target: m.kcal,
+          };
+        }),
         executed: selectedExecutedSessions,
       }),
-    [selectedPlanSessions, selectedExecutedSessions],
+    [selectedPlanSessions, selectedExecutedSessions, profile?.weight_kg],
   );
 
   const nutritionDayModel = useMemo<NutritionDailyEnergyModel | null>(() => {
