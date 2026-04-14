@@ -62,7 +62,7 @@ export function CalendarPlannedBuilderDetail({
 }: {
   workout: PlannedWorkout;
   athleteId?: string | null;
-  onDeleted?: () => void;
+  onDeleted?: (removedPlannedId: string) => void;
 }) {
   const [structureOpen, setStructureOpen] = useState(true);
   const [deleting, setDeleting] = useState(false);
@@ -128,7 +128,7 @@ export function CalendarPlannedBuilderDetail({
                 setDeleting(true);
                 try {
                   await deletePlannedWorkout({ id: workout.id, athleteId });
-                  onDeleted?.();
+                  onDeleted?.(workout.id);
                 } catch (e) {
                   window.alert(e instanceof Error ? e.message : "Eliminazione non riuscita");
                 } finally {

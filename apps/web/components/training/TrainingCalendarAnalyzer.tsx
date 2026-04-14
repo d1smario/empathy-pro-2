@@ -87,7 +87,7 @@ type Props = {
   /** Per cancellazione eseguiti (API V1-parity). */
   athleteId?: string | null;
   onExecutedChanged?: () => void;
-  onPlannedChanged?: () => void;
+  onPlannedChanged?: (removedPlannedId?: string) => void;
 };
 
 export function TrainingCalendarAnalyzer({
@@ -912,7 +912,7 @@ export function TrainingCalendarAnalyzer({
                     setDeletingPlannedId(w.id);
                     try {
                       await deletePlannedWorkout({ id: w.id, athleteId });
-                      onPlannedChanged?.();
+                      onPlannedChanged?.(w.id);
                     } catch (err) {
                       window.alert(err instanceof Error ? err.message : "Eliminazione non riuscita");
                     } finally {

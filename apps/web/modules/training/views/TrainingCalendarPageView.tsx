@@ -227,7 +227,8 @@ export default function TrainingCalendarPageView() {
   const plannedWindowFetchGenRef = useRef(0);
 
   const loadMonth = useCallback(async () => {
-    if (ctxLoading) return;
+    /** Con `athleteId` già noto non bloccare: altrimenti dopo delete il refresh può saltare e la UI resta su dati vecchi. */
+    if (ctxLoading && !athleteId) return;
     const fetchGen = ++plannedWindowFetchGenRef.current;
     const isStale = () => fetchGen !== plannedWindowFetchGenRef.current;
 
@@ -637,7 +638,10 @@ export default function TrainingCalendarPageView() {
               monthExecuted={executed}
               athleteId={athleteId}
               onExecutedChanged={() => void loadMonth()}
-              onPlannedChanged={() => void loadMonth()}
+              onPlannedChanged={(removedId) => {
+                if (removedId) setPlanned((prev) => prev.filter((w) => w.id !== removedId));
+                void loadMonth();
+              }}
             />
           </div>
 
@@ -795,7 +799,10 @@ export default function TrainingCalendarPageView() {
                         key={w.id}
                         workout={w}
                         athleteId={athleteId}
-                        onDeleted={() => void loadMonth()}
+                        onDeleted={(removedId) => {
+                          if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
+                          void loadMonth();
+                        }}
                       />
                     ))
                   )}

@@ -65,6 +65,12 @@ import type { TrainingDayOperationalContext } from "@/lib/training/day-operation
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { effectivePlannedWorkoutNutritionMetrics } from "@/lib/training/builder/pro2-session-notes";
 import { analyzePlannedSessionsForFueling } from "@/lib/nutrition/fueling-planned-session-analysis";
+import {
+  buildFuelingProtocolSlots,
+  buildGlycogenPlotGeometry,
+  computeGlycogenDepletionForFueling,
+  type FuelingProtocolSlot,
+} from "@/lib/nutrition/fueling-session-protocol";
 import { FoodDiaryPanel } from "@/modules/nutrition/components/FoodDiaryPanel";
 import {
   NutritionMicronutrientGrid,
@@ -407,27 +413,6 @@ function resolveFuelingProductImage(
 function parseFuelingMinuteOffset(timeLabel: string): number {
   const match = timeLabel.match(/([+-]?\d+)/);
   return match ? Number(match[1]) : 0;
-}
-
-function buildSmoothPath(points: Array<{ x: number; y: number }>): string {
-  if (!points.length) return "";
-  if (points.length < 3) return `M ${points.map((p) => `${p.x} ${p.y}`).join(" L ")}`;
-
-  let d = `M ${points[0].x} ${points[0].y}`;
-  for (let i = 0; i < points.length - 1; i += 1) {
-    const p0 = points[i - 1] ?? points[i];
-    const p1 = points[i];
-    const p2 = points[i + 1];
-    const p3 = points[i + 2] ?? p2;
-
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-
-    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-  }
-  return d;
 }
 
 function n(v: unknown, fallback = 0): number {
@@ -1128,9 +1113,27 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const sequestrationPct = clamp(n(lactate?.effectiveSequestrationPct, 0), 0, 35);
     const gutStressPct = clamp(n(lactate?.gutStressScore, 0) * 100, 0, 100);
     const dysbiosisPct = clamp(n(lactate?.microbiotaDysbiosisScore, 0) * 100, 0, 100);
-    const coriReturnG = Math.max(0, n(lactate?.glucoseFromCoriG, 0));
-    const exogenousOxidizedG = Math.max(0, n(lactate?.exogenousOxidizedG, 0));
-    const choSharePct = clamp(n(lactate?.glycolyticSharePct, 65), 45, 96);
+    const coriFromPlannedSessions = fuelingTrainingContext.reduce((acc, s) => acc + (s.substrate?.glucoseFromCoriG ?? 0), 0);
+    const coriReturnG =
+      coriFromPlannedSessions > 0.05 ? coriFromPlannedSessions : Math.max(0, n(lactate?.glucoseFromCoriG, 0));
+    const exoFromPlannedSessions = fuelingTrainingContext.reduce((acc, s) => acc + (s.substrate?.exogenousOxidizedG ?? 0), 0);
+    const exogenousOxidizedG =
+      exoFromPlannedSessions > 0.05 ? exoFromPlannedSessions : Math.max(0, n(lactate?.exogenousOxidizedG, 0));
+    let choWeightedNum = 0;
+    let choWeightedDen = 0;
+    for (const s of fuelingTrainingContext) {
+      const sub = s.substrate;
+      if (!sub) continue;
+      const w = Math.max(1, s.durationMin);
+      choWeightedNum += sub.glycolyticSharePct * w;
+      choWeightedDen += w;
+    }
+    const choShareFromSessions = choWeightedDen > 0 ? choWeightedNum / choWeightedDen : null;
+    const choSharePct = clamp(
+      choShareFromSessions != null ? choShareFromSessions : n(lactate?.glycolyticSharePct, 65),
+      45,
+      96,
+    );
     const oxidativeCeilingKcalMin = Math.max(0, n(performance?.oxidativeCapacityKcalMin, 0));
     const redoxPct = clamp(n(performance?.redoxStressIndex, twinState?.redoxStressIndex ?? 0), 0, 100);
     const gutPathwayRisk = String(lactate?.gutPathwayRisk ?? "stable");
@@ -1150,7 +1153,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       pcrCapacityJ,
       vLamax,
     };
-  }, [physiologyState, twinState, physio]);
+  }, [physiologyState, twinState, physio, fuelingTrainingContext]);
 
   const effectiveMacroSplit = useMemo(() => {
     const bump = nutritionPerformanceIntegration?.proteinBiasPctPoints ?? 0;
@@ -1603,25 +1606,75 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return pathwayNutrientSummaryToMicroLines(nutrientSummary, hydrationPlan.minDailyMl);
   }, [intelligentMealPlan?.nutrientRollup?.dayTotals, nutrientSummary, hydrationPlan.minDailyMl]);
 
-  const fuelingProtocol = useMemo<FuelingSlot[]>(() => {
-    const brandA = profileSupplements[0] ?? "Enervit";
-    const brandB = profileSupplements[1] ?? brandA;
-    const brandC = profileSupplements[2] ?? brandA;
-    const durationHours = Math.max(0.5, effectiveSessionDurationMin / 60);
-    const preCho = Math.max(15, round(nutritionDayModel?.fueling.preChoG ?? 20));
-    const postCho = Math.max(25, round(nutritionDayModel?.fueling.postChoG ?? 30));
-    const intraTotalCho = Math.max(
+  /** Un protocollo pre/intra/post per seduta pianificata (≥2 sessioni); altrimenti un solo blocco “giornata”. */
+  const fuelingSessionPackages = useMemo(() => {
+    type TimelineStep = FuelingSlot & {
+      product: FuelingProduct | undefined;
+      displayImage: string;
+      isLogoFallback: boolean;
+      minuteOffset: number;
+    };
+
+    const fpGly = {
+      choSharePct: fuelingPhysiology.choSharePct,
+      vLamax: fuelingPhysiology.vLamax,
+      oxidativeCeilingKcalMin: fuelingPhysiology.oxidativeCeilingKcalMin,
+      redoxPct: fuelingPhysiology.redoxPct,
+      gutDeliveryPct: fuelingPhysiology.gutDeliveryPct,
+      coriReturnG: fuelingPhysiology.coriReturnG,
+    };
+
+    const supplements = profileSupplements;
+
+    function enrichSlots(slots: FuelingProtocolSlot[]): TimelineStep[] {
+      const products = slots.map((slot) => {
+        for (const brand of normalizedPreferredBrands) {
+          const product = FUELING_PRODUCT_CATALOG.find((p) => p.brand === brand && p.category === slot.category);
+          if (product) return product;
+        }
+        return FUELING_PRODUCT_CATALOG.find((p) => p.category === slot.category) ?? FUELING_PRODUCT_CATALOG[0];
+      });
+      return slots.map((slot, idx) => {
+        const product = products[idx];
+        const { displayImage, isLogoFallback } = resolveFuelingProductImage(product, slot.category, fuelingMediaByKey);
+        return {
+          ...slot,
+          product,
+          displayImage,
+          isLogoFallback,
+          minuteOffset: parseFuelingMinuteOffset(slot.time),
+        };
+      });
+    }
+
+    function timelineFromSteps(steps: TimelineStep[]) {
+      const byPhase: Record<"pre" | "intra" | "post", TimelineStep[]> = { pre: [], intra: [], post: [] };
+      for (const step of steps) {
+        const key = step.phase.toLowerCase().includes("pre")
+          ? "pre"
+          : step.phase.toLowerCase().includes("post")
+            ? "post"
+            : "intra";
+        byPhase[key].push(step);
+      }
+      byPhase.pre.sort((a, b) => a.minuteOffset - b.minuteOffset);
+      byPhase.intra.sort((a, b) => a.minuteOffset - b.minuteOffset);
+      byPhase.post.sort((a, b) => a.minuteOffset - b.minuteOffset);
+      return [...byPhase.pre, ...byPhase.intra, ...byPhase.post];
+    }
+
+    const dayHours = Math.max(0.5, effectiveSessionDurationMin / 60);
+    const dayPre = Math.max(15, round(nutritionDayModel?.fueling.preChoG ?? 20));
+    const dayPost = Math.max(25, round(nutritionDayModel?.fueling.postChoG ?? 30));
+    const dayIntraTotal = Math.max(
       round(nutritionDayModel?.fueling.intraChoG ?? 0, 1),
-      round(resolvedFuelingChoGPerHour * durationHours, 1),
+      round(resolvedFuelingChoGPerHour * dayHours, 1),
     );
-    const intraStepsCount = Math.max(1, Math.ceil(effectiveSessionDurationMin / 20));
-    const perStepFluid = Math.max(120, round((effectiveFluidMlPerHour * durationHours) / intraStepsCount));
-    const rawStepCho = intraStepsCount > 0 ? intraTotalCho / intraStepsCount : intraTotalCho;
-    const engineSuffix =
+    const engineSuffixDay =
       fuelingEngineDaySummary != null
         ? ` · motore: lact ~${round(fuelingEngineDaySummary.lactateG, 1)} g · Cori ~${round(fuelingEngineDaySummary.coriG, 1)} g · CHOexo ~${round(fuelingEngineDaySummary.exoG, 1)} g`
         : "";
-    const intraSplitNote =
+    const intraSplitFull =
       fuelingIntraChoSplitBySession != null && fuelingIntraChoSplitBySession.length > 0
         ? ` · ripartizione intra stimata: ${fuelingIntraChoSplitBySession
             .map((x) => {
@@ -1630,58 +1683,155 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             })
             .join(" · ")}`
         : "";
-    const intraSteps = Array.from({ length: intraStepsCount }, (_, i) => {
-      const minute = i * 20;
-      const isLast = i === intraStepsCount - 1;
-      const distributedBefore = round(rawStepCho * i, 1);
-      const remaining = Math.max(0, round(intraTotalCho - distributedBefore, 1));
-      const stepCho = isLast ? remaining : round(rawStepCho, 1);
-      const category: FuelingCategory = i % 3 === 0 ? "drink" : i % 3 === 1 ? "gel" : "chew";
-      const formatLabel =
-        category === "drink"
-          ? `drink mix ${brandA}`
-          : category === "gel"
-            ? `gel 2:1 ${brandB}`
-            : `chew/bar ${brandC}`;
+
+    const buildPackage = (args: {
+      id: string | number;
+      title: string;
+      durationMin: number;
+      intensityPctFtp: number;
+      preCho: number;
+      postCho: number;
+      intraTotalCho: number;
+      engineSuffix: string;
+      intraSplitNote: string;
+    }) => {
+      const slots = buildFuelingProtocolSlots({
+        durationMin: args.durationMin,
+        preCho: args.preCho,
+        postCho: args.postCho,
+        intraTotalCho: args.intraTotalCho,
+        effectiveFluidMlPerHour,
+        resolvedFuelingTierBand,
+        engineSuffix: args.engineSuffix,
+        intraSplitNote: args.intraSplitNote,
+        profileSupplements: supplements,
+      });
+      const steps = enrichSlots(slots);
+      const timelineSteps = timelineFromSteps(steps);
+      const durationH = Math.max(0.25, args.durationMin / 60);
+      const choPerHourSession = Math.min(150, args.intraTotalCho / durationH);
+      const glyc = computeGlycogenDepletionForFueling({
+        weightKg: n(profile?.weight_kg, 72),
+        muscleMassKg: profile?.muscle_mass_kg,
+        durationMin: args.durationMin,
+        intensityPctFtp: args.intensityPctFtp,
+        fuelingPhysiology: fpGly,
+        resolvedFuelingChoGPerHour: choPerHourSession,
+      });
+      const glyPlot = buildGlycogenPlotGeometry(glyc);
+      const hydrationTimeline = Array.from({ length: Math.max(1, Math.ceil(args.durationMin / 20)) }, (_, i) => {
+        const minute = i * 20;
+        return { minuteLabel: minute === 0 ? "0'" : `+${minute}'`, note: "500ml + sali minerali" };
+      });
+      const totalHydration = steps.reduce((s, st) => s + st.fluid, 0);
+      const totalCho = steps.reduce((s, st) => s + st.cho, 0);
+      const visualMetrics = [
+        {
+          label: "CHO/h",
+          value: round(choPerHourSession),
+          unit: "g/h",
+          pct: clamp((choPerHourSession / 130) * 100, 8, 100),
+          color: "#ff6b00",
+        },
+        {
+          label: "Idratazione totale",
+          value: round(totalHydration),
+          unit: "ml",
+          pct: clamp((totalHydration / 3000) * 100, 8, 100),
+          color: "#0ea5e9",
+        },
+        {
+          label: "Sodio/h",
+          value: round(sodiumMgPerHour),
+          unit: "mg/h",
+          pct: clamp((sodiumMgPerHour / 1200) * 100, 8, 100),
+          color: "#8b5cf6",
+        },
+        {
+          label: "kcal protocollo",
+          value: round(totalCho * 4),
+          unit: "kcal",
+          pct: clamp(((totalCho * 4) / 1000) * 100, 8, 100),
+          color: "#10b981",
+        },
+      ];
+      const opsCards = [
+        { label: "CHO seduta", value: `${round(totalCho)} g` },
+        { label: "Fluid seduta", value: `${round(totalHydration)} ml` },
+        { label: "Steps", value: `${timelineSteps.length}` },
+      ];
       return {
-        phase: "Intra",
-        time: minute === 0 ? "0'" : `+${minute}'`,
-        icon: "🟦",
-        plan: `${stepCho}g CHO via ${formatLabel}`,
-        cho: stepCho,
-        fluid: perStepFluid,
-        notes:
-          i === 0
-            ? `Tier ${resolvedFuelingTierBand} · steady delivery${engineSuffix}${intraSplitNote}`
-            : `Tier ${resolvedFuelingTierBand} · steady delivery`,
-        category,
-      } satisfies FuelingSlot;
+        id: args.id,
+        title: args.title,
+        durationMin: args.durationMin,
+        intensityPctFtp: args.intensityPctFtp,
+        choPerHourSession: round(choPerHourSession, 1),
+        steps,
+        timelineSteps,
+        hydrationTimeline,
+        visualMetrics,
+        opsCards,
+        glycogenDepletion: glyc,
+        glycogenPlot: glyPlot,
+      };
+    };
+
+    const sessions = fuelingTrainingContext;
+
+    if (sessions.length <= 1) {
+      const s0 = sessions[0];
+      const duration = s0?.durationMin ?? effectiveSessionDurationMin;
+      const intensity = s0?.substrate?.estimatedIntensityPctFtp ?? effectiveSessionIntensityPctFtp;
+      const engineOne =
+        s0?.substrate != null
+          ? ` · motore: lact ~${s0.substrate.lactateProducedG} g · Cori ~${s0.substrate.glucoseFromCoriG} g · CHOexo ~${s0.substrate.exogenousOxidizedG} g`
+          : engineSuffixDay;
+      return [
+        buildPackage({
+          id: s0?.id ?? "day",
+          title: s0?.title ?? "Contesto giornata training",
+          durationMin: duration,
+          intensityPctFtp: intensity,
+          preCho: dayPre,
+          postCho: dayPost,
+          intraTotalCho: dayIntraTotal,
+          engineSuffix: engineOne,
+          intraSplitNote:
+            sessions.length === 1 && (fuelingIntraChoSplitBySession?.length ?? 0) >= 2 ? intraSplitFull : "",
+        }),
+      ];
+    }
+
+    const weights = sessions.map((s) => Math.max(0.01, n(s.choEnergyWeight, s.tss || 1)));
+    const sumW = weights.reduce((a, b) => a + b, 0);
+
+    return sessions.map((s, i) => {
+      const wShare = weights[i] / sumW;
+      const preS = Math.max(12, round(dayPre * wShare));
+      const postS = Math.max(18, round(dayPost * wShare));
+      const intraS =
+        fuelingIntraChoSplitBySession?.find((x) => String(x.id) === String(s.id))?.choG ?? round(dayIntraTotal * wShare, 1);
+      const dur = Math.max(1, s.durationMin);
+      const intens = s.substrate?.estimatedIntensityPctFtp ?? effectiveSessionIntensityPctFtp;
+      const eng =
+        s.substrate != null
+          ? ` · motore: lact ~${s.substrate.lactateProducedG} g · Cori ~${s.substrate.glucoseFromCoriG} g · CHOexo ~${s.substrate.exogenousOxidizedG} g`
+          : "";
+      return buildPackage({
+        id: s.id,
+        title: String(s.title),
+        durationMin: dur,
+        intensityPctFtp: intens,
+        preCho: preS,
+        postCho: postS,
+        intraTotalCho: intraS,
+        engineSuffix: eng,
+        intraSplitNote: i === 0 ? intraSplitFull : "",
+      });
     });
-    return [
-      {
-        phase: "Pre-workout",
-        time: "-30'",
-        icon: "🟣",
-        plan: `${preCho}g CHO + priming mix (${brandA}) + 300ml acqua`,
-        cho: preCho,
-        fluid: 300,
-        notes: `Priming metabolico · tier ${resolvedFuelingTierBand}${engineSuffix}${intraSplitNote}`,
-        category: "drink",
-      },
-      ...intraSteps,
-      {
-        phase: "Post-workout",
-        time: "+10'",
-        icon: "🟢",
-        plan: `${postCho}g CHO + recovery protein blend (${brandC}) + 350ml acqua`,
-        cho: postCho,
-        fluid: 350,
-        notes: `Recovery immediato${engineSuffix}`,
-        category: "recovery",
-      },
-    ];
   }, [
     profileSupplements,
+    profile,
     effectiveSessionDurationMin,
     effectiveFluidMlPerHour,
     nutritionDayModel,
@@ -1689,76 +1839,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     resolvedFuelingTierBand,
     fuelingEngineDaySummary,
     fuelingIntraChoSplitBySession,
+    fuelingTrainingContext,
+    fuelingPhysiology,
+    fuelingMediaByKey,
+    normalizedPreferredBrands,
+    effectiveSessionIntensityPctFtp,
+    sodiumMgPerHour,
   ]);
-
-  const fuelingProductsBySlot = useMemo(() => {
-    return fuelingProtocol.map((slot) => {
-      for (const brand of normalizedPreferredBrands) {
-        const product = FUELING_PRODUCT_CATALOG.find((p) => p.brand === brand && p.category === slot.category);
-        if (product) return product;
-      }
-      return FUELING_PRODUCT_CATALOG.find((p) => p.category === slot.category) ?? FUELING_PRODUCT_CATALOG[0];
-    });
-  }, [fuelingProtocol, normalizedPreferredBrands]);
-
-  const fuelingSteps = useMemo(() => {
-    return fuelingProtocol.map((slot, idx) => {
-      const product = fuelingProductsBySlot[idx];
-      const { displayImage, isLogoFallback } = resolveFuelingProductImage(product, slot.category, fuelingMediaByKey);
-      return {
-        ...slot,
-        product,
-        displayImage,
-        isLogoFallback,
-        minuteOffset: parseFuelingMinuteOffset(slot.time),
-      };
-    });
-  }, [fuelingProtocol, fuelingProductsBySlot, fuelingMediaByKey]);
-
-  const fuelingByPhase = useMemo(() => {
-    const byPhase: Record<"pre" | "intra" | "post", typeof fuelingSteps> = { pre: [], intra: [], post: [] };
-    for (const step of fuelingSteps) {
-      const key = step.phase.toLowerCase().includes("pre")
-        ? "pre"
-        : step.phase.toLowerCase().includes("post")
-          ? "post"
-          : "intra";
-      byPhase[key].push(step);
-    }
-    byPhase.pre.sort((a, b) => a.minuteOffset - b.minuteOffset);
-    byPhase.intra.sort((a, b) => a.minuteOffset - b.minuteOffset);
-    byPhase.post.sort((a, b) => a.minuteOffset - b.minuteOffset);
-    return byPhase;
-  }, [fuelingSteps]);
-
-  const fuelingTimelineSteps = useMemo(() => {
-    return [...fuelingByPhase.pre, ...fuelingByPhase.intra, ...fuelingByPhase.post];
-  }, [fuelingByPhase]);
-
-  const hydrationTimeline = useMemo(() => {
-    const everyMin = 20;
-    const bottleMl = 500;
-    const rounds = Math.max(1, Math.ceil(effectiveSessionDurationMin / everyMin));
-    return Array.from({ length: rounds }, (_, i) => {
-      const minute = i * everyMin;
-      return {
-        minuteLabel: minute === 0 ? "0'" : `+${minute}'`,
-        note: `${bottleMl}ml + sali minerali`,
-      };
-    });
-  }, [effectiveSessionDurationMin]);
-
-  const fuelingVisualMetrics = useMemo(() => {
-    const totalHydration = fuelingSteps.reduce((sum, s) => sum + s.fluid, 0);
-    const totalCho = fuelingSteps.reduce((sum, s) => sum + s.cho, 0);
-    const totalKcal = round(totalCho * 4);
-    return [
-      { label: "CHO/h", value: round(resolvedFuelingChoGPerHour), unit: "g/h", pct: clamp((resolvedFuelingChoGPerHour / 130) * 100, 8, 100), color: "#ff6b00" },
-      { label: "Idratazione totale", value: round(totalHydration), unit: "ml", pct: clamp((totalHydration / 3000) * 100, 8, 100), color: "#0ea5e9" },
-      { label: "Sodio/h", value: round(sodiumMgPerHour), unit: "mg/h", pct: clamp((sodiumMgPerHour / 1200) * 100, 8, 100), color: "#8b5cf6" },
-      { label: "kcal protocollo", value: totalKcal, unit: "kcal", pct: clamp((totalKcal / 1000) * 100, 8, 100), color: "#10b981" },
-    ];
-  }, [fuelingSteps, resolvedFuelingChoGPerHour, sodiumMgPerHour]);
 
   const integrationProductCards = useMemo(() => {
     const focusPriority: FuelingFunctionalFocus[] = [
@@ -1803,77 +1890,47 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     ];
   }, [integrationProductCards]);
 
-  const glycogenDepletion = useMemo(() => {
-    const weight = n(profile?.weight_kg, 72);
-    const muscleKg = n(profile?.muscle_mass_kg, weight * 0.45);
-    const totalGlycogen = round(muscleKg * 12.5 + 95);
-    const durationHours = Math.max(0.5, n(effectiveSessionDurationMin, 120) / 60);
-    const burnBase = clamp(
-      72 + (effectiveSessionIntensityPctFtp - 55) * 1.75 + (fuelingPhysiology.choSharePct - 55) * 1.35 + fuelingPhysiology.vLamax * 18,
-      80,
-      250,
-    );
-    const intakeRate = clamp(resolvedFuelingChoGPerHour, 0, 150);
-    const absorbedRate = intakeRate * (fuelingPhysiology.gutDeliveryPct / 100);
-    const coriRate = fuelingPhysiology.coriReturnG > 0 ? fuelingPhysiology.coriReturnG / durationHours : 0;
-    const dt = 1 / 6; // 10'
+  /** Proiezione glicogeno aggregata sulla giornata (predictor e riepilogo). */
+  const glycogenDepletion = useMemo(
+    () =>
+      computeGlycogenDepletionForFueling({
+        weightKg: n(profile?.weight_kg, 72),
+        muscleMassKg: profile?.muscle_mass_kg,
+        durationMin: effectiveSessionDurationMin,
+        intensityPctFtp: effectiveSessionIntensityPctFtp,
+        fuelingPhysiology: {
+          choSharePct: fuelingPhysiology.choSharePct,
+          vLamax: fuelingPhysiology.vLamax,
+          oxidativeCeilingKcalMin: fuelingPhysiology.oxidativeCeilingKcalMin,
+          redoxPct: fuelingPhysiology.redoxPct,
+          gutDeliveryPct: fuelingPhysiology.gutDeliveryPct,
+          coriReturnG: fuelingPhysiology.coriReturnG,
+        },
+        resolvedFuelingChoGPerHour,
+      }),
+    [
+      effectiveSessionDurationMin,
+      effectiveSessionIntensityPctFtp,
+      profile,
+      resolvedFuelingChoGPerHour,
+      fuelingPhysiology,
+    ],
+  );
 
-    let time = 0;
-    let remaining = totalGlycogen;
-    const points: Array<{ xHour: number; pct: number; grams: number }> = [{ xHour: 0, pct: 100, grams: totalGlycogen }];
-
-    while (time < durationHours) {
-      const remainingRatio = remaining / Math.max(1, totalGlycogen);
-      const metabolicDownshift = 0.72 + remainingRatio * 0.42;
-      const oxidativeProtection =
-        fuelingPhysiology.oxidativeCeilingKcalMin > 0
-          ? clamp(fuelingPhysiology.oxidativeCeilingKcalMin / 14, 0.82, 1.06)
-          : 1;
-      const redoxPenalty = 1 + clamp((fuelingPhysiology.redoxPct - 50) / 200, -0.08, 0.18);
-      const burnRate = burnBase * metabolicDownshift * redoxPenalty / oxidativeProtection;
-      const netRate = Math.max(6, burnRate - absorbedRate - coriRate);
-      remaining = Math.max(0, remaining - netRate * dt);
-      time = Math.min(durationHours, time + dt);
-      const pct = (remaining / Math.max(1, totalGlycogen)) * 100;
-      points.push({ xHour: round(time, 2), pct: round(pct, 2), grams: round(remaining, 1) });
-    }
-
-    const totalConsume = round(burnBase * durationHours);
-    const totalIntake = round(intakeRate * durationHours);
-    const totalAbsorbed = round(absorbedRate * durationHours);
-    const totalCori = round(coriRate * durationHours);
-    const totalNet = Math.max(0, round(totalConsume - totalAbsorbed - totalCori));
-    const finalRemaining = points[points.length - 1]?.grams ?? totalGlycogen;
-    const finalPct = points[points.length - 1]?.pct ?? 100;
-    const finalZone: "green" | "yellow" | "red" = finalPct > 60 ? "green" : finalPct > 30 ? "yellow" : "red";
-
-    return {
-      totalGlycogen,
-      blocks: [],
-      points,
-      totalConsume,
-      totalIntake,
-      totalAbsorbed,
-      totalCori,
-      totalNet,
-      finalRemaining: round(finalRemaining),
-      finalPct: round(finalPct, 1),
-      finalZone,
-      totalHours: round(durationHours, 2),
-    };
-  }, [effectiveSessionDurationMin, effectiveSessionIntensityPctFtp, profile, resolvedFuelingChoGPerHour, fuelingPhysiology]);
-
-  const fuelingOpsCards = useMemo(
-    () => [
-      { label: "CHO total", value: `${round(fuelingSteps.reduce((sum, step) => sum + step.cho, 0))} g` },
-      { label: "Fluid total", value: `${round(fuelingSteps.reduce((sum, step) => sum + step.fluid, 0))} ml` },
+  const fuelingOpsCards = useMemo(() => {
+    const totalCho = fuelingSessionPackages.reduce((s, p) => s + p.steps.reduce((x, st) => x + st.cho, 0), 0);
+    const totalFluid = fuelingSessionPackages.reduce((s, p) => s + p.steps.reduce((x, st) => x + st.fluid, 0), 0);
+    const totalSteps = fuelingSessionPackages.reduce((s, p) => s + p.timelineSteps.length, 0);
+    return [
+      { label: "Protocolli", value: `${fuelingSessionPackages.length}` },
+      { label: "CHO total (Σ)", value: `${round(totalCho)} g` },
+      { label: "Fluid total (Σ)", value: `${round(totalFluid)} ml` },
       { label: "Sodium", value: `${round(sodiumMgPerHour)} mg/h` },
       { label: "Gut delivery", value: `${round(fuelingPhysiology.gutDeliveryPct)}%` },
-      { label: "Glycogen end", value: `${round(glycogenDepletion.finalRemaining)} g` },
-      { label: "Steps", value: `${fuelingTimelineSteps.length}` },
-    ],
-    [fuelingSteps, sodiumMgPerHour, fuelingPhysiology.gutDeliveryPct, glycogenDepletion.finalRemaining, fuelingTimelineSteps.length],
-  );
+      { label: "Glycogen end (giorno)", value: `${round(glycogenDepletion.finalRemaining)} g` },
+      { label: "Steps (Σ)", value: `${totalSteps}` },
+    ];
+  }, [fuelingSessionPackages, sodiumMgPerHour, fuelingPhysiology.gutDeliveryPct, glycogenDepletion.finalRemaining]);
 
   const selectedExecutedKj = useMemo(
     () => selectedExecutedSessions.reduce((sum, session) => sum + n(session.kj, 0), 0),
@@ -1908,40 +1965,28 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     [adaptationLoop, bioenergeticModulation],
   );
 
-  const glycogenPlot = useMemo(() => {
-    const w = 760;
-    const h = 230;
-    const padL = 52;
-    const padR = 28;
-    const padT = 18;
-    const padB = 36;
-    const chartW = w - padL - padR;
-    const chartH = h - padT - padB;
-    const maxX = Math.max(1, glycogenDepletion.totalHours);
-    const toX = (x: number) => padL + (x / maxX) * chartW;
-    const toY = (pct: number) => padT + ((100 - pct) / 100) * chartH;
-    const plotted = glycogenDepletion.points.map((p) => ({ x: toX(p.xHour), y: toY(p.pct) }));
-    const smoothPath = buildSmoothPath(plotted);
-    const areaPath = `${smoothPath} L ${toX(glycogenDepletion.totalHours)} ${toY(0)} L ${toX(0)} ${toY(0)} Z`;
-
-    return { w, h, padL, padR, padT, padB, chartW, chartH, toX, toY, smoothPath, areaPath };
-  }, [glycogenDepletion]);
-
   const garminPayload = useMemo(() => {
     const ftp = n(physio?.ftp_watts, 260);
-    const steps: GarminFuelingStep[] = fuelingProtocol.map((slot) => {
-      const raw = slot.time.replace("'", "").trim();
-      const minute_offset = raw.startsWith("+") ? Number(raw.slice(1)) : raw.startsWith("-") ? -Number(raw.slice(1)) : Number(raw);
-      return {
-        phase: slot.phase,
-        minute_offset: Number.isFinite(minute_offset) ? minute_offset : 0,
-        icon: slot.icon,
-        protocol: slot.plan,
-        cho_g: slot.cho,
-        hydration_ml: slot.fluid,
-        notes: slot.notes,
-      };
-    });
+    const steps: GarminFuelingStep[] = fuelingSessionPackages.flatMap((pkg) =>
+      pkg.steps.map((slot) => {
+        const raw = slot.time.replace("'", "").trim();
+        const minute_offset = raw.startsWith("+")
+          ? Number(raw.slice(1))
+          : raw.startsWith("-")
+            ? -Number(raw.slice(1))
+            : Number(raw);
+        const shortTitle = pkg.title.length > 28 ? `${pkg.title.slice(0, 28)}…` : pkg.title;
+        return {
+          phase: `[${shortTitle}] ${slot.phase}`,
+          minute_offset: Number.isFinite(minute_offset) ? minute_offset : 0,
+          icon: slot.icon,
+          protocol: slot.plan,
+          cho_g: slot.cho,
+          hydration_ml: slot.fluid,
+          notes: slot.notes,
+        };
+      }),
+    );
 
     const totalCho = steps.reduce((s, x) => s + x.cho_g, 0);
     const totalHydration = steps.reduce((s, x) => s + x.hydration_ml, 0);
@@ -1973,6 +2018,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         zone: glycogenDepletion.finalZone,
       },
       protocol_summary: {
+        sessions_count: fuelingSessionPackages.length,
         steps_count: steps.length,
         cho_total_g: totalCho,
         hydration_total_ml: totalHydration,
@@ -1983,7 +2029,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     athleteId,
     fluidMlPerHour,
     resolvedFuelingChoGPerHour,
-    fuelingProtocol,
+    fuelingSessionPackages,
     glycogenDepletion,
     physio,
     predictorSport,
@@ -2495,147 +2541,244 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   </div>
                 </details>
               ) : null}
-              <div className="fueling-vertical-timeline">
-                {fuelingTimelineSteps.map((step, idx) => (
-                  <article key={`step-${step.phase}-${step.time}-${idx}`} className="fueling-vstep">
-                    {(() => {
-                      const phaseColor = fuelingPhaseColor(step.phase);
-                      return (
-                        <>
-                    <div className="fueling-vrail">
-                      <span className="fueling-vdot" style={{ background: `${phaseColor}22`, border: `1px solid ${phaseColor}`, color: phaseColor }}>
-                        {idx + 1}
-                      </span>
-                      {idx < fuelingTimelineSteps.length - 1 && <span className="fueling-vline" style={{ background: `${phaseColor}66` }} />}
+              {fuelingSessionPackages.map((pkg) => {
+                const glyId = `glycoArea-${String(pkg.id).replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+                const gPlot = pkg.glycogenPlot;
+                const gDep = pkg.glycogenDepletion;
+                return (
+                  <section
+                    key={`fuel-pkg-${pkg.id}`}
+                    style={{
+                      marginBottom: 20,
+                      paddingBottom: 16,
+                      borderBottom: "1px solid rgba(255,255,255,0.08)",
+                    }}
+                  >
+                    <h4 style={{ marginBottom: 10, fontSize: "1rem" }}>{pkg.title}</h4>
+                    <p className="nutrition-muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                      ~{pkg.durationMin} min · intensità stimata ~{round(pkg.intensityPctFtp)}% FTP · CHO/h seduta ~{pkg.choPerHourSession} g/h
+                    </p>
+                    <div className="fueling-vertical-timeline">
+                      {pkg.timelineSteps.map((step, idx) => (
+                        <article key={`step-${pkg.id}-${step.phase}-${step.time}-${idx}`} className="fueling-vstep">
+                          {(() => {
+                            const phaseColor = fuelingPhaseColor(step.phase);
+                            return (
+                              <>
+                                <div className="fueling-vrail">
+                                  <span
+                                    className="fueling-vdot"
+                                    style={{
+                                      background: `${phaseColor}22`,
+                                      border: `1px solid ${phaseColor}`,
+                                      color: phaseColor,
+                                    }}
+                                  >
+                                    {idx + 1}
+                                  </span>
+                                  {idx < pkg.timelineSteps.length - 1 && (
+                                    <span className="fueling-vline" style={{ background: `${phaseColor}66` }} />
+                                  )}
+                                </div>
+                                <div className="fueling-vcard">
+                                  <a
+                                    href={step.product?.productUrl ?? "#"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="fueling-step-media-link flex items-center justify-center"
+                                    aria-label={step.product?.product ?? "Prodotto fueling"}
+                                  >
+                                    <div className="fueling-step-fallback flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 to-orange-500/5">
+                                      <Package className="h-9 w-9 text-fuchsia-300/90" strokeWidth={1.75} aria-hidden />
+                                    </div>
+                                  </a>
+                                  <div className="fueling-step-body">
+                                    <span
+                                      className="fueling-step-time"
+                                      style={{
+                                        color: phaseColor,
+                                        border: `1px solid ${phaseColor}`,
+                                        background: `${phaseColor}22`,
+                                        borderRadius: "999px",
+                                        padding: "2px 8px",
+                                        display: "inline-block",
+                                      }}
+                                    >
+                                      {step.phase} · {step.time}
+                                    </span>
+                                    <strong>{step.product?.product ?? "Fuel product"}</strong>
+                                    <small>{step.product?.brand ?? "Brand"}</small>
+                                    <div className="fueling-step-chip-row">
+                                      <span>CHO {step.cho}g</span>
+                                      <span>Fluid {step.fluid}ml</span>
+                                      {step.product?.format ? <span>{step.product.format}</span> : null}
+                                      {step.product?.functionalFocus?.[0] ? <span>{step.product.functionalFocus[0]}</span> : null}
+                                    </div>
+                                    <div className="fueling-step-actions">
+                                      <a
+                                        href={step.product?.productUrl ?? "#"}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="fueling-step-link"
+                                      >
+                                        Product link
+                                      </a>
+                                    </div>
+                                  </div>
+                                </div>
+                              </>
+                            );
+                          })()}
+                        </article>
+                      ))}
                     </div>
-                    <div className="fueling-vcard">
-                      <a
-                        href={step.product?.productUrl ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="fueling-step-media-link flex items-center justify-center"
-                        aria-label={step.product?.product ?? "Prodotto fueling"}
-                      >
-                        <div className="fueling-step-fallback flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 to-orange-500/5">
-                          <Package className="h-9 w-9 text-fuchsia-300/90" strokeWidth={1.75} aria-hidden />
-                        </div>
-                      </a>
-                      <div className="fueling-step-body">
-                        <span
-                          className="fueling-step-time"
-                          style={{
-                            color: phaseColor,
-                            border: `1px solid ${phaseColor}`,
-                            background: `${phaseColor}22`,
-                            borderRadius: "999px",
-                            padding: "2px 8px",
-                            display: "inline-block",
-                          }}
-                        >
-                          {step.phase} · {step.time}
-                        </span>
-                        <strong>{step.product?.product ?? "Fuel product"}</strong>
-                        <small>{step.product?.brand ?? "Brand"}</small>
-                        <div className="fueling-step-chip-row">
-                          <span>CHO {step.cho}g</span>
-                          <span>Fluid {step.fluid}ml</span>
-                          {step.product?.format ? <span>{step.product.format}</span> : null}
-                          {step.product?.functionalFocus?.[0] ? <span>{step.product.functionalFocus[0]}</span> : null}
-                        </div>
-                        <div className="fueling-step-actions">
-                          <a
-                            href={step.product?.productUrl ?? "#"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="fueling-step-link"
-                          >
-                            Product link
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                        </>
-                      );
-                    })()}
-                  </article>
-                ))}
-              </div>
 
-              <details className="collapsible-card">
-                <summary>Hydration protocol</summary>
-                <section className="fueling-hydration-strip" style={{ marginBottom: 0 }}>
-                  <div className="fueling-hydration-grid">
-                    {hydrationTimeline.map((h) => (
-                      <div key={`hydration-${h.minuteLabel}`} className="fueling-hydration-chip">
-                        <strong>{h.minuteLabel}</strong>
-                        <span>{h.note}</span>
-                      </div>
-                    ))}
-                  </div>
-                </section>
-              </details>
+                    <details className="collapsible-card">
+                      <summary>Hydration protocol · {pkg.title}</summary>
+                      <section className="fueling-hydration-strip" style={{ marginBottom: 0 }}>
+                        <div className="fueling-hydration-grid">
+                          {pkg.hydrationTimeline.map((h) => (
+                            <div key={`hydration-${pkg.id}-${h.minuteLabel}`} className="fueling-hydration-chip">
+                              <strong>{h.minuteLabel}</strong>
+                              <span>{h.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    </details>
 
-              <section className="fueling-visual-report">
-                <h4>Fueling Visual Report</h4>
-                <div className="fueling-metric-grid">
-                  {fuelingVisualMetrics.map((metric) => (
-                    <article key={metric.label} className="fueling-metric-card">
-                      <div className="fueling-metric-head">
-                        <label>{metric.label}</label>
-                        <strong>{metric.value} {metric.unit}</strong>
+                    <section className="fueling-visual-report">
+                      <h4>Fueling Visual Report · {pkg.title}</h4>
+                      <div className="fueling-metric-grid">
+                        {pkg.visualMetrics.map((metric) => (
+                          <article key={`${pkg.id}-${metric.label}`} className="fueling-metric-card">
+                            <div className="fueling-metric-head">
+                              <label>{metric.label}</label>
+                              <strong>
+                                {metric.value} {metric.unit}
+                              </strong>
+                            </div>
+                            <div className="fueling-metric-bar">
+                              <div className="fueling-metric-fill" style={{ width: `${metric.pct}%`, background: metric.color }} />
+                            </div>
+                          </article>
+                        ))}
                       </div>
-                      <div className="fueling-metric-bar">
-                        <div className="fueling-metric-fill" style={{ width: `${metric.pct}%`, background: metric.color }} />
+                      <div className="fueling-glyco-future">
+                        <h5>Glycogen depletion (seduta)</h5>
+                        <div className="nutrition-detail-rail" style={{ marginBottom: "8px" }}>
+                          <span>
+                            <strong>Intake raw:</strong> {gDep.totalIntake} g
+                          </span>
+                          <span>
+                            <strong>Assorbiti:</strong> {gDep.totalAbsorbed} g
+                          </span>
+                          <span>
+                            <strong>Cori:</strong> {gDep.totalCori} g
+                          </span>
+                          <span>
+                            <strong>Gut risk:</strong> {fuelingPhysiology.gutPathwayRisk}
+                          </span>
+                        </div>
+                        <svg viewBox={`0 0 ${gPlot.w} ${gPlot.h}`} className="fueling-glyco-svg">
+                          <defs>
+                            <linearGradient id={glyId} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={FUELING_CHART_THEME_PRO2.areaTop} stopOpacity="0.45" />
+                              <stop offset="100%" stopColor={FUELING_CHART_THEME_PRO2.areaBottom} stopOpacity="0.04" />
+                            </linearGradient>
+                          </defs>
+                          <rect
+                            x={gPlot.padL}
+                            y={gPlot.padT}
+                            width={gPlot.chartW}
+                            height={gPlot.chartH}
+                            fill="rgba(255,255,255,0.02)"
+                            rx="8"
+                          />
+                          <rect
+                            x={gPlot.padL}
+                            y={gPlot.toY(100)}
+                            width={gPlot.chartW}
+                            height={gPlot.toY(60) - gPlot.toY(100)}
+                            fill={FUELING_CHART_THEME_PRO2.zoneGreen}
+                          />
+                          <rect
+                            x={gPlot.padL}
+                            y={gPlot.toY(60)}
+                            width={gPlot.chartW}
+                            height={gPlot.toY(30) - gPlot.toY(60)}
+                            fill={FUELING_CHART_THEME_PRO2.zoneYellow}
+                          />
+                          <rect
+                            x={gPlot.padL}
+                            y={gPlot.toY(30)}
+                            width={gPlot.chartW}
+                            height={gPlot.toY(0) - gPlot.toY(30)}
+                            fill={FUELING_CHART_THEME_PRO2.zoneRed}
+                          />
+                          <path d={gPlot.areaPath} fill={`url(#${glyId})`} />
+                          <path fill="none" stroke={FUELING_CHART_THEME_PRO2.line} strokeWidth="3" d={gPlot.smoothPath} />
+                          {gDep.points.map((p) => (
+                            <circle
+                              key={`g-${pkg.id}-${p.xHour}-${p.pct}`}
+                              cx={gPlot.toX(p.xHour)}
+                              cy={gPlot.toY(p.pct)}
+                              r="4"
+                              fill={FUELING_CHART_THEME_PRO2.dot}
+                            />
+                          ))}
+                          <line
+                            x1={gPlot.padL}
+                            y1={gPlot.toY(60)}
+                            x2={gPlot.w - gPlot.padR}
+                            y2={gPlot.toY(60)}
+                            stroke="rgba(103,232,249,0.5)"
+                            strokeDasharray="4 6"
+                          />
+                          <line
+                            x1={gPlot.padL}
+                            y1={gPlot.toY(30)}
+                            x2={gPlot.w - gPlot.padR}
+                            y2={gPlot.toY(30)}
+                            stroke="rgba(248,113,113,0.55)"
+                            strokeDasharray="4 6"
+                          />
+                          <line
+                            x1={gPlot.padL}
+                            y1={gPlot.padT}
+                            x2={gPlot.padL}
+                            y2={gPlot.h - gPlot.padB}
+                            stroke={FUELING_CHART_THEME_PRO2.axis}
+                          />
+                          <line
+                            x1={gPlot.padL}
+                            y1={gPlot.h - gPlot.padB}
+                            x2={gPlot.w - gPlot.padR}
+                            y2={gPlot.h - gPlot.padB}
+                            stroke={FUELING_CHART_THEME_PRO2.axis}
+                          />
+                          {[100, 80, 60, 40, 30, 20, 0].map((pct) => (
+                            <text key={`y-${pkg.id}-${pct}`} x={8} y={gPlot.toY(pct) + 4} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
+                              {pct}% · {round((gDep.totalGlycogen * pct) / 100)}g
+                            </text>
+                          ))}
+                          {Array.from({ length: Math.floor(gDep.totalHours) + 1 }, (_, i) => i).map((hTick) => (
+                            <text key={`x-${pkg.id}-${hTick}`} x={gPlot.toX(hTick) - 8} y={gPlot.h - 8} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
+                              {hTick}h
+                            </text>
+                          ))}
+                          <text x={gPlot.w - 188} y={16} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
+                            Y: glicogeno disponibile (g / %)
+                          </text>
+                          <text x={gPlot.w - 118} y={gPlot.h - 8} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
+                            X: tempo
+                          </text>
+                        </svg>
                       </div>
-                    </article>
-                  ))}
-                </div>
-                <div className="fueling-glyco-future">
-                  <h5>Glycogen depletion</h5>
-                  <div className="nutrition-detail-rail" style={{ marginBottom: "8px" }}>
-                    <span><strong>Intake raw:</strong> {glycogenDepletion.totalIntake} g</span>
-                    <span><strong>Assorbiti:</strong> {glycogenDepletion.totalAbsorbed} g</span>
-                    <span><strong>Cori:</strong> {glycogenDepletion.totalCori} g</span>
-                    <span><strong>Gut risk:</strong> {fuelingPhysiology.gutPathwayRisk}</span>
-                  </div>
-                  <svg viewBox={`0 0 ${glycogenPlot.w} ${glycogenPlot.h}`} className="fueling-glyco-svg">
-                    <defs>
-                      <linearGradient id="glycoArea" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={FUELING_CHART_THEME_PRO2.areaTop} stopOpacity="0.45" />
-                        <stop offset="100%" stopColor={FUELING_CHART_THEME_PRO2.areaBottom} stopOpacity="0.04" />
-                      </linearGradient>
-                    </defs>
-                    <rect x={glycogenPlot.padL} y={glycogenPlot.padT} width={glycogenPlot.chartW} height={glycogenPlot.chartH} fill="rgba(255,255,255,0.02)" rx="8" />
-                    <rect x={glycogenPlot.padL} y={glycogenPlot.toY(100)} width={glycogenPlot.chartW} height={glycogenPlot.toY(60) - glycogenPlot.toY(100)} fill={FUELING_CHART_THEME_PRO2.zoneGreen} />
-                    <rect x={glycogenPlot.padL} y={glycogenPlot.toY(60)} width={glycogenPlot.chartW} height={glycogenPlot.toY(30) - glycogenPlot.toY(60)} fill={FUELING_CHART_THEME_PRO2.zoneYellow} />
-                    <rect x={glycogenPlot.padL} y={glycogenPlot.toY(30)} width={glycogenPlot.chartW} height={glycogenPlot.toY(0) - glycogenPlot.toY(30)} fill={FUELING_CHART_THEME_PRO2.zoneRed} />
-                    <path
-                      d={glycogenPlot.areaPath}
-                      fill="url(#glycoArea)"
-                    />
-                    <path fill="none" stroke={FUELING_CHART_THEME_PRO2.line} strokeWidth="3" d={glycogenPlot.smoothPath} />
-                    {glycogenDepletion.points.map((p) => (
-                      <circle key={`g-${p.xHour}-${p.pct}`} cx={glycogenPlot.toX(p.xHour)} cy={glycogenPlot.toY(p.pct)} r="4" fill={FUELING_CHART_THEME_PRO2.dot} />
-                    ))}
-                    <line x1={glycogenPlot.padL} y1={glycogenPlot.toY(60)} x2={glycogenPlot.w - glycogenPlot.padR} y2={glycogenPlot.toY(60)} stroke="rgba(103,232,249,0.5)" strokeDasharray="4 6" />
-                    <line x1={glycogenPlot.padL} y1={glycogenPlot.toY(30)} x2={glycogenPlot.w - glycogenPlot.padR} y2={glycogenPlot.toY(30)} stroke="rgba(248,113,113,0.55)" strokeDasharray="4 6" />
-                    <line x1={glycogenPlot.padL} y1={glycogenPlot.padT} x2={glycogenPlot.padL} y2={glycogenPlot.h - glycogenPlot.padB} stroke={FUELING_CHART_THEME_PRO2.axis} />
-                    <line x1={glycogenPlot.padL} y1={glycogenPlot.h - glycogenPlot.padB} x2={glycogenPlot.w - glycogenPlot.padR} y2={glycogenPlot.h - glycogenPlot.padB} stroke={FUELING_CHART_THEME_PRO2.axis} />
-                    {[100, 80, 60, 40, 30, 20, 0].map((pct) => (
-                      <text key={`y-${pct}`} x={8} y={glycogenPlot.toY(pct) + 4} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
-                        {pct}% · {round((glycogenDepletion.totalGlycogen * pct) / 100)}g
-                      </text>
-                    ))}
-                    {Array.from({ length: Math.floor(glycogenDepletion.totalHours) + 1 }, (_, i) => i).map((hTick) => (
-                      <text key={`x-${hTick}`} x={glycogenPlot.toX(hTick) - 8} y={glycogenPlot.h - 8} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">
-                        {hTick}h
-                      </text>
-                    ))}
-                    <text x={glycogenPlot.w - 188} y={16} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">Y: glicogeno disponibile (g / %)</text>
-                    <text x={glycogenPlot.w - 118} y={glycogenPlot.h - 8} fill={FUELING_CHART_THEME_PRO2.text} fontSize="10">X: tempo</text>
-                  </svg>
-                </div>
-              </section>
+                    </section>
+                  </section>
+                );
+              })}
             </section>
           </section>
           ) : null}
