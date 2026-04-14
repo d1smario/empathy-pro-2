@@ -24,3 +24,4 @@ Thumbs.db
 # OneDrive / local sync artifacts
 .next.nosync/
 .vercel
+.env*.local
