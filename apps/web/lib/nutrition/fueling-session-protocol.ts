@@ -1,4 +1,9 @@
-import type { FuelingCategory } from "@/lib/nutrition/fueling-product-catalog";
+import type { FuelingCategory, FuelingProduct } from "@/lib/nutrition/fueling-product-catalog";
+import {
+  buildIntraFuelingPlan,
+  resolvePostRecoveryProduct,
+  resolvePreWorkoutCarbProduct,
+} from "@/lib/nutrition/fueling-intra-protocol";
 
 export type FuelingProtocolSlot = {
   phase: string;
@@ -9,6 +14,8 @@ export type FuelingProtocolSlot = {
   fluid: number;
   notes: string;
   category: FuelingCategory;
+  /** Prodotto già scelto dal builder del protocollo; evita match errati per sola categoria (es. BCAA su chew). */
+  catalogProduct?: FuelingProduct;
 };
 
 export type FuelingGlycogenDepletionModel = {
@@ -85,10 +92,13 @@ export function buildFuelingProtocolSlots(input: {
   engineSuffix: string;
   intraSplitNote: string;
   profileSupplements: string[];
+  /** Marchi normalizzati da profilo (supplement_config); guida catalogo intra/pre/post. */
+  preferredBrands: string[];
 }): FuelingProtocolSlot[] {
-  const brandA = input.profileSupplements[0] ?? "Enervit";
-  const brandB = input.profileSupplements[1] ?? brandA;
-  const brandC = input.profileSupplements[2] ?? brandA;
+  const brands =
+    input.preferredBrands.length > 0 ? input.preferredBrands : input.profileSupplements;
+  const preProduct = resolvePreWorkoutCarbProduct(brands);
+  const postProduct = resolvePostRecoveryProduct(brands);
   const durationMin = Math.max(1, input.durationMin);
   const durationHours = Math.max(0.5, durationMin / 60);
   const preCho = Math.max(12, round(input.preCho));
@@ -99,59 +109,49 @@ export function buildFuelingProtocolSlots(input: {
     120,
     round((input.effectiveFluidMlPerHour * durationHours) / intraStepsCount),
   );
-  const rawStepCho = intraStepsCount > 0 ? intraTotalCho / intraStepsCount : intraTotalCho;
   const engineSuffix = input.engineSuffix;
   const intraSplitNote = input.intraSplitNote;
 
-  const intraSteps = Array.from({ length: intraStepsCount }, (_, i) => {
-    const minute = i * 20;
-    const isLast = i === intraStepsCount - 1;
-    const distributedBefore = round(rawStepCho * i, 1);
-    const remaining = Math.max(0, round(intraTotalCho - distributedBefore, 1));
-    const stepCho = isLast ? remaining : round(rawStepCho, 1);
-    const category: FuelingCategory = i % 3 === 0 ? "drink" : i % 3 === 1 ? "gel" : "chew";
-    const formatLabel =
-      category === "drink"
-        ? `drink mix ${brandA}`
-        : category === "gel"
-          ? `gel 2:1 ${brandB}`
-          : `chew/bar ${brandC}`;
-    return {
-      phase: "Intra",
-      time: minute === 0 ? "0'" : `+${minute}'`,
-      icon: "🟦",
-      plan: `${stepCho}g CHO via ${formatLabel}`,
-      cho: stepCho,
-      fluid: perStepFluid,
-      notes:
-        i === 0
-          ? `Tier ${input.resolvedFuelingTierBand} · steady delivery${engineSuffix}${intraSplitNote}`
-          : `Tier ${input.resolvedFuelingTierBand} · steady delivery`,
-      category,
-    } satisfies FuelingProtocolSlot;
+  const intraPlan = buildIntraFuelingPlan({
+    intraTotalCho,
+    durationMin,
+    perStepFluid,
+    preferredBrands: brands,
+    tierBand: input.resolvedFuelingTierBand,
   });
+
+  const intraSteps: FuelingProtocolSlot[] = intraPlan.map((row, i) => ({
+    ...row.slot,
+    catalogProduct: row.product,
+    notes:
+      i === 0
+        ? `${row.slot.notes}${engineSuffix}${intraSplitNote}`
+        : row.slot.notes,
+  }));
 
   return [
     {
       phase: "Pre-workout",
       time: "-30'",
       icon: "🟣",
-      plan: `${preCho}g CHO + priming mix (${brandA}) + 300ml acqua`,
+      plan: `${preCho}g CHO + ${preProduct.product} (${preProduct.brand}) + 300ml acqua`,
       cho: preCho,
       fluid: 300,
       notes: `Priming metabolico · tier ${input.resolvedFuelingTierBand}${engineSuffix}${intraSplitNote}`,
-      category: "drink",
+      category: preProduct.category,
+      catalogProduct: preProduct,
     },
     ...intraSteps,
     {
       phase: "Post-workout",
       time: "+10'",
       icon: "🟢",
-      plan: `${postCho}g CHO + recovery protein blend (${brandC}) + 350ml acqua`,
+      plan: `${postCho}g CHO + ${postProduct.product} (${postProduct.brand}) + 350ml acqua`,
       cho: postCho,
       fluid: 350,
       notes: `Recovery immediato${engineSuffix}`,
       category: "recovery",
+      catalogProduct: postProduct,
     },
   ];
 }

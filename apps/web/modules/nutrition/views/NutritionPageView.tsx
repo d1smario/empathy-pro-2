@@ -1628,6 +1628,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
     function enrichSlots(slots: FuelingProtocolSlot[]): TimelineStep[] {
       const products = slots.map((slot) => {
+        if (slot.catalogProduct) return slot.catalogProduct;
         for (const brand of normalizedPreferredBrands) {
           const product = FUELING_PRODUCT_CATALOG.find((p) => p.brand === brand && p.category === slot.category);
           if (product) return product;
@@ -1705,6 +1706,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         engineSuffix: args.engineSuffix,
         intraSplitNote: args.intraSplitNote,
         profileSupplements: supplements,
+        preferredBrands: normalizedPreferredBrands,
       });
       const steps = enrichSlots(slots);
       const timelineSteps = timelineFromSteps(steps);
