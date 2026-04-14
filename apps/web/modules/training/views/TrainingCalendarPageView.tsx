@@ -5,7 +5,7 @@ import { formatExecutedWorkoutSummary } from "@empathy/domain-training";
 import { Activity, CalendarDays, FileUp, LineChart, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
 import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
@@ -220,8 +220,17 @@ export default function TrainingCalendarPageView() {
     [monthStart, monthEnd],
   );
 
+  /**
+   * Evita che risposte `planned-window` più lente sovrascrivano una lettura più recente
+   * (es. dopo elimina seduta: due fetch in parallelo → la vecchia ripristina la riga).
+   */
+  const plannedWindowFetchGenRef = useRef(0);
+
   const loadMonth = useCallback(async () => {
     if (ctxLoading) return;
+    const fetchGen = ++plannedWindowFetchGenRef.current;
+    const isStale = () => fetchGen !== plannedWindowFetchGenRef.current;
+
     if (!athleteId) {
       setPlanned([]);
       setExecuted([]);
@@ -241,6 +250,8 @@ export default function TrainingCalendarPageView() {
         headers: await buildSupabaseAuthHeaders(),
       });
       const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
+      if (isStale()) return;
+
       if (!res.ok || !json.ok) {
         setPlanned([]);
         setExecuted([]);
@@ -269,6 +280,7 @@ export default function TrainingCalendarPageView() {
         resTo: json.to,
       });
     } catch {
+      if (isStale()) return;
       setErr("Errore di rete.");
       setPlanned([]);
       setExecuted([]);
@@ -276,7 +288,9 @@ export default function TrainingCalendarPageView() {
       setTwinContextStrip(null);
       setFetchDiag({ status: 0, plannedN: 0, executedN: 0, apiError: "network" });
     } finally {
-      setLoading(false);
+      if (!isStale()) {
+        setLoading(false);
+      }
     }
   }, [athleteId, ctxLoading, fetchFrom, fetchTo]);
 
