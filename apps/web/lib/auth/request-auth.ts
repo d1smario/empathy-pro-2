@@ -48,6 +48,12 @@ export async function requireRequestUser(req: NextRequest): Promise<string> {
   return resolveRequestUserId(req);
 }
 
+/**
+ * Bearer-only + RLS client dedicato. Per **nuove** route Pro 2 preferire
+ * `requireAthleteReadContext` da `@/lib/auth/athlete-read-context` (cookie **o** Bearer, stesso gate atleta,
+ * service role su letture tabella se configurato) così Training / Nutrition / Health / Dashboard dialogano
+ * con la stessa policy.
+ */
 export async function requireRequestAthleteAccess(req: NextRequest, athleteId: string): Promise<string> {
   const targetAthleteId = athleteId.trim();
   if (!targetAthleteId) {

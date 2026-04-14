@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { TrainingRouteAuthError, requireTrainingAthleteWriteContext } from "@/lib/auth/training-route-auth";
+import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { buildRealityIngestionEnvelope } from "@/lib/reality/build-ingestion-envelope";
 import { buildPlannedTrainingImportQuality } from "@/lib/reality/training-import-quality";
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing file" }, { status: 400, headers: NO_STORE });
     }
 
-    const { db } = await requireTrainingAthleteWriteContext(req, athleteId);
+    const { db } = await requireAthleteWriteContext(req, athleteId);
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const fileChecksum = createHash("sha1").update(fileBuffer).digest("hex");
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Planned import failed";

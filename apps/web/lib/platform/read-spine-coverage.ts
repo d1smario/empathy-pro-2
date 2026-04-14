@@ -4,6 +4,10 @@ import type { AthleteMemory } from "@/lib/empathy/schemas";
  * Operational read-spine coverage from a resolved AthleteMemory payload.
  * Used to drive dashboard/dev tooling and to verify "effective" cross-module state
  * without implying clinical completeness.
+ *
+ * Le API che espongono questo riepilogo devono essere dietro lo stesso gate atleta di
+ * `@/lib/auth/athlete-read-context` (`requireAthleteReadContext`), così la copertura riflette
+ * dati letti con policy unica.
  */
 export type ReadSpineCoverageSummary = {
   hasProfile: boolean;

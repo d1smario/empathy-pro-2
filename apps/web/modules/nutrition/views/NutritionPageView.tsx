@@ -5,6 +5,7 @@ import { Package } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { cn } from "@/lib/cn";
+import { NutritionPlanDatePicker } from "@/components/nutrition/NutritionPlanDatePicker";
 import { NutritionSubnav } from "@/components/nutrition/NutritionSubnav";
 import { SessionKnowledgeSummary } from "@/components/nutrition/SessionKnowledgeSummary";
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
@@ -91,6 +92,31 @@ import {
   readMealRotationWeekPayload,
   recordPlanDayStaples,
 } from "@/lib/nutrition/meal-rotation-week-cache";
+
+const NUTRITION_PLAN_DATE_STORAGE_PREFIX = "empathy-pro2.nutrition.planDate.";
+
+function isIsoDateKey(s: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(s);
+}
+
+function readPersistedNutritionPlanDate(athleteId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = sessionStorage.getItem(`${NUTRITION_PLAN_DATE_STORAGE_PREFIX}${athleteId}`)?.trim();
+    return raw && isIsoDateKey(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedNutritionPlanDate(athleteId: string, dateKey: string): void {
+  if (typeof window === "undefined" || !isIsoDateKey(dateKey)) return;
+  try {
+    sessionStorage.setItem(`${NUTRITION_PLAN_DATE_STORAGE_PREFIX}${athleteId}`, dateKey);
+  } catch {
+    /* quota / private mode */
+  }
+}
 
 type AthleteNutritionRow = {
   id: string;
@@ -418,10 +444,6 @@ function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
 
-function toIsoDate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
 function round(v: number, digits = 0) {
   const m = 10 ** digits;
   return Math.round(v * m) / m;
@@ -522,6 +544,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [profileFoodExcludeBusy, setProfileFoodExcludeBusy] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!athleteId || loading) return;
+    writePersistedNutritionPlanDate(athleteId, selectedPlanDate);
+  }, [athleteId, selectedPlanDate, loading]);
+
+  useEffect(() => {
     setIntelligentMealPlan(null);
     setIntelligentMealError(null);
     setCoachMealRemovalKeys(new Set());
@@ -552,11 +579,15 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       }
       setLoading(true);
       setError(null);
-      const start = new Date();
-      const end = new Date();
-      end.setDate(start.getDate() + 14);
-      const startKey = start.toISOString().slice(0, 10);
-      const endKey = end.toISOString().slice(0, 10);
+      // Finestra ampia (locale, mezzogiorno): allineata al calendario/builder — evita nutrition "ferma"
+      // quando la data piano è oltre ~2 settimane o nel passato recente (prima era solo oggi→+14 UTC).
+      const today = new Date();
+      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
+      start.setDate(start.getDate() - 90);
+      end.setDate(end.getDate() + 120);
+      const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+      const endKey = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
       const moduleData = await fetchNutritionModuleContext({
         athleteId,
         from: startKey,
@@ -599,23 +630,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const todayKey = new Date().toISOString().slice(0, 10);
       const availableDates = Array.from(new Set(pl.map((row) => row.date))).sort();
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
-      setSelectedPlanDate(nextDate);
+      const persisted = readPersistedNutritionPlanDate(athleteId);
+      setSelectedPlanDate(persisted ?? nextDate);
       setLoading(false);
     }
     loadData();
   }, [athleteId]);
-
-  const planDateOptions = useMemo(() => {
-    const fromPlanned = planned.map((p) => p.date);
-    const today = new Date();
-    const rolling = Array.from({ length: 14 }, (_, i) => {
-      const x = new Date(today);
-      x.setDate(today.getDate() + i);
-      return toIsoDate(x);
-    });
-    const dates = Array.from(new Set([selectedPlanDate, ...rolling, ...fromPlanned])).sort();
-    return dates;
-  }, [planned, selectedPlanDate]);
 
   const selectedPlanSessions = useMemo(
     () => planned.filter((p) => p.date === selectedPlanDate),
@@ -985,7 +1005,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     });
   }, [foodLookupResults, restrictedTokens]);
 
-  const recent7 = executed.slice(0, 7);
+  /** Eseguiti ordinati per data desc (la finestra API è come il calendario: asc); per medie serve “ultimi 7”. */
+  const recent7 = useMemo(() => {
+    const sorted = [...executed].sort((a, b) => String(b.date).slice(0, 10).localeCompare(String(a.date).slice(0, 10)));
+    return sorted.slice(0, 7);
+  }, [executed]);
   const avgTss7 = useMemo(() => (recent7.length ? recent7.reduce((s, x) => s + n(x.tss), 0) / recent7.length : 0), [recent7]);
   const lactateAvg = useMemo(() => (recent7.length ? recent7.reduce((s, x) => s + n(x.lactate_mmoll), 0) / recent7.length : 0), [recent7]);
   const glucoseAvg = useMemo(() => (recent7.length ? recent7.reduce((s, x) => s + n(x.glucose_mmol, 5.1), 0) / recent7.length : 0), [recent7]);
@@ -2132,30 +2156,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             subRoute === "diary" ||
             subRoute === "predictor") ? (
             <section className="viz-card builder-panel border border-emerald-500/25 bg-black/20 px-4 py-3 sm:px-5">
-              <label className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col gap-3">
                 <span className="text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">Giorno da visualizzare</span>
-                <select
-                  className={cn(
-                    "w-full rounded-xl border border-emerald-500/40 bg-gradient-to-r from-emerald-950/50 to-black/50 px-4 py-3",
-                    "text-sm font-semibold text-white shadow-inner outline-none transition",
-                    "hover:border-emerald-400/55 focus:ring-2 focus:ring-emerald-400/35 sm:max-w-md sm:flex-1",
-                  )}
-                  aria-label="Seleziona giorno piano pasti"
+                <NutritionPlanDatePicker
                   value={selectedPlanDate}
-                  onChange={(e) => setSelectedPlanDate(e.target.value)}
-                >
-                  {planDateOptions.map((d) => (
-                    <option key={d} value={d}>
-                      {new Date(`${d}T00:00:00`).toLocaleDateString("it-IT", {
-                        weekday: "long",
-                        day: "2-digit",
-                        month: "2-digit",
-                        year: "numeric",
-                      })}
-                    </option>
-                  ))}
-                </select>
-              </label>
+                  onChange={setSelectedPlanDate}
+                  minOffsetDays={-400}
+                  maxOffsetDays={400}
+                  className="w-full"
+                />
+              </div>
             </section>
           ) : null}
 

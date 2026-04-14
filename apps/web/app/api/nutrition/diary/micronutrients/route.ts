@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readRequestBearerToken, RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import {
   bucketLines,
   extractMicroNutrientsPer100g,
@@ -8,7 +8,6 @@ import {
   type MicroTotalLine,
 } from "@/lib/nutrition/fdc-micronutrient-extract";
 import { fetchFdcFoodNutrientsRaw } from "@/lib/nutrition/usda-fdc-food-detail";
-import { createRequestSupabaseClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 
@@ -36,13 +35,8 @@ export async function GET(req: NextRequest) {
     if (!athleteId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return NextResponse.json({ error: "Serve athleteId e date (YYYY-MM-DD)" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
-    const token = readRequestBearerToken(req);
-    if (!token) {
-      return NextResponse.json({ error: "Sessione non valida: effettua di nuovo l’accesso." }, { status: 401 });
-    }
-    const supabase = createRequestSupabaseClient(token);
-    const { data, error } = await supabase
+    const { db } = await requireAthleteReadContext(req, athleteId);
+    const { data, error } = await db
       .from("food_diary_entries")
       .select("fdc_id, quantity_g, provenance")
       .eq("athlete_id", athleteId)
@@ -117,7 +111,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(payload);
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Micronutrients rollup failed";

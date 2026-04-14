@@ -7,7 +7,8 @@
 1. **Ingest** — adapter device, laboratorio, BIA; **LogMeal** (foto pasto → reality nutrizionale); eventi normalizzati / envelope di qualità.
 2. **Compute** — motori versionati (fisiologia, bioenergetica); proiezione **digital twin**.
 3. **Interpretation** — knowledge (corpus, meccanismi, binding), research trace, faccette deterministiche; AI solo interpretazione/orchestrazione.
-4. **Application** — `apps/web` (e future API thin): moduli prodotto, auth, ruoli atleta/coach, Stripe; **Spline** per presentazione 3D esercizi (layer UI, non sorgente dati).
+4. **Application** — `apps/web` (e future API thin): moduli prodotto, auth, ruoli atleta/coach, Stripe; **Spline** per presentazione 3D esercizi (layer UI, non sorgente dati).  
+   **Gate lettura atleta (Pro 2):** `requireAthleteReadContext` in `apps/web/lib/auth/athlete-read-context.ts` — stessa policy per route che leggono dati per `athleteId` (allineamento calendario / moduli / dashboard). **Staging interpretazione L2** (confronto prima del deposito in memoria canonica): `docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md`.
 
 Flusso logico: ingest → compute → twin; ingest e twin alimentano knowledge; twin + knowledge → UI/API.
 

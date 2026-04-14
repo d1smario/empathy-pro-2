@@ -1,14 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
-import {
-  TrainingRouteAuthError,
-  requireAuthenticatedTrainingUser,
-} from "@/lib/auth/training-route-auth";
-import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
@@ -126,22 +121,17 @@ export async function GET(req: NextRequest) {
     if (!athleteId || !from || !to) {
       return NextResponse.json({ error: "Missing athleteId/from/to", rows: [] }, { status: 400, headers: NO_STORE });
     }
-    const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
-    const allowed = await canAccessAthleteData(rlsClient, userId, athleteId, null);
-    if (!allowed) {
-      return NextResponse.json({ error: "forbidden", rows: [] }, { status: 403, headers: NO_STORE });
-    }
+    const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
     const [{ data: executedData, error: executedError }, { data: plannedData, error: plannedError }, athleteMemory] = await Promise.all([
-      supabase
+      db
         .from("executed_workouts")
         .select("id, date, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2")
         .eq("athlete_id", athleteId)
         .gte("date", from)
         .lte("date", to)
         .order("date", { ascending: true }),
-      supabase
+      db
         .from("planned_workouts")
         .select("date, tss_target, duration_minutes, kcal_target, type")
         .eq("athlete_id", athleteId)
@@ -249,7 +239,7 @@ export async function GET(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message, rows: [] }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training analytics API error";

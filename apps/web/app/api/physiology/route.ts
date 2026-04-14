@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 
 export const runtime = "nodejs";
 
@@ -9,10 +8,9 @@ export async function GET(req: NextRequest) {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     if (!athleteId) return NextResponse.json({ error: "Missing athleteId", results: [] }, { status: 400 });
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("metabolic_lab_runs")
       .select("section, model_version, output_payload, created_at")
       .eq("athlete_id", athleteId)
@@ -45,7 +43,7 @@ export async function GET(req: NextRequest) {
       results,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message, results: [] }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Physiology API error";

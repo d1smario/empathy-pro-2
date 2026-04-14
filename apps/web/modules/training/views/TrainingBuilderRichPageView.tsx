@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  formatPlannedWorkoutTitle,
   formatExecutedWorkoutSummary,
   type ExecutedWorkout,
   type PlannedWorkout,
@@ -87,9 +86,41 @@ import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverag
 import { fetchNutritionViewModel } from "@/modules/nutrition/services/nutrition-api";
 import { fetchProfileViewModel } from "@/modules/profile/services/profile-api";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { formatPlannedWorkoutCardTitle } from "@/lib/training/planned/format-planned-workout-title";
 
 function initialManualPlanBlocks(): ManualPlanBlock[] {
   return [{ ...defaultManualPlanBlock("steady", "Blocco 1"), minutes: 20, seconds: 0, intensity: "Z2" }];
+}
+
+/** Data calendario locale (non UTC): allineata a griglia Calendario e `input type="date"`. */
+function localCalendarDateString(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function addCalendarDays(isoDate: string, deltaDays: number): string {
+  const key = isoDate.slice(0, 10);
+  const base = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return key;
+  base.setDate(base.getDate() + deltaDays);
+  return localCalendarDateString(base);
+}
+
+/** Finestra fetch KPI: include ancore date picker + margine, così sedute lontane restano visibili. */
+function builderPlannedWindowRange(plannedDateStr: string, manualPlannedDateStr: string): { from: string; to: string } {
+  const today = localCalendarDateString();
+  let from = addCalendarDays(today, -7);
+  let to = addCalendarDays(today, 120);
+  const anchors = [plannedDateStr, manualPlannedDateStr].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
+  for (const a of anchors) {
+    const lo = addCalendarDays(a, -14);
+    const hi = addCalendarDays(a, 14);
+    if (lo < from) from = lo;
+    if (hi > to) to = hi;
+  }
+  return { from, to };
 }
 
 type WindowErr = { ok: false; error?: string };
@@ -352,6 +383,9 @@ export default function TrainingBuilderRichPageView() {
   const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
+  /** Deve stare prima del fetch calendario: la finestra include queste date ± margine (non solo oggi±7/28). */
+  const [plannedDate, setPlannedDate] = useState(() => localCalendarDateString());
+  const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -370,8 +404,15 @@ export default function TrainingBuilderRichPageView() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch(`/api/training/planned-window?athleteId=${encodeURIComponent(athleteId)}`, {
+        const { from, to } = builderPlannedWindowRange(plannedDate, manualPlannedDate);
+        const q = new URLSearchParams({
+          athleteId,
+          from,
+          to,
+        });
+        const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",
+          credentials: "same-origin",
           headers: await buildSupabaseAuthHeaders(),
         });
         const json = (await res.json()) as TrainingPlannedWindowOkViewModel | WindowErr;
@@ -403,7 +444,7 @@ export default function TrainingBuilderRichPageView() {
     return () => {
       c = true;
     };
-  }, [athleteId, ctxLoading, calendarRefresh]);
+  }, [athleteId, ctxLoading, calendarRefresh, plannedDate, manualPlannedDate]);
 
   const stats = useMemo(() => {
     const pTss = sumPlannedTss(planned);
@@ -442,7 +483,6 @@ export default function TrainingBuilderRichPageView() {
   const [genBusy, setGenBusy] = useState(false);
   const [genErr, setGenErr] = useState<string | null>(null);
   const [genResult, setGenResult] = useState<Awaited<ReturnType<typeof generateBuilderSession>> | null>(null);
-  const [plannedDate, setPlannedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [saveOkId, setSaveOkId] = useState<string | null>(null);
@@ -454,7 +494,6 @@ export default function TrainingBuilderRichPageView() {
   const [speedRefKmh, setSpeedRefKmh] = useState(32);
   const [manualSessionName, setManualSessionName] = useState("Seduta coach Pro 2");
   const [manualPlanBlocks, setManualPlanBlocks] = useState<ManualPlanBlock[]>(initialManualPlanBlocks);
-  const [manualPlannedDate, setManualPlannedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [manualSaveBusy, setManualSaveBusy] = useState(false);
   const [manualSaveErr, setManualSaveErr] = useState<string | null>(null);
   const [manualSaveOkId, setManualSaveOkId] = useState<string | null>(null);
@@ -736,7 +775,6 @@ export default function TrainingBuilderRichPageView() {
         sessionName: manualSessionName.trim() || "Scheda Pro 2",
         adaptationTarget: adaptation,
         phase,
-        plannedSessionDurationMinutes: manualSessionDurationMinutes,
       });
       extraNotesLines = [serializePro2BuilderSessionContract(contract)];
     }
@@ -746,9 +784,6 @@ export default function TrainingBuilderRichPageView() {
       date: plannedDate,
       session,
       extraNotesLines,
-      ...(activeMacroId === "strength"
-        ? { plannedDurationMinutesOverride: manualSessionDurationMinutes }
-        : {}),
     });
     setSaveBusy(false);
     if (!res.ok) {
@@ -767,7 +802,6 @@ export default function TrainingBuilderRichPageView() {
     adaptation,
     currentSportLabel,
     manualSessionName,
-    manualSessionDurationMinutes,
     phase,
     intensityUnit,
     ftpW,
@@ -797,7 +831,6 @@ export default function TrainingBuilderRichPageView() {
             sessionName: manualSessionName.trim() || "Scheda Pro 2",
             adaptationTarget: adaptation,
             phase,
-            plannedSessionDurationMinutes: manualSessionDurationMinutes,
           })
         : activeMacroId === "lifestyle"
           ? buildPro2LifestyleSchedaSessionContract({
@@ -807,7 +840,6 @@ export default function TrainingBuilderRichPageView() {
               sessionName: manualSessionName.trim() || "Scheda lifestyle Pro 2",
               adaptationTarget: adaptation,
               phase,
-              plannedSessionDurationMinutes: manualSessionDurationMinutes,
             })
           : activeMacroId === "technical"
             ? buildPro2TechnicalSchedaSessionContract({
@@ -817,7 +849,6 @@ export default function TrainingBuilderRichPageView() {
                 sessionName: manualSessionName.trim() || "Scheda tecnica Pro 2",
                 adaptationTarget: adaptation,
                 phase,
-                plannedSessionDurationMinutes: manualSessionDurationMinutes,
                 technicalModuleFocus: {
                   workPhase: techWorkPhase,
                   gameContext: techGameContext,
@@ -832,7 +863,6 @@ export default function TrainingBuilderRichPageView() {
                 adaptationTarget: adaptation,
                 phase,
                 family: activeMacroId,
-                plannedSessionDurationMinutes: manualSessionDurationMinutes,
               });
     const jsonLine = serializePro2BuilderSessionContract(contract);
     const res = await insertPlannedWorkoutFromEngineSession({
@@ -840,7 +870,6 @@ export default function TrainingBuilderRichPageView() {
       date: manualPlannedDate,
       session: manualSession,
       extraNotesLines: [jsonLine],
-      plannedDurationMinutesOverride: manualSessionDurationMinutes,
     });
     setManualSaveBusy(false);
     if (!res.ok) {
@@ -871,11 +900,10 @@ export default function TrainingBuilderRichPageView() {
     adaptation,
     phase,
     activeMacroId,
-    manualSessionDurationMinutes,
   ]);
 
   const upcoming = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localCalendarDateString();
     return [...planned]
       .filter((w) => w.date >= today)
       .sort((a, b) => a.date.localeCompare(b.date))
@@ -898,8 +926,15 @@ export default function TrainingBuilderRichPageView() {
         return;
       }
       const p = vm.plan;
+      const src =
+        vm.planSource === "calendar_training_solver"
+          ? "da calendario"
+          : vm.planSource === "nutrition_plans"
+            ? "da piano nutrizione"
+            : "nessun allenamento in calendario per questo giorno";
       setNutritionLine(
-        `${p.calories} kcal · CHO ${p.carbsG}g · PRO ${p.proteinsG}g · FAT ${p.fatsG}g · H₂O ${p.hydrationMl}ml`,
+        `${p.calories} kcal · CHO ${p.carbsG}g · PRO ${p.proteinsG}g · FAT ${p.fatsG}g · H₂O ${p.hydrationMl}ml · ${src}` +
+          (typeof vm.plannedSessionsCount === "number" ? ` · sedute pianific. ${vm.plannedSessionsCount}` : ""),
       );
     } catch (e) {
       setNutritionErr(e instanceof Error ? e.message : "Errore lettura nutrizione");
@@ -908,6 +943,11 @@ export default function TrainingBuilderRichPageView() {
       setNutritionBusy(false);
     }
   }, [athleteId, plannedDate]);
+
+  useEffect(() => {
+    if (!athleteId) return;
+    void refreshNutritionContext();
+  }, [athleteId, plannedDate, calendarRefresh, refreshNutritionContext]);
 
   const showData = !ctxLoading && !loading && !err;
 
@@ -1738,8 +1778,16 @@ export default function TrainingBuilderRichPageView() {
               ) : null}
               {saveOkId ? (
                 <p className="text-sm text-emerald-300/90">
-                  Salvato su planned_workouts
-                  {saveOkId !== "ok" ? ` (id ${saveOkId.slice(0, 8)}…)` : ""}. KPI sopra si aggiornano al prossimo fetch.
+                  Salvato su planned_workouts per il{" "}
+                  <span className="font-mono text-emerald-200">{plannedDate}</span>
+                  {saveOkId !== "ok" ? ` (id ${saveOkId.slice(0, 8)}…)` : ""}. Apri il calendario su quel giorno:{" "}
+                  <Pro2Link
+                    href={`/training/calendar?date=${encodeURIComponent(plannedDate)}`}
+                    variant="ghost"
+                    className="!inline-flex border border-emerald-500/40 px-2 py-0.5 text-xs"
+                  >
+                    Calendario
+                  </Pro2Link>
                 </p>
               ) : null}
               <p className="font-mono text-[0.65rem] text-gray-500">{genResult.source}</p>
@@ -1915,7 +1963,7 @@ export default function TrainingBuilderRichPageView() {
                     <CalendarDays className="h-3.5 w-3.5 text-cyan-300" aria-hidden />
                     {w.date}
                   </span>
-                  <span className="min-w-0 flex-1 text-sm font-medium text-white">{formatPlannedWorkoutTitle(w)}</span>
+                  <span className="min-w-0 flex-1 text-sm font-medium text-white">{formatPlannedWorkoutCardTitle(w)}</span>
                 </li>
               ))}
             </ul>

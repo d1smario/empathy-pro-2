@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import {
   coerceTechnicalModuleFocus,
@@ -14,7 +14,6 @@ import {
   type SessionGoalRequest,
   type TrainingDomain,
 } from "@/lib/training/engine";
-import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -103,19 +102,6 @@ function num(v: unknown): number | null {
 }
 
 export async function POST(req: NextRequest) {
-  const client = createSupabaseCookieClient();
-  if (!client) {
-    return NextResponse.json({ error: "Supabase not configured" }, { status: 503, headers: NO_STORE });
-  }
-
-  const {
-    data: { user },
-    error: authErr,
-  } = await client.auth.getUser();
-  if (authErr || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: NO_STORE });
-  }
-
   const body = (await req.json()) as {
     athleteId?: string;
     applyOperationalScaling?: boolean;
@@ -126,9 +112,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
   }
 
-  const allowed = await canAccessAthleteData(client, user.id, athleteId, null);
-  if (!allowed) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: NO_STORE });
+  let db: Awaited<ReturnType<typeof requireAthleteReadContext>>["db"];
+  try {
+    ({ db } = await requireAthleteReadContext(req, athleteId));
+  } catch (err) {
+    if (err instanceof AthleteReadContextError) {
+      const msg =
+        err.status === 401 ? "Unauthorized" : err.status === 403 ? "Forbidden" : err.message;
+      return NextResponse.json({ error: msg }, { status: err.status, headers: NO_STORE });
+    }
+    throw err;
   }
 
   const requestRaw = body.request ?? {};
@@ -153,7 +146,7 @@ export async function POST(req: NextRequest) {
   const canonPhys = await resolveCanonicalPhysiologyState(athleteId);
   const phys = canonPhys.physiologicalProfile;
 
-  const { data: twinRow } = await client
+  const { data: twinRow } = await db
     .from("twin_states")
     .select("readiness, fatigue_acute")
     .eq("athlete_id", athleteId)

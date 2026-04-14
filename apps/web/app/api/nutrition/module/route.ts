@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import type { PlannedWorkoutDbRow } from "@empathy/domain-training";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import type { PlannedWorkoutDbRow as AdapterPlannedWorkoutDbRow } from "@/lib/empathy/adapters/training";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { toCanonicalPlannedWorkout } from "@/lib/empathy/adapters/training";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
@@ -11,11 +12,14 @@ import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
+import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export const runtime = "nodejs";
 
 // Full nutrition module context endpoint.
 // This route aggregates physiology, twin, memory, execution, and planning inputs.
+// Planned + executed nella finestra `from`…`to`: stessa query e stesso client DB di `GET /api/training/planned-window`
+// (`requireAthleteReadContext` → service role se configurato).
 // Optional query: pathwayDate=YYYY-MM-DD (must be within from…to) → pathwayModulation + functionalFoodRecommendations (stessi builder del client).
 
 export async function GET(req: NextRequest) {
@@ -24,29 +28,16 @@ export async function GET(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId", profile: null, physio: null, executed: [], planned: [] }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
     const from = (req.nextUrl.searchParams.get("from") ?? "").trim();
     const to = (req.nextUrl.searchParams.get("to") ?? "").trim();
     if (!from || !to) {
       return NextResponse.json({ error: "Missing from/to", profile: null, physio: null, executed: [], planned: [] }, { status: 400 });
     }
 
-    const supabase = createServerSupabaseClient();
-    const [athleteMemory, execRes, plannedRes, recoverySummary, researchTraceSummaries] = await Promise.all([
+    const { db } = await requireAthleteReadContext(req, athleteId);
+    const [athleteMemory, trainingWindow, recoverySummary, researchTraceSummaries] = await Promise.all([
       resolveAthleteMemory(athleteId),
-      supabase
-        .from("executed_workouts")
-        .select("id, date, duration_minutes, tss, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2")
-        .eq("athlete_id", athleteId)
-        .order("date", { ascending: false })
-        .limit(30),
-      supabase
-        .from("planned_workouts")
-        .select("id, date, type, duration_minutes, tss_target, kcal_target, notes")
-        .eq("athlete_id", athleteId)
-        .gte("date", from)
-        .lte("date", to)
-        .order("date", { ascending: true }),
+      queryPlannedExecutedWindow(db, athleteId, from, to),
       resolveLatestRecoverySummary(athleteId),
       listKnowledgeExpansionTraceSummaries(athleteId, {
         limit: 4,
@@ -56,10 +47,10 @@ export async function GET(req: NextRequest) {
         throw error;
       }),
     ]);
-    const error =
-      execRes.error?.message ??
-      plannedRes.error?.message ??
-      null;
+    const plannedRes = trainingWindow.planned;
+    const execRes = trainingWindow.executed;
+    const error = firstWindowQueryError(plannedRes, execRes);
+    const plannedRaw = (plannedRes.data ?? []) as PlannedWorkoutDbRow[];
     const profile = athleteMemory.profile
       ? {
           id: athleteMemory.profile.id,
@@ -106,11 +97,11 @@ export async function GET(req: NextRequest) {
     let pathwayModulation = null;
     let functionalFoodRecommendations = null;
     if (pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to) {
-      const rowsForDay = (plannedRes.data ?? []).filter((row) => row.date === pathwayDateParam);
+      const rowsForDay = plannedRaw.filter((row) => row.date.slice(0, 10) === pathwayDateParam);
       pathwayModulation = buildNutritionPathwayModulationViewModel({
         date: pathwayDateParam,
         plannedSessions: rowsForDay.map((row) => {
-          const bs = parsePro2BuilderSessionFromNotes(row.notes);
+          const bs = parsePro2BuilderSessionFromNotes(row.notes ?? null);
           return {
             id: row.id,
             label: String(bs?.sessionName ?? bs?.discipline ?? row.type ?? "Sessione"),
@@ -150,11 +141,12 @@ export async function GET(req: NextRequest) {
       functionalFoodRecommendations,
       athleteMemory,
       executed: execRes.data ?? [],
-      planned: (plannedRes.data ?? []).map((row) => {
-        const builderSession = parsePro2BuilderSessionFromNotes(row.notes);
+      planned: plannedRaw.map((row) => {
+        const builderSession = parsePro2BuilderSessionFromNotes(row.notes ?? null);
+        const adapterRow = row as unknown as AdapterPlannedWorkoutDbRow;
         const canonicalPlannedWorkout = toCanonicalPlannedWorkout({
-          ...row,
-          athlete_id: athleteId,
+          ...adapterRow,
+          athlete_id: row.athlete_id,
           adaptive_goal: builderSession?.adaptationTarget ?? null,
         });
         return {
@@ -170,7 +162,7 @@ export async function GET(req: NextRequest) {
       error,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message, profile: null, physio: null, executed: [], planned: [] }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Nutrition module API error";

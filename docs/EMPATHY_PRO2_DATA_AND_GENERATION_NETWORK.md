@@ -82,6 +82,8 @@ flowchart TB
 
 Questa rete **legge** output di Compute e memoria; **non** sostituisce solver/builder.
 
+**Memoria intermedia (staging L2):** orchestrazioni multilivello confrontano più sorgenti (sempre dopo i gate Application, vedi `requireAthleteReadContext`) e tengono proposte/diff in uno **spazio di lavoro** prima del commit in memoria atleta / trace / evidence. Contratto e motivazione: `docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md`, tipi `apps/web/lib/memory/interpretation-staging-contract.ts`.
+
 ```mermaid
 flowchart TB
   subgraph compute2 [Da Rete A / Compute]

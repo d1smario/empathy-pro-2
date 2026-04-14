@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 
 export const runtime = "nodejs";
@@ -12,14 +12,14 @@ export async function GET(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteReadContext(req, athleteId);
 
     const athleteMemory = await resolveAthleteMemory(athleteId);
     return NextResponse.json(athleteMemory, {
       headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Athlete memory fetch failed";

@@ -1,11 +1,11 @@
 "use client";
 
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/domain-training";
-import { formatExecutedWorkoutSummary, formatPlannedWorkoutTitle } from "@empathy/domain-training";
+import { formatExecutedWorkoutSummary } from "@empathy/domain-training";
 import { Activity, CalendarDays, FileUp, LineChart, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
 import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
@@ -13,7 +13,11 @@ import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
-import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
+import {
+  effectiveDurationMinutesFromPro2Contract,
+  effectiveTssDisplayFromPro2Contract,
+  parsePro2BuilderSessionFromNotes,
+} from "@/lib/training/builder/pro2-session-notes";
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
@@ -23,6 +27,40 @@ import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/t
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Sposta una chiave YYYY-MM-DD di `delta` giorni (mezzogiorno locale → evita salti fusi). */
+function addDaysToIsoDateKey(isoDay: string, deltaDays: number): string {
+  const key = isoDay.slice(0, 10);
+  const base = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return key;
+  base.setDate(base.getDate() + deltaDays);
+  return toDateKey(base);
+}
+
+/**
+ * La griglia resta sul mese visibile, ma il fetch allarga la finestra (come il Builder):
+ * evita sedute “perdute” ai bordi e allinea i dati alla lista “Prossime pianificate”.
+ */
+function calendarPlannedFetchBounds(monthStart: Date, monthEnd: Date): {
+  monthFrom: string;
+  monthTo: string;
+  fetchFrom: string;
+  fetchTo: string;
+} {
+  const monthFrom = toDateKey(monthStart);
+  const monthTo = toDateKey(monthEnd);
+  const fetchFrom = addDaysToIsoDateKey(monthFrom, -45);
+  const fetchTo = addDaysToIsoDateKey(monthTo, 45);
+  return { monthFrom, monthTo, fetchFrom, fetchTo };
+}
+
+function plannedChipMetrics(w: PlannedWorkout): { minutes: number; tss: number } {
+  const c = parsePro2BuilderSessionFromNotes(w.notes ?? null);
+  return {
+    minutes: effectiveDurationMinutesFromPro2Contract(c, w.durationMinutes),
+    tss: effectiveTssDisplayFromPro2Contract(c, w.tssTarget),
+  };
 }
 
 function normalizeIsoDateParam(raw: string | null): string | null {
@@ -167,9 +205,20 @@ export default function TrainingCalendarPageView() {
     notes: "",
     file: null as File | null,
   });
+  /** Solo per confronto oggettivo con Builder (stesso endpoint): HTTP + conteggi risposta. */
+  const [fetchDiag, setFetchDiag] = useState<{
+    status: number;
+    plannedN: number;
+    executedN: number;
+    apiError?: string;
+    resFrom?: string;
+    resTo?: string;
+  } | null>(null);
 
-  const from = toDateKey(monthStart);
-  const to = toDateKey(monthEnd);
+  const { monthFrom, monthTo, fetchFrom, fetchTo } = useMemo(
+    () => calendarPlannedFetchBounds(monthStart, monthEnd),
+    [monthStart, monthEnd],
+  );
 
   const loadMonth = useCallback(async () => {
     if (ctxLoading) return;
@@ -185,9 +234,10 @@ export default function TrainingCalendarPageView() {
     setLoading(true);
     setErr(null);
     try {
-      const q = new URLSearchParams({ athleteId, from, to });
+      const q = new URLSearchParams({ athleteId, from: fetchFrom, to: fetchTo });
       const res = await fetch(`/api/training/planned-window?${q}`, {
         cache: "no-store",
+        credentials: "same-origin",
         headers: await buildSupabaseAuthHeaders(),
       });
       const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
@@ -196,23 +246,39 @@ export default function TrainingCalendarPageView() {
         setExecuted([]);
         setReadSpineCoverage(null);
         setTwinContextStrip(null);
+        setFetchDiag({
+          status: res.status,
+          plannedN: 0,
+          executedN: 0,
+          apiError: ("error" in json && json.error) || res.statusText,
+        });
         setErr(("error" in json && json.error) || "Lettura calendario non riuscita.");
         return;
       }
-      setPlanned(json.planned ?? []);
-      setExecuted(json.executed ?? []);
+      const p = json.planned ?? [];
+      const ex = json.executed ?? [];
+      setPlanned(p);
+      setExecuted(ex);
       setReadSpineCoverage(json.readSpineCoverage ?? null);
       setTwinContextStrip(json.twinContextStrip ?? null);
+      setFetchDiag({
+        status: res.status,
+        plannedN: p.length,
+        executedN: ex.length,
+        resFrom: json.from,
+        resTo: json.to,
+      });
     } catch {
       setErr("Errore di rete.");
       setPlanned([]);
       setExecuted([]);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setFetchDiag({ status: 0, plannedN: 0, executedN: 0, apiError: "network" });
     } finally {
       setLoading(false);
     }
-  }, [athleteId, ctxLoading, from, to]);
+  }, [athleteId, ctxLoading, fetchFrom, fetchTo]);
 
   useEffect(() => {
     void loadMonth();
@@ -221,7 +287,8 @@ export default function TrainingCalendarPageView() {
   const plannedByDate = useMemo(() => {
     const m = new Map<string, PlannedWorkout[]>();
     for (const w of planned) {
-      const key = w.date.slice(0, 10);
+      const key = normalizeDateKey(w.date);
+      if (!key) continue;
       const arr = m.get(key) ?? [];
       arr.push(w);
       m.set(key, arr);
@@ -241,7 +308,12 @@ export default function TrainingCalendarPageView() {
     return m;
   }, [executed]);
 
-  const monthlySessionCount = useMemo(() => planned.length + executed.length, [planned.length, executed.length]);
+  const monthlySessionCount = useMemo(() => {
+    const inMonth = (dayKey: string) => dayKey >= monthFrom && dayKey <= monthTo;
+    const p = planned.filter((w) => inMonth(normalizeDateKey(w.date))).length;
+    const e = executed.filter((w) => inMonth(normalizeDateKey(workoutDayKey(w)))).length;
+    return p + e;
+  }, [planned, executed, monthFrom, monthTo]);
 
   const dayPlanned = plannedByDate.get(selectedDate) ?? [];
   const dayExecuted = executedByDate.get(selectedDate) ?? [];
@@ -409,8 +481,8 @@ export default function TrainingCalendarPageView() {
             {showFileImport ? "Chiudi import" : "Importa file"}
           </button>
         </div>
-        <p className="font-mono text-xs text-gray-500">
-          {from} → {to}
+        <p className="font-mono text-xs text-gray-500" title="Finestra API (include margine oltre il mese della griglia)">
+          {fetchFrom} → {fetchTo} · griglia {monthFrom}…{monthTo}
         </p>
       </div>
 
@@ -427,107 +499,125 @@ export default function TrainingCalendarPageView() {
         </p>
       ) : null}
 
+      {process.env.NODE_ENV === "development" && athleteId && fetchDiag ? (
+        <p className="mb-4 rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-[0.65rem] leading-relaxed text-slate-400">
+          <span className="text-slate-500">diag calendario · </span>
+          athleteId={athleteId} · HTTP {fetchDiag.status} · planned={fetchDiag.plannedN} · executed={fetchDiag.executedN}
+          {fetchDiag.resFrom && fetchDiag.resTo ? (
+            <>
+              {" "}
+              · API <span className="text-slate-300">{fetchDiag.resFrom}</span> →{" "}
+              <span className="text-slate-300">{fetchDiag.resTo}</span>
+            </>
+          ) : null}
+          {fetchDiag.apiError ? <span className="text-amber-400/90"> · {fetchDiag.apiError}</span> : null}
+        </p>
+      ) : null}
+
       {!ctxLoading && !loading && !err ? (
-        <>
-        <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
-          <div className="tc2-calendar-scroll">
-            <div className="tc2-calendar-frame">
-              <div className="tc2-calendar-weekdays">
-                {WEEKDAYS.map((d) => (
-                  <div key={d} className="tc2-calendar-weekday-label">
-                    {d}
-                  </div>
-                ))}
-              </div>
-              <div className="tc2-calendar-grid">
-                {Array.from({ length: monthStartWeekdayMonday }).map((_, i) => (
-                  <div key={`pad-start-${i}`} className="tc2-calendar-grid-pad" aria-hidden />
-                ))}
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  const date = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-                  const pList = plannedByDate.get(date) ?? [];
-                  const eList = executedByDate.get(date) ?? [];
-                  const active = selectedDate === date;
-                  return (
-                    <button
-                      key={date}
-                      type="button"
-                      onClick={() => setSelectedDate(date)}
-                      className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
-                    >
-                      <div className="tc2-calendar-day-num">{day}</div>
-                      {pList.slice(0, 2).map((w) => (
-                        <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-plan">
-                          <div className="flex items-center font-bold">
-                            <span className="tc2-sport-glyph">
-                              <SportGlyph type={w.type} />
-                            </span>
-                            PLAN
-                          </div>
-                          <div>
-                            {w.durationMinutes}m · TSS {Number(w.tssTarget).toFixed(0)}
-                          </div>
-                          <div>
-                            {plannedTitleLine(w)} · km — · Pavg — · kcal{" "}
-                            {w.kcalTarget != null ? Number(w.kcalTarget).toFixed(0) : "—"}
-                          </div>
-                        </div>
-                      ))}
-                      {pList.length > 2 ? (
-                        <div className="text-[10px] font-semibold text-violet-200/90">+{pList.length - 2} pianif.</div>
-                      ) : null}
-                      {eList.slice(0, 2).map((w) => {
-                        const tr = traceRecord(w);
-                        const km = pickMetric(tr, ["distance_km", "distanceKm", "km"]);
-                        const pwr = pickMetric(tr, ["power_avg_w", "power_avg", "avg_power", "powerAvg", "avgPower"]);
-                        const importedFile = pickText(tr, ["imported_file_name"]);
-                        return (
-                          <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-exec">
-                            <div className="font-bold">✅ EXEC</div>
-                            <div>
-                              {w.durationMinutes}m · TSS {Number(w.tss).toFixed(0)}
-                            </div>
-                            <div>
-                              km {km != null ? km.toFixed(1) : "—"} · Pavg {pwr != null ? Math.round(pwr) : "—"} · kcal{" "}
-                              {w.kcal != null ? Number(w.kcal).toFixed(0) : "—"}
-                            </div>
-                            {importedFile ? (
-                              <div className="mt-0.5 opacity-90">
-                                file: {importedFile.slice(0, 40)}
-                                {importedFile.length > 40 ? "…" : ""}
+        <Fragment>
+          <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
+            <div className="tc2-calendar-scroll">
+              <div className="tc2-calendar-frame">
+                <div className="tc2-calendar-weekdays">
+                  {WEEKDAYS.map((d) => (
+                    <div key={d} className="tc2-calendar-weekday-label">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+                <div className="tc2-calendar-grid">
+                  {Array.from({ length: monthStartWeekdayMonday }).map((_, i) => (
+                    <div key={`pad-start-${i}`} className="tc2-calendar-grid-pad" aria-hidden />
+                  ))}
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const date = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+                    const pList = plannedByDate.get(date) ?? [];
+                    const eList = executedByDate.get(date) ?? [];
+                    const active = selectedDate === date;
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => setSelectedDate(date)}
+                        className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
+                      >
+                        <div className="tc2-calendar-day-num">{day}</div>
+                        {pList.slice(0, 2).map((w) => {
+                          const chip = plannedChipMetrics(w);
+                          return (
+                            <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-plan">
+                              <div className="flex items-center font-bold">
+                                <span className="tc2-sport-glyph">
+                                  <SportGlyph type={w.type} />
+                                </span>
+                                PLAN
                               </div>
-                            ) : null}
-                          </div>
-                        );
-                      })}
-                      {eList.length > 2 ? (
-                        <div className="text-[10px] font-semibold text-sky-200/90">+{eList.length - 2} eseguiti</div>
-                      ) : null}
-                    </button>
-                  );
-                })}
+                              <div>
+                                {chip.minutes}m · TSS {chip.tss}
+                              </div>
+                              <div>
+                                {plannedTitleLine(w)} · km — · Pavg — · kcal{" "}
+                                {w.kcalTarget != null ? Number(w.kcalTarget).toFixed(0) : "—"}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {pList.length > 2 ? (
+                          <div className="text-[10px] font-semibold text-violet-200/90">+{pList.length - 2} pianif.</div>
+                        ) : null}
+                        {eList.slice(0, 2).map((w) => {
+                          const tr = traceRecord(w);
+                          const km = pickMetric(tr, ["distance_km", "distanceKm", "km"]);
+                          const pwr = pickMetric(tr, ["power_avg_w", "power_avg", "avg_power", "powerAvg", "avgPower"]);
+                          const importedFile = pickText(tr, ["imported_file_name"]);
+                          return (
+                            <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-exec">
+                              <div className="font-bold">✅ EXEC</div>
+                              <div>
+                                {w.durationMinutes}m · TSS {Number(w.tss).toFixed(0)}
+                              </div>
+                              <div>
+                                km {km != null ? km.toFixed(1) : "—"} · Pavg {pwr != null ? Math.round(pwr) : "—"} · kcal{" "}
+                                {w.kcal != null ? Number(w.kcal).toFixed(0) : "—"}
+                              </div>
+                              {importedFile ? (
+                                <div className="mt-0.5 opacity-90">
+                                  file: {importedFile.slice(0, 40)}
+                                  {importedFile.length > 40 ? "…" : ""}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                        {eList.length > 2 ? (
+                          <div className="text-[10px] font-semibold text-sky-200/90">+{eList.length - 2} eseguiti</div>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+          </section>
+
+          <div className="mb-10 w-full min-w-0">
+            <TrainingCalendarAnalyzer
+              selectedDate={selectedDate}
+              dayPlanned={dayPlanned}
+              dayExecuted={dayExecuted}
+              monthExecuted={executed}
+              athleteId={athleteId}
+              onExecutedChanged={() => void loadMonth()}
+            />
           </div>
-        </section>
 
-        <div className="mb-10 w-full min-w-0">
-          <TrainingCalendarAnalyzer
-            selectedDate={selectedDate}
-            dayPlanned={dayPlanned}
-            dayExecuted={dayExecuted}
-            monthExecuted={executed}
-            athleteId={athleteId}
-            onExecutedChanged={() => void loadMonth()}
-          />
-        </div>
-
-      <div className="grid gap-8 lg:grid-cols-[1fr_minmax(0,420px)]">
-        <div className="space-y-6">
-          {showFileImport ? (
-            <Pro2SectionCard accent="violet" title="Import da file" subtitle="FIT · TCX · GPX · CSV · JSON (come V1)" icon={FileUp}>
-              <form onSubmit={handleFileImportSubmit} className="space-y-4">
+          <div className="grid gap-8 lg:grid-cols-[1fr_minmax(0,420px)]">
+            <div className="space-y-6">
+              {showFileImport ? (
+                <Pro2SectionCard accent="violet" title="Import da file" subtitle="FIT · TCX · GPX · CSV · JSON (come V1)" icon={FileUp}>
+                  <form onSubmit={handleFileImportSubmit} className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                     Modalità
@@ -619,75 +709,74 @@ export default function TrainingCalendarPageView() {
                     Giornata
                   </Pro2Link>
                 </div>
-              </form>
-            </Pro2SectionCard>
-          ) : null}
+                  </form>
+                </Pro2SectionCard>
+              ) : null}
 
-          {!showFileImport ? (
-            <Pro2SectionCard accent="cyan" title="Import veloce" subtitle="Apri il pannello Importa file nella barra mese" icon={FileUp}>
-              <p className="text-sm text-slate-400">
-                Usa il pulsante <strong className="text-slate-200">Importa file</strong> sopra per caricare FIT/TCX/GPX o la programmazione CSV/JSON.
-              </p>
-            </Pro2SectionCard>
-          ) : null}
-        </div>
-
-        <aside className="space-y-6">
-          <Pro2SectionCard
-            accent="orange"
-            title="Giorno selezionato"
-            subtitle={new Date(`${selectedDate}T12:00:00`).toLocaleDateString("it-IT", {
-              weekday: "long",
-              day: "numeric",
-              month: "long",
-            })}
-            icon={Sparkles}
-          >
-            <p className="font-mono text-xs text-gray-500">{selectedDate}</p>
-
-            <div className="mt-4 space-y-3">
-              <p className="text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">Pianificato · builder</p>
-              {dayPlanned.length === 0 ? (
-                <p className="text-sm text-gray-500">Nessuna seduta pianificata.</p>
-              ) : (
-                dayPlanned.map((w) => <CalendarPlannedBuilderDetail key={w.id} workout={w} />)
-              )}
+              {!showFileImport ? (
+                <Pro2SectionCard accent="cyan" title="Import veloce" subtitle="Apri il pannello Importa file nella barra mese" icon={FileUp}>
+                  <p className="text-sm text-slate-400">
+                    Usa il pulsante <strong className="text-slate-200">Importa file</strong> sopra per caricare FIT/TCX/GPX o la programmazione CSV/JSON.
+                  </p>
+                </Pro2SectionCard>
+              ) : null}
             </div>
 
-            <div className="mt-6 space-y-3 border-t border-white/10 pt-6">
-              <p className="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">
-                <Activity className="h-3.5 w-3.5" aria-hidden />
-                Eseguito
-              </p>
-              {dayExecuted.length === 0 ? (
-                <p className="text-sm text-gray-500">Nessun eseguito in questo giorno.</p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {dayExecuted.map((w) => (
-                    <li
-                      key={w.id}
-                      className="rounded-xl border border-sky-500/30 bg-sky-500/[0.08] px-3 py-2 text-sm text-gray-200"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span>{formatExecutedWorkoutSummary(w)}</span>
-                        <Pro2Link
-                          href={`/training/session/${selectedDate}`}
-                          variant="ghost"
-                          className="shrink-0 border border-sky-500/35 px-2 py-1 text-xs"
+            <aside className="space-y-6">
+              <Pro2SectionCard
+                accent="orange"
+                title="Giorno selezionato"
+                subtitle={new Date(`${selectedDate}T12:00:00`).toLocaleDateString("it-IT", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                })}
+                icon={Sparkles}
+              >
+                <p className="font-mono text-xs text-gray-500">{selectedDate}</p>
+
+                <div className="mt-4 space-y-3">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">Pianificato · builder</p>
+                  {dayPlanned.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessuna seduta pianificata.</p>
+                  ) : (
+                    dayPlanned.map((w) => <CalendarPlannedBuilderDetail key={w.id} workout={w} />)
+                  )}
+                </div>
+
+                <div className="mt-6 space-y-3 border-t border-white/10 pt-6">
+                  <p className="flex items-center gap-2 text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">
+                    <Activity className="h-3.5 w-3.5" aria-hidden />
+                    Eseguito
+                  </p>
+                  {dayExecuted.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessun eseguito in questo giorno.</p>
+                  ) : (
+                    <ul className="flex flex-col gap-2">
+                      {dayExecuted.map((w) => (
+                        <li
+                          key={w.id}
+                          className="rounded-xl border border-sky-500/30 bg-sky-500/[0.08] px-3 py-2 text-sm text-gray-200"
                         >
-                          Apri
-                        </Pro2Link>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-          </Pro2SectionCard>
-        </aside>
-      </div>
-        </>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span>{formatExecutedWorkoutSummary(w)}</span>
+                            <Pro2Link
+                              href={`/training/session/${selectedDate}`}
+                              variant="ghost"
+                              className="shrink-0 border border-sky-500/35 px-2 py-1 text-xs"
+                            >
+                              Apri
+                            </Pro2Link>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Pro2SectionCard>
+            </aside>
+          </div>
+        </Fragment>
       ) : null}
     </Pro2ModulePageShell>
   );

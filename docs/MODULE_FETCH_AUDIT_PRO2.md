@@ -50,7 +50,7 @@
 
 **Nota:** `NutritionPageView` costruisce anche URL per food-lookup con query aggiuntive (stesso path base di `FoodDiaryPanel`).
 
-**`GET /api/training/planned-window`:** oltre a `planned` / `executed`, espone `readSpineCoverage` e `twinContextStrip` (da `resolveAthleteMemory` in parallelo alle query calendario), salvo **`includeAthleteContext=0|false|no|off|skip`** → contesto `null`, meno latenza. Componente UI: `components/training/TrainingPlannedWindowContextStrip.tsx`.
+**`GET /api/training/planned-window`:** lettura unificata **pianificato + eseguito** (tabelle `planned_workouts` e `executed_workouts`); è l’hub UI per Calendario, Builder e scheda giorno — vedi `docs/EMPATHY_OPERATIONAL_REALIZATION_MAP.md` §2.1. Oltre a `planned` / `executed`, espone `readSpineCoverage` e `twinContextStrip` (da `resolveAthleteMemory` in parallelo alle query calendario), salvo **`includeAthleteContext=0|false|no|off|skip`** → contesto `null`, meno latenza. Componente UI: `components/training/TrainingPlannedWindowContextStrip.tsx`.
 
 **Legacy:** `GET /api/physiology/profile-latest` resta disponibile (cookie session) ed è marcato `@deprecated`; nessun componente prodotto elencato sopra dovrebbe dipendervi.
 

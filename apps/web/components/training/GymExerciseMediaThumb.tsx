@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { imageSrcUnoptimized } from "@/lib/media/image-src-unoptimized";
 
 type GymExerciseMediaThumbProps = {
   src?: string | null;
@@ -56,18 +58,23 @@ export function GymExerciseMediaThumb({
   }
 
   return (
-    <img
-      src={displaySrc}
-      alt={alt}
-      className={`object-cover ${className}`}
-      loading="lazy"
-      onError={() => {
-        if (artUrl && primary && !useArtFallback && displaySrc === primary) {
-          setUseArtFallback(true);
-          return;
-        }
-        setBroken(true);
-      }}
-    />
+    <div className={`relative overflow-hidden ${className}`}>
+      <Image
+        src={displaySrc}
+        alt={alt}
+        fill
+        className="object-cover"
+        sizes="96px"
+        loading="lazy"
+        unoptimized={imageSrcUnoptimized(displaySrc)}
+        onError={() => {
+          if (artUrl && primary && !useArtFallback && displaySrc === primary) {
+            setUseArtFallback(true);
+            return;
+          }
+          setBroken(true);
+        }}
+      />
+    </div>
   );
 }

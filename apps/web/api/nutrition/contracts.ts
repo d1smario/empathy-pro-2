@@ -21,11 +21,17 @@ export type NutritionPlanVm = {
   hydrationMl: number;
 };
 
+export type NutritionPlanSource = "nutrition_plans" | "calendar_training_solver" | "none";
+
 export type NutritionViewModel = {
   athleteId: string;
   plan: NutritionPlanVm;
   adherenceScore: number;
   error?: string | null;
+  /** Da dove arrivano i target giornalieri (piano DB esplicito vs allenamenti in calendario). */
+  planSource?: NutritionPlanSource;
+  /** Sessioni `planned_workouts` per la data richiesta. */
+  plannedSessionsCount?: number;
 };
 
 export type NutritionPlannedWorkoutRow = Record<string, unknown> & {

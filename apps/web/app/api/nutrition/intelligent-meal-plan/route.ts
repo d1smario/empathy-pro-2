@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { buildDeterministicMealPlanFromRequest } from "@/lib/nutrition/deterministic-meal-plan-from-request";
 import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteReadContext(req, athleteId);
 
     const plan = body.plan as unknown;
     if (!isRecord(plan)) {
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     const assembled = buildDeterministicMealPlanFromRequest(request);
     return NextResponse.json(attachSolverBasisToAssembled(assembled, request));
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Intelligent meal plan error";

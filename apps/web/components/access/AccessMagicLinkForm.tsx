@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { Pro2Button } from "@/components/ui/empathy";
 
@@ -31,7 +32,7 @@ export function AccessMagicLinkForm({ redirectAfterLogin }: Props) {
       return;
     }
     setBusy(true);
-    const origin = window.location.origin;
+    const origin = accessAppOriginFromWindow();
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmed,
       options: {

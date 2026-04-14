@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { estimateVo2FromDevice } from "@/lib/engines/vo2-estimator";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 
@@ -49,29 +48,28 @@ export async function GET(req: NextRequest) {
     const athleteId = (searchParams.get("athleteId") ?? "").trim();
     if (!athleteId) return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
     const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes] = await Promise.all([
-      supabase
+      db
         .from("metabolic_lab_runs")
         .select("id, section, model_version, created_at, input_payload, output_payload")
         .eq("athlete_id", athleteId)
         .order("created_at", { ascending: false })
         .limit(8),
       resolveCanonicalPhysiologyState(athleteId),
-      supabase
+      db
         .from("executed_workouts")
         .select("id, date, duration_minutes, tss, trace_summary, lactate_mmoll, glucose_mmol, smo2")
         .eq("athlete_id", athleteId)
         .order("date", { ascending: false })
         .limit(24),
-      supabase
+      db
         .from("athlete_profiles")
         .select("weight_kg, resting_hr_bpm, max_hr_bpm")
         .eq("id", athleteId)
         .maybeSingle(),
-      supabase
+      db
         .from("biomarker_panels")
         .select("id, type, sample_date, values, source, created_at")
         .eq("athlete_id", athleteId)
@@ -339,7 +337,7 @@ export async function GET(req: NextRequest) {
       workouts,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Physiology history fetch failed";

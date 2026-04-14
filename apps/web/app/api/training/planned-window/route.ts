@@ -5,10 +5,10 @@ import {
   type ExecutedWorkoutDbRow,
   type PlannedWorkoutDbRow,
 } from "@empathy/domain-training";
-import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
-import { TrainingRouteAuthError, requireAuthenticatedTrainingUser, supabaseForTrainingReadAfterAuth } from "@/lib/auth/training-route-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
+import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import type { TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 
 export const dynamic = "force-dynamic";
@@ -53,14 +53,16 @@ function addDays(isoDate: string, delta: number): string {
 }
 
 /**
- * Finestra calendario: `planned_workouts` + `executed_workouts`.
+ * Hub lettura calendario (verità operativa attività): `planned_workouts` + `executed_workouts`
+ * nella finestra `from`…`to`. Il Builder scrive il pianificato via `POST /api/training/planned/insert`;
+ * device/import/manual scrivono l’eseguito su `executed_workouts`. Le viste Calendario / Builder / scheda
+ * giorno usano questo endpoint come sorgente unificata lato UI.
+ *
  * Opzionale: `includeAthleteContext=0|false|no|off|skip` → niente `resolveAthleteMemory`; `readSpineCoverage` e `twinContextStrip` sono `null` (meno latenza).
  * Auth: cookie o `Authorization: Bearer` (parity V1); letture con service role se configurato.
  */
 export async function GET(req: NextRequest) {
   try {
-    const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
-
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     let from = (req.nextUrl.searchParams.get("from") ?? "").trim();
     let to = (req.nextUrl.searchParams.get("to") ?? "").trim();
@@ -77,54 +79,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const allowed = await canAccessAthleteData(rlsClient, userId, athleteId, null);
-    if (!allowed) {
-      return NextResponse.json(
-        { ok: false as const, error: "forbidden", ...EMPTY },
-        { status: 403, headers: NO_STORE },
-      );
-    }
-
-    const db = supabaseForTrainingReadAfterAuth(rlsClient);
+    const { db } = await requireAthleteReadContext(req, athleteId);
     const includeAthleteContext = wantsAthleteContextFromQuery(req);
 
-    const plannedPromise = db
-      .from("planned_workouts")
-      .select("id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, notes")
-      .eq("athlete_id", athleteId)
-      .gte("date", from)
-      .lte("date", to)
-      .order("date", { ascending: true });
-    const executedPromise = db
-      .from("executed_workouts")
-      .select(
-        "id, athlete_id, date, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id",
-      )
-      .eq("athlete_id", athleteId)
-      .gte("date", from)
-      .lte("date", to)
-      .order("date", { ascending: true });
+    const windowPromise = queryPlannedExecutedWindow(db, athleteId, from, to);
 
-    let plannedRes: Awaited<typeof plannedPromise>;
-    let executedRes: Awaited<typeof executedPromise>;
+    let plannedRes: { data: unknown[] | null; error: { message: string } | null };
+    let executedRes: { data: unknown[] | null; error: { message: string } | null };
     let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
 
     if (includeAthleteContext) {
-      const batch = await Promise.all([
-        plannedPromise,
-        executedPromise,
-        resolveAthleteMemory(athleteId).catch(() => null),
-      ]);
-      plannedRes = batch[0];
-      executedRes = batch[1];
-      athleteMemory = batch[2];
+      const batch = await Promise.all([windowPromise, resolveAthleteMemory(athleteId).catch(() => null)]);
+      plannedRes = batch[0].planned;
+      executedRes = batch[0].executed;
+      athleteMemory = batch[1];
     } else {
-      const batch = await Promise.all([plannedPromise, executedPromise]);
-      plannedRes = batch[0];
-      executedRes = batch[1];
+      const windowRes = await windowPromise;
+      plannedRes = windowRes.planned;
+      executedRes = windowRes.executed;
     }
 
-    const errMsg = plannedRes.error?.message ?? executedRes.error?.message ?? null;
+    const errMsg = firstWindowQueryError(plannedRes, executedRes);
     if (errMsg) {
       return NextResponse.json(
         { ok: false as const, error: errMsg, ...EMPTY },
@@ -151,7 +126,7 @@ export async function GET(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json(
         { ok: false as const, error: err.message, ...EMPTY },
         { status: err.status, headers: NO_STORE },

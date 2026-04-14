@@ -16,6 +16,9 @@ function appendHeaders(target: Headers, source?: HeadersInit) {
  * client SSR cookie (`createBrowserClient`). Il singleton `lib/supabase` non legge quei cookie → 401 sulle API con Bearer.
  */
 async function readStableAccessToken(attempts = 4): Promise<string | null> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
+    return null;
+  }
   const safeAttempts = Math.max(1, attempts);
   const browserSsr = typeof window !== "undefined" ? createEmpathyBrowserSupabase() : null;
   for (let index = 0; index < safeAttempts; index += 1) {

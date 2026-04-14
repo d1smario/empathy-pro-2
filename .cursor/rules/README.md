@@ -19,6 +19,10 @@ Dominio / integrazioni:
 
 - **`empathy_nutrition_meal_exposition.mdc`**, **`empathy_nutrition_food_diary.mdc`**, **`empathy_training_macro_sport_strip.mdc`**, **`empathy_athlete_memory.mdc`**, **`empathy_ingest_envelope.mdc`**, **`empathy_v1_pro2_repo_separation.mdc`**, ecc.
 
+**Deploy / host:**
+
+- **`empathy_pro2_vercel_web.mdc`** — produzione Vercel **`empathy-pro-2-web`** → `https://empathy-pro-2-web.vercel.app`; deploy CLI dalla root monorepo.
+
 V1 (`nextjs-empathy-pro/.cursor/rules/`) resta riferimento per testi aggiuntivi; Pro 2 **importa e unifica** qui le regole generative operative.
 
 ## Riallineamento agente (testi per Settings / chat)

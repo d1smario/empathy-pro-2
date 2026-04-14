@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readRequestBearerToken, RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createRequestSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import type { FoodDiaryEntryViewModel, FoodDiaryListViewModel } from "@/api/nutrition/contracts";
 import { fetchFdcFoodPer100gMacros, scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
 
@@ -37,13 +36,8 @@ export async function GET(req: NextRequest) {
     if (!athleteId || !from || !to) {
       return NextResponse.json({ error: "Serve athleteId, from, to (YYYY-MM-DD)" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
-    const token = readRequestBearerToken(req);
-    if (!token) {
-      return NextResponse.json({ error: "Sessione non valida: effettua di nuovo l’accesso." }, { status: 401 });
-    }
-    const supabase = createRequestSupabaseClient(token);
-    const { data, error } = await supabase
+    const { db } = await requireAthleteReadContext(req, athleteId);
+    const { data, error } = await db
       .from("food_diary_entries")
       .select("*")
       .eq("athlete_id", athleteId)
@@ -97,7 +91,7 @@ export async function GET(req: NextRequest) {
     const payload: FoodDiaryListViewModel = { athleteId, from, to, entries, dayTotals };
     return NextResponse.json(payload);
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Food diary GET failed";
@@ -141,7 +135,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "quantityG deve essere tra 0 e 50000 g" }, { status: 400 });
     }
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteWriteContext(req, athleteId);
 
     const apiKey = process.env.USDA_API_KEY?.trim();
     const mode = (body.mode ?? "usda_fdc").trim();
@@ -231,12 +225,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "mode deve essere usda_fdc o scaled_reference" }, { status: 400 });
     }
 
-    const token = readRequestBearerToken(req);
-    if (!token) {
-      return NextResponse.json({ error: "Sessione non valida: effettua di nuovo l’accesso." }, { status: 401 });
-    }
-    const supabase = createRequestSupabaseClient(token);
-    const { data, error } = await supabase.from("food_diary_entries").insert(insert).select("*").single();
+    const { data, error } = await db.from("food_diary_entries").insert(insert).select("*").single();
 
     if (error) {
       if (error.message?.includes("does not exist") || error.code === "42P01") {
@@ -259,7 +248,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ entry: rowToVm(data as Record<string, unknown>) });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Food diary POST failed";
@@ -274,13 +263,8 @@ export async function DELETE(req: NextRequest) {
     if (!athleteId || !id) {
       return NextResponse.json({ error: "Serve athleteId e id" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
-    const tokenDel = readRequestBearerToken(req);
-    if (!tokenDel) {
-      return NextResponse.json({ error: "Sessione non valida: effettua di nuovo l’accesso." }, { status: 401 });
-    }
-    const supabase = createRequestSupabaseClient(tokenDel);
-    const { data, error } = await supabase
+    const { db } = await requireAthleteWriteContext(req, athleteId);
+    const { data, error } = await db
       .from("food_diary_entries")
       .delete()
       .eq("id", id)
@@ -295,7 +279,7 @@ export async function DELETE(req: NextRequest) {
     }
     return NextResponse.json({ ok: true });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Food diary DELETE failed";

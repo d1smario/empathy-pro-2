@@ -40,4 +40,10 @@ Pro 2.0 **non** usa la variabile generica `PORT` del sistema (spesso `3000`) per
 
 ---
 
+## Stesso Supabase e righe “senza builder”
+
+Se Pro 2 e V1 puntano allo **stesso progetto Supabase**, vedrai in calendario anche `planned_workouts` create da **script SQL di demo** nel repo V1 (`nextjs-empathy-pro/supabase/DEMO_*.sql`, `PASTE_DEMO_*`, note `[DEMO_*]`, `mario-rova-demo`, …). Quelle righe **non** contengono `BUILDER_SESSION_JSON::` per scelta: servono a riempire grafici e smoke test, **non** a simulare un salvataggio da Builder/Virya. Non interpretare l’assenza del contratto su quel sottoinsieme come fallimento dell’architettura.
+
+---
+
 *Documento operativo locale; non sostituisce `docs/PLATFORM_AND_DEPLOY.md`.*

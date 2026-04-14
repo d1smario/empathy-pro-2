@@ -1,9 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
-import {
-  TrainingRouteAuthError,
-  requireTrainingAthleteWriteContext,
-} from "@/lib/auth/training-route-auth";
+import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 
 export const dynamic = "force-dynamic";
@@ -51,7 +48,7 @@ export async function POST(req: NextRequest) {
       if (!athleteId) {
         return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
       }
-      const { db } = await requireTrainingAthleteWriteContext(req, athleteId);
+      const { db } = await requireAthleteWriteContext(req, athleteId);
       const payloads = body.rows.map((row) => toInsertRecord(row));
       if (!payloads.length) {
         return NextResponse.json({ error: "rows is empty" }, { status: 400, headers: NO_STORE });
@@ -81,7 +78,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing row payload" }, { status: 400, headers: NO_STORE });
     }
     const aid = String(body.row.athlete_id ?? "").trim();
-    const { db } = await requireTrainingAthleteWriteContext(req, aid);
+    const { db } = await requireAthleteWriteContext(req, aid);
     const insertPayload = toInsertRecord(body.row);
     const { error } = await db.from("planned_workouts").insert(insertPayload);
     if (error) {
@@ -92,7 +89,7 @@ export async function POST(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training planned POST failed";
@@ -110,7 +107,7 @@ export async function PATCH(req: NextRequest) {
     if (!body.id || !body.athleteId || !body.patch) {
       return NextResponse.json({ error: "Missing id, athleteId or patch" }, { status: 400, headers: NO_STORE });
     }
-    const { db } = await requireTrainingAthleteWriteContext(req, body.athleteId);
+    const { db } = await requireAthleteWriteContext(req, body.athleteId);
     const { error } = await db.from("planned_workouts").update(body.patch).eq("id", body.id).eq("athlete_id", body.athleteId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
@@ -120,7 +117,7 @@ export async function PATCH(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training planned PATCH failed";
@@ -134,7 +131,7 @@ export async function DELETE(req: NextRequest) {
     if (!body.id || !body.athleteId) {
       return NextResponse.json({ error: "Missing id or athleteId" }, { status: 400, headers: NO_STORE });
     }
-    const { db } = await requireTrainingAthleteWriteContext(req, body.athleteId);
+    const { db } = await requireAthleteWriteContext(req, body.athleteId);
     const { error } = await db.from("planned_workouts").delete().eq("id", body.id).eq("athlete_id", body.athleteId);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
@@ -144,7 +141,7 @@ export async function DELETE(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training planned DELETE failed";

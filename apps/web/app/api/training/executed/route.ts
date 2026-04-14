@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
 import {
-  TrainingRouteAuthError,
-  requireAuthenticatedTrainingUser,
-  requireTrainingAthleteWriteContext,
-  supabaseForTrainingReadAfterAuth,
-} from "@/lib/auth/training-route-auth";
+  AthleteReadContextError,
+  requireAthleteReadContext,
+  requireAthleteWriteContext,
+} from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -56,7 +54,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing athlete_id or date" }, { status: 400, headers: NO_STORE });
     }
 
-    const { db } = await requireTrainingAthleteWriteContext(req, body.athlete_id);
+    const { db } = await requireAthleteWriteContext(req, body.athlete_id);
     const { error } = await db.from("executed_workouts").insert({
       athlete_id: body.athlete_id,
       date: body.date,
@@ -86,7 +84,7 @@ export async function POST(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training executed POST failed";
@@ -117,8 +115,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing id or athleteId" }, { status: 400, headers: NO_STORE });
     }
 
-    const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
-    const dbRead = supabaseForTrainingReadAfterAuth(rlsClient);
+    const { db: dbRead, rlsClient } = await requireAthleteReadContext(req, athleteId);
 
     const target = await dbRead
       .from("executed_workouts")
@@ -134,8 +131,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     const rowAthleteId = String(target.data.athlete_id);
-    const allowed = await canAccessAthleteData(rlsClient, userId, rowAthleteId, null);
-    if (!allowed) {
+    if (rowAthleteId !== athleteId.trim()) {
       return NextResponse.json({ error: "forbidden" }, { status: 403, headers: NO_STORE });
     }
 
@@ -218,7 +214,7 @@ export async function DELETE(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Training executed DELETE failed";

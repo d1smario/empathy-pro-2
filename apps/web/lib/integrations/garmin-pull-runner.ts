@@ -3,12 +3,15 @@ import "server-only";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
+import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
 
 type PullJobRow = {
   id: string;
   callback_url: string;
   user_access_token: string;
+  athlete_id: string | null;
+  endpoint_kind: string;
 };
 
 function nowIso() {
@@ -33,6 +36,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   completed: number;
   failed: number;
   errors: string[];
+  activitiesUpserted: number;
 }> {
   if (!readOptionalServiceRoleKey()) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per la coda pull Garmin.");
@@ -41,7 +45,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   const supabase = createServerSupabaseClient();
   const { data: jobs, error } = await supabase
     .from("garmin_pull_jobs")
-    .select("id, callback_url, user_access_token")
+    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -51,6 +55,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
 
   let completed = 0;
   let failed = 0;
+  let activitiesUpserted = 0;
   const errors: string[] = [];
 
   for (const job of list) {
@@ -84,6 +89,19 @@ export async function runGarminPullJobs(limit: number): Promise<{
           error_message: ok ? null : text.slice(0, 4000),
         })
         .eq("id", job.id);
+
+      if (ok && job.athlete_id) {
+        try {
+          const { upserted } = await materializeGarminActivitiesFromPullResponse({
+            athleteId: job.athlete_id,
+            endpointKind: job.endpoint_kind,
+            responseBody: body,
+          });
+          activitiesUpserted += upserted;
+        } catch {
+          /* materializzazione best-effort */
+        }
+      }
     } catch (err) {
       failed += 1;
       const msg = err instanceof Error ? err.message : "Pull fallito.";
@@ -99,5 +117,5 @@ export async function runGarminPullJobs(limit: number): Promise<{
     }
   }
 
-  return { processed: list.length, completed, failed, errors };
+  return { processed: list.length, completed, failed, errors, activitiesUpserted };
 }

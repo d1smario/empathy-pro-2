@@ -1,0 +1,12 @@
+---
+description: Host e progetto Vercel canonici Pro 2 (empathy-pro-2-web); deploy da root monorepo
+alwaysApply: true
+---
+
+# Empathy Pro 2 — produzione `empathy-pro-2-web`
+
+- **Questo monorepo** (`empathy-pro-2-cursor` / `empathy-pro-2`) è l’app **Pro 2.0** deployata su Vercel come progetto **`empathy-pro-2-web`**.
+- **URL produzione:** `https://empathy-pro-2-web.vercel.app` — per OAuth redirect, webhook Garmin push, callback, test manuali e documentazione operativa **usa questo host** (salvo task esplicito su un deployment preview).
+- **Non** assumere che le stesse route o env vivano in **V1** (`nextjs-empathy-pro`); modifiche deploy/API/UI Pro 2 si fanno **qui**, poi push + deploy Vercel.
+- **CLI Vercel:** con **Root Directory** = `apps/web` nel dashboard, lanciare `npx vercel deploy` dalla **root del clone** (cartella che contiene `package.json` workspaces e `apps/web`), non solo da `apps/web`, per evitare path `apps/web/apps/web`.
+- File progetto locale opzionale: `.vercel/project.json` in **root** del monorepo (tipicamente in `.gitignore`).

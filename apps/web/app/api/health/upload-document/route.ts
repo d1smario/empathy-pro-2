@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import {
   getHealthUploadsBucket,
   sanitizeHealthObjectName,
@@ -10,7 +10,6 @@ import {
   type HealthPanelTypeForParse,
 } from "@/lib/health/lab-text-extractors";
 import { extractTextFromPdfBuffer } from "@/lib/health/parse-health-pdf";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 
@@ -52,7 +51,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false as const, error: "missing_file" }, { status: 400, headers: NO_STORE });
     }
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteWriteContext(req, athleteId);
 
     const mime = file.type || "application/octet-stream";
     const filename = file instanceof File ? file.name : "upload.bin";
@@ -112,8 +111,7 @@ export async function POST(req: NextRequest) {
       import: importBlock,
     };
 
-    const supabase = createServerSupabaseClient();
-    const { data: inserted, error } = await supabase
+    const { data: inserted, error } = await db
       .from("biomarker_panels")
       .insert({
         athlete_id: athleteId,
@@ -137,7 +135,7 @@ export async function POST(req: NextRequest) {
     if (bucket && panelId) {
       const safe = sanitizeHealthObjectName(filename);
       const objectPath = `${athleteId}/${panelId}/${safe}`;
-      const up = await uploadHealthObject(supabase, bucket, objectPath, buffer, mime);
+      const up = await uploadHealthObject(db, bucket, objectPath, buffer, mime);
       if (up.ok) {
         storagePath = objectPath;
         const nextValues = {
@@ -149,7 +147,7 @@ export async function POST(req: NextRequest) {
             storage_uploaded_at: new Date().toISOString(),
           },
         };
-        await supabase.from("biomarker_panels").update({ values: nextValues }).eq("id", panelId);
+        await db.from("biomarker_panels").update({ values: nextValues }).eq("id", panelId);
       } else {
         storageErr = up.message;
         const nextValues = {
@@ -160,7 +158,7 @@ export async function POST(req: NextRequest) {
             storage_bucket: bucket,
           },
         };
-        await supabase.from("biomarker_panels").update({ values: nextValues }).eq("id", panelId);
+        await db.from("biomarker_panels").update({ values: nextValues }).eq("id", panelId);
       }
     }
 
@@ -181,7 +179,7 @@ export async function POST(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ ok: false as const, error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Upload failed";

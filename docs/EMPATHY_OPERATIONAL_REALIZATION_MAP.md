@@ -50,6 +50,18 @@
 
 **Copertura codificabile:** `summarizeReadSpineCoverage()` in `apps/web/lib/platform/read-spine-coverage.ts` — booleans su cosa è presente in `AthleteMemory` (dashboard hub, health check interno, QA).
 
+**Gate Application unico (Pro 2, codice):** `requireAthleteReadContext` → `@/lib/auth/athlete-read-context` (identità Bearer o cookie → `canAccessAthleteData` → client lettura tabella con service role se configurato). Usato da `planned-window`, `nutrition/module`, `dashboard/athlete-hub`; le altre route `/api/*` vanno converge qui per evitare letture “per conto loro”. Documento: `docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md`.
+
+### 2.1 Hub calendario = verità operativa attività (Pro 2)
+
+**Scrittura pianificato:** il **Builder** (e in futuro VIRYA dopo le date) materializza la sessione sul calendario con **`POST /api/training/planned/insert`** → riga in **`planned_workouts`** (`apps/web/app/api/training/planned/insert/route.ts`, client `training-planned-api.ts`). Import pianificato (file) → **`POST /api/training/import-planned`**, stessa tabella.
+
+**Reality / device:** attività importate o registrate come esecuzione reale finiscono in **`executed_workouts`** (es. materializzazione Garmin `lib/integrations/garmin-activity-materialize.ts`, **`/api/training/import`**, esecuzioni manuali **`/api/training/executed`**), eventualmente con `planned_workout_id` per il link piano→reality.
+
+**Lettura unificata (UI e contesto giornata):** **`GET /api/training/planned-window`** (`apps/web/app/api/training/planned-window/route.ts`) è la superficie preferita per **pianificato + eseguito** nella stessa finestra temporale; **Calendario**, **Builder** (strip KPI) e **scheda giorno** devono attingere da qui (o da API server che leggono le **stesse** tabelle), non da stato pagina isolato come fonte di verità sulle attività.
+
+Altri endpoint (dashboard hub, nutrition module, twin) possono leggere `planned_workouts` / `executed_workouts` direttamente lato server per aggregati; il principio resta: **una sola coppia di tabelle calendario**, niente “secondo registro” attività parallelo in prodotto.
+
 ---
 
 ## 3. Matrice modulo × dominio (stato attuale — indicativo)
@@ -119,6 +131,12 @@ Per **ogni** nuovo tipo di dato:
 5. Solo dopo: UI e copy generativa (L2/L1).
 
 **Exit:** checklist “nuovo dato” completata; nessun bypass del gate architetturale.
+
+---
+
+## 4.1 Smoke manuale (build → risultati in UI)
+
+Checklist operativa passo-passo: **`docs/PRO2_SMOKE_CHECKLIST.md`** (gate A = `npm run verify` + `/api/health`; gate B–F = login + atleta + training/nutrition/knowledge).
 
 ---
 

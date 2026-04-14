@@ -8,6 +8,8 @@ import { GymExerciseMediaThumb } from "@/components/training/GymExerciseMediaThu
 import { LifestylePracticeMediaThumb } from "@/components/training/LifestylePracticeMediaThumb";
 import { Pro2Link } from "@/components/ui/empathy";
 import {
+  effectiveDurationMinutesFromPro2Contract,
+  effectiveTssDisplayFromPro2Contract,
   estimatedTssFromPro2Contract,
   parsePro2BuilderSessionFromNotes,
   pro2BuilderContractToChartSegments,
@@ -60,6 +62,15 @@ export function CalendarPlannedBuilderDetail({ workout }: { workout: PlannedWork
 
   const tssEst = useMemo(() => (contract ? estimatedTssFromPro2Contract(contract) : 0), [contract]);
 
+  const titleDurationMin = useMemo(
+    () => effectiveDurationMinutesFromPro2Contract(contract, workout.durationMinutes),
+    [contract, workout.durationMinutes],
+  );
+  const titleTss = useMemo(
+    () => effectiveTssDisplayFromPro2Contract(contract, workout.tssTarget),
+    [contract, workout.tssTarget],
+  );
+
   const sessionHref = `/training/session/${workout.date}`;
   const builderHref = `/training/builder?date=${encodeURIComponent(workout.date)}&replace_planned_id=${encodeURIComponent(workout.id)}`;
 
@@ -78,7 +89,7 @@ export function CalendarPlannedBuilderDetail({ workout }: { workout: PlannedWork
             <span className="font-mono text-xs text-gray-500">{workout.type}</span>
           </div>
           <h4 className="mt-1.5 text-base font-bold text-white">
-            {contract?.sessionName?.trim() || workout.type} · {workout.durationMinutes}′ · TSS {workout.tssTarget}
+            {contract?.sessionName?.trim() || workout.type} · {titleDurationMin}′ · TSS {titleTss}
           </h4>
           {contract?.discipline ? (
             <p className="mt-0.5 text-xs text-gray-500">
@@ -134,8 +145,8 @@ export function CalendarPlannedBuilderDetail({ workout }: { workout: PlannedWork
 
             <SessionMultilevelAnalysisStrip
               contract={contract}
-              fallbackTss={workout.tssTarget}
-              fallbackDurationMin={workout.durationMinutes}
+              fallbackTss={titleTss}
+              fallbackDurationMin={titleDurationMin}
               compact
             />
 

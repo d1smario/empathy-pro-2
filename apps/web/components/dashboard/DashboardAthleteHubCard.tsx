@@ -65,7 +65,7 @@ export function DashboardAthleteHubCard() {
       try {
         const res = await fetch(
           `/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}&includeOperationalSignals=1`,
-          { cache: "no-store" },
+          { cache: "no-store", credentials: "same-origin" },
         );
         const json = (await res.json()) as HubOk | HubErr;
         if (c) return;

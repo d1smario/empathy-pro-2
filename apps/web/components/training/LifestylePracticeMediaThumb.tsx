@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
+import { imageSrcUnoptimized } from "@/lib/media/image-src-unoptimized";
 import {
   LIFESTYLE_V1_DEFAULT_IMAGE,
   lifestyleV1FallbackImageForCategory,
@@ -64,11 +66,14 @@ export function LifestylePracticeMediaThumb({
       className={`relative overflow-hidden bg-black/40 ${className}`}
       data-lifestyle-playbook={playbookItemId?.trim() || undefined}
     >
-      <img
+      <Image
         src={displaySrc}
         alt={alt}
-        className="h-full w-full object-cover object-center"
+        fill
+        className="object-cover object-center"
+        sizes="(max-width: 768px) 50vw, 160px"
         loading="lazy"
+        unoptimized={imageSrcUnoptimized(displaySrc)}
         onError={() => {
           if (primary && !useV1Fallback && displaySrc === primary) {
             setUseV1Fallback(true);

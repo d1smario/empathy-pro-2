@@ -49,7 +49,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const result = await runGarminPullJobs(limit);
-    return NextResponse.json({ ok: true as const, ...result });
+    return NextResponse.json({
+      ok: true as const,
+      processed: result.processed,
+      completed: result.completed,
+      failed: result.failed,
+      errors: result.errors,
+      activitiesUpserted: result.activitiesUpserted,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Esecuzione pull fallita.";
     const status = message.includes("SUPABASE_SERVICE_ROLE_KEY") ? 503 : 500;

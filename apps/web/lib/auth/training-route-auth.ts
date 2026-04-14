@@ -94,3 +94,26 @@ export async function requireTrainingAthleteWriteContext(
 export function supabaseForTrainingReadAfterAuth(rlsClient: SupabaseClient): SupabaseClient {
   return createSupabaseAdminClient() ?? rlsClient;
 }
+
+/**
+ * Auth training (Bearer o cookie) + `canAccessAthleteData` + client DB per letture tabella.
+ * **Import canonico lato app:** `@/lib/auth/athlete-read-context` → `requireAthleteReadContext`.
+ */
+export async function requireTrainingAthleteReadContext(
+  req: NextRequest,
+  athleteId: string,
+): Promise<{ userId: string; rlsClient: SupabaseClient; db: SupabaseClient }> {
+  const target = athleteId.trim();
+  if (!target) {
+    throw new TrainingRouteAuthError(400, "missing_athleteId");
+  }
+
+  const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
+  const allowed = await canAccessAthleteData(rlsClient, userId, target, null);
+  if (!allowed) {
+    throw new TrainingRouteAuthError(403, "forbidden");
+  }
+
+  const db = supabaseForTrainingReadAfterAuth(rlsClient);
+  return { userId, rlsClient, db };
+}

@@ -4,9 +4,14 @@ import { createHmac } from "node:crypto";
 
 import OAuth from "oauth-1.0a";
 
+/**
+ * Consumer OAuth 1.0a per firmare le GET pull verso Garmin.
+ * Preferisce `GARMIN_OAUTH_CONSUMER_*`; se assenti, usa la stessa coppia OAuth2 del portale (`GARMIN_OAUTH2_*`).
+ */
 export function readGarminOAuthConsumer(): { key: string; secret: string } | null {
-  const key = process.env.GARMIN_OAUTH_CONSUMER_KEY?.trim();
-  const secret = process.env.GARMIN_OAUTH_CONSUMER_SECRET?.trim();
+  const key = process.env.GARMIN_OAUTH_CONSUMER_KEY?.trim() || process.env.GARMIN_OAUTH2_CLIENT_ID?.trim();
+  const secret =
+    process.env.GARMIN_OAUTH_CONSUMER_SECRET?.trim() || process.env.GARMIN_OAUTH2_CLIENT_SECRET?.trim();
   if (!key || !secret) return null;
   return { key, secret };
 }
@@ -25,7 +30,9 @@ export function buildGarminSignedGetHeaders(params: { url: string; userAccessTok
 } {
   const consumer = readGarminOAuthConsumer();
   if (!consumer) {
-    throw new Error("Imposta GARMIN_OAUTH_CONSUMER_KEY e GARMIN_OAUTH_CONSUMER_SECRET (portale Garmin).");
+    throw new Error(
+      "Imposta GARMIN_OAUTH_CONSUMER_KEY/SECRET oppure GARMIN_OAUTH2_CLIENT_ID/SECRET (stessa coppia del portale se Garmin le unifica).",
+    );
   }
 
   const oauth = new OAuth({

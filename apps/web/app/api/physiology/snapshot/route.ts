@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 
 export const runtime = "nodejs";
 
@@ -27,10 +26,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing snapshot payload" }, { status: 400 });
     }
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteWriteContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
-    const { error: insertErr } = await supabase.from("metabolic_lab_runs").insert({
+    const { error: insertErr } = await db.from("metabolic_lab_runs").insert({
       athlete_id: athleteId,
       section: body.runSection,
       model_version: body.modelVersion ?? "v0.2",
@@ -41,7 +39,7 @@ export async function POST(req: NextRequest) {
     if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
 
     if (body.runSection === "metabolic_profile" && body.profileUpdate) {
-      const { error: upsertErr } = await supabase
+      const { error: upsertErr } = await db
         .from("physiological_profiles")
         .upsert(
           {
@@ -61,7 +59,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ status: "ok" });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Physiology snapshot save failed";

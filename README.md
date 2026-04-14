@@ -23,6 +23,7 @@ Greenfield repository per la prossima generazione della piattaforma **EMPATHY**:
 | [`docs/INTEGRATIONS_SPLINE.md`](docs/INTEGRATIONS_SPLINE.md) | Esercizi e asset **3D** (stile MyFit Coach) |
 | [`docs/v2/SKELETON_CHECKLIST.md`](docs/v2/SKELETON_CHECKLIST.md) | Checklist primo codice |
 | [`docs/LOCAL_DEV_WITH_V1.md`](docs/LOCAL_DEV_WITH_V1.md) | Due finestre Cursor, porte, convivenza con V1 |
+| [`docs/PRO2_SMOKE_CHECKLIST.md`](docs/PRO2_SMOKE_CHECKLIST.md) | **Smoke manuale** — verify, health, login, training/nutrition/API fino a risultati |
 | [`docs/CURSOR_REALIGN_HOWTO.md`](docs/CURSOR_REALIGN_HOWTO.md) | **Dove e come** usare i testi di riallineamento (Settings vs chat) |
 | [`docs/CURSOR_REALIGN_DAILY.md`](docs/CURSOR_REALIGN_DAILY.md) | Blocco breve quotidiano (bussola repo + generativo + UI Pro 2) |
 | [`docs/CURSOR_REALIGN_DEEP.md`](docs/CURSOR_REALIGN_DEEP.md) | Riallineamento profondo se la sessione è fuori rotta |
@@ -36,9 +37,11 @@ Greenfield repository per la prossima generazione della piattaforma **EMPATHY**:
 
 Dalla **root del monorepo**, dopo `npm install`:
 
-1. Copia `apps/web/.env.example` → `apps/web/.env.local` e compila almeno **Supabase** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) per login e API dati.
-2. Verifica build + tipi + lint: `npm run verify` (su **Windows/OneDrive** pulisce `.next` prima del build per evitare errori `readlink` / symlink corrotti).
+1. Copia `apps/web/.env.example` → `apps/web/.env.local` e compila almeno **Supabase** (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`) per login e API dati. Per integrazione con lo stesso cloud di V1, riusa le stesse chiavi di `nextjs-empathy-pro/.env.local`.
+2. Verifica build + tipi + lint: `npm run verify` (su **Windows/OneDrive** pulisce `.next` prima del build per evitare errori `readlink` / symlink corrotti). Se `verify` è verde, l’app Pro 2 è **operativa** a livello di build; il passo mancante è solo configurazione/env e avvio dev.
 3. Avvio dev: `npm run dev` oppure doppio click su **`start-dev.cmd`** (stessa cartella del monorepo).
+
+**Calendario vs builder con DB condiviso:** molte righe `planned_workouts` create da **seed SQL** in V1 (`supabase/DEMO_*.sql`, ecc.) non hanno il marker `BUILDER_SESSION_JSON::` — sono dati sintetici per analisi, non sessioni materializzate da Builder/Virya. Vedi `docs/LOCAL_DEV_WITH_V1.md` § “Stesso Supabase”.
 
 Dalla **root del monorepo**:
 

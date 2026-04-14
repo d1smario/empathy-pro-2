@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 
 export const runtime = "nodejs";
 
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteReadContext(req, athleteId);
 
     const b64 = String(body.imageBase64 ?? "").replace(/\s/g, "");
     if (!b64 || b64.length > MAX_B64_CHARS) {
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ estimate });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "food-photo-estimate error";

@@ -1,5 +1,8 @@
 import type { GeneratedSession } from "@/lib/training/engine";
+import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { mapEngineSessionToPlannedRow } from "@/lib/training/planned/map-engine-session-to-planned";
+
+/** Persistenza sul calendario operativo: ogni insert finisce in `planned_workouts` (stessa sorgente letta da `GET /api/training/planned-window`). */
 
 export type InsertPlannedResponse =
   | { ok: true; athleteId: string; plannedWorkoutId: string | null }
@@ -22,9 +25,10 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
     plannedDurationMinutesOverride: input.plannedDurationMinutesOverride,
   });
 
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
   const res = await fetch("/api/training/planned/insert", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers,
     credentials: "same-origin",
     body: JSON.stringify({ row }),
     cache: "no-store",

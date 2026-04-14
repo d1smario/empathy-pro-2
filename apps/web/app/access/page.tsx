@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { AccessMagicLinkForm } from "@/components/access/AccessMagicLinkForm";
+import { AccessAuthPanel } from "@/components/access/AccessAuthPanel";
+import { AccessRedirectIfSession } from "@/components/access/AccessRedirectIfSession";
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { safeAppInternalPath } from "@/core/routing/guards";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { Pro2Link } from "@/components/ui/empathy";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Access",
@@ -36,6 +39,7 @@ export default async function AccessPage({
 
   return (
     <BrutalistAppBackdrop matrix>
+      <AccessRedirectIfSession nextPath={safeNext} />
       <main
         id="main-content"
         tabIndex={-1}
@@ -59,7 +63,7 @@ export default async function AccessPage({
             Supabase non configurato sul server.
           </p>
         ) : null}
-        <AccessMagicLinkForm redirectAfterLogin={safeNext} />
+        <AccessAuthPanel redirectAfterLogin={safeNext} />
         <div className="flex w-full max-w-xs flex-col gap-3">
           <Pro2Link href={safeNext} variant="primary" className="justify-center">
             Vai al prodotto

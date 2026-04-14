@@ -12,7 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
 
   /** `/preview` è noindex a livello pagina — non in sitemap. */
-  const paths = new Set<string>(["/", "/access", "/pricing"]);
+  const paths = new Set<string>(["/", "/access", "/pricing", "/privacy"]);
   for (const item of PRODUCT_MODULE_NAV) {
     paths.add(item.href);
   }

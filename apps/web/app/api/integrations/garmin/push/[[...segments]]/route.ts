@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import { runGarminPartnerAdminEffects } from "@/lib/integrations/garmin-admin-webhooks";
 import { persistGarminPushReceipt } from "@/lib/integrations/garmin-push-persist";
 
 export const runtime = "nodejs";
@@ -22,6 +23,14 @@ function endpointKindFromParams(segments: string[] | undefined): string {
   if (!segments?.length) return "unspecified";
   return segments.join("/").slice(0, 200);
 }
+
+/**
+ * Partner Verification Garmin: nel portale servono anche (oltre agli stream dati):
+ * - Deregistration → `.../push/deregistration` (rimuove link atleta in DB se `userId` nel body)
+ * - User permissions change → `.../push/userPermissions` (solo audit in `garmin_push_receipts`)
+ * - Ping → `.../push/ping` se richiesto dal test (“almeno 1 altro endpoint” oltre ai due sopra)
+ * Stesso `?token=` o header se usi `GARMIN_PUSH_WEBHOOK_SECRET`.
+ */
 
 /**
  * GET: verifica reachability (utile per test manuale / alcuni flussi partner).
@@ -66,13 +75,20 @@ export async function POST(
   }
 
   try {
+    const admin = await runGarminPartnerAdminEffects({ endpointKind: kind, parsedJson: parsed });
     const { id, pullJobsQueued } = await persistGarminPushReceipt({
       endpointKind: kind,
       contentType,
       parsedJson: parsed,
     });
     return NextResponse.json(
-      { ok: true as const, id, endpointKind: kind, pullJobsQueued },
+      {
+        ok: true as const,
+        id,
+        endpointKind: kind,
+        pullJobsQueued,
+        deregistrationRemoved: admin.deregistrationRemoved,
+      },
       { status: 200 },
     );
   } catch (err) {

@@ -2,6 +2,8 @@ export type GarminPullItem = {
   streamKey: string;
   userAccessToken: string;
   callbackUrl: string;
+  /** User ID API Garmin (push / ping) per mappare l’atleta. */
+  garminUserId?: string;
   /** Parametri tipici notifica Garmin (tempi finestra, id riepilogo, …) */
   querySnapshot: Record<string, string | number | boolean | null>;
 };
@@ -39,6 +41,12 @@ function snapshotFromRecord(rec: Record<string, unknown>): Record<string, string
   return snap;
 }
 
+function readGarminUserId(rec: Record<string, unknown>): string | undefined {
+  const v = rec.userId ?? rec.user_id ?? rec.userUUID ?? rec.userUuid;
+  if (typeof v === "string" && v.trim()) return v.trim();
+  return undefined;
+}
+
 function pushItem(streamKey: string, rec: Record<string, unknown>, sink: GarminPullItem[]): void {
   const tokenRaw = rec.userAccessToken ?? rec.user_access_token;
   const urlRaw = rec.callbackURL ?? rec.callbackUrl ?? rec.callback_url;
@@ -46,10 +54,12 @@ function pushItem(streamKey: string, rec: Record<string, unknown>, sink: GarminP
   const token = tokenRaw.trim();
   const url = urlRaw.trim();
   if (!token || !url) return;
+  const garminUserId = readGarminUserId(rec);
   sink.push({
     streamKey,
     userAccessToken: token,
     callbackUrl: url,
+    garminUserId,
     querySnapshot: snapshotFromRecord(rec),
   });
 }
@@ -57,6 +67,16 @@ function pushItem(streamKey: string, rec: Record<string, unknown>, sink: GarminP
 /**
  * Estrae voci pull dalla JSON tipica della push Garmin (array per stream: dailies, activities, …).
  */
+export function extractRootGarminUserId(parsed: unknown): string | null {
+  const root = asRecord(parsed);
+  if (!root) return null;
+  for (const k of ["userId", "user_id", "userUUID", "userUuid"]) {
+    const v = root[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
 export function extractGarminPullItems(parsed: unknown, endpointKind: string): GarminPullItem[] {
   const sink: GarminPullItem[] = [];
   const root = asRecord(parsed);

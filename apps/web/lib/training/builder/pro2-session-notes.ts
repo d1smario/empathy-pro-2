@@ -57,3 +57,27 @@ export function estimatedTssFromPro2Contract(contract: Pro2BuilderSessionContrac
   if (typeof fromSummary === "number" && Number.isFinite(fromSummary) && fromSummary > 0) return Math.round(fromSummary);
   return Math.round(estimateTssFromSegments(pro2BuilderContractToChartSegments(contract)));
 }
+
+/** Durata display / calendario: preferisci `summary.durationSec` o somma blocchi, non la colonna DB se è stale. */
+export function effectiveDurationMinutesFromPro2Contract(
+  contract: Pro2BuilderSessionContract | null | undefined,
+  fallbackMinutes: number,
+): number {
+  if (!contract) return Math.max(1, Math.round(fallbackMinutes));
+  const sec = contract.summary?.durationSec;
+  if (typeof sec === "number" && Number.isFinite(sec) && sec > 0) {
+    return Math.max(1, Math.round(sec / 60));
+  }
+  const fromBlocks = (contract.blocks ?? []).reduce((s, b) => s + (Number(b.durationMinutes) || 0), 0);
+  if (fromBlocks > 0) return Math.max(1, Math.round(fromBlocks));
+  return Math.max(1, Math.round(fallbackMinutes));
+}
+
+export function effectiveTssDisplayFromPro2Contract(
+  contract: Pro2BuilderSessionContract | null | undefined,
+  fallbackTss: number,
+): number {
+  if (!contract) return Math.max(0, Math.round(fallbackTss));
+  const t = estimatedTssFromPro2Contract(contract);
+  return t > 0 ? t : Math.max(0, Math.round(fallbackTss));
+}

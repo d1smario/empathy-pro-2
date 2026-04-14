@@ -2,7 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
 
 /**
- * Private: proprio athlete_id. Coach: riga in coach_athletes per `org_id` (env o default seed migration).
+ * Gate unico atleta: **stesso significato** di `requireRequestAthleteAccess` (Pro 2).
+ * - Profilo con `athlete_id` uguale al target → accesso (atleta “proprio”).
+ * - Altrimenti solo **coach** con riga in `coach_athletes` per `org_id`.
  */
 export async function canAccessAthleteData(
   client: SupabaseClient,
@@ -18,7 +20,8 @@ export async function canAccessAthleteData(
   if (error || !prof) return false;
 
   const p = prof as { role?: string; athlete_id?: string | null };
-  if (p.role === "private" && p.athlete_id === athleteId) return true;
+  const linkedAthleteId = typeof p.athlete_id === "string" ? p.athlete_id : null;
+  if (linkedAthleteId === athleteId) return true;
   if (p.role !== "coach") return false;
 
   const resolvedOrg = orgId ?? coachOrgIdForDb();

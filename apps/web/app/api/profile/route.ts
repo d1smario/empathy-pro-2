@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess, requireRequestUser } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
+import { RequestAuthError, requireRequestUser } from "@/lib/auth/request-auth";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { writeAthleteMemoryDomainPatch } from "@/lib/memory/athlete-memory-domain-writer";
 
@@ -43,12 +43,11 @@ export async function GET(req: NextRequest) {
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     if (!athleteId) return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
     const [athleteMemory, executedRes] = await Promise.all([
       resolveAthleteMemory(athleteId),
-      supabase
+      db
         .from("executed_workouts")
         .select("date, trace_summary, duration_minutes, tss, kj, kcal")
         .eq("athlete_id", athleteId)
@@ -166,7 +165,7 @@ export async function GET(req: NextRequest) {
       error,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Profile API error";
@@ -207,7 +206,7 @@ export async function PUT(req: NextRequest) {
     if (!athleteId || !body.payload) {
       return NextResponse.json({ error: "Missing athleteId or payload" }, { status: 400 });
     }
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteWriteContext(req, athleteId);
     const result = await writeAthleteMemoryDomainPatch({
       domain: "profile",
       action: "update",
@@ -220,7 +219,7 @@ export async function PUT(req: NextRequest) {
       athleteMemory: result.athleteMemory,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Profile update failed";

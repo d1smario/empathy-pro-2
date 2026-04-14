@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,10 +29,9 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    await requireRequestAthleteAccess(req, athleteId);
+    const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const supabase = createServerSupabaseClient();
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("biomarker_panels")
       .select("id, type, sample_date, reported_at, source, values, created_at")
       .eq("athlete_id", athleteId)
@@ -57,7 +55,7 @@ export async function GET(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json(
         { ok: false as const, error: err.message, panels: [] },
         { status: err.status, headers: NO_STORE },

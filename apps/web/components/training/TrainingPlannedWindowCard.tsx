@@ -1,11 +1,7 @@
 "use client";
 
-import {
-  formatExecutedWorkoutSummary,
-  formatPlannedWorkoutTitle,
-  type ExecutedWorkout,
-  type PlannedWorkout,
-} from "@empathy/domain-training";
+import { formatExecutedWorkoutSummary, type ExecutedWorkout, type PlannedWorkout } from "@empathy/domain-training";
+import { formatPlannedWorkoutCardTitle } from "@/lib/training/planned/format-planned-workout-title";
 import { useEffect, useState } from "react";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
@@ -142,7 +138,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
                   <div className="min-w-0">
                     <span className="font-mono text-xs text-gray-500">{w.date}</span>
                     <span className="mx-2 text-gray-600">·</span>
-                    {formatPlannedWorkoutTitle(w)}
+                    {formatPlannedWorkoutCardTitle(w)}
                   </div>
                   <Pro2Link
                     href={`/training/session/${w.date}`}

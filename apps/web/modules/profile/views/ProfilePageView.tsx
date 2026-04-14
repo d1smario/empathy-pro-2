@@ -393,6 +393,12 @@ export default function ProfilePage() {
     biomarkerPanel: boolean;
   } | null>(null);
   const [twinSnapshot, setTwinSnapshot] = useState<TwinState | null>(null);
+  const [garminLink, setGarminLink] = useState<{
+    linked: boolean;
+    garminUserIdMasked?: string;
+  } | null>(null);
+  const [garminReturn, setGarminReturn] = useState<string | null>(null);
+  const [garminDetail, setGarminDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -510,6 +516,43 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!athleteLoading) load();
   }, [athleteLoading, activeAthleteId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const q = new URLSearchParams(window.location.search);
+    const p = q.get("garmin");
+    if (p) setGarminReturn(p);
+    const d = q.get("detail");
+    if (d) setGarminDetail(d);
+  }, []);
+
+  useEffect(() => {
+    if (!activeAthleteId) {
+      setGarminLink(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await fetch(
+          `/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`,
+          { credentials: "include" },
+        );
+        const j = (await r.json()) as { linked?: boolean; garminUserIdMasked?: string };
+        if (!cancelled) {
+          setGarminLink({
+            linked: Boolean(j.linked),
+            garminUserIdMasked: j.garminUserIdMasked,
+          });
+        }
+      } catch {
+        if (!cancelled) setGarminLink({ linked: false });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeAthleteId]);
 
   function startEditProfile(p: AthleteProfileRow) {
     const routine = toRecord(p.routine_config);
@@ -1248,6 +1291,74 @@ export default function ProfilePage() {
               <div className="profile-subpanel tone-slate" style={{ marginTop: "12px" }}>
                 <h4 className="profile-editor-subtitle"><span className="profile-kpi-dot" />Devices</h4>
                 <p className="muted-copy">Qui colleghiamo le API device: Garmin, Strava, Whoop, Oura e altri provider.</p>
+                {garminReturn === "connected" ? (
+                  <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
+                    Garmin Connect collegato. Le attività compaiono in Training dopo notifica Garmin e esecuzione del
+                    worker pull (cron o manuale).
+                  </p>
+                ) : null}
+                {garminReturn === "error" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Collegamento Garmin non riuscito (vedi parametro <code className="text-white/80">reason</code>{" "}
+                    nell&apos;URL). Riprova o verifica env e redirect URI nel portale Garmin.
+                  </p>
+                ) : null}
+                {garminReturn === "forbidden" ? (
+                  <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
+                    Accesso negato per questo atleta (profilo coach/atleta o org non allineata). Verifica il collegamento
+                    coach–atleta e riprova.
+                  </p>
+                ) : null}
+                {garminReturn === "server_config" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    OAuth Garmin non configurato sul server: imposta in Vercel{" "}
+                    <code className="text-white/80">GARMIN_OAUTH2_CLIENT_ID</code> e{" "}
+                    <code className="text-white/80">GARMIN_OAUTH2_REDIRECT_URI</code> (o{" "}
+                    <code className="text-white/80">GARMIN_OAUTH2_REDIRECT_URL</code>), poi ridistribuisci.
+                  </p>
+                ) : null}
+                {garminReturn === "missing_athlete" ? (
+                  <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
+                    Atleta non selezionato. Apri il profilo con un atleta attivo e usa di nuovo &quot;Collega Garmin&quot;.
+                  </p>
+                ) : null}
+                {garminReturn === "pkce" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Errore cookie PKCE: imposta <code className="text-white/80">GARMIN_OAUTH_PKCE_SECRET</code> su Vercel
+                    (min. 16 caratteri).
+                    {garminDetail ? (
+                      <>
+                        {" "}
+                        Dettaglio: <code className="text-white/70">{garminDetail}</code>
+                      </>
+                    ) : null}
+                  </p>
+                ) : null}
+                {activeAthleteId && garminLink ? (
+                  <div className="flex flex-col gap-2" style={{ marginTop: 12 }}>
+                    {garminLink.linked ? (
+                      <p className="muted-copy text-sm">
+                        Garmin collegato (ID API <span className="text-white/80">{garminLink.garminUserIdMasked}</span>
+                        ).
+                      </p>
+                    ) : (
+                      <p className="muted-copy text-sm">Nessun account Garmin collegato a questo profilo atleta.</p>
+                    )}
+                    <a
+                      href={`/api/integrations/garmin/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                      target="_self"
+                      rel="noopener noreferrer"
+                      className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                    >
+                      {garminLink.linked ? "Ricollega Garmin Connect" : "Collega Garmin Connect"}
+                    </a>
+                    <p className="muted-copy text-xs">
+                      In produzione configura <code className="text-white/70">GARMIN_OAUTH2_REDIRECT_URI</code>,{" "}
+                      <code className="text-white/70">GARMIN_OAUTH_PKCE_SECRET</code> e il cron che chiama{" "}
+                      <code className="text-white/70">POST /api/integrations/garmin/pull/run</code>.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}

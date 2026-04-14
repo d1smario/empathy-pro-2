@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
-import {
-  TrainingRouteAuthError,
-  requireAuthenticatedTrainingUser,
-} from "@/lib/auth/training-route-auth";
-import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
@@ -40,11 +36,7 @@ export async function GET(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
     }
-    const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
-    const allowed = await canAccessAthleteData(rlsClient, userId, athleteId, null);
-    if (!allowed) {
-      return NextResponse.json({ error: "forbidden" }, { status: 403, headers: NO_STORE });
-    }
+    await requireAthleteReadContext(req, athleteId);
 
     const athleteMemory = await resolveAthleteMemory(athleteId);
     const canonicalState = athleteMemory.physiology ?? (await resolveCanonicalPhysiologyState(athleteId));
@@ -233,7 +225,7 @@ export async function GET(req: NextRequest) {
       { headers: NO_STORE },
     );
   } catch (err) {
-    if (err instanceof TrainingRouteAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
     }
     const message = err instanceof Error ? err.message : "Virya context fetch failed";
