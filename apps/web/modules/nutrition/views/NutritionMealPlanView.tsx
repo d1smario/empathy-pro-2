@@ -38,6 +38,19 @@ export type MealPlanDisplayRow = {
 
 export type NutritionMealPlanStateTone = "amber" | "cyan" | "green" | "rose" | "slate";
 
+export type NutritionMealPlanEnergyLedger = {
+  /** BMR + lifestyle + quota training destinata ai pasti (solver). */
+  mealsKcalSolver: number | null;
+  /** BMR + lifestyle + costo training completo (include parte gestita come fueling). */
+  dailyKcalSolver: number | null;
+  /** Parte del costo training allocata a pre/intra/post (non nei cinque slot pasto). */
+  fuelingKcalSolver: number | null;
+  /** kcal training dopo scala integrazione (prima del split pasti/fueling). */
+  trainingKcalSolver: number | null;
+  /** Somma kcal voci USDA del piano generato (esclude voci coach nascoste). */
+  assembledUsdaKcalSum: number | null;
+};
+
 export type NutritionMealPlanDailyTargetsProps = {
   complianceTargets: { kcal: number; carbs: number; protein: number; fat: number };
   dateLabel: string;
@@ -45,6 +58,8 @@ export type NutritionMealPlanDailyTargetsProps = {
   selectedExecutedKj: number;
   sessionLoadKcalEstimate: number;
   round: (v: number, digits?: number) => number;
+  /** Chiarimento 3954 vs 3555: pasti vs giornata vs fueling vs assemblaggio USDA. */
+  energyLedger?: NutritionMealPlanEnergyLedger | null;
 };
 
 /** Blocco KPI giornaliero (stesso `viz-card` del subnav — renderlo subito sotto `NutritionSubnav`). */
@@ -55,7 +70,17 @@ export function NutritionMealPlanDailyTargets({
   selectedExecutedKj,
   sessionLoadKcalEstimate,
   round,
+  energyLedger,
 }: NutritionMealPlanDailyTargetsProps) {
+  const slotSumKcal = round(complianceTargets.kcal);
+  const ledger = energyLedger ?? null;
+  const showLedger =
+    ledger &&
+    (ledger.mealsKcalSolver != null ||
+      ledger.dailyKcalSolver != null ||
+      ledger.fuelingKcalSolver != null ||
+      ledger.assembledUsdaKcalSum != null);
+
   return (
     <div>
       <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">Target giornaliero</p>
@@ -68,6 +93,56 @@ export function NutritionMealPlanDailyTargets({
         }}
         dateLabel={dateLabel}
       />
+      {showLedger ? (
+        <div
+          className="mt-3 rounded-xl border border-slate-600/40 bg-slate-950/50 px-3 py-2.5 text-[11px] leading-relaxed text-slate-400"
+          role="region"
+          aria-label="Bilancio energetico giornaliero"
+        >
+          <p className="mb-1.5 font-mono text-[0.6rem] font-bold uppercase tracking-wider text-slate-500">Bilancio kcal · cosa stai sommando</p>
+          <ul className="m-0 list-none space-y-1 p-0 font-mono">
+            <li>
+              <span className="text-slate-500">Σ slot pasto (griglia sopra):</span>{" "}
+              <span className="font-semibold text-slate-200">{slotSumKcal} kcal</span>
+            </li>
+            {ledger.mealsKcalSolver != null ? (
+              <li>
+                <span className="text-slate-500">Target pasti solver (BMR+lifestyle+quota training sui pasti):</span>{" "}
+                <span className="font-semibold text-cyan-100/90">{round(ledger.mealsKcalSolver)} kcal</span>
+              </li>
+            ) : null}
+            {ledger.fuelingKcalSolver != null ? (
+              <li>
+                <span className="text-slate-500">Quota fueling (pre/intra/post, non nei pasti):</span>{" "}
+                <span className="font-semibold text-amber-200/90">{round(ledger.fuelingKcalSolver)} kcal</span>
+              </li>
+            ) : null}
+            {ledger.dailyKcalSolver != null ? (
+              <li>
+                <span className="text-slate-500">Totale metabolico giornata (BMR+lifestyle+allenamento):</span>{" "}
+                <span className="font-semibold text-emerald-100/90">{round(ledger.dailyKcalSolver)} kcal</span>
+              </li>
+            ) : null}
+            {ledger.trainingKcalSolver != null && ledger.trainingKcalSolver > 0 ? (
+              <li>
+                <span className="text-slate-500">Costo training stimato (dopo integrazione):</span>{" "}
+                <span className="text-slate-300">{round(ledger.trainingKcalSolver)} kcal</span>
+              </li>
+            ) : null}
+            {ledger.assembledUsdaKcalSum != null ? (
+              <li>
+                <span className="text-slate-500">Σ piano USDA assemblato (voci alimenti):</span>{" "}
+                <span className="font-semibold text-orange-100/95">{round(ledger.assembledUsdaKcalSum)} kcal</span>
+                {ledger.mealsKcalSolver != null && Math.abs(ledger.assembledUsdaKcalSum - ledger.mealsKcalSolver) > 25 ? (
+                  <span className="block pt-1 text-[10px] text-amber-300/90">
+                    Diverso dal target pasti solver: l&apos;assemblaggio USDA non è vincolato a restare esattamente sul target slot-per-slot.
+                  </span>
+                ) : null}
+              </li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
       <p className="mt-2 text-xs text-slate-500">
         Idratazione minima: <span className="font-semibold text-slate-300">{hydrationMinDailyMl} ml</span>
         {" · "}
@@ -310,7 +385,7 @@ export function NutritionMealPlanWorkspace({
                 </div>
                 <EmpathyMealPlanGlycemicLegend />
                 <div className="mt-2 rounded-xl border border-orange-500/30 bg-orange-500/10 px-3 py-2 font-mono text-sm font-bold text-orange-50">
-                  Σ giornata · ~
+                  Σ USDA assemblato · ~
                   {intelligentMealPlan.slots.reduce((acc, sl) => {
                     const sk = sl.slot as MealSlotKey;
                     return (
@@ -322,6 +397,9 @@ export function NutritionMealPlanWorkspace({
                     );
                   }, 0)}{" "}
                   kcal
+                  <span className="mt-1 block text-[10px] font-normal font-sans text-orange-200/80">
+                    Non è il totale metabolico giornata: vedi «Bilancio kcal» sopra per pasti vs fueling vs giornata.
+                  </span>
                 </div>
               </div>
               <details className="collapsible-card" style={{ marginBottom: 12 }}>

@@ -29,6 +29,12 @@ import {
 import { TrainingCalendarTelemetryChart } from "@/components/training/TrainingCalendarTelemetryChart";
 import { TrainingPowerProfileRadar } from "@/components/training/TrainingPowerProfileRadar";
 import { deleteExecutedWorkout } from "@/modules/training/services/training-executed-api";
+import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
+import {
+  effectiveDurationMinutesFromPro2Contract,
+  effectiveTssDisplayFromPro2Contract,
+  parsePro2BuilderSessionFromNotes,
+} from "@/lib/training/builder/pro2-session-notes";
 
 /** Radar MMP-style: stessi assi temporali, serie diverse vs picco mensile nel calendario. */
 const RADAR_METRIC_OPTIONS: Array<{ id: string; label: string; unit: string; keys: string[] }> = [
@@ -81,6 +87,7 @@ type Props = {
   /** Per cancellazione eseguiti (API V1-parity). */
   athleteId?: string | null;
   onExecutedChanged?: () => void;
+  onPlannedChanged?: () => void;
 };
 
 export function TrainingCalendarAnalyzer({
@@ -90,12 +97,14 @@ export function TrainingCalendarAnalyzer({
   monthExecuted = [],
   athleteId = null,
   onExecutedChanged,
+  onPlannedChanged,
 }: Props) {
   const [fileTraceMode, setFileTraceMode] = useState(true);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [radarMetricId, setRadarMetricId] = useState<string>("power");
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingPlannedId, setDeletingPlannedId] = useState<string | null>(null);
 
   const primaryExecuted = useMemo(() => {
     if (!dayExecuted.length) return null;
@@ -876,16 +885,47 @@ export function TrainingCalendarAnalyzer({
       ) : null}
 
       <div className="mt-4 flex flex-col gap-2 text-sm">
-        {dayPlanned.map((w) => (
-          <div key={w.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2">
-            <span className="rounded-full border border-violet-400/55 bg-violet-400/15 px-2 py-0.5 text-[0.65rem] font-bold text-violet-100">
-              PLAN
-            </span>
-            <span>
-              {w.durationMinutes}m · TSS {w.tssTarget}
-            </span>
-          </div>
-        ))}
+        {dayPlanned.map((w) => {
+          const c = parsePro2BuilderSessionFromNotes(w.notes ?? null);
+          const dm = effectiveDurationMinutesFromPro2Contract(c, w.durationMinutes);
+          const ts = effectiveTssDisplayFromPro2Contract(c, w.tssTarget);
+          return (
+            <div
+              key={w.id}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-400/30 bg-violet-500/10 px-3 py-2"
+            >
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <span className="rounded-full border border-violet-400/55 bg-violet-400/15 px-2 py-0.5 text-[0.65rem] font-bold text-violet-100">
+                  PLAN
+                </span>
+                <span>
+                  {dm}m · TSS {ts}
+                </span>
+              </div>
+              {athleteId ? (
+                <button
+                  type="button"
+                  disabled={deletingPlannedId === w.id}
+                  className="shrink-0 rounded-lg border border-rose-400/40 bg-rose-500/15 px-2 py-1 text-xs font-bold text-rose-100 hover:bg-rose-500/25 disabled:opacity-40"
+                  onClick={async () => {
+                    if (!athleteId || !window.confirm("Eliminare questa seduta pianificata?")) return;
+                    setDeletingPlannedId(w.id);
+                    try {
+                      await deletePlannedWorkout({ id: w.id, athleteId });
+                      onPlannedChanged?.();
+                    } catch (err) {
+                      window.alert(err instanceof Error ? err.message : "Eliminazione non riuscita");
+                    } finally {
+                      setDeletingPlannedId(null);
+                    }
+                  }}
+                >
+                  {deletingPlannedId === w.id ? "…" : "Elimina"}
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
         {dayExecuted.map((w) => {
           const tr = traceRecord(w);
           const fn = pickText(tr, ["imported_file_name"]);

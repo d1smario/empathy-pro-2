@@ -476,7 +476,20 @@ export default function TrainingCalendarPageView() {
           <button
             type="button"
             className="ml-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/15"
-            onClick={() => setShowFileImport((v) => !v)}
+            onClick={() => {
+              setShowFileImport((v) => {
+                const next = !v;
+                if (next) {
+                  window.setTimeout(() => {
+                    document.getElementById("training-calendar-file-import")?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }, 80);
+                }
+                return next;
+              });
+            }}
           >
             {showFileImport ? "Chiudi import" : "Importa file"}
           </button>
@@ -610,12 +623,14 @@ export default function TrainingCalendarPageView() {
               monthExecuted={executed}
               athleteId={athleteId}
               onExecutedChanged={() => void loadMonth()}
+              onPlannedChanged={() => void loadMonth()}
             />
           </div>
 
           <div className="grid gap-8 lg:grid-cols-[1fr_minmax(0,420px)]">
             <div className="space-y-6">
               {showFileImport ? (
+                <div id="training-calendar-file-import" className="scroll-mt-24">
                 <Pro2SectionCard accent="violet" title="Import da file" subtitle="FIT · TCX · GPX · CSV · JSON (come V1)" icon={FileUp}>
                   <form onSubmit={handleFileImportSubmit} className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -711,14 +726,35 @@ export default function TrainingCalendarPageView() {
                 </div>
                   </form>
                 </Pro2SectionCard>
+                </div>
               ) : null}
 
               {!showFileImport ? (
-                <Pro2SectionCard accent="cyan" title="Import veloce" subtitle="Apri il pannello Importa file nella barra mese" icon={FileUp}>
-                  <p className="text-sm text-slate-400">
-                    Usa il pulsante <strong className="text-slate-200">Importa file</strong> sopra per caricare FIT/TCX/GPX o la programmazione CSV/JSON.
-                  </p>
-                </Pro2SectionCard>
+                <button
+                  type="button"
+                  className="group w-full rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/25 via-black/50 to-black/70 p-5 text-left shadow-inner transition hover:border-cyan-400/45 hover:bg-cyan-950/30"
+                  onClick={() => {
+                    setShowFileImport(true);
+                    window.setTimeout(() => {
+                      document.getElementById("training-calendar-file-import")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }, 80);
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-cyan-400/45 bg-cyan-500/35 text-cyan-50 shadow-[0_0_16px_rgba(34,211,238,0.3)]">
+                      <FileUp className="h-5 w-5" strokeWidth={2.35} aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <h2 className="text-lg font-bold text-white group-hover:text-cyan-50">Import veloce</h2>
+                      <p className="mt-1 text-sm text-slate-400">
+                        Apre il pannello <strong className="text-slate-200">Import da file</strong> qui sotto e scorre al form (stesso flusso del pulsante &quot;Importa file&quot; in alto).
+                      </p>
+                    </div>
+                  </div>
+                </button>
               ) : null}
             </div>
 
@@ -740,7 +776,14 @@ export default function TrainingCalendarPageView() {
                   {dayPlanned.length === 0 ? (
                     <p className="text-sm text-gray-500">Nessuna seduta pianificata.</p>
                   ) : (
-                    dayPlanned.map((w) => <CalendarPlannedBuilderDetail key={w.id} workout={w} />)
+                    dayPlanned.map((w) => (
+                      <CalendarPlannedBuilderDetail
+                        key={w.id}
+                        workout={w}
+                        athleteId={athleteId}
+                        onDeleted={() => void loadMonth()}
+                      />
+                    ))
                   )}
                 </div>
 

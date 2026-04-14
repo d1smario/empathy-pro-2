@@ -29,8 +29,9 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 
 function familyLabel(family: string | undefined): string {
   switch (family) {
@@ -54,8 +55,17 @@ const familyBadgeClass: Record<string, string> = {
   lifestyle: "border-emerald-400/50 bg-emerald-500/15 text-emerald-100",
 };
 
-export function CalendarPlannedBuilderDetail({ workout }: { workout: PlannedWorkout }) {
+export function CalendarPlannedBuilderDetail({
+  workout,
+  athleteId,
+  onDeleted,
+}: {
+  workout: PlannedWorkout;
+  athleteId?: string | null;
+  onDeleted?: () => void;
+}) {
   const [structureOpen, setStructureOpen] = useState(true);
+  const [deleting, setDeleting] = useState(false);
   const contract = useMemo(() => parsePro2BuilderSessionFromNotes(workout.notes ?? null), [workout.notes]);
 
   const segments = useMemo(() => (contract ? pro2BuilderContractToChartSegments(contract) : []), [contract]);
@@ -107,6 +117,29 @@ export function CalendarPlannedBuilderDetail({ workout }: { workout: PlannedWork
           <Pro2Link href={builderHref} variant="ghost" className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs">
             Builder
           </Pro2Link>
+          {athleteId ? (
+            <button
+              type="button"
+              disabled={deleting}
+              className="inline-flex items-center gap-1 rounded-lg border border-rose-400/45 bg-rose-500/15 px-2.5 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-500/25 disabled:opacity-40"
+              title="Rimuove questa riga da planned_workouts"
+              onClick={async () => {
+                if (!window.confirm("Eliminare questa seduta pianificata dal calendario?")) return;
+                setDeleting(true);
+                try {
+                  await deletePlannedWorkout({ id: workout.id, athleteId });
+                  onDeleted?.();
+                } catch (e) {
+                  window.alert(e instanceof Error ? e.message : "Eliminazione non riuscita");
+                } finally {
+                  setDeleting(false);
+                }
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              {deleting ? "…" : "Elimina"}
+            </button>
+          ) : null}
         </div>
       </div>
 
