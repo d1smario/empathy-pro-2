@@ -133,20 +133,25 @@ export function defaultBlock(kind: BlockKind = "steady", name = "Nuovo blocco"):
   };
 }
 
+/**
+ * Estrae la **prima** zona canonica nel testo (word-boundary), così frasi tipo
+ * «Z2 distesi … evitare Z4» non finiscono su Z4 per un `.includes("Z4")` accidentale.
+ */
 function zoneFromIntensityCue(cue: string, fallback: string = "Z2"): string {
-  const text = cue.toUpperCase();
-  if (text.includes("LT2")) return "LT2";
-  if (text.includes("LT1")) return "LT1";
-  if (text.includes("Z7")) return "Z7";
-  if (text.includes("Z6")) return "Z6";
-  if (text.includes("Z5")) return "Z5";
-  if (text.includes("Z4")) return "Z4";
-  if (text.includes("Z3")) return "Z3";
-  if (text.includes("Z2")) return "Z2";
-  if (text.includes("Z1")) return "Z1";
-  if (text.includes("RECOVERY") || text.includes("LOW INTENSITY") || text.includes("BREATHING")) return "Z1";
-  if (text.includes("EXPLOSIVE") || text.includes("POWER")) return "Z5";
-  if (text.includes("THRESHOLD")) return "LT2";
+  const raw = cue.trim();
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (/recovery|low intensity|breathing-led|autonomic/i.test(lower)) return "Z1";
+  if (/explosive|power output/i.test(lower)) return "Z5";
+  if (/\bthreshold\b|\bsoglia\b/i.test(lower)) return "LT2";
+  const re = /\b(Z[1-7]|LT1|LT2|FatMax)\b/gi;
+  const m = re.exec(raw);
+  if (m?.[1]) {
+    const tok = m[1];
+    if (/^fatmax$/i.test(tok)) return "FatMax";
+    const u = tok.toUpperCase();
+    return u === "LT1" || u === "LT2" ? u : u;
+  }
   return fallback;
 }
 
@@ -240,10 +245,14 @@ export function mapEngineSessionToTrainingBlocks(input: MaterializeEngineInput):
   return builderBlocks.map((block, index) => {
     const method = String(block.kind ?? "steady");
     const intensityCue = String(block.intensityCue ?? "");
-    const primaryZone = zoneFromIntensityCue(intensityCue, method === "flow_recovery" ? "Z1" : "Z2");
+    const labelStr = String(block.label ?? `Block ${index + 1}`);
+    const primaryZone = /warm-up|cool-down/i.test(labelStr)
+      ? method === "flow_recovery"
+        ? "Z1"
+        : "Z2"
+      : zoneFromIntensityCue(intensityCue, method === "flow_recovery" ? "Z1" : "Z2");
     const secondaryZone = method === "interval" || method === "repeated_sprint" ? "Z1" : "Z2";
     const durationMinutes = Math.max(4, Math.round(Number(block.durationMinutes ?? 10) || 10));
-    const labelStr = String(block.label ?? `Block ${index + 1}`);
     const presetShape = intervalShapeFromViryaPreset(labelStr, method, intensityCue, durationMinutes);
     const intervalWork = presetShape
       ? presetShape.workSeconds
