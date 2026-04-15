@@ -87,7 +87,7 @@ export default function TrainingViryaPageView() {
       eyebrow="Training · Virya"
       eyebrowClassName="text-violet-400"
       title="Virya · contesto e piano annuale"
-      description="Contesto canonico (fisiologia, hint, research) e orchestratore annuale: fasi, TSS, deploy su Calendar tramite lo stesso motore sessione del builder."
+      description="Con atleta attivo l’orchestratore annuale è in cima alla pagina (stimoli al passo 5, deploy su Calendar). Le schede di contesto canonico compaiono sotto al caricamento della memoria atleta."
       headerActions={
         <>
           <Pro2Link
@@ -141,6 +141,14 @@ export default function TrainingViryaPageView() {
         <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
           {err}
         </p>
+      ) : null}
+
+      {athleteId ? (
+        <ViryaAnnualPlanOrchestrator
+          athleteId={athleteId}
+          viryaContext={ctx}
+          contextLoading={loading || ctxLoading}
+        />
       ) : null}
 
       {loading || ctxLoading ? (
@@ -322,14 +330,6 @@ export default function TrainingViryaPageView() {
             </Pro2SectionCard>
           ) : null}
         </div>
-      ) : null}
-
-      {athleteId ? (
-        <ViryaAnnualPlanOrchestrator
-          athleteId={athleteId}
-          viryaContext={ctx}
-          contextLoading={loading || ctxLoading}
-        />
       ) : null}
 
       <Pro2SectionCard accent="orange" title="Pipeline" subtitle="Riepilogo" icon={Sparkles} className="mt-8">

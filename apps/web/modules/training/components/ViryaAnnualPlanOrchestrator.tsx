@@ -39,6 +39,7 @@ import {
 import type { AdaptationTarget, SessionGoalRequest, TrainingDomain } from "@/lib/training/engine";
 import type { BuilderSessionOperationalScalingViewModel } from "@/api/training/contracts";
 import { materializePro2BlocksFromEngine } from "@/lib/training/virya/materialize-pro2-blocks-from-engine";
+import { resolveAerobicViryaPrescription } from "@/lib/training/engine/aerobic-virya-prescription";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
 import { replaceTrainingPlannerCalendar } from "@/modules/training/services/training-write-api";
 
@@ -1311,17 +1312,6 @@ export function ViryaAnnualPlanOrchestrator({
     return "movement_quality";
   }
 
-  function deriveAerobicAdaptation(phase: PhaseType, goalSummary: string): AdaptationTarget {
-    const goalText = goalSummary.toLowerCase();
-    if (goalText.includes("recovery") || goalText.includes("recuper")) return "recovery";
-    if (goalText.includes("vo2") || goalText.includes("z5")) return "vo2_max_support";
-    if (goalText.includes("lactate") || goalText.includes("soglia")) return "lactate_clearance";
-    if (phase === "base") return "mitochondrial_density";
-    if (phase === "build") return "lactate_clearance";
-    if (phase === "deload") return "recovery";
-    return "vo2_max_support";
-  }
-
   function deriveViryaRequest(input: {
     family: SportFamily;
     discipline: string;
@@ -1332,6 +1322,10 @@ export function ViryaAnnualPlanOrchestrator({
     gymModule?: GymDayModule;
     technicalModule?: TechnicalDayModule;
     lifestyleModule?: LifestyleDayModule;
+    /** Solo famiglia aerobica: stimoli settimana + indice seduta per rotazione metabolica. */
+    weekObjectives?: WeekObjectiveKey[];
+    sessionIndexInWeek?: number;
+    sessionsInWeek?: number;
   }): {
     adaptationTarget: AdaptationTarget;
     domain: TrainingDomain;
@@ -1362,16 +1356,20 @@ export function ViryaAnnualPlanOrchestrator({
         objectiveDetail: `${input.lifestyleModule.practiceType} · ${input.lifestyleModule.objective}`,
       };
     }
+    const preset = resolveAerobicViryaPrescription({
+      viryaPhase: input.phase,
+      goalSummary: input.objective ?? "",
+      weekObjectives: input.weekObjectives ?? [],
+      sessionIndexInWeek: input.sessionIndexInWeek ?? 0,
+      sessionsInWeek: Math.max(1, input.sessionsInWeek ?? 1),
+    });
     return {
-      adaptationTarget: deriveAerobicAdaptation(input.phase, input.objective ?? ""),
+      adaptationTarget: preset.adaptationTarget,
       domain: "endurance",
-      intensityHint:
-        deriveAerobicAdaptation(input.phase, input.objective ?? "") === "vo2_max_support"
-          ? "Z5-focused aerobic power"
-          : deriveAerobicAdaptation(input.phase, input.objective ?? "") === "recovery"
-            ? "Z1-Z2 recovery aerobic"
-            : "Z2-Z4 periodized aerobic distribution",
-      objectiveDetail: input.objective ?? input.methodology ?? "periodized endurance support",
+      intensityHint: preset.intensityHint,
+      objectiveDetail: [input.objective ?? input.methodology ?? "periodized endurance support", preset.objectiveDetail]
+        .filter(Boolean)
+        .join(" · "),
     };
   }
 
@@ -1388,6 +1386,9 @@ export function ViryaAnnualPlanOrchestrator({
     gymModule?: GymDayModule;
     technicalModule?: TechnicalDayModule;
     lifestyleModule?: LifestyleDayModule;
+    weekObjectives?: WeekObjectiveKey[];
+    sessionIndexInWeek?: number;
+    sessionsInWeek?: number;
   }) {
     const request = deriveViryaRequest(input);
     const fallbackBlocks = buildViryaBlocks(input);
@@ -1705,7 +1706,7 @@ export function ViryaAnnualPlanOrchestrator({
               notes: [
                 `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretto=${module.district} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 serializedContract,
-              ].join(" | "),
+              ].join("\n"),
             });
           }
         } else if (sportFamily === "technical") {
@@ -1747,7 +1748,7 @@ export function ViryaAnnualPlanOrchestrator({
               notes: [
                 `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo C Tecnico-Tattico · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} obiettivi=${sequence} esercizio=${module.exerciseType} intensita=${module.intensity} metodo=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 serializedContract,
-              ].join(" | "),
+              ].join("\n"),
             });
           }
         } else if (sportFamily === "lifestyle") {
@@ -1788,7 +1789,7 @@ export function ViryaAnnualPlanOrchestrator({
               notes: [
                 `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo D Lifestyle · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} objective=${module.objective} pratica=${module.practiceType} RPE=${module.intensityRpe} breathing=${module.breathingCadence} holdFlow=${module.holdOrFlow} method=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 serializedContract,
-              ].join(" | "),
+              ].join("\n"),
             });
           }
         } else {
@@ -1835,6 +1836,9 @@ export function ViryaAnnualPlanOrchestrator({
                 kcal: Math.round(tssPerSession * 10.5),
                 objective: goalSummary,
                 methodology: "annual_periodized_distribution",
+                weekObjectives: wm.objectives,
+                sessionIndexInWeek: s,
+                sessionsInWeek: sportSessions,
               });
               rows.push({
                 athlete_id: selectedAthleteId,
@@ -1846,7 +1850,7 @@ export function ViryaAnnualPlanOrchestrator({
                 notes: [
                   `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                   serializedContract,
-                ].join(" | "),
+                ].join("\n"),
               });
             }
             dayCursor += sportSessions;
@@ -2017,12 +2021,13 @@ export function ViryaAnnualPlanOrchestrator({
   }
 
   return (
-    <div className="mt-6 space-y-6">
+    <div id="virya-orchestrator" className="mt-6 scroll-mt-24 space-y-6">
       <div className="rounded-2xl border border-violet-500/25 bg-gradient-to-br from-violet-950/25 via-black/50 to-black/80 p-5 shadow-inner">
         <p className="text-[0.65rem] font-bold uppercase tracking-wider text-violet-300/90">Virya · Pro 2</p>
         <h2 className="text-xl font-semibold tracking-tight text-white">Piano annuale</h2>
         <p className="mt-1 max-w-2xl text-sm text-slate-400">
-          Percorso guidato in quattro passi — stesso motore sessione del builder. Deploy batch su Calendar solo quando sei pronto.
+          Percorso in cinque passi — stesso motore sessione del builder. Gli obiettivi focali settimanali (stimoli) sono
+          al passo 5, colonna «Obiettivi (multipli)». Deploy batch su Calendar da lì quando sei pronto.
         </p>
         {viryaHeroStats.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
@@ -2059,7 +2064,7 @@ export function ViryaAnnualPlanOrchestrator({
             { n: 2 as const, label: "Sport", desc: "Disciplina" },
             { n: 3 as const, label: "Periodo", desc: "Date piano" },
             { n: 4 as const, label: "Stagione", desc: "Cardine · eventi · fasi" },
-            { n: 5 as const, label: "Settimane", desc: "Griglia · Calendar" },
+            { n: 5 as const, label: "Settimane", desc: "Stimoli · griglia · Calendar" },
           ] as const
         ).map((s) => (
           <button

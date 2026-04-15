@@ -83,7 +83,13 @@ export function generateTrainingSession(
   const domain = requestEffective.domain || inferDomainFromSport(requestEffective.sport);
   const distribution = rule.phaseDistribution[requestEffective.phase];
   const effectiveLoad = deriveLoadBand(rule.baseLoadBand, athlete);
-  const requestedIntensityCue = requestEffective.intensityHint?.trim() || rule.intensityCue;
+  const hintTrim = requestEffective.intensityHint?.trim() ?? "";
+  const requestedIntensityCue = hintTrim || rule.intensityCue;
+  /** Hint con token Virya `PRESET_*` è per il blocco principale; warm/cool restano autonomici. */
+  const flowRecoveryCue =
+    /PRESET_/i.test(hintTrim) || !hintTrim
+      ? "Z1–Z2 progressive activation / breathing-led; low neuromuscular stress"
+      : hintTrim;
   const requestedTssHint =
     Number.isFinite(Number(requestEffective.tssTargetHint)) && Number(requestEffective.tssTargetHint) > 0
       ? Math.round(Number(requestEffective.tssTargetHint))
@@ -135,10 +141,9 @@ export function generateTrainingSession(
       },
       tmpl.label === "Main block" ? 4 : 2,
     );
-    const baseFlowCue = requestEffective.intensityHint?.trim() || "Low intensity, breathing-led";
     const mainCue =
       tmpl.method === "flow_recovery"
-        ? baseFlowCue
+        ? flowRecoveryCue
         : domain === "gym" && gymProfile?.contraction
           ? augmentGymBlockCue(requestedIntensityCue, gymProfile.contraction)
           : requestedIntensityCue;

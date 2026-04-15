@@ -166,6 +166,60 @@ function blockKindFromEngineMethod(method: string): BlockKind {
   return "steady";
 }
 
+/**
+ * Preset Virya / motore in `intensityCue` → work/recovery/repeats per blocchi interval
+ * (solo label "Main block" per non alterare warm-up / cool-down).
+ */
+function intervalShapeFromViryaPreset(
+  label: string,
+  method: string,
+  intensityCue: string,
+  durationMinutes: number,
+): { workSeconds: number; recoverSeconds: number; repeats: number } | null {
+  if (label !== "Main block") return null;
+  if (method !== "interval" && method !== "repeated_sprint") return null;
+  const c = intensityCue;
+  const totalSec = Math.max(600, Math.round(durationMinutes * 60 * 0.72));
+
+  if (/PRESET_NORWEGIAN/i.test(c)) {
+    const work = 8 * 60;
+    const recover = 2 * 60;
+    const reps = Math.max(3, Math.min(10, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  if (/PRESET_VO2_Z6/i.test(c)) {
+    const work = 45;
+    const recover = 60;
+    const reps = Math.max(8, Math.min(18, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  if (/PRESET_VO2_Z5/i.test(c)) {
+    const work = 90;
+    const recover = 90;
+    const reps = Math.max(5, Math.min(14, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  if (/PRESET_LACTATE_MAX/i.test(c)) {
+    const work = 40;
+    const recover = 80;
+    const reps = Math.max(10, Math.min(24, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  if (/PRESET_ON_OFF/i.test(c)) {
+    const work = 3 * 60;
+    const recover = 90;
+    const reps = Math.max(6, Math.min(16, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  if (/PRESET_LADDER/i.test(c)) {
+    const work = 5 * 60;
+    const recover = 2 * 60;
+    const reps = Math.max(4, Math.min(12, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
+  return null;
+}
+
 function loadFactorFromEngineMethod(method: string): number {
   if (method === "flow_recovery") return 0.55;
   if (method === "technical_drill") return 0.8;
@@ -189,11 +243,20 @@ export function mapEngineSessionToTrainingBlocks(input: MaterializeEngineInput):
     const primaryZone = zoneFromIntensityCue(intensityCue, method === "flow_recovery" ? "Z1" : "Z2");
     const secondaryZone = method === "interval" || method === "repeated_sprint" ? "Z1" : "Z2";
     const durationMinutes = Math.max(4, Math.round(Number(block.durationMinutes ?? 10) || 10));
-    const intervalWork = Math.max(30, Math.round((durationMinutes * 60) / 6));
-    const intervalRecover = Math.max(20, Math.round(intervalWork / 2));
+    const labelStr = String(block.label ?? `Block ${index + 1}`);
+    const presetShape = intervalShapeFromViryaPreset(labelStr, method, intensityCue, durationMinutes);
+    const intervalWork = presetShape
+      ? presetShape.workSeconds
+      : Math.max(30, Math.round((durationMinutes * 60) / 6));
+    const intervalRecover = presetShape
+      ? presetShape.recoverSeconds
+      : Math.max(20, Math.round(intervalWork / 2));
+    const intervalRepeats = presetShape
+      ? presetShape.repeats
+      : Math.max(3, Math.round(durationMinutes / 4));
 
     return {
-      ...defaultBlock(blockKindFromEngineMethod(method), String(block.label ?? `Block ${index + 1}`)),
+      ...defaultBlock(blockKindFromEngineMethod(method), labelStr),
       minutes: durationMinutes,
       seconds: 0,
       intensity: primaryZone,
@@ -201,7 +264,7 @@ export function mapEngineSessionToTrainingBlocks(input: MaterializeEngineInput):
       endIntensity: primaryZone,
       intensity2: secondaryZone,
       intensity3: "Z5",
-      repeats: Math.max(3, Math.round(durationMinutes / 4)),
+      repeats: intervalRepeats,
       workSeconds: intervalWork,
       recoverSeconds: intervalRecover,
       target: targetFromAdaptation(String(block.target ?? "")),

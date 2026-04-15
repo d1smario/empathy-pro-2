@@ -8,11 +8,23 @@ import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
  * Estrae il contratto Pro 2 serializzato in `notes` (stesso tag URI-encoded di V1).
  * Il tipo include campi opzionali V1-compat (`sessionKnowledge`, `structure`) se presenti nel JSON.
  */
+function collectBuilderJsonSegments(line: string): string[] {
+  const t = line.trim();
+  if (!t) return [];
+  /** Virya (legacy) univa testo + JSON con ` | ` su una sola riga: ogni segmento può essere una riga JSON canonica. */
+  return t
+    .split(/\s*\|\s*/)
+    .map((s) => s.trim())
+    .filter((s) => s.startsWith(BUILDER_SESSION_JSON_TAG));
+}
+
 export function parsePro2BuilderSessionFromNotes(notes: string | null | undefined): Pro2SessionMultilevelSource | null {
   if (!notes?.trim()) return null;
+  const candidates: string[] = [];
   for (const line of notes.split(/\r?\n/)) {
-    const t = line.trim();
-    if (!t.startsWith(BUILDER_SESSION_JSON_TAG)) continue;
+    candidates.push(...collectBuilderJsonSegments(line));
+  }
+  for (const t of candidates) {
     const payload = t.slice(BUILDER_SESSION_JSON_TAG.length);
     try {
       const json = JSON.parse(decodeURIComponent(payload)) as unknown;
