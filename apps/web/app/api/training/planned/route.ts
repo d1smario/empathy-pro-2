@@ -156,35 +156,47 @@ export async function DELETE(req: NextRequest) {
      */
     const { rlsClient } = await requireAuthenticatedTrainingUser(req);
     const probeDb = createSupabaseAdminClient() ?? rlsClient;
-    const { data: existing, error: readErr } = await probeDb
+    const { data: probeRows, error: readErr } = await probeDb
       .from("planned_workouts")
       .select("id, athlete_id")
       .eq("id", id)
-      .maybeSingle();
+      .limit(1);
     if (readErr) {
       return NextResponse.json({ error: readErr.message }, { status: 500, headers: NO_STORE });
     }
-    const rowAthleteId = typeof existing?.athlete_id === "string" ? existing.athlete_id.trim() : "";
-    if (!existing?.id || !rowAthleteId) {
+    const row0 = (probeRows?.[0] ?? null) as Record<string, unknown> | null;
+    const rowId = typeof row0?.id === "string" ? row0.id.trim() : "";
+    const rowAthleteId =
+      typeof row0?.athlete_id === "string"
+        ? row0.athlete_id.trim()
+        : typeof row0?.athleteId === "string"
+          ? row0.athleteId.trim()
+          : "";
+    if (!rowId || !rowAthleteId) {
       return NextResponse.json(
-        { error: "Planned workout not found or not deletable for this athlete" },
+        {
+          error: "Nessuna riga planned_workouts con questo id (verifica progetto Supabase e sessione).",
+          errorCode: "planned_probe_empty",
+        },
         { status: 404, headers: NO_STORE },
       );
     }
 
     const { db } = await requireAthleteWriteContext(req, rowAthleteId);
-    const { data: deletedRows, error } = await db
-      .from("planned_workouts")
-      .delete()
-      .eq("id", id)
-      .eq("athlete_id", rowAthleteId)
-      .select("id");
+    /**
+     * Dopo il gate su `rowAthleteId`, cancelliamo solo per PK `id` (come insert materializza una riga per id).
+     * Un secondo `.eq("athlete_id", …)` può dare 0 righe se c’è disallineamento tipo/formato pur con accesso ok.
+     */
+    const { data: deletedRows, error } = await db.from("planned_workouts").delete().eq("id", id).select("id");
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
     }
     if (!deletedRows?.length) {
       return NextResponse.json(
-        { error: "Planned workout not found or not deletable for this athlete" },
+        {
+          error: "Delete non ha rimosso righe: controlla RLS/policies su planned_workouts per il ruolo usato dall’API.",
+          errorCode: "planned_delete_noop",
+        },
         { status: 404, headers: NO_STORE },
       );
     }
