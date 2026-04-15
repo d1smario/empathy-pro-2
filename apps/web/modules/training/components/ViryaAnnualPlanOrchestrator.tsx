@@ -2653,7 +2653,10 @@ export function ViryaAnnualPlanOrchestrator({
                 checked={replacePrevious}
                 onChange={(e) => setReplacePrevious(e.target.checked)}
               />
-              <span>Sostituisci sessioni già generate con lo stesso tag piano (notes che iniziano con [VIRYA:…])</span>
+              <span>
+                Sostituisci sessioni VIRYA già salvate nello stesso intervallo di date del piano (marker{" "}
+                <code className="rounded bg-black/40 px-1">[VIRYA:…]</code> nelle note)
+              </span>
             </label>
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -3620,7 +3623,7 @@ export function ViryaAnnualPlanOrchestrator({
           <label className="form-field" style={{ marginBottom: "10px" }}>
             <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <input type="checkbox" checked={replacePrevious} onChange={(e) => setReplacePrevious(e.target.checked)} />
-              Sostituisci precedenti sessioni generate con lo stesso piano
+              Sostituisci sessioni VIRYA già sul calendario nello stesso intervallo di date (cancella marker [VIRYA:…] prima di reinserire)
             </span>
           </label>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>

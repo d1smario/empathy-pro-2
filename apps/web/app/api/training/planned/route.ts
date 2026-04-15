@@ -81,15 +81,33 @@ export async function POST(req: NextRequest) {
       if (!payloads.length) {
         return NextResponse.json({ error: "rows is empty" }, { status: 400, headers: NO_STORE });
       }
+      /**
+       * Sostituzione piano VIRYA: rimuove le righe precedenti nello **stesso intervallo di date**
+       * del batch. Usa un sotto-pattern con `[` **escapato**: in PostgreSQL ILIKE/LIKE `[` apre
+       * una character class, quindi `[VIRYA:…]%` non matchava mai e le vecchie sedute non venivano cancellate.
+       */
       if (body.replaceTag && body.athleteId) {
-        const tag = String(body.replaceTag);
-        const { error: delErr } = await db
-          .from("planned_workouts")
-          .delete()
-          .eq("athlete_id", body.athleteId)
-          .ilike("notes", `${tag}%`);
-        if (delErr) {
-          return NextResponse.json({ error: delErr.message }, { status: 500, headers: NO_STORE });
+        const aid = String(body.athleteId);
+        const dateStrs = payloads
+          .map((p) => {
+            const d = (p as { date?: unknown }).date;
+            return typeof d === "string" ? d.trim() : "";
+          })
+          .filter(Boolean);
+        if (dateStrs.length) {
+          const minD = dateStrs.reduce((a, b) => (a < b ? a : b));
+          const maxD = dateStrs.reduce((a, b) => (a > b ? a : b));
+          const viryaMarker = "%\\[VIRYA:%";
+          const { error: delErr } = await db
+            .from("planned_workouts")
+            .delete()
+            .eq("athlete_id", aid)
+            .gte("date", minD)
+            .lte("date", maxD)
+            .ilike("notes", viryaMarker);
+          if (delErr) {
+            return NextResponse.json({ error: delErr.message }, { status: 500, headers: NO_STORE });
+          }
         }
       }
       const { error: insertErr } = await db.from("planned_workouts").insert(payloads);
