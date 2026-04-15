@@ -108,9 +108,20 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Missing id, athleteId or patch" }, { status: 400, headers: NO_STORE });
     }
     const { db } = await requireAthleteWriteContext(req, body.athleteId);
-    const { error } = await db.from("planned_workouts").update(body.patch).eq("id", body.id).eq("athlete_id", body.athleteId);
+    const { data: updatedRows, error } = await db
+      .from("planned_workouts")
+      .update(body.patch)
+      .eq("id", body.id)
+      .eq("athlete_id", body.athleteId)
+      .select("id");
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
+    }
+    if (!updatedRows?.length) {
+      return NextResponse.json(
+        { error: "Planned workout not found or not updatable for this athlete" },
+        { status: 404, headers: NO_STORE },
+      );
     }
     return NextResponse.json(
       { status: "ok" as const, athleteMemory: await memoryOrNull(body.athleteId) },
@@ -127,17 +138,34 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
-    const body = (await req.json()) as { id?: string; athleteId?: string };
-    if (!body.id || !body.athleteId) {
+    const body = (await req.json().catch(() => ({}))) as { id?: string; athleteId?: string };
+    let id = String(body.id ?? "").trim();
+    let athleteId = String(body.athleteId ?? "").trim();
+    if (!id || !athleteId) {
+      id = (req.nextUrl.searchParams.get("id") ?? "").trim();
+      athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
+    }
+    if (!id || !athleteId) {
       return NextResponse.json({ error: "Missing id or athleteId" }, { status: 400, headers: NO_STORE });
     }
-    const { db } = await requireAthleteWriteContext(req, body.athleteId);
-    const { error } = await db.from("planned_workouts").delete().eq("id", body.id).eq("athlete_id", body.athleteId);
+    const { db } = await requireAthleteWriteContext(req, athleteId);
+    const { data: deletedRows, error } = await db
+      .from("planned_workouts")
+      .delete()
+      .eq("id", id)
+      .eq("athlete_id", athleteId)
+      .select("id");
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
     }
+    if (!deletedRows?.length) {
+      return NextResponse.json(
+        { error: "Planned workout not found or not deletable for this athlete" },
+        { status: 404, headers: NO_STORE },
+      );
+    }
     return NextResponse.json(
-      { status: "ok" as const, athleteMemory: await memoryOrNull(body.athleteId) },
+      { status: "ok" as const, athleteMemory: await memoryOrNull(athleteId) },
       { headers: NO_STORE },
     );
   } catch (err) {
