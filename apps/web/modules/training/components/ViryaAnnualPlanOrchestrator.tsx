@@ -2539,6 +2539,50 @@ export function ViryaAnnualPlanOrchestrator({
             </p>
           </Pro2SectionCard>
 
+          <Pro2SectionCard
+            accent="cyan"
+            title="Salva sul Calendar"
+            subtitle="Batch su planned_workouts — POST /api/training/planned (contratto Virya)"
+            icon={CalendarRange}
+          >
+            <p className="mb-3 text-sm text-slate-300">
+              Qui si materializza il piano: finché non premi il pulsante, le sedute restano solo in questa pagina. In basso
+              trovi la stessa azione con anteprima carico annuale; usa quella che preferisci.
+            </p>
+            <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-white/20 bg-black/40"
+                checked={replacePrevious}
+                onChange={(e) => setReplacePrevious(e.target.checked)}
+              />
+              <span>Sostituisci sessioni già generate con lo stesso tag piano (notes che iniziano con [VIRYA:…])</span>
+            </label>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                className="rounded-xl border border-cyan-500/50 bg-cyan-500/20 px-5 py-3 text-sm font-semibold text-cyan-50 shadow-[0_0_24px_rgba(34,211,238,0.12)] hover:bg-cyan-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void generateOnCalendar()}
+                disabled={saving || !selectedAthleteId || phases.length === 0}
+                title={
+                  !selectedAthleteId
+                    ? "Seleziona / carica contesto atleta"
+                    : phases.length === 0
+                      ? "Aggiungi fasi (passo 4) prima di generare"
+                      : undefined
+                }
+              >
+                {saving ? "Generazione in corso…" : "Genera piano annuale su Calendar"}
+              </button>
+              <Link
+                href="/training/calendar"
+                className="text-sm font-semibold text-cyan-300 underline decoration-cyan-500/40 hover:text-cyan-200"
+              >
+                Apri Calendar →
+              </Link>
+            </div>
+          </Pro2SectionCard>
+
           <div className="flex justify-start">
             <button
               type="button"
@@ -3483,7 +3527,19 @@ export function ViryaAnnualPlanOrchestrator({
             </span>
           </label>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-            <button type="button" className="btn-primary" onClick={generateOnCalendar} disabled={saving}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => void generateOnCalendar()}
+              disabled={saving || !selectedAthleteId || phases.length === 0}
+              title={
+                !selectedAthleteId
+                  ? "Seleziona / carica contesto atleta"
+                  : phases.length === 0
+                    ? "Aggiungi fasi (passo 4) prima di generare"
+                    : undefined
+              }
+            >
               {saving ? "Generazione..." : "Genera piano annuale"}
             </button>
             <Link href="/training/calendar" style={{ color: "var(--empathy-primary)", textDecoration: "none", alignSelf: "center" }}>
