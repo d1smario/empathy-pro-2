@@ -60,17 +60,19 @@ export async function updatePlannedWorkout(input: {
   return (await response.json()) as { status: "ok"; athleteMemory?: AthleteMemory | null };
 }
 
-export async function deletePlannedWorkout(input: { id: string; athleteId?: string | null }) {
-  const body: { id: string; athleteId?: string } = { id: input.id };
-  if (input.athleteId?.trim()) body.athleteId = input.athleteId.trim();
+export async function deletePlannedWorkout(input: { id: string; athleteId: string }) {
+  const body = { id: input.id.trim(), athleteId: input.athleteId.trim() };
+  if (!body.athleteId) throw new Error("athleteId required for deletePlannedWorkout");
   const response = await fetch("/api/training/planned", {
     method: "DELETE",
     headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!response.ok) {
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(payload.error ?? "Delete planned workout failed");
+    const payload = (await response.json().catch(() => ({}))) as { error?: string; errorCode?: string };
+    const probe = response.headers.get("x-empathy-delete-probe");
+    const extra = [payload.errorCode, probe].filter(Boolean).join(" · ");
+    throw new Error([payload.error ?? "Delete planned workout failed", extra].filter(Boolean).join(" — "));
   }
   return (await response.json()) as { status: "ok"; athleteMemory?: AthleteMemory | null };
 }

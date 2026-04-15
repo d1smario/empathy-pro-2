@@ -117,7 +117,7 @@ export function CalendarPlannedBuilderDetail({
           <Pro2Link href={builderHref} variant="ghost" className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs">
             Builder
           </Pro2Link>
-          {athleteId ? (
+          {workout.athleteId?.trim() || athleteId?.trim() ? (
             <button
               type="button"
               disabled={deleting}
@@ -125,12 +125,14 @@ export function CalendarPlannedBuilderDetail({
               title="Rimuove questa riga da planned_workouts"
               onClick={async () => {
                 if (!window.confirm("Eliminare questa seduta pianificata dal calendario?")) return;
+                const aid = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+                if (!aid) {
+                  window.alert("Manca athleteId: impossibile allineare DELETE a planned-window.");
+                  return;
+                }
                 setDeleting(true);
                 try {
-                  await deletePlannedWorkout({
-                    id: workout.id,
-                    athleteId: workout.athleteId?.trim() || athleteId?.trim() || undefined,
-                  });
+                  await deletePlannedWorkout({ id: workout.id, athleteId: aid });
                   onDeleted?.(workout.id);
                 } catch (e) {
                   window.alert(e instanceof Error ? e.message : "Eliminazione non riuscita");

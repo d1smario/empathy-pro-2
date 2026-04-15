@@ -911,10 +911,12 @@ export function TrainingCalendarAnalyzer({
                     if (!athleteId || !window.confirm("Eliminare questa seduta pianificata?")) return;
                     setDeletingPlannedId(w.id);
                     try {
-                      await deletePlannedWorkout({
-                        id: w.id,
-                        athleteId: w.athleteId?.trim() || athleteId?.trim() || undefined,
-                      });
+                      const aid = (w.athleteId?.trim() || athleteId?.trim() || "").trim();
+                      if (!aid) {
+                        window.alert("Manca athleteId: impossibile allineare DELETE a planned-window.");
+                        return;
+                      }
+                      await deletePlannedWorkout({ id: w.id, athleteId: aid });
                       onPlannedChanged?.(w.id);
                     } catch (err) {
                       window.alert(err instanceof Error ? err.message : "Eliminazione non riuscita");

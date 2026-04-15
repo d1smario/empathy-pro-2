@@ -46,23 +46,26 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
 }
 
 /**
- * Invia sempre `athleteId` se lo hai (stesso valore di `planned-window`): il DELETE usa lo stesso gate RLS
- * della lettura calendario prima del fallback globale.
+ * `athleteId` obbligatorio (stesso valore usato in `planned-window`): il DELETE allinea il probe RLS alla lettura calendario.
+ * In Network → risposta DELETE controlla header `x-empathy-delete-probe`.
  */
-export async function deletePlannedWorkout(input: { id: string; athleteId?: string | null }): Promise<void> {
+export async function deletePlannedWorkout(input: { id: string; athleteId: string }): Promise<void> {
+  const hint = input.athleteId.trim();
+  if (!hint) {
+    throw new Error("athleteId mancante: impossibile allineare DELETE a planned-window.");
+  }
   const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
-  const body: { id: string; athleteId?: string } = { id: input.id.trim() };
-  const hint = input.athleteId?.trim();
-  if (hint) body.athleteId = hint;
   const res = await fetch("/api/training/planned", {
     method: "DELETE",
     headers,
     credentials: "same-origin",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ id: input.id.trim(), athleteId: hint }),
     cache: "no-store",
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  const json = (await res.json().catch(() => ({}))) as { error?: string; errorCode?: string };
   if (!res.ok) {
-    throw new Error(json.error ?? "Eliminazione seduta pianificata non riuscita");
+    const probe = res.headers.get("x-empathy-delete-probe");
+    const extra = [json.errorCode, probe].filter(Boolean).join(" · ");
+    throw new Error([json.error ?? "Eliminazione seduta pianificata non riuscita", extra].filter(Boolean).join(" — "));
   }
 }

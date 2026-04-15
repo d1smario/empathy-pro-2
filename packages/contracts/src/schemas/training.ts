@@ -22,6 +22,10 @@ export type PlannedWorkout = {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  /**
+   * Origine riga (solo API calendario): demo SQL vs builder vs import — inferenza deterministica da `notes`/`type`.
+   */
+  provenance?: string;
 };
 
 export type ExecutedWorkout = {

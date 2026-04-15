@@ -14,6 +14,10 @@ export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
 
+function deleteProbeHeaders(probe: string): Record<string, string> {
+  return { ...NO_STORE, "x-empathy-delete-probe": probe };
+}
+
 type PlannedWorkoutPayload = PlannedWorkoutInsertPayload;
 
 function toInsertRecord(row: PlannedWorkoutInsertPayload): Record<string, unknown> {
@@ -143,6 +147,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  let deleteProbe = "init";
   try {
     const body = (await req.json().catch(() => ({}))) as { id?: string; athleteId?: string };
     let id = String(body.id ?? "").trim();
@@ -154,7 +159,7 @@ export async function DELETE(req: NextRequest) {
       athleteIdHint = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     }
     if (!id) {
-      return NextResponse.json({ error: "Missing id" }, { status: 400, headers: NO_STORE });
+      return NextResponse.json({ error: "Missing id" }, { status: 400, headers: deleteProbeHeaders("bad_request_no_id") });
     }
 
     const { rlsClient } = await requireAuthenticatedTrainingUser(req);
@@ -164,6 +169,7 @@ export async function DELETE(req: NextRequest) {
      * `athlete_id` (alcune RLS permettono SELECT per finestra atleta ma non una lookup “solo id”).
      * 2) Fallback: admin o client anon+JWT come prima.
      */
+    let scoped: "skip" | "hit" | "miss" | "err" = athleteIdHint ? "miss" : "skip";
     let row0: Record<string, unknown> | null = null;
     if (athleteIdHint) {
       try {
@@ -176,12 +182,17 @@ export async function DELETE(req: NextRequest) {
           .limit(1);
         if (!scopedErr && scopedRows?.[0]) {
           row0 = scopedRows[0] as Record<string, unknown>;
+          scoped = "hit";
+        } else {
+          scoped = "miss";
         }
       } catch {
+        scoped = "err";
         /* hint non accessibile: si tenta il fallback globale */
       }
     }
 
+    let global: "skip" | "hit" | "miss" = "skip";
     if (!row0) {
       const probeDb = createSupabaseAdminClient() ?? rlsClient;
       const { data: probeRows, error: readErr } = await probeDb
@@ -190,10 +201,15 @@ export async function DELETE(req: NextRequest) {
         .eq("id", id)
         .limit(1);
       if (readErr) {
-        return NextResponse.json({ error: readErr.message }, { status: 500, headers: NO_STORE });
+        deleteProbe = `scoped=${scoped};global=error`;
+        return NextResponse.json({ error: readErr.message }, { status: 500, headers: deleteProbeHeaders(deleteProbe) });
       }
       row0 = (probeRows?.[0] ?? null) as Record<string, unknown> | null;
+      global = row0 ? "hit" : "miss";
+    } else {
+      global = "skip";
     }
+    deleteProbe = `scoped=${scoped};global=${global}`;
     const rowId = typeof row0?.id === "string" ? row0.id.trim() : "";
     const rowAthleteId =
       typeof row0?.athlete_id === "string"
@@ -207,7 +223,7 @@ export async function DELETE(req: NextRequest) {
           error: "Nessuna riga planned_workouts con questo id (verifica progetto Supabase e sessione).",
           errorCode: "planned_probe_empty",
         },
-        { status: 404, headers: NO_STORE },
+        { status: 404, headers: deleteProbeHeaders(deleteProbe) },
       );
     }
 
@@ -218,7 +234,10 @@ export async function DELETE(req: NextRequest) {
      */
     const { data: deletedRows, error } = await db.from("planned_workouts").delete().eq("id", id).select("id");
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500, headers: deleteProbeHeaders(`${deleteProbe};delete=error`) },
+      );
     }
     if (!deletedRows?.length) {
       return NextResponse.json(
@@ -226,18 +245,24 @@ export async function DELETE(req: NextRequest) {
           error: "Delete non ha rimosso righe: controlla RLS/policies su planned_workouts per il ruolo usato dall’API.",
           errorCode: "planned_delete_noop",
         },
-        { status: 404, headers: NO_STORE },
+        { status: 404, headers: deleteProbeHeaders(`${deleteProbe};delete=noop`) },
       );
     }
     return NextResponse.json(
       { status: "ok" as const, athleteMemory: await memoryOrNull(rowAthleteId) },
-      { headers: NO_STORE },
+      { headers: deleteProbeHeaders(`${deleteProbe};delete=ok`) },
     );
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
-      return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });
+      return NextResponse.json(
+        { error: err.message },
+        { status: err.status, headers: deleteProbeHeaders(`exception|${deleteProbe}`) },
+      );
     }
     const message = err instanceof Error ? err.message : "Training planned DELETE failed";
-    return NextResponse.json({ error: message }, { status: 500, headers: NO_STORE });
+    return NextResponse.json(
+      { error: message },
+      { status: 500, headers: deleteProbeHeaders(`exception|${deleteProbe}`) },
+    );
   }
 }

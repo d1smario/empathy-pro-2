@@ -24,6 +24,7 @@ import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewMode
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
+import { formatPlannedProvenanceSummaryIt } from "@/lib/training/planned-provenance";
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -213,6 +214,8 @@ export default function TrainingCalendarPageView() {
     apiError?: string;
     resFrom?: string;
     resTo?: string;
+    /** Presente solo dopo `planned-window` ok: conteggi origine righe (SQL seed / builder / …). */
+    plannedProvenanceSummary?: Partial<Record<string, number>>;
   } | null>(null);
 
   const { monthFrom, monthTo, fetchFrom, fetchTo } = useMemo(
@@ -279,6 +282,7 @@ export default function TrainingCalendarPageView() {
         executedN: ex.length,
         resFrom: json.from,
         resTo: json.to,
+        plannedProvenanceSummary: json.plannedProvenanceSummary ?? {},
       });
     } catch {
       if (isStale()) return;
@@ -524,6 +528,16 @@ export default function TrainingCalendarPageView() {
       {err ? (
         <p className="mb-6 text-sm text-amber-300/90" role="alert">
           {err}
+        </p>
+      ) : null}
+
+      {athleteId && fetchDiag?.plannedProvenanceSummary != null ? (
+        <p
+          className="mb-3 rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-2 text-[0.72rem] leading-relaxed text-amber-50/95"
+          title="Heuristica su notes/type: non è generativo; serve a capire seed SQL vs builder vs import."
+        >
+          <span className="font-mono font-bold uppercase tracking-wide text-amber-200/90">Origine pianificato · </span>
+          {formatPlannedProvenanceSummaryIt(fetchDiag.plannedProvenanceSummary)}
         </p>
       ) : null}
 

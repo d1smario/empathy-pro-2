@@ -9,6 +9,7 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
+import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import type { TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 
 export const dynamic = "force-dynamic";
@@ -107,7 +108,11 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const planned = ((plannedRes.data ?? []) as PlannedWorkoutDbRow[]).map(plannedWorkoutFromDbRow);
+    const planned = ((plannedRes.data ?? []) as PlannedWorkoutDbRow[]).map((row) => {
+      const p = plannedWorkoutFromDbRow(row);
+      return { ...p, provenance: inferPlannedProvenance(row) };
+    });
+    const plannedProvenanceSummary = summarizeProvenanceCounts(planned);
     const executed = ((executedRes.data ?? []) as ExecutedWorkoutDbRow[]).map(executedWorkoutFromDbRow);
     const readSpineCoverage = includeAthleteContext ? summarizeReadSpineCoverage(athleteMemory) : null;
     const twinContextStrip = includeAthleteContext ? twinContextStripFromMemory(athleteMemory?.twin ?? null) : null;
@@ -119,6 +124,7 @@ export async function GET(req: NextRequest) {
         to,
         athleteId,
         planned,
+        plannedProvenanceSummary,
         executed,
         readSpineCoverage,
         twinContextStrip,

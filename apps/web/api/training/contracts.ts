@@ -35,6 +35,8 @@ export type TrainingPlannedWindowOkViewModel = {
   athleteId: string;
   planned: PlannedWorkout[];
   executed: ExecutedWorkout[];
+  /** Conteggi per `planned[].provenance` (demo SQL / builder / …). */
+  plannedProvenanceSummary?: Partial<Record<string, number>>;
   /** `null` se `includeAthleteContext=0` (solo planned/executed, meno latenza). */
   readSpineCoverage: ReadSpineCoverageSummary | null;
   twinContextStrip: TrainingTwinContextStripViewModel | null;
