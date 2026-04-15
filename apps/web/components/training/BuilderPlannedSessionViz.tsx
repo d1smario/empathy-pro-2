@@ -1,6 +1,7 @@
 "use client";
 
 import type { Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { intensityLabelForContractBlock } from "@/lib/training/builder/pro2-session-notes";
 
 type StoredChartBlock = NonNullable<NonNullable<Pro2BuilderBlockContract["chart"]>> & {
   id: string;
@@ -161,7 +162,11 @@ export function BuilderPlannedSessionViz({
   if (!blocks.length) return null;
   const renderProfile = contract?.renderProfile;
   const chartBlocks = blocks
-    .map((block) => (block.chart ? { ...block.chart, id: block.id, name: block.label, kind: block.kind } : null))
+    .map((block) => {
+      if (!block.chart) return null;
+      const zone = intensityLabelForContractBlock(block);
+      return { ...block.chart, id: block.id, name: block.label, kind: block.kind, intensity: zone };
+    })
     .filter((block): block is StoredChartBlock => block != null);
   if (!renderProfile || chartBlocks.length !== blocks.length) {
     return null;
@@ -250,9 +255,9 @@ export function BuilderPlannedSessionViz({
             key={`legend-${block.id}`}
             className="builder-zone-chip"
             style={{
-              borderColor: colorForIntensity(block.intensityCue?.split("/")[0]?.split("->").pop()?.trim() || "Z2"),
-              color: colorForIntensity(block.intensityCue?.split("/")[0]?.split("->").pop()?.trim() || "Z2"),
-              backgroundColor: `${colorForIntensity(block.intensityCue?.split("/")[0]?.split("->").pop()?.trim() || "Z2")}22`,
+              borderColor: colorForIntensity(intensityLabelForContractBlock(block)),
+              color: colorForIntensity(intensityLabelForContractBlock(block)),
+              backgroundColor: `${colorForIntensity(intensityLabelForContractBlock(block))}22`,
             }}
           >
             #{index + 1} {block.label} · {block.durationMinutes}m
@@ -266,7 +271,7 @@ export function BuilderPlannedSessionViz({
               key={`card-${block.id}`}
               style={{
                 border: "1px solid rgba(255,255,255,0.12)",
-                borderLeft: `3px solid ${colorForIntensity(block.intensityCue?.split("/")[0]?.split("->").pop()?.trim() || "Z2")}`,
+                borderLeft: `3px solid ${colorForIntensity(intensityLabelForContractBlock(block))}`,
                 borderRadius: 8,
                 padding: "10px 12px",
                 background: "rgba(255,255,255,0.03)",

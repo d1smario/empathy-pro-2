@@ -464,22 +464,23 @@ export function buildPro2BlockSessionContract(input: {
   lengthMode: BlockLengthMode;
   speedRefKmh: number;
 }): Pro2BuilderSessionContract {
-  const blocksOut: Pro2BuilderBlockContract[] = input.blocks.map((block) => ({
+  const segOpts = {
+    unit: input.unit,
+    ftpW: input.ftpW,
+    hrMax: input.hrMax,
+    lengthMode: input.lengthMode,
+    speedRefKmh: input.speedRefKmh,
+  };
+  const blocksOut: Pro2BuilderBlockContract[] = input.blocks.map((block) => {
+    const expandedSecs = expandBlockSegments(block, segOpts).reduce((sum, segment) => sum + segment.seconds, 0);
+    const durationMinutes = Math.round((expandedSecs / 60) * 10) / 10;
+    const chartMinutes = Math.floor(expandedSecs / 60);
+    const chartSeconds = Math.max(0, Math.round(expandedSecs - chartMinutes * 60));
+    return {
     id: block.id,
     label: block.name,
     kind: block.kind,
-    durationMinutes:
-      Math.round(
-        (expandBlockSegments(block, {
-          unit: input.unit,
-          ftpW: input.ftpW,
-          hrMax: input.hrMax,
-          lengthMode: input.lengthMode,
-          speedRefKmh: input.speedRefKmh,
-        }).reduce((sum, segment) => sum + segment.seconds, 0) /
-          60) *
-          10,
-      ) / 10,
+    durationMinutes,
     intensityCue:
       block.kind === "ramp"
         ? `${block.startIntensity}->${block.endIntensity}`
@@ -492,8 +493,8 @@ export function buildPro2BlockSessionContract(input: {
     notes: block.notes,
     mediaUrl: block.mediaUrl,
     chart: {
-      minutes: block.minutes,
-      seconds: block.seconds,
+      minutes: chartMinutes,
+      seconds: chartSeconds,
       intensity: block.intensity,
       startIntensity: block.startIntensity,
       endIntensity: block.endIntensity,
@@ -516,7 +517,8 @@ export function buildPro2BlockSessionContract(input: {
       frequencyHint: block.frequencyHint,
       loadFactor: block.loadFactor,
     },
-  }));
+  };
+  });
 
   return {
     version: 1,

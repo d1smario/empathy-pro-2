@@ -1,6 +1,10 @@
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
 import { intensityScore } from "@/lib/training/builder/pro2-intensity";
-import { BUILDER_SESSION_JSON_TAG, type Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import {
+  BUILDER_SESSION_JSON_TAG,
+  type Pro2BuilderBlockContract,
+  type Pro2BuilderSessionContract,
+} from "@/lib/training/builder/pro2-session-contract";
 import type { Pro2SessionMultilevelSource } from "@/lib/training/session-multilevel-analysis-strip";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
 
@@ -39,6 +43,26 @@ export function parsePro2BuilderSessionFromNotes(notes: string | null | undefine
   return null;
 }
 
+/**
+ * Zona per UI / TSS da un blocco contratto: corregge JSON legacy (es. warm-up con `chart.intensity` = Z4)
+ * usando l’etichetta blocco + prima zona canonica in `intensityCue`.
+ */
+export function intensityLabelForContractBlock(b: Pro2BuilderBlockContract): string {
+  const lbl = (b.label ?? "").toLowerCase();
+  if (/\bwarm-up\b|riscaldamento|\bwarm\b/i.test(lbl) && !/cool/.test(lbl)) return "Z1";
+  if (/\bcool-down\b|defaticamento|\bcool\b/i.test(lbl)) return "Z2";
+
+  const ch0 = (b.chart?.intensity ?? "").trim();
+  if (ch0) {
+    const canon = ch0.match(/\b(Z[1-7]|LT1|LT2|FatMax)\b/i);
+    if (canon) return /^fatmax$/i.test(canon[1]!) ? "FatMax" : canon[1]!.toUpperCase();
+  }
+  const cue = (b.intensityCue ?? "").trim();
+  const m = cue.match(/\b(Z[1-7]|LT1|LT2|FatMax)\b/i);
+  if (m) return /^fatmax$/i.test(m[1]!) ? "FatMax" : m[1]!.toUpperCase();
+  return "Z3";
+}
+
 /** Segmenti per `SessionBlockIntensityChart` da blocchi con `chart` o solo `durationMinutes`. */
 export function pro2BuilderContractToChartSegments(contract: Pro2BuilderSessionContract): ChartSegment[] {
   const blocks = contract.blocks ?? [];
@@ -46,12 +70,17 @@ export function pro2BuilderContractToChartSegments(contract: Pro2BuilderSessionC
   const out: ChartSegment[] = [];
   for (const b of blocks) {
     const ch = b.chart;
-    let durationSeconds = Math.max(60, Math.round(Math.max(0.25, b.durationMinutes || 1) * 60));
-    if (ch) {
+    const dm = Number(b.durationMinutes);
+    let durationSeconds: number;
+    if (Number.isFinite(dm) && dm > 0) {
+      durationSeconds = Math.max(30, Math.round(dm * 60));
+    } else if (ch) {
       const min = Math.max(0, ch.minutes || 0) + Math.max(0, Math.min(59, ch.seconds || 0)) / 60;
-      if (min > 0) durationSeconds = Math.max(60, Math.round(min * 60));
+      durationSeconds = min > 0 ? Math.max(30, Math.round(min * 60)) : Math.max(60, Math.round(Math.max(0.25, 1) * 60));
+    } else {
+      durationSeconds = Math.max(60, Math.round(Math.max(0.25, b.durationMinutes || 1) * 60));
     }
-    const intensity = ((ch?.intensity ?? "Z3").trim() || "Z3") as string;
+    const intensity = intensityLabelForContractBlock(b);
     out.push({
       id: b.id,
       order: order++,
@@ -65,9 +94,17 @@ export function pro2BuilderContractToChartSegments(contract: Pro2BuilderSessionC
 }
 
 export function estimatedTssFromPro2Contract(contract: Pro2BuilderSessionContract): number {
+  const blocks = contract.blocks ?? [];
+  if (blocks.length > 0) {
+    const segs = pro2BuilderContractToChartSegments(contract);
+    if (segs.length > 0) {
+      const fromSegments = estimateTssFromSegments(segs);
+      if (fromSegments > 0) return Math.round(fromSegments);
+    }
+  }
   const fromSummary = contract.summary?.tss;
   if (typeof fromSummary === "number" && Number.isFinite(fromSummary) && fromSummary > 0) return Math.round(fromSummary);
-  return Math.round(estimateTssFromSegments(pro2BuilderContractToChartSegments(contract)));
+  return 0;
 }
 
 /** Durata display / calendario: preferisci `summary.durationSec` o somma blocchi, non la colonna DB se è stale. */
