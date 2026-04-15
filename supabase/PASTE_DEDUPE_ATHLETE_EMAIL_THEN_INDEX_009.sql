@@ -1,4 +1,4 @@
--- Deduplica athlete_profiles per stessa email normalizzata, poi applica vincolo + funzione 009.
+-- Deduplica athlete_profiles per stessa email normalizzata, poi applica funzione (009) + indice univoco (010).
 -- 1) Cambia solo la riga seguente se serve un altro indirizzo.
 -- 2) Esegui tutto in SQL Editor (una volta). In caso di errore su una tabella assente, commenta quella UPDATE.
 
@@ -114,7 +114,7 @@ UPDATE public.coach_athletes SET athlete_id = (SELECT keeper_id FROM _reap_keep)
 DELETE FROM public.athlete_profiles ap
 WHERE ap.id IN (SELECT loser_id FROM _reap_los);
 
--- Completamento migrazione 009 (funzione + indice; idempotente)
+-- Completamento migrazioni 009 + 010 (funzione + indice; idempotente)
 CREATE OR REPLACE FUNCTION public.athlete_profile_id_by_normalized_email(p_email text)
 RETURNS uuid
 LANGUAGE sql

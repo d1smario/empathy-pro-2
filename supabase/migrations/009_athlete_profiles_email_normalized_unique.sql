@@ -1,6 +1,5 @@
--- Idempotenza profilo atleta per email: lookup normalizzato + vincolo univoco.
--- Se CREATE UNIQUE INDEX fallisce per righe duplicate (stesso lower(trim(email))),
--- deduplica i dati nel progetto (reassign FK → un solo id → delete duplicati) poi riesegui.
+-- 009 (parte A): funzione lookup per email normalizzata — sicura anche con email duplicate in tabella.
+-- L’indice univoco è in 010: eseguire 010 solo dopo deduplica (o su DB senza duplicati per stessa email normalizzata).
 
 CREATE OR REPLACE FUNCTION public.athlete_profile_id_by_normalized_email(p_email text)
 RETURNS uuid
@@ -24,7 +23,3 @@ COMMENT ON FUNCTION public.athlete_profile_id_by_normalized_email(text) IS
   'Prima riga athlete_profiles per email normalizzata (lower(trim)); usata da ensure-profile.';
 
 GRANT EXECUTE ON FUNCTION public.athlete_profile_id_by_normalized_email(text) TO anon, authenticated, service_role;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_athlete_profiles_email_normalized
-  ON public.athlete_profiles (lower(trim(email)))
-  WHERE email IS NOT NULL AND length(trim(email)) > 0;
