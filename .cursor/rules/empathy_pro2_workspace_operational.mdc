@@ -1,0 +1,11 @@
+---
+description: Workspace operativo Empathy Pro 2 — dove lavora l’agente; GitHub e Vercel di riferimento
+alwaysApply: true
+---
+
+# Empathy Pro 2 — workspace operativo (vincolante)
+
+- **Codice prodotto e modifiche agente:** questo monorepo **`empathy-pro-2-cursor`** / repo GitHub **`d1smario/empathy-pro-2`**. È il **canale predefinito** per implementazioni, refactor e fix che toccano l’app deployata.
+- **Deploy / URL:** progetto Vercel **`empathy-pro-2-web`** → produzione **`https://empathy-pro-2-web.vercel.app`**. Allineamento atteso: **push su Git** → build Vercel (o deploy CLI dalla root monorepo, vedi `empathy_pro2_vercel_web.mdc`).
+- **Empathy V1** (`nextjs-empathy-pro`): **non** è il target implicito delle modifiche. Portare idee da V1 in Pro 2 solo con **porting esplicito** in questo repo (nessun import TypeScript da path V1; vedi `empathy_v1_pro2_repo_separation.mdc`).
+- Se l’utente non specifica un repo, **assumere Pro 2**. Se chiede esplicitamente V1, limitare le modifiche al clone V1.

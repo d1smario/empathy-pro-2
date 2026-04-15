@@ -2,6 +2,8 @@
 
 Regole **sempre attive** (generative + architettura + stabilità):
 
+- **`empathy_pro2_workspace_operational.mdc`** — modifiche predefinite in **questo** repo / GitHub **empathy-pro-2** / Vercel **empathy-pro-2-web**; V1 solo se esplicito.
+- **`empathy_pro2_virya_builder_pipeline.mdc`** — VIRYA aerobico/tecnico/lifestyle = stessa pipeline Builder (`engine-blocks-to-session-contract`); no percorso parallelo “magro”.
 - **`empathy_pro2_north_star.mdc`** — questo repo è Pro 2; V1 è fonte di assorbimento; cosa leggere prima di cambi strutturali.
 - **`empathy_generative_core.mdc`** — loop chiuso reality→twin→moduli; gerarchia Reality/Physiology/Internal load; **AI ≠ motore** sessioni/piani; pipeline deterministica unica; builder/virya/calendar; twin; ingest LogMeal/Spline/diario.
 - **`empathy_architecture_gate.mdc`** — niente scorciatoie che violano CONSTITUTION/docs; builder canonico; no provider come base concettuale del dominio.

@@ -1,0 +1,20 @@
+---
+description: VIRYA e Builder Pro 2 — una sola pipeline per seduta aerobica/tecnica/lifestyle (vincolante)
+alwaysApply: true
+---
+
+# VIRYA ↔ Builder — pipeline unica (Pro 2)
+
+## Obbligo
+
+- Per **aerobic**, **technical** e **lifestyle**, la materializzazione seduta verso calendario (`BUILDER_SESSION_JSON` in `notes`) deve seguire la **stessa matematica e lo stesso shape blocchi** del Builder:
+  - `generateBuilderSession` → `mapEngineSessionToTrainingBlocks` (input da `materializeEngineSessionToSlimBlocks`) → `scaleTrainingBlock` (operational scaling) → `summarizeBlocks` → `buildPro2BlockSessionContract` → `finalizeViryaPro2ContractAsBuilderFile` → `serializePro2BuilderSessionContract`.
+- **Vietato** per quelle famiglie: fermarsi solo su `materializePro2BlocksFromEngine` + contratto “magro” senza `chart` pieno come da `TrainingBlock`, salvo fallback senza atleta o ramo esplicitamente documentato.
+
+## Strength (gym)
+
+- Il ramo **strength** può restare su `materializePro2BlocksFromEngine` + `serializeViryaSessionContract` finché non esiste parity gym nel builder unico; non estendere logica parallela alle altre famiglie.
+
+## Allineamento con regole generative
+
+- Non violare `empathy_generative_core.mdc` né `empathy_architecture_gate.mdc`: **AI ≠ motore**; numeri e struttura blocchi da motori + contratto deterministico; VIRYA **periodizza** e **materializza** file builder-compatibili, non sostituisce il motore.

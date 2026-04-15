@@ -22,6 +22,13 @@ import {
   type Pro2BuilderBlockContract,
 } from "@/lib/training/builder/pro2-session-contract";
 import {
+  buildPro2BlockSessionContract,
+  mapEngineSessionToTrainingBlocks,
+  scaleTrainingBlock,
+  summarizeBlocks,
+} from "@/lib/training/builder/engine-blocks-to-session-contract";
+import { finalizeViryaPro2ContractAsBuilderFile } from "@/lib/training/builder/finalize-virya-pro2-contract-as-builder-file";
+import {
   getLifestyleProtocolMediaUrl,
   getLifestyleProtocolsForDiscipline,
   getTechnicalDrillMediaUrl,
@@ -1441,13 +1448,52 @@ export function ViryaAnnualPlanOrchestrator({
           .join(" | ")
       : input.methodology;
 
+    if (input.family === "strength") {
+      const mediaFromFallback = (index: number) =>
+        fallbackBlocks[index]?.lifestyleRx?.mediaUrl ?? fallbackBlocks[0]?.lifestyleRx?.mediaUrl;
+      const blocks = materializePro2BlocksFromEngine({
+        session: engineRes.session,
+        blockExercises: Array.isArray(engineRes.blockExercises)
+          ? (engineRes.blockExercises as { exercises?: Array<{ name?: string }> }[])
+          : undefined,
+        fallbackBlocks,
+        fallbackDurationMinutes: input.durationMinutes,
+        fallbackTarget: input.objective,
+        fallbackIntensityCue: request.intensityHint,
+        fallbackNotes: request.objectiveDetail,
+        mediaResolver: mediaFromFallback,
+      });
+      return serializeViryaSessionContract({
+        family: input.family,
+        discipline: input.discipline,
+        sessionName: input.sessionName,
+        phase: input.phase,
+        durationMinutes: effectiveDuration,
+        tss: effectiveTss,
+        kcal: effectiveKcal,
+        adaptationTarget: request.adaptationTarget,
+        methodology: effectiveMethodology,
+        blocks,
+      });
+    }
+
+    const physiology = viryaContext?.physiologyState;
+    const ftpRaw = Number(physiology?.physiologicalProfile.ftpWatts ?? 0);
+    const hrRaw = Number(physiology?.performanceProfile.maxHrBpm ?? 0);
+    const ftpW = Number.isFinite(ftpRaw) && ftpRaw > 0 ? ftpRaw : 250;
+    const hrMax = Number.isFinite(hrRaw) && hrRaw > 0 ? hrRaw : 185;
+    const unit = "watt" as const;
+    const lengthMode = "time" as const;
+    const speedRefKmh = 32;
+
+    const loadScale =
+      operationalScaling?.applied && operationalScaling.loadScale > 0 ? operationalScaling.loadScale : 1;
     const mediaFromFallback = (index: number) =>
       fallbackBlocks[index]?.lifestyleRx?.mediaUrl ?? fallbackBlocks[0]?.lifestyleRx?.mediaUrl;
-
-    const blocks = materializePro2BlocksFromEngine({
-      session: engineRes.session,
+    const trainingBlocks = mapEngineSessionToTrainingBlocks({
+      session: engineRes.session as unknown as Record<string, unknown>,
       blockExercises: Array.isArray(engineRes.blockExercises)
-        ? (engineRes.blockExercises as { exercises?: Array<{ name?: string }> }[])
+        ? (engineRes.blockExercises as Array<Record<string, unknown>>)
         : undefined,
       fallbackBlocks,
       fallbackDurationMinutes: input.durationMinutes,
@@ -1456,19 +1502,50 @@ export function ViryaAnnualPlanOrchestrator({
       fallbackNotes: request.objectiveDetail,
       mediaResolver: mediaFromFallback,
     });
+    const scaledBlocks = trainingBlocks.map((b) => scaleTrainingBlock(b, loadScale));
+    const summary = summarizeBlocks(scaledBlocks, { unit, ftpW, hrMax, lengthMode, speedRefKmh });
 
-    return serializeViryaSessionContract({
-      family: input.family,
+    const builderFamily =
+      input.family === "aerobic" ? "aerobic" : input.family === "technical" ? "technical" : "lifestyle";
+    const contract = buildPro2BlockSessionContract({
       discipline: input.discipline,
+      family: builderFamily,
       sessionName: input.sessionName,
-      phase: input.phase,
-      durationMinutes: effectiveDuration,
-      tss: effectiveTss,
-      kcal: effectiveKcal,
       adaptationTarget: request.adaptationTarget,
-      methodology: effectiveMethodology,
-      blocks,
+      phase: input.phase,
+      summary,
+      plannedSessionDurationMinutes: effectiveDuration,
+      blocks: scaledBlocks,
+      unit,
+      ftpW,
+      hrMax,
+      lengthMode,
+      speedRefKmh,
     });
+
+    const finalized = finalizeViryaPro2ContractAsBuilderFile({
+      contract,
+      ftpW,
+      hrMax,
+      intensityUnit: unit,
+      lengthMode,
+      speedRefKmh,
+    });
+
+    const firstNote = [viryaStructureTag(), effectiveMethodology ? `methodology=${effectiveMethodology}` : ""]
+      .filter(Boolean)
+      .join(" · ");
+    const blocksMerged = (finalized.blocks ?? []).map((b, i) => {
+      if (i !== 0) return b;
+      const withPrefix = firstNote ? (b.notes ? `${firstNote} | ${b.notes}` : firstNote) : (b.notes ?? "");
+      const n = withPrefix.trim() || "virya_planner";
+      return {
+        ...b,
+        notes: n.includes("origin=virya_planner") ? n : `${n} | origin=virya_planner`,
+      };
+    });
+
+    return serializePro2BuilderSessionContract({ ...finalized, blocks: blocksMerged });
   }
 
   function buildViryaBlocks(input: {

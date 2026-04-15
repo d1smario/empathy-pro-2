@@ -57,6 +57,8 @@ export type Pro2BuilderBlockContract = {
   intensityCue?: string;
   target?: string;
   notes?: string;
+  /** Opzionale: bridge motore / Virya verso chart (allineato V1). */
+  mediaUrl?: string;
   chart?: Pro2BlockChart;
   /** Prescrizione gym manuale (catalogo V1 + serie/carico/esecuzione). */
   gymRx?: {

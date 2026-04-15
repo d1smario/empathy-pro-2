@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Pro 2 ↔ V1 — separazione repository
 
-- **Questo workspace** è il monorepo **Empathy Pro 2.0** (`empathy-pro-2-cursor` / `empathy-pro-2`). **Empathy V1** è il repo **`nextjs-empathy-pro`**, clone separato.
+- **Questo workspace** è il monorepo **Empathy Pro 2.0** (`empathy-pro-2-cursor` / `empathy-pro-2`). **Empathy V1** è il repo **`nextjs-empathy-pro`**, clone separato. L’agente implementa le feature Pro 2 **qui** salvo richiesta esplicita del contrario (vedi `empathy_pro2_workspace_operational.mdc`).
 - **Non** annidare una repo dentro l’altra; **non** importare file TypeScript da V1 in `apps/web` (né path relativi fuori dal monorepo).
 - **SQL**: usare **solo** `empathy-pro-2-cursor/supabase/migrations/` per le migration “Pro 2” (`000`, `002`, `003`). Lo schema base atleta (`athlete_profiles`, `004`, ecc.) si applica dal **checkout V1** sullo stesso progetto Supabase quando serve — senza symlink tra repo.
 - **DB condiviso**: stesso URL Supabase tra V1 e Pro 2 è ok operativamente; i **commit** restano per repo.
