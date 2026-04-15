@@ -254,18 +254,24 @@ export function pickAerobicSessionArchetype(input: {
   }
 
   const list = archetypesForPhase(input.viryaPhase);
-  let idx = slot % list.length;
+  /** Rotazione su un sottoinsieme: i chip settimanali *restringono* il pool, non devono fissare lo stesso idx per ogni slot. */
+  const pickFromPool = (pool: AerobicSessionArchetype[]) =>
+    pool[slot % pool.length] ?? list[0]!;
 
   if (has("sprint_agilita") || has("neuromotorio")) {
-    const j = list.findIndex((a) => /sprint/i.test(a.id));
-    if (j >= 0) idx = j;
+    const pool = list.filter((a) => /sprint/i.test(a.id));
+    if (pool.length >= 2) return pickFromPool(pool);
+    if (pool.length === 1) return pickFromPool(list);
   } else if (has("lattato") || has("anaerobico")) {
-    const j = list.findIndex((a) => /lactate|norwegian|ladder|vo2_z6|vo2_z5/i.test(a.id));
-    if (j >= 0) idx = j;
+    const pool = list.filter((a) => /lactate|norwegian|ladder|vo2_z6|vo2_z5/i.test(a.id));
+    if (pool.length >= 2) return pickFromPool(pool);
+    if (pool.length === 1) return pickFromPool(list);
   } else if (has("aerobico")) {
-    const j = list.findIndex((a) => /z2_volume|polarized|sweet|torque|z3/i.test(a.id));
-    if (j >= 0) idx = j;
+    const pool = list.filter((a) => /z2_volume|polarized|sweet|torque|z3|glycolytic/i.test(a.id));
+    if (pool.length >= 2) return pickFromPool(pool);
+    // Un solo match (es. build): evitare settimane tutte identiche
+    if (pool.length === 1) return pickFromPool(list);
   }
 
-  return list[idx] ?? list[0]!;
+  return pickFromPool(list);
 }
