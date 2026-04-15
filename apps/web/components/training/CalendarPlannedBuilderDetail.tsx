@@ -127,7 +127,10 @@ export function CalendarPlannedBuilderDetail({
                 if (!window.confirm("Eliminare questa seduta pianificata dal calendario?")) return;
                 setDeleting(true);
                 try {
-                  await deletePlannedWorkout({ id: workout.id, athleteId });
+                  await deletePlannedWorkout({
+                    id: workout.id,
+                    athleteId: workout.athleteId?.trim() || athleteId?.trim() || undefined,
+                  });
                   onDeleted?.(workout.id);
                 } catch (e) {
                   window.alert(e instanceof Error ? e.message : "Eliminazione non riuscita");

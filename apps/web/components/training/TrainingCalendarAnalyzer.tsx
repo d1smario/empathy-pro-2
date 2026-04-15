@@ -911,7 +911,10 @@ export function TrainingCalendarAnalyzer({
                     if (!athleteId || !window.confirm("Eliminare questa seduta pianificata?")) return;
                     setDeletingPlannedId(w.id);
                     try {
-                      await deletePlannedWorkout({ id: w.id, athleteId });
+                      await deletePlannedWorkout({
+                        id: w.id,
+                        athleteId: w.athleteId?.trim() || athleteId?.trim() || undefined,
+                      });
                       onPlannedChanged?.(w.id);
                     } catch (err) {
                       window.alert(err instanceof Error ? err.message : "Eliminazione non riuscita");

@@ -45,13 +45,16 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
   };
 }
 
-export async function deletePlannedWorkout(input: { id: string; athleteId: string }): Promise<void> {
+/** `athleteId` opzionale: il server risolve `athlete_id` dalla riga (`id`) per evitare mismatch con contesto UI. */
+export async function deletePlannedWorkout(input: { id: string; athleteId?: string | null }): Promise<void> {
   const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const body: { id: string; athleteId?: string } = { id: input.id };
+  if (input.athleteId?.trim()) body.athleteId = input.athleteId.trim();
   const res = await fetch("/api/training/planned", {
     method: "DELETE",
     headers,
     credentials: "same-origin",
-    body: JSON.stringify({ id: input.id, athleteId: input.athleteId }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
   const json = (await res.json().catch(() => ({}))) as { error?: string };

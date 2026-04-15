@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
+import { requireAuthenticatedTrainingUser } from "@/lib/auth/training-route-auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 
 export const dynamic = "force-dynamic";
@@ -140,20 +142,42 @@ export async function DELETE(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as { id?: string; athleteId?: string };
     let id = String(body.id ?? "").trim();
-    let athleteId = String(body.athleteId ?? "").trim();
-    if (!id || !athleteId) {
+    if (!id) {
       id = (req.nextUrl.searchParams.get("id") ?? "").trim();
-      athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     }
-    if (!id || !athleteId) {
-      return NextResponse.json({ error: "Missing id or athleteId" }, { status: 400, headers: NO_STORE });
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400, headers: NO_STORE });
     }
-    const { db } = await requireAthleteWriteContext(req, athleteId);
+
+    /**
+     * Risoluzione per `id` sola: il client può inviare un `athleteId` (contesto UI) che non coincide con
+     * `planned_workouts.athlete_id` della riga (localStorage stale, merge profili). Prima leggevamo solo
+     * con la coppia body → 0 righe eliminate. Qui usiamo l’athlete_id reale della riga dopo auth.
+     */
+    const { rlsClient } = await requireAuthenticatedTrainingUser(req);
+    const probeDb = createSupabaseAdminClient() ?? rlsClient;
+    const { data: existing, error: readErr } = await probeDb
+      .from("planned_workouts")
+      .select("id, athlete_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (readErr) {
+      return NextResponse.json({ error: readErr.message }, { status: 500, headers: NO_STORE });
+    }
+    const rowAthleteId = typeof existing?.athlete_id === "string" ? existing.athlete_id.trim() : "";
+    if (!existing?.id || !rowAthleteId) {
+      return NextResponse.json(
+        { error: "Planned workout not found or not deletable for this athlete" },
+        { status: 404, headers: NO_STORE },
+      );
+    }
+
+    const { db } = await requireAthleteWriteContext(req, rowAthleteId);
     const { data: deletedRows, error } = await db
       .from("planned_workouts")
       .delete()
       .eq("id", id)
-      .eq("athlete_id", athleteId)
+      .eq("athlete_id", rowAthleteId)
       .select("id");
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
@@ -165,7 +189,7 @@ export async function DELETE(req: NextRequest) {
       );
     }
     return NextResponse.json(
-      { status: "ok" as const, athleteMemory: await memoryOrNull(athleteId) },
+      { status: "ok" as const, athleteMemory: await memoryOrNull(rowAthleteId) },
       { headers: NO_STORE },
     );
   } catch (err) {

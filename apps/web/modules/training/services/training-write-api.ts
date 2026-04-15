@@ -60,11 +60,13 @@ export async function updatePlannedWorkout(input: {
   return (await response.json()) as { status: "ok"; athleteMemory?: AthleteMemory | null };
 }
 
-export async function deletePlannedWorkout(input: { id: string; athleteId: string }) {
+export async function deletePlannedWorkout(input: { id: string; athleteId?: string | null }) {
+  const body: { id: string; athleteId?: string } = { id: input.id };
+  if (input.athleteId?.trim()) body.athleteId = input.athleteId.trim();
   const response = await fetch("/api/training/planned", {
     method: "DELETE",
     headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
