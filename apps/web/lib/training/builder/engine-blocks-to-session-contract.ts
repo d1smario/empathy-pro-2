@@ -222,6 +222,12 @@ function intervalShapeFromViryaPreset(
     const reps = Math.max(4, Math.min(12, Math.round(totalSec / (work + recover))));
     return { workSeconds: work, recoverSeconds: recover, repeats: reps };
   }
+  if (/PRESET_SPRINT/i.test(c)) {
+    const work = 22;
+    const recover = 100;
+    const reps = Math.max(10, Math.min(28, Math.round(totalSec / (work + recover))));
+    return { workSeconds: work, recoverSeconds: recover, repeats: reps };
+  }
   return null;
 }
 

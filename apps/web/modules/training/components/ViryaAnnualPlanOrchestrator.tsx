@@ -1367,7 +1367,11 @@ export function ViryaAnnualPlanOrchestrator({
       adaptationTarget: preset.adaptationTarget,
       domain: "endurance",
       intensityHint: preset.intensityHint,
-      objectiveDetail: [input.objective ?? input.methodology ?? "periodized endurance support", preset.objectiveDetail]
+      objectiveDetail: [
+        input.objective ?? input.methodology ?? "periodized endurance support",
+        preset.objectiveDetail,
+        preset.archetypeLabelIt ? `model=${preset.archetypeLabelIt}` : "",
+      ]
         .filter(Boolean)
         .join(" · "),
     };
@@ -1826,14 +1830,25 @@ export function ViryaAnnualPlanOrchestrator({
                 : Math.max(30, durationFromObjective || Math.round((tssPerSession / 0.9) * 1.2));
             for (let s = 0; s < sportSessions; s += 1) {
               const dayOffset = scheduleOffsets[(dayCursor + s) % scheduleOffsets.length];
+              const aerobicPres = resolveAerobicViryaPrescription({
+                viryaPhase: phase.phase,
+                goalSummary,
+                weekObjectives: wm.objectives,
+                sessionIndexInWeek: s,
+                sessionsInWeek: sportSessions,
+              });
+              const durationAdj = Math.max(28, Math.round(duration * aerobicPres.durationScale));
+              const tssAdj = Math.max(12, Math.round(tssPerSession * aerobicPres.tssScale));
+              const kcalAdj = Math.round(tssAdj * 10.5);
+              const sessionTitle = `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${sportTarget.sport} · ${aerobicPres.archetypeLabelIt}`;
               const serializedContract = await materializeViryaSessionContract({
                 family: "aerobic",
                 discipline: sportTarget.sport,
-                sessionName: `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${sportTarget.sport}`,
+                sessionName: sessionTitle,
                 phase: phase.phase,
-                durationMinutes: duration,
-                tss: tssPerSession,
-                kcal: Math.round(tssPerSession * 10.5),
+                durationMinutes: durationAdj,
+                tss: tssAdj,
+                kcal: kcalAdj,
                 objective: goalSummary,
                 methodology: "annual_periodized_distribution",
                 weekObjectives: wm.objectives,
@@ -1844,9 +1859,9 @@ export function ViryaAnnualPlanOrchestrator({
                 athlete_id: selectedAthleteId,
                 date: addDays(weekStart, dayOffset),
                 type: sportTarget.sport.toLowerCase(),
-                duration_minutes: duration,
-                tss_target: tssPerSession,
-                kcal_target: Math.round(tssPerSession * 10.5),
+                duration_minutes: durationAdj,
+                tss_target: tssAdj,
+                kcal_target: kcalAdj,
                 notes: [
                   `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                   serializedContract,
