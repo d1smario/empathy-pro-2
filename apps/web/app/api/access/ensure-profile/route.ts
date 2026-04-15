@@ -9,6 +9,24 @@ export const runtime = "nodejs";
  * Bootstrap profilo app + collegamento atleta (stesso contratto logico di V1).
  * Auth: cookie SSR (niente Bearer). Richiede RLS coerenti sullo stesso progetto Supabase di V1.
  */
+async function athleteIdByNormalizedEmail(
+  supabase: NonNullable<ReturnType<typeof createSupabaseCookieClient>>,
+  email: string,
+): Promise<string | null> {
+  const { data, error } = await supabase.rpc("athlete_profile_id_by_normalized_email", { p_email: email });
+  if (error) {
+    const { data: row } = await supabase
+      .from("athlete_profiles")
+      .select("id")
+      .eq("email", email)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    return row && typeof row.id === "string" ? row.id : null;
+  }
+  return typeof data === "string" ? data : null;
+}
+
 async function resolveExistingAthleteId(
   supabase: NonNullable<ReturnType<typeof createSupabaseCookieClient>>,
   athleteId: string | null,
@@ -21,16 +39,7 @@ async function resolveExistingAthleteId(
     }
   }
   if (email) {
-    const { data } = await supabase
-      .from("athlete_profiles")
-      .select("id")
-      .eq("email", email)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (data && typeof (data as { id?: string }).id === "string") {
-      return (data as { id: string }).id;
-    }
+    return athleteIdByNormalizedEmail(supabase, email);
   }
   return null;
 }
@@ -94,10 +103,16 @@ export async function POST(req: Request) {
       .select("id")
       .maybeSingle();
     if (insErr) {
-      return NextResponse.json({ error: insErr.message }, { status: 500 });
+      if (insErr.code === "23505" && email) {
+        resolvedAthleteId = await athleteIdByNormalizedEmail(supabase, email);
+      }
+      if (!resolvedAthleteId) {
+        return NextResponse.json({ error: insErr.message }, { status: 500 });
+      }
+    } else {
+      const row = inserted as { id?: string } | null;
+      resolvedAthleteId = row?.id ?? null;
     }
-    const row = inserted as { id?: string } | null;
-    resolvedAthleteId = row?.id ?? null;
   }
 
   const nextRole = role;
