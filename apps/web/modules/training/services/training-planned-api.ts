@@ -62,10 +62,18 @@ export async function deletePlannedWorkout(input: { id: string; athleteId: strin
     body: JSON.stringify({ id: input.id.trim(), athleteId: hint }),
     cache: "no-store",
   });
-  const json = (await res.json().catch(() => ({}))) as { error?: string; errorCode?: string };
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    errorCode?: string;
+    deleteHints?: Record<string, unknown>;
+  };
   if (!res.ok) {
     const probe = res.headers.get("x-empathy-delete-probe");
-    const extra = [json.errorCode, probe].filter(Boolean).join(" · ");
+    const hints =
+      json.deleteHints && Object.keys(json.deleteHints).length > 0
+        ? JSON.stringify(json.deleteHints)
+        : "";
+    const extra = [json.errorCode, probe, hints].filter(Boolean).join(" · ");
     throw new Error([json.error ?? "Eliminazione seduta pianificata non riuscita", extra].filter(Boolean).join(" — "));
   }
 }

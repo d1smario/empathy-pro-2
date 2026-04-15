@@ -5,7 +5,10 @@ import {
   requireAthleteReadContext,
   requireAthleteWriteContext,
 } from "@/lib/auth/athlete-read-context";
-import { requireAuthenticatedTrainingUser } from "@/lib/auth/training-route-auth";
+import {
+  requireAuthenticatedTrainingUser,
+  supabaseForTrainingReadAfterAuth,
+} from "@/lib/auth/training-route-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 
@@ -16,6 +19,21 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 
 function deleteProbeHeaders(probe: string): Record<string, string> {
   return { ...NO_STORE, "x-empathy-delete-probe": probe };
+}
+
+/** Allinea a ciò che PostgREST/UUID accettano (copia da UI, graffe, maiuscole). */
+function normalizeUuidParam(raw: string): string {
+  return raw.trim().replace(/^\{|\}$/g, "").toLowerCase();
+}
+
+function athleteIdFromRow(row: Record<string, unknown>): string {
+  const v = row.athlete_id ?? row.athleteId;
+  return typeof v === "string" ? normalizeUuidParam(v) : "";
+}
+
+function idFromRow(row: Record<string, unknown>): string {
+  const v = row.id;
+  return typeof v === "string" ? normalizeUuidParam(v) : "";
 }
 
 type PlannedWorkoutPayload = PlannedWorkoutInsertPayload;
@@ -158,33 +176,64 @@ export async function DELETE(req: NextRequest) {
     if (!athleteIdHint) {
       athleteIdHint = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     }
+    id = normalizeUuidParam(id);
+    if (athleteIdHint) athleteIdHint = normalizeUuidParam(athleteIdHint);
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400, headers: deleteProbeHeaders("bad_request_no_id") });
     }
 
     const { rlsClient } = await requireAuthenticatedTrainingUser(req);
+    const adminOnce = createSupabaseAdminClient();
+    const hadServiceRole = adminOnce != null;
 
     /**
-     * 1) Stesso percorso di `GET /api/training/planned-window`: `requireAthleteReadContext` + filtro su
-     * `athlete_id` (alcune RLS permettono SELECT per finestra atleta ma non una lookup “solo id”).
-     * 2) Fallback: admin o client anon+JWT come prima.
+     * 1) `requireAthleteReadContext` + stesso stack lettura training (`admin ?? rls`) di planned-window.
+     * 2) Se strict (id + athlete_id) fallisce, retry solo `id` ma accettiamo la riga solo se `athlete_id` coincide col hint
+     *    (evita delete cross-atleta; risolve mismatch maiuscole/spazi su UUID).
+     * 3) Fallback globale: **stesso** `supabaseForTrainingReadAfterAuth(rls)` della lettura modulo — non usare solo `rlsClient`
+     *    se il service role è attivo (prima il global usava `rlsClient` e poteva divergere dal client di finestra).
      */
-    let scoped: "skip" | "hit" | "miss" | "err" = athleteIdHint ? "miss" : "skip";
+    let scoped: "skip" | "hit" | "hit_relaxed" | "miss" | "err" | "db_err" | "wrong_athlete" = athleteIdHint
+      ? "miss"
+      : "skip";
+    let scopedDbError: string | undefined;
     let row0: Record<string, unknown> | null = null;
     if (athleteIdHint) {
       try {
         const { db } = await requireAthleteReadContext(req, athleteIdHint);
-        const { data: scopedRows, error: scopedErr } = await db
+        const strict = await db
           .from("planned_workouts")
           .select("id, athlete_id")
           .eq("id", id)
           .eq("athlete_id", athleteIdHint)
           .limit(1);
-        if (!scopedErr && scopedRows?.[0]) {
-          row0 = scopedRows[0] as Record<string, unknown>;
+        if (strict.error) {
+          scopedDbError = strict.error.message;
+          scoped = "db_err";
+        } else if (strict.data?.[0]) {
+          row0 = strict.data[0] as Record<string, unknown>;
           scoped = "hit";
-        } else {
-          scoped = "miss";
+        }
+        if (!row0) {
+          const relaxed = await db
+            .from("planned_workouts")
+            .select("id, athlete_id")
+            .eq("id", id)
+            .limit(1);
+          if (relaxed.error) {
+            scopedDbError = scopedDbError ?? relaxed.error.message;
+            scoped = "db_err";
+          } else if (relaxed.data?.[0]) {
+            const r = relaxed.data[0] as Record<string, unknown>;
+            if (athleteIdFromRow(r) === athleteIdHint) {
+              row0 = r;
+              scoped = "hit_relaxed";
+            } else {
+              scoped = "wrong_athlete";
+            }
+          } else if (scoped !== "db_err") {
+            scoped = "miss";
+          }
         }
       } catch {
         scoped = "err";
@@ -192,9 +241,20 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
-    let global: "skip" | "hit" | "miss" = "skip";
+    let global: "skip" | "hit" | "miss" | "error" = "skip";
     if (!row0) {
-      const probeDb = createSupabaseAdminClient() ?? rlsClient;
+      if (scoped === "wrong_athlete") {
+        deleteProbe = `scoped=${scoped};global=skip`;
+        return NextResponse.json(
+          {
+            error:
+              "Esiste una riga con questo id ma per un altro atleta: l’athleteId inviato non coincide con planned_workouts.athlete_id.",
+            errorCode: "planned_id_wrong_athlete",
+          },
+          { status: 403, headers: deleteProbeHeaders(deleteProbe) },
+        );
+      }
+      const probeDb = adminOnce ?? supabaseForTrainingReadAfterAuth(rlsClient);
       const { data: probeRows, error: readErr } = await probeDb
         .from("planned_workouts")
         .select("id, athlete_id")
@@ -210,18 +270,20 @@ export async function DELETE(req: NextRequest) {
       global = "skip";
     }
     deleteProbe = `scoped=${scoped};global=${global}`;
-    const rowId = typeof row0?.id === "string" ? row0.id.trim() : "";
-    const rowAthleteId =
-      typeof row0?.athlete_id === "string"
-        ? row0.athlete_id.trim()
-        : typeof row0?.athleteId === "string"
-          ? row0.athleteId.trim()
-          : "";
+    const rowId = row0 ? idFromRow(row0) : "";
+    const rowAthleteId = row0 ? athleteIdFromRow(row0) : "";
     if (!rowId || !rowAthleteId) {
       return NextResponse.json(
         {
-          error: "Nessuna riga planned_workouts con questo id (verifica progetto Supabase e sessione).",
+          error:
+            "Nessuna riga planned_workouts con questo id. Confronta l’id con la risposta GET /api/training/planned-window (stessa sessione); in produzione verifica NEXT_PUBLIC_SUPABASE_URL e che SUPABASE_SERVICE_ROLE_KEY sia impostata se usi letture training con service role.",
           errorCode: "planned_probe_empty",
+          deleteHints: {
+            scoped,
+            global,
+            hadServiceRole,
+            scopedDbError: scopedDbError ?? null,
+          },
         },
         { status: 404, headers: deleteProbeHeaders(deleteProbe) },
       );
