@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
-import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
+import {
+  AthleteReadContextError,
+  requireAthleteReadContext,
+  requireAthleteWriteContext,
+} from "@/lib/auth/athlete-read-context";
 import { requireAuthenticatedTrainingUser } from "@/lib/auth/training-route-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
@@ -142,29 +146,54 @@ export async function DELETE(req: NextRequest) {
   try {
     const body = (await req.json().catch(() => ({}))) as { id?: string; athleteId?: string };
     let id = String(body.id ?? "").trim();
+    let athleteIdHint = String(body.athleteId ?? "").trim();
     if (!id) {
       id = (req.nextUrl.searchParams.get("id") ?? "").trim();
+    }
+    if (!athleteIdHint) {
+      athleteIdHint = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     }
     if (!id) {
       return NextResponse.json({ error: "Missing id" }, { status: 400, headers: NO_STORE });
     }
 
-    /**
-     * Risoluzione per `id` sola: il client può inviare un `athleteId` (contesto UI) che non coincide con
-     * `planned_workouts.athlete_id` della riga (localStorage stale, merge profili). Prima leggevamo solo
-     * con la coppia body → 0 righe eliminate. Qui usiamo l’athlete_id reale della riga dopo auth.
-     */
     const { rlsClient } = await requireAuthenticatedTrainingUser(req);
-    const probeDb = createSupabaseAdminClient() ?? rlsClient;
-    const { data: probeRows, error: readErr } = await probeDb
-      .from("planned_workouts")
-      .select("id, athlete_id")
-      .eq("id", id)
-      .limit(1);
-    if (readErr) {
-      return NextResponse.json({ error: readErr.message }, { status: 500, headers: NO_STORE });
+
+    /**
+     * 1) Stesso percorso di `GET /api/training/planned-window`: `requireAthleteReadContext` + filtro su
+     * `athlete_id` (alcune RLS permettono SELECT per finestra atleta ma non una lookup “solo id”).
+     * 2) Fallback: admin o client anon+JWT come prima.
+     */
+    let row0: Record<string, unknown> | null = null;
+    if (athleteIdHint) {
+      try {
+        const { db } = await requireAthleteReadContext(req, athleteIdHint);
+        const { data: scopedRows, error: scopedErr } = await db
+          .from("planned_workouts")
+          .select("id, athlete_id")
+          .eq("id", id)
+          .eq("athlete_id", athleteIdHint)
+          .limit(1);
+        if (!scopedErr && scopedRows?.[0]) {
+          row0 = scopedRows[0] as Record<string, unknown>;
+        }
+      } catch {
+        /* hint non accessibile: si tenta il fallback globale */
+      }
     }
-    const row0 = (probeRows?.[0] ?? null) as Record<string, unknown> | null;
+
+    if (!row0) {
+      const probeDb = createSupabaseAdminClient() ?? rlsClient;
+      const { data: probeRows, error: readErr } = await probeDb
+        .from("planned_workouts")
+        .select("id, athlete_id")
+        .eq("id", id)
+        .limit(1);
+      if (readErr) {
+        return NextResponse.json({ error: readErr.message }, { status: 500, headers: NO_STORE });
+      }
+      row0 = (probeRows?.[0] ?? null) as Record<string, unknown> | null;
+    }
     const rowId = typeof row0?.id === "string" ? row0.id.trim() : "";
     const rowAthleteId =
       typeof row0?.athlete_id === "string"

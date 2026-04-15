@@ -45,11 +45,15 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
   };
 }
 
-/** `athleteId` opzionale: il server risolve `athlete_id` dalla riga (`id`) per evitare mismatch con contesto UI. */
+/**
+ * Invia sempre `athleteId` se lo hai (stesso valore di `planned-window`): il DELETE usa lo stesso gate RLS
+ * della lettura calendario prima del fallback globale.
+ */
 export async function deletePlannedWorkout(input: { id: string; athleteId?: string | null }): Promise<void> {
   const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
-  const body: { id: string; athleteId?: string } = { id: input.id };
-  if (input.athleteId?.trim()) body.athleteId = input.athleteId.trim();
+  const body: { id: string; athleteId?: string } = { id: input.id.trim() };
+  const hint = input.athleteId?.trim();
+  if (hint) body.athleteId = hint;
   const res = await fetch("/api/training/planned", {
     method: "DELETE",
     headers,
