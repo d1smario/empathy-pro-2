@@ -5,6 +5,8 @@ import { coerceProfileViewModel } from "@/lib/profile/coerce-profile-view-model"
 export async function fetchProfileViewModel(athleteId: string): Promise<ProfileViewModel & { error?: string | null }> {
   const response = await fetch(`/api/profile?athleteId=${encodeURIComponent(athleteId)}`, {
     method: "GET",
+    cache: "no-store",
+    credentials: "same-origin",
     headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
   });
   if (!response.ok) {
@@ -26,6 +28,8 @@ export async function fetchProfileViewModel(athleteId: string): Promise<ProfileV
 export async function updateProfilePayload(athleteId: string, payload: Record<string, unknown>) {
   const response = await fetch("/api/profile", {
     method: "PUT",
+    cache: "no-store",
+    credentials: "same-origin",
     headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ athleteId, payload }),
   });
@@ -39,6 +43,8 @@ export async function updateProfilePayload(athleteId: string, payload: Record<st
 export async function createProfilePayload(payload: Record<string, unknown>) {
   const response = await fetch("/api/profile", {
     method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
     headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ payload }),
   });

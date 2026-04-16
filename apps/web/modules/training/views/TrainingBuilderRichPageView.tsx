@@ -18,6 +18,7 @@ import {
   Sparkles,
   Timer,
 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BuilderGymManualComposer } from "@/components/training/BuilderGymManualComposer";
 import { BuilderLifestyleManualComposer } from "@/components/training/BuilderLifestyleManualComposer";
@@ -374,6 +375,7 @@ type EngineGenerateOverrides = Partial<{
  * Builder = unico motore sessione; Vyria annuale userà solo questo endpoint per materializzare.
  */
 export default function TrainingBuilderRichPageView() {
+  const searchParams = useSearchParams();
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -386,6 +388,14 @@ export default function TrainingBuilderRichPageView() {
   /** Deve stare prima del fetch calendario: la finestra include queste date ± margine (non solo oggi±7/28). */
   const [plannedDate, setPlannedDate] = useState(() => localCalendarDateString());
   const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
+
+  /** Calendario → builder: `?date=YYYY-MM-DD` (e in futuro `replace_planned_id` per punto B). */
+  const dateFromQuery = searchParams.get("date");
+  useEffect(() => {
+    if (!dateFromQuery || !/^\d{4}-\d{2}-\d{2}$/.test(dateFromQuery)) return;
+    setPlannedDate(dateFromQuery);
+    setManualPlannedDate(dateFromQuery);
+  }, [dateFromQuery]);
 
   useEffect(() => {
     if (ctxLoading) return;

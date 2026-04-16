@@ -792,7 +792,9 @@ export default function ProfilePage() {
 
     try {
       if (editingProfileId) {
-        await updateProfilePayload(editingProfileId, payload);
+        /** Stesso id usato da GET `/api/profile?athleteId=` (memoria atleta); evita mismatch con stato form. */
+        const putId = (activeAthleteId ?? "").trim() || editingProfileId;
+        await updateProfilePayload(putId, payload);
       } else {
         await createProfilePayload(payload);
       }

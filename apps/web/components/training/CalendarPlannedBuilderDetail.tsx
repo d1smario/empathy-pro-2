@@ -114,8 +114,13 @@ export function CalendarPlannedBuilderDetail({
             Giornata
             <ExternalLink className="ml-1 inline h-3 w-3 opacity-70" aria-hidden />
           </Pro2Link>
-          <Pro2Link href={builderHref} variant="ghost" className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs">
-            Builder
+          <Pro2Link
+            href={builderHref}
+            variant="ghost"
+            className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs"
+            title="Apre il builder sulla data di questa seduta (parametro date nell’URL). Sostituzione riga pianificata in arrivo con replace_planned_id."
+          >
+            Modifica
           </Pro2Link>
           {workout.athleteId?.trim() || athleteId?.trim() ? (
             <button
