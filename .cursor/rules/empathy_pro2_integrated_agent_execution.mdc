@@ -23,6 +23,11 @@ Ogni modifica va trattata come effetto sul **sistema**, non come task locale chi
 - Vietati fix isolati su tabelle, RLS o contratti API: servono **migration ordinata** + uso nel codice + valutazione impatto **V1/Pro 2** se stesso Supabase (`.cursor/rules/empathy_schema_whole_picture.mdc`).
 - Non proporre DDL o repair senza aver letto le migration che toccano le stesse tabelle.
 
+## Deploy (solo Empathy Pro 2)
+
+- Il deploy di **questo** monorepo riguarda **unicamente** il prodotto **Empathy Pro 2** sul progetto Vercel documentato in `docs/AGENT_STATIC_CONTEXT_PRO2.md` (URL produzione: `empathy-pro-2-web.vercel.app`). **Non** trattare come target altri progetti Vercel, app generiche, estensioni o workspace collegati casualmente al CLI (`vercel link` su progetti non Empathy Pro 2).
+- **Mai** eseguire dall’agente `vercel deploy --prod`, `npx vercel --prod` o comandi equivalenti: rischio di progetto sbagliato e impatto su produzione. La produzione si aggiorna con **push su `master` del repo canonico** → integrazione GitHub→Vercel già configurata, oppure con azione **esplicita** dell’utente in dashboard Vercel.
+
 ## Toolchain (Next, npm, audit)
 
 - Non eseguire **`npm audit fix --force`**, upgrade major di **Next/React**, né reset aggressivo di lockfile / `node_modules` **salvo richiesta esplicita** dell’utente che accetti breaking change.

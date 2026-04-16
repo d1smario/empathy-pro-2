@@ -27,6 +27,7 @@
 
 ## Vercel
 
+- **Deploy:** solo il progetto **Empathy Pro 2** collegato a questo repository (produzione: [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/)). Non configurare o collegare come target altri progetti Vercel o applicazioni periferiche (“estensioni”) per il deploy di questo monorepo.
 - **URL production attuale (progetto collegato al repo):** [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/) — se i deploy non si aggiornano dopo `git push` su `master`, controlla in dashboard: repo corretto, **Production Branch = `master`**, log ultimo deploy (build fallito vs webhook assente). Dettaglio “fatti statici” anche in `docs/AGENT_STATIC_CONTEXT_PRO2.md`.
 
 1. **New Project** → import del repo (es. `empathy-pro-2-cursor` / `empathy-pro-2`).

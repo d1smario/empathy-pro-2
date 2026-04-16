@@ -12,7 +12,7 @@ Questo file **non** sostituisce architettura o constitution: serve perché **la 
 | Ambiente | URL / comando |
 |----------|-----------------|
 | **Dev locale** | [http://localhost:3020/](http://localhost:3020/) — porta predefinita Pro 2 (`EMPATHY_PRO2_DEV_PORT`, default `3020`). Vedi anche `docs/LOCAL_DEV_WITH_V1.md`. |
-| **Production (Vercel)** | [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/) |
+| **Production (Vercel)** | [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/) — **solo** questo progetto Empathy Pro 2; non usare altri progetti Vercel o “estensioni” come destinazione deploy per questo repo. |
 | **Monorepo Next** | App in `apps/web`; build dalla root: `npm run verify` / `npm run build`. Deploy Vercel: vedi `docs/PLATFORM_AND_DEPLOY.md` (Root Directory `apps/web`, install/build da root). |
 
 ## Riallineamento Cursor (bussola)
