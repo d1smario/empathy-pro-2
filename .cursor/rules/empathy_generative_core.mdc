@@ -46,3 +46,7 @@ alwaysApply: true
 - **LogMeal** (diario alimentare da immagine): ingest **reality** nutrizionale in `packages/integrations-logmeal` dove presente; verità operativa = correzioni utente/coach; vedi `docs/INTEGRATIONS_LOGMEAL.md`.
 - **Spline** (3D esercizi): solo **presentazione**; catalogo esercizi e builder restano sorgente dati; vedi `docs/INTEGRATIONS_SPLINE.md`.
 - **Diario alimentare (pipeline):** catalogo (fdcId + quantità) **oppure** foto su storage **temporaneo**; nutrienti da **USDA FDC** dopo risoluzione dove applicabile; foto **eliminata** post-finalize. Regole dettagliate: `empathy_nutrition_food_diary.mdc` e documentazione nutrizione in `docs/` (es. pipeline USDA se presente nel repo).
+
+## Operazione agent (integrazione nel progetto)
+
+Il modello generativo vale anche per **come** l’agent interviene sul repo: niente ottimizzazioni locali che contraddicono il grafo. Applicare **`.cursor/rules/empathy_pro2_integrated_agent_execution.mdc`** (sempre attiva) e, quando serve, il blocco **`docs/CURSOR_REALIGN_DAILY.md`**. Mappa dati deterministici vs interpretation: **`docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md`**.

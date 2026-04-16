@@ -11,5 +11,6 @@ alwaysApply: true
 - **Production Vercel:** https://empathy-pro-2-web.vercel.app/
 - **Deploy / monorepo:** `docs/PLATFORM_AND_DEPLOY.md` (Root `apps/web`, install da root).
 - **Riallineamento Cursor:** `docs/CURSOR_REALIGN_HOWTO.md`, `docs/CURSOR_REALIGN_DAILY.md`, `docs/CURSOR_REALIGN_DEEP.md` — frase tipo **RIALLINEAMENTO EMPATHY PRO 2** + incolla blocco daily se serve.
+- **Esecuzione integrata (ogni patch):** `.cursor/rules/empathy_pro2_integrated_agent_execution.mdc` — allineata al generative core in `.cursor/rules/empathy_generative_core.mdc`.
 
 Non confondere questo clone con **V1** (`nextjs-empathy-pro`): due repository distinti (`empathy_v1_pro2_repo_separation`).

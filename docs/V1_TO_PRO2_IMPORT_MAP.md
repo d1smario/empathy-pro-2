@@ -84,7 +84,7 @@ flowchart LR
 | Modulo | V1 view | Pro 2 view | Azione import |
 |--------|---------|------------|---------------|
 | Nutrition | `NutritionPageView.tsx` (monolite + tab) | `NutritionPageView.tsx` + `NutritionMealPlanView.tsx` | Logica V1 già spezzata in `NutritionMealPlanWorkspace` / `LeadPanels`; diff residui |
-| Training builder | `TrainingBuilderPageView.tsx` | `TrainingBuilderRichPageView.tsx` | Portare pezzi V1 (trace, replicate, cataloghi) solo se mancanti |
+| Training builder | `TrainingBuilderPageView.tsx` | `TrainingBuilderRichPageView.tsx` | **Contesto generativo:** `ResearchTraceScientificPanel`, `ReplicateStatusStrip`, sintesi nutrizione on-demand (`plannedDate` + `fetchNutritionViewModel`) già montati in vista. Residui: parità fine cataloghi/composer/copy vs V1 solo dove serve (diff mirato). |
 | Training session | `TrainingSessionPageView.tsx` (ricco) | `TrainingSessionPageView.tsx` (finestra) | **KPI giornata + viz blocchi** da V1 (questa serie) |
 | Training calendar | `TrainingCalendarPageView.tsx` | `TrainingCalendarPageView.tsx` | Aggiungere `BuilderPlannedSessionViz` compact dove c’è contratto |
 | Virya | `TrainingViryaPageView.tsx` | `TrainingViryaPageView.tsx` | Diff |
@@ -109,7 +109,7 @@ In Pro 2: aggiunte in `apps/web/app/globals.css` (blocco “V1 builder viz parit
 6. ✅ Calendario mensile Pro 2: usa già `CalendarPlannedBuilderDetail` per cella giorno → eredita la viz.
 7. ✅ `SessionMultilevelAnalysisStrip` + `session-multilevel-analysis-strip.ts` (tipi già in `api/training/contracts`); wiring in `CalendarPlannedBuilderDetail`; `parsePro2BuilderSessionFromNotes` → `Pro2SessionMultilevelSource`.
 8. ⏳ Completion coach, hero session (parità `TrainingSessionPageView` V1). **Twin/recovery in UI:** card «Twin e recovery» + link Profile nell’header; **dati live** da athlete memory / twin API quando portati da V1.
-9. ⏳ Builder V1 ↔ `TrainingBuilderRichPageView`: replicate strip, research panel, fetch nutrizione contesto.
+9. ✅ `TrainingBuilderRichPageView`: `ResearchTraceScientificPanel`, `ReplicateStatusStrip`, sintesi nutrizione su `plannedDate` (`fetchNutritionViewModel`, controllo “Aggiorna sintesi”). 🟡 Residuo: QA UI/copy e parità cataloghi/composer rispetto V1 se ancora diversi.
 10. ✅ Deploy Vercel monorepo: `apps/web/vercel.json` + `experimental.outputFileTracingRoot` in `next.config.mjs`; build prod OK (`StravaStyleMap` tipi Leaflet, no eslint rule fantasma).
 11. ✅ Auth client API: `lib/auth/client-auth.ts` usa sessione `createBrowserClient` (Bearer) — fix 401 su `/api/nutrition/module` e altre route `requireRequestAthleteAccess`.
 
@@ -120,7 +120,7 @@ In Pro 2: aggiunte in `apps/web/app/globals.css` (blocco “V1 builder viz parit
 | # | Modulo | Stato | Note |
 |---|--------|--------|------|
 | 1 | **Training · sessione + dettaglio pianificato** | ✅ batch 1 | KPI giornata, grafico zone builder, CSS, parser `virya`. |
-| 2 | **Training · builder ricco** | 🟡 in corso | Sezione “contesto generativo”: `ResearchTraceScientificPanel`, `ReplicateStatusStrip`, sintesi nutrizione on-demand (`plannedDate`). |
+| 2 | **Training · builder ricco** | ✅ batch 2 (contesto generativo) | In `TrainingBuilderRichPageView`: `ResearchTraceScientificPanel`, `ReplicateStatusStrip`, sintesi nutrizione on-demand su `plannedDate`. 🟡 Validare in smoke UI; eventuale diff residuo cataloghi/composer vs V1. |
 | 3 | **Training · sessione profonda** | 🟡 | Strip multilivello ✅ in dettaglio pianificato; completion / hero V1 ⏳. |
 | 4 | **Nutrition** | ⏳ | `NutritionMealPlanView` / `LeadPanels` già allineati a buona parte; diff residuo su export/micronutrienti. |
 | 5 | **Profile** | ✅ batch Pro 2 | Route `/profile`, `GET/POST/PUT /api/profile`, `ProfilePageView` + shell/KPI canone, `coerceProfileViewModel`, twin + coverage. |
@@ -129,4 +129,4 @@ In Pro 2: aggiunte in `apps/web/app/globals.css` (blocco “V1 builder viz parit
 
 ---
 
-*Ultimo aggiornamento: Health & Bio Pro 2 (import, timeline, upload, grafici).*
+*Ultimo aggiornamento: aprile 2026 — allineamento stato builder ricco (trace / replicate / sintesi nutrizione in `TrainingBuilderRichPageView`).*

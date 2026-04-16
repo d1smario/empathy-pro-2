@@ -1,0 +1,38 @@
+---
+description: Pro 2 — ogni intervento integrato nel progetto; gate sessione, toolchain, schema condiviso
+alwaysApply: true
+---
+
+# Empathy Pro 2 — Integrated agent execution
+
+Ogni modifica va trattata come effetto sul **sistema**, non come task locale chiuso.
+
+## Prima di agire
+
+- **Root workspace:** monorepo **empathy-pro-2-cursor**. Non confondere con **V1** (`nextjs-empathy-pro`) né con cartelle frammento sotto V1.
+- **Multi-root Cursor:** verificare il **path assoluto** dei file toccati (`apps/web`, `packages/...`).
+- **Riallineamento:** a inizio sessione o su richiesta utente, applicare il blocco in `docs/CURSOR_REALIGN_DAILY.md` (trigger **RIALLINEAMENTO EMPATHY PRO 2**). Fatti fissi URL/porta/deploy: `docs/AGENT_STATIC_CONTEXT_PRO2.md`.
+
+## Generativo (coerenza con il core)
+
+- Ordine **Ingest → Compute → Interpretation → Application** e confine AI vs pipeline deterministica: `docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md` e `.cursor/rules/empathy_generative_core.mdc`.
+- **Builder** = unica generazione canonica della **singola sessione** (struttura + numeri da motori/twin). **Calendario** = hub operativo (pianifica, memorizza, distribuisce); **non** è fonte biologica e **non** sostituisce il builder. Dettaglio: `docs/CURSOR_REALIGN_DAILY.md`.
+
+## Schema, API, “controllo struttura”
+
+- Vietati fix isolati su tabelle, RLS o contratti API: servono **migration ordinata** + uso nel codice + valutazione impatto **V1/Pro 2** se stesso Supabase (`.cursor/rules/empathy_schema_whole_picture.mdc`).
+- Non proporre DDL o repair senza aver letto le migration che toccano le stesse tabelle.
+
+## Toolchain (Next, npm, audit)
+
+- Non eseguire **`npm audit fix --force`**, upgrade major di **Next/React**, né reset aggressivo di lockfile / `node_modules` **salvo richiesta esplicita** dell’utente che accetti breaking change.
+- Dopo patch rilevanti: dalla **root del monorepo** eseguire `npm run verify` o `npm run build` come in `docs/AGENT_STATIC_CONTEXT_PRO2.md`.
+- Se si cambia versione **next**, verificare che le patch in `patches/` applicano ancora (`patch-package`).
+
+## Stabilità e architettura
+
+- Non mescolare nello stesso intervento fix di **auth / routing / contesto atleta** con **restyle UI** o refactor generativi ampi (`.cursor/rules/empathy_stability_first.mdc`, `empathy_architecture_gate.mdc`).
+
+## Stop e chiedi conferma
+
+Se non si può dire in una frase **quale piano generativo** (Ingest…Application) e **quale layer** si sta modificando, fermarsi e chiedere all’utente prima di procedere.
