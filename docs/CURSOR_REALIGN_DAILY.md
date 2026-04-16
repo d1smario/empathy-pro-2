@@ -1,6 +1,6 @@
 # Cursor — riallineamento quotidiano (EMPATHY Pro)
 
-**Uso:** in chat scrivi **`RIALLINEAMENTO EMPATHY PRO`** e incolla il blocco sotto (inizio giornata o task piccolo).  
+**Uso:** in chat scrivi **`RIALLINEAMENTO EMPATHY PRO`** o **`RIALLINEAMENTO EMPATHY PRO 2`** e incolla il blocco sotto (inizio giornata o task piccolo). Fatti fissi (URL GitHub, Vercel, localhost): `docs/AGENT_STATIC_CONTEXT_PRO2.md`.  
 **Oppure:** incolla il blocco in **Cursor → Settings → Rules → User rules** (vale su tutti i workspace; meccanica in `docs/CURSOR_REALIGN_HOWTO.md`).
 
 ---

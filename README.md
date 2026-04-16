@@ -24,6 +24,7 @@ Greenfield repository per la prossima generazione della piattaforma **EMPATHY**:
 | [`docs/v2/SKELETON_CHECKLIST.md`](docs/v2/SKELETON_CHECKLIST.md) | Checklist primo codice |
 | [`docs/LOCAL_DEV_WITH_V1.md`](docs/LOCAL_DEV_WITH_V1.md) | Due finestre Cursor, porte, convivenza con V1 |
 | [`docs/PRO2_SMOKE_CHECKLIST.md`](docs/PRO2_SMOKE_CHECKLIST.md) | **Smoke manuale** — verify, health, login, training/nutrition/API fino a risultati |
+| [`docs/AGENT_STATIC_CONTEXT_PRO2.md`](docs/AGENT_STATIC_CONTEXT_PRO2.md) | **URL fissi** (GitHub, localhost 3020, Vercel production), branch, trigger riallineamento — per agent senza memoria tra sessioni |
 | [`docs/CURSOR_REALIGN_HOWTO.md`](docs/CURSOR_REALIGN_HOWTO.md) | **Dove e come** usare i testi di riallineamento (Settings vs chat) |
 | [`docs/CURSOR_REALIGN_DAILY.md`](docs/CURSOR_REALIGN_DAILY.md) | Blocco breve quotidiano (bussola repo + generativo + UI Pro 2) |
 | [`docs/CURSOR_REALIGN_DEEP.md`](docs/CURSOR_REALIGN_DEEP.md) | Riallineamento profondo se la sessione è fuori rotta |

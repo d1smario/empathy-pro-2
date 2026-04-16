@@ -27,6 +27,8 @@
 
 ## Vercel
 
+- **URL production attuale (progetto collegato al repo):** [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/) — se i deploy non si aggiornano dopo `git push` su `master`, controlla in dashboard: repo corretto, **Production Branch = `master`**, log ultimo deploy (build fallito vs webhook assente). Dettaglio “fatti statici” anche in `docs/AGENT_STATIC_CONTEXT_PRO2.md`.
+
 1. **New Project** → import del repo (es. `empathy-pro-2-cursor` / `empathy-pro-2`).
 2. **Monorepo (consigliato):** **Root Directory** = **`apps/web`**. Il file `apps/web/vercel.json` imposta già:
    - **Install Command**: `cd ../.. && npm install`

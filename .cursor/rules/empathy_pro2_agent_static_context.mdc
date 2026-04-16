@@ -1,0 +1,15 @@
+---
+description: Empathy Pro 2 — URL, GitHub, Vercel, dev; puntatore a contesto statico (no memoria tra chat)
+alwaysApply: true
+---
+
+# Pro 2 — fatti statici (leggere prima di assumere URL/deploy)
+
+- **Contesto completo (URL, branch, riallineamento):** `docs/AGENT_STATIC_CONTEXT_PRO2.md` in questo monorepo.
+- **GitHub:** https://github.com/d1smario/empathy-pro-2/ — branch `master`.
+- **Dev locale:** http://localhost:3020/ (porta default Pro 2; vedi `docs/LOCAL_DEV_WITH_V1.md`).
+- **Production Vercel:** https://empathy-pro-2-web.vercel.app/
+- **Deploy / monorepo:** `docs/PLATFORM_AND_DEPLOY.md` (Root `apps/web`, install da root).
+- **Riallineamento Cursor:** `docs/CURSOR_REALIGN_HOWTO.md`, `docs/CURSOR_REALIGN_DAILY.md`, `docs/CURSOR_REALIGN_DEEP.md` — frase tipo **RIALLINEAMENTO EMPATHY PRO 2** + incolla blocco daily se serve.
+
+Non confondere questo clone con **V1** (`nextjs-empathy-pro`): due repository distinti (`empathy_v1_pro2_repo_separation`).
