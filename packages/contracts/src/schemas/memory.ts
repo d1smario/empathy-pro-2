@@ -21,11 +21,24 @@ export type AthleteIdentityMemory = {
   roleMode: "private" | "coach_managed" | "shared" | "unassigned";
 };
 
+/** L8: righe `systemic_modulation_snapshots` — separato da `biomarker_panels`. */
+export type AthleteSystemicModulationSnapshot = {
+  id: string;
+  athleteId: string;
+  capturedAt: IsoDateTime;
+  algorithmVersion: string;
+  source: string;
+  axes: string[];
+  payload: Record<string, unknown>;
+  createdAt?: IsoDateTime;
+};
+
 export type AthleteHealthMemory = {
   blood?: Record<string, unknown> | null;
   microbiota?: Record<string, unknown> | null;
   epigenetics?: Record<string, unknown> | null;
   panels: Array<Record<string, unknown>>;
+  systemicModulationSnapshots: AthleteSystemicModulationSnapshot[];
 };
 
 export type AthleteNutritionMemory = {

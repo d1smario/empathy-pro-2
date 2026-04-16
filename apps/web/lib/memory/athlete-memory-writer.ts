@@ -66,6 +66,8 @@ export function applyAthleteMemoryPatch(
           microbiota: mergeRecord(memory.health.microbiota, patch.health.microbiota),
           epigenetics: mergeRecord(memory.health.epigenetics, patch.health.epigenetics),
           panels: patch.health.panels ?? memory.health.panels,
+          systemicModulationSnapshots:
+            patch.health.systemicModulationSnapshots ?? memory.health.systemicModulationSnapshots,
         }
       : memory.health,
     twin: patch.twin === undefined ? memory.twin : patch.twin,

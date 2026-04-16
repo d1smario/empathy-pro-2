@@ -16,6 +16,8 @@ export type ReadSpineCoverageSummary = {
   hasNutritionConstraints: boolean;
   hasNutritionDiary: boolean;
   hasHealthPanels: boolean;
+  /** L8: snapshot tabellari separati da `biomarker_panels`. */
+  hasSystemicModulationSnapshots: boolean;
   hasRealityIngestions: boolean;
   hasEvidenceItems: boolean;
   physiologySources: PhysiologySourceFlags | null;
@@ -40,6 +42,7 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
       hasNutritionConstraints: false,
       hasNutritionDiary: false,
       hasHealthPanels: false,
+      hasSystemicModulationSnapshots: false,
       hasRealityIngestions: false,
       hasEvidenceItems: false,
       physiologySources: null,
@@ -53,6 +56,7 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
   const hasNutritionConstraints = memory.nutrition?.constraints != null;
   const hasNutritionDiary = (memory.nutrition?.diary?.length ?? 0) > 0;
   const hasHealthPanels = (memory.health?.panels?.length ?? 0) > 0;
+  const hasSystemicModulationSnapshots = (memory.health?.systemicModulationSnapshots?.length ?? 0) > 0;
   const hasRealityIngestions = (memory.reality?.recentIngestions?.length ?? 0) > 0;
   const hasEvidenceItems = (memory.evidenceMemory?.items?.length ?? 0) > 0;
 
@@ -78,6 +82,7 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
     hasNutritionConstraints,
     hasNutritionDiary,
     hasHealthPanels,
+    hasSystemicModulationSnapshots,
     hasRealityIngestions,
     hasEvidenceItems,
     physiologySources,

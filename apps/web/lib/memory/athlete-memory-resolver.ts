@@ -2,6 +2,7 @@ import type {
   AthleteEvidenceMemoryItem,
   AthleteProfile,
   AthleteMemory,
+  AthleteSystemicModulationSnapshot,
   ConnectedDevice,
 } from "@/lib/empathy/schemas";
 import type { NutritionConstraints } from "@/lib/empathy/schemas";
@@ -154,6 +155,43 @@ function addDaysUtcIso(isoDate: string, deltaDays: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function toSystemicModulationSnapshots(
+  athleteId: string,
+  rows: Array<Record<string, unknown>>,
+): AthleteSystemicModulationSnapshot[] {
+  const out: AthleteSystemicModulationSnapshot[] = [];
+  for (const row of rows) {
+    const id = typeof row.id === "string" ? row.id : "";
+    if (!id) continue;
+    const axesRaw = row.axes;
+    const axes = Array.isArray(axesRaw)
+      ? axesRaw.filter((a): a is string => typeof a === "string" && a.trim() !== "")
+      : [];
+    const payload =
+      row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
+        ? (row.payload as Record<string, unknown>)
+        : {};
+    const capturedAt =
+      typeof row.captured_at === "string"
+        ? row.captured_at
+        : typeof row.created_at === "string"
+          ? row.created_at
+          : new Date().toISOString();
+    const item: AthleteSystemicModulationSnapshot = {
+      id,
+      athleteId,
+      capturedAt,
+      algorithmVersion: typeof row.algorithm_version === "string" ? row.algorithm_version : "l8_v0",
+      source: typeof row.source === "string" ? row.source : "unknown",
+      axes,
+      payload,
+    };
+    if (typeof row.created_at === "string") item.createdAt = row.created_at;
+    out.push(item);
+  }
+  return out;
+}
+
 function toEvidenceItems(rows: Array<Record<string, unknown>>): AthleteEvidenceMemoryItem[] {
   return rows.map((row) => {
     const payload = asRecord(row.payload);
@@ -185,7 +223,8 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   const supabase = createServerSupabaseClient();
   const diaryWindowEnd = new Date().toISOString().slice(0, 10);
   const diaryWindowStart = addDaysUtcIso(diaryWindowEnd, -44);
-  const [profileRes, appUserRes, coachLinksRes, devicesRes, importJobsRes, deviceExportsRes, panelsRes, evidenceRes, physiology, knowledge, diaryRes] = await Promise.all([
+  const [profileRes, appUserRes, coachLinksRes, devicesRes, importJobsRes, deviceExportsRes, panelsRes, evidenceRes, systemicRes, physiology, knowledge, diaryRes] =
+    await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
     supabase.from("app_user_profiles").select("user_id, role").eq("athlete_id", athleteId).limit(1).maybeSingle(),
     supabase
@@ -225,6 +264,12 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .eq("athlete_id", athleteId)
       .order("created_at", { ascending: false })
       .limit(80),
+    supabase
+      .from("systemic_modulation_snapshots")
+      .select("id, athlete_id, captured_at, algorithm_version, source, axes, payload, created_at")
+      .eq("athlete_id", athleteId)
+      .order("captured_at", { ascending: false })
+      .limit(12),
     resolveCanonicalPhysiologyState(athleteId),
     resolveAthleteKnowledgeMemory(athleteId),
     supabase
@@ -248,6 +293,17 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   if (deviceExportsRes.error) throw new Error(deviceExportsRes.error.message);
   if (panelsRes.error) throw new Error(panelsRes.error.message);
   if (evidenceRes.error) throw new Error(evidenceRes.error.message);
+
+  let systemicRows: Array<Record<string, unknown>> = [];
+  if (systemicRes.error) {
+    const msg = systemicRes.error.message ?? "";
+    const code = String((systemicRes.error as { code?: string }).code ?? "");
+    if (code !== "42P01" && !msg.includes("does not exist")) {
+      throw new Error(systemicRes.error.message);
+    }
+  } else {
+    systemicRows = (systemicRes.data ?? []) as Array<Record<string, unknown>>;
+  }
 
   let diaryRows: Array<Record<string, unknown>> = [];
   if (diaryRes.error) {
@@ -374,6 +430,18 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     source: {
       domain: "health",
       source: "supabase.health_evidence",
+      sourceId: athleteId,
+      updatedAt: now,
+    },
+  });
+
+  memory = applyAthleteMemoryPatch(memory, {
+    health: {
+      systemicModulationSnapshots: toSystemicModulationSnapshots(athleteId, systemicRows),
+    },
+    source: {
+      domain: "health",
+      source: "supabase.systemic_modulation_snapshots",
       sourceId: athleteId,
       updatedAt: now,
     },

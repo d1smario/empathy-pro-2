@@ -22,6 +22,7 @@ export function createEmptyAthleteMemory(athleteId: string): AthleteMemory {
       microbiota: null,
       epigenetics: null,
       panels: [],
+      systemicModulationSnapshots: [],
     },
     twin: null,
     reality: {

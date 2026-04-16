@@ -48,7 +48,8 @@ Ogni chiave non riconosciuta dal consumer deve essere ignorata (forward compatib
 - `algorithm_version` vincola riproducibilità audit.
 - `source` discrimina provenienza (lab, questionario, coach, import batch).
 
-Dettaglio DDL: `supabase/migrations/011_systemic_modulation_snapshots.sql`.
+Dettaglio DDL: `supabase/migrations/011_systemic_modulation_snapshots.sql`.  
+Strisce SQL per paste manuale (Supabase SQL Editor): `supabase/PASTE_SYSTEMIC_MODULATION_SNAPSHOTS.sql`.
 
 ---
 
