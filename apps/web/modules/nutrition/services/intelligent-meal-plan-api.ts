@@ -10,6 +10,8 @@ export async function fetchIntelligentMealPlan(
   try {
     res = await fetchWithTimeout("/api/nutrition/intelligent-meal-plan", {
       method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ athleteId, plan }),
     });

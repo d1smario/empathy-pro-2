@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Package } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { cn } from "@/lib/cn";
 import { NutritionPlanDatePicker } from "@/components/nutrition/NutritionPlanDatePicker";
@@ -463,6 +463,7 @@ function nutritionToneForLabel(label: string): "amber" | "cyan" | "green" | "ros
 
 export default function NutritionPageView({ subRoute }: { subRoute: NutritionSubRoute }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { athleteId, role, loading: athleteLoading } = useActiveAthlete();
   const [profile, setProfile] = useState<AthleteNutritionRow | null>(null);
   const [physio, setPhysio] = useState<PhysioRow | null>(null);
@@ -615,6 +616,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setNutritionPerformanceIntegration(moduleData.nutritionPerformanceIntegration ?? null);
       setExecuted(ex);
       setPlanned(pl);
+      /** Dopo refresh modulo (profilo/fisiologia): evita che il rollup USDA del piano precedente copra i nuovi target kcal solver. */
+      setIntelligentMealPlan(null);
+      setIntelligentMealError(null);
+      setCoachMealRemovalKeys(new Set());
+      setCoachSessionFoodExclusions([]);
       const todayKey = new Date().toISOString().slice(0, 10);
       const availableDates = Array.from(new Set(pl.map((row) => row.date))).sort();
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
@@ -623,7 +629,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setLoading(false);
     }
     loadData();
-  }, [athleteId]);
+  }, [athleteId, pathname]);
 
   const selectedPlanSessions = useMemo(
     () => planned.filter((p) => p.date === selectedPlanDate),

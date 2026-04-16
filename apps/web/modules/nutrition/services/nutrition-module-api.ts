@@ -23,6 +23,8 @@ export async function fetchNutritionModuleContext(input: {
   try {
     response = await fetchWithTimeout(`/api/nutrition/module?${params.toString()}`, {
       method: "GET",
+      cache: "no-store",
+      credentials: "same-origin",
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
     });
   } catch (error) {
