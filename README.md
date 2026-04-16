@@ -25,6 +25,7 @@ Greenfield repository per la prossima generazione della piattaforma **EMPATHY**:
 | [`docs/LOCAL_DEV_WITH_V1.md`](docs/LOCAL_DEV_WITH_V1.md) | Due finestre Cursor, porte, convivenza con V1 |
 | [`docs/PRO2_SMOKE_CHECKLIST.md`](docs/PRO2_SMOKE_CHECKLIST.md) | **Smoke manuale** — verify, health, login, training/nutrition/API fino a risultati |
 | [`docs/AGENT_STATIC_CONTEXT_PRO2.md`](docs/AGENT_STATIC_CONTEXT_PRO2.md) | **URL fissi** (GitHub, localhost 3020, Vercel production), branch, trigger riallineamento — per agent senza memoria tra sessioni |
+| [`docs/WORKSTREAM_AFTER_REALIGN.md`](docs/WORKSTREAM_AFTER_REALIGN.md) | **Linea di lavoro** post-riallineamento (P0 deploy → P1… smoke); un punto alla volta |
 | [`docs/CURSOR_REALIGN_HOWTO.md`](docs/CURSOR_REALIGN_HOWTO.md) | **Dove e come** usare i testi di riallineamento (Settings vs chat) |
 | [`docs/CURSOR_REALIGN_DAILY.md`](docs/CURSOR_REALIGN_DAILY.md) | Blocco breve quotidiano (bussola repo + generativo + UI Pro 2) |
 | [`docs/CURSOR_REALIGN_DEEP.md`](docs/CURSOR_REALIGN_DEEP.md) | Riallineamento profondo se la sessione è fuori rotta |
