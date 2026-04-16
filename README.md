@@ -17,6 +17,7 @@ Greenfield repository per la prossima generazione della piattaforma **EMPATHY**:
 | [`docs/TECHNICAL_BLUEPRINT.md`](docs/TECHNICAL_BLUEPRINT.md) | Scheletro repo, layer, assorbimento da V1 |
 | [`docs/DESIGN_SYSTEM_AND_FIGMA.md`](docs/DESIGN_SYSTEM_AND_FIGMA.md) | **Grafica / Figma (canonico 2.0)** — token, UI grade A, viewport 3D |
 | [`docs/PLATFORM_AND_DEPLOY.md`](docs/PLATFORM_AND_DEPLOY.md) | Cursor, GitHub, **Supabase**, **Vercel**, segreti LogMeal/Spline |
+| [`docs/P0_VERCEL_DEPLOY_CHECKLIST.md`](docs/P0_VERCEL_DEPLOY_CHECKLIST.md) | **P0 deploy:** checklist Vercel (branch `master`, root `apps/web`, webhook, build) |
 | [`docs/ARCHITECTURE_SAFETY_AND_RISKS.md`](docs/ARCHITECTURE_SAFETY_AND_RISKS.md) | Coerenza generazione, rischi crash, mitigazioni |
 | [`docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md`](docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md) | Diario alimentare + USDA (allineamento con V1) |
 | [`docs/INTEGRATIONS_LOGMEAL.md`](docs/INTEGRATIONS_LOGMEAL.md) | Diario alimentare AI (**solo 2.0**) |

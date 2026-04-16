@@ -10,9 +10,9 @@
 
 ### P0 — Deploy / ambiente (se il problema è “Vercel fermo”)
 
-- Dashboard Vercel progetto collegato a [empathy-pro-2](https://github.com/d1smario/empathy-pro-2): **Production branch = `master`**, nuovi commit visibili come deploy (anche falliti).
-- Impostazioni monorepo: `docs/PLATFORM_AND_DEPLOY.md` — Root **`apps/web`**, install/build da root (`cd ../.. && npm install` / `build` come in `apps/web/vercel.json`).
-- **Nessun codice** finché non è chiaro se è solo integrazione Git.
+- **Checklist operativa passo-passo:** `docs/P0_VERCEL_DEPLOY_CHECKLIST.md` (Git repo/branch, Root `apps/web`, comandi `vercel.json`, env, deploy ignorati, redeploy).
+- Panoramica: `docs/PLATFORM_AND_DEPLOY.md` + fatti fissi `docs/AGENT_STATIC_CONTEXT_PRO2.md`.
+- **Nessun codice** in P0 salvo emergenza lockfile — è quasi sempre configurazione dashboard / Git.
 
 ### P1 — Stabilità sessione e atleta (dopo env)
 

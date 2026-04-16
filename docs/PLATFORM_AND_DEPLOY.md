@@ -31,9 +31,9 @@
 
 1. **New Project** → import del repo (es. `empathy-pro-2-cursor` / `empathy-pro-2`).
 2. **Monorepo (consigliato):** **Root Directory** = **`apps/web`**. Il file `apps/web/vercel.json` imposta già:
-   - **Install Command**: `cd ../.. && npm install`
+   - **Install Command**: `cd ../.. && npm ci` (come in repo; install pulita in CI)
    - **Build Command**: `cd ../.. && npm run build`  
-   Così si installano tutti i workspace (`packages/*`) e si esegue `next build ./apps/web` dalla root del clone.
+   Così si installano tutti i workspace (`packages/*`) e si esegue `next build ./apps/web` dalla root del clone. In dashboard, se compaiono comandi duplicati, lascia prevalere `vercel.json` o allinea manualmente a questi valori.
 3. **Node.js** 20.x (allineato a `engines` nel `package.json` root).
 4. Aggiungere **Environment Variables** (Production + Preview):
    - Supabase (come sopra)
