@@ -180,6 +180,7 @@ Questo è il pezzo “**legge tutto e modula**” allineato a **V1 `GET /api/das
 
 - Riallineamento operativo: `docs/CURSOR_REALIGN_DAILY.md`, `docs/CURSOR_REALIGN_DEEP.md`
 - Multiscala (blueprint + implementazione seed): `docs/EMPATHY_MULTISCALE_BIOLOGICAL_ENGINE.md`, `packages/domain-knowledge/src/multiscale/`
+- Modulazione sistemica L8 (contratto + slice DB): `docs/EMPATHY_LAYER8_SYSTEMIC_MODULATION.md`, migration `supabase/migrations/011_systemic_modulation_snapshots.sql`
 - Canone UI: `docs/PRO2_UI_PAGE_CANON.md`
 
 **Fine.**

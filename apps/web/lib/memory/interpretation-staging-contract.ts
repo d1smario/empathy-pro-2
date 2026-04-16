@@ -5,7 +5,7 @@ import "server-only";
  *
  * Non implementa persistenza: definisce la forma attesa così orchestrazioni multilivello / AI
  * confrontano sorgenti e producono solo **commit espliciti** verso trace / evidence / campi profilo
- * (vedi `docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md`).
+ * (vedi `docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md`, `docs/EMPATHY_LAYER8_SYSTEMIC_MODULATION.md`).
  *
  * Regole: nessun numero canonico di sessione, piano pasti o twin qui; solo proposte strutturate
  * e metadati di confronto per pipeline deterministiche o validazione umana.
@@ -13,7 +13,13 @@ import "server-only";
 
 /** Riferimento opaco a uno snapshot letto post-`requireAthleteReadContext` (es. hash request + athleteId + timestamp). */
 export type InterpretationSourceRef = {
-  kind: "athlete_memory" | "planned_window" | "knowledge_trace" | "health_panel" | "manual";
+  kind:
+    | "athlete_memory"
+    | "planned_window"
+    | "knowledge_trace"
+    | "health_panel"
+    | "systemic_modulation_snapshot"
+    | "manual";
   label: string;
   /** Es. ISO o id riga; solo per audit/debug, non business logic in UI. */
   ref?: string | null;

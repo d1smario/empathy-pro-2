@@ -162,6 +162,7 @@ Steps 1–2 are largely **deterministic** today; 3–8 are **partially** impleme
 | Graph helpers (subgraph, adjacency) | `multiscale/graph.ts` | — |
 | Proxy → activated nodes | `deriveMultiscaleActivatedNodes` in `multiscale/bindings.ts` | Pathway copy still from `pathway-modulation-model.ts` |
 | L1–L6 bottleneck view (interpretation only) | `computeMetabolicBottleneckView` in `multiscale/bottleneck.ts` | Not wired |
+| L8 systemic modulation (contract + DB append-only snapshots) | `docs/EMPATHY_LAYER8_SYSTEMIC_MODULATION.md`, `011_systemic_modulation_snapshots.sql` | Same shared DB; resolver wire-up TBD |
 | DB-backed ontology / full automation | Future migrations + curated data per `empathy_schema_whole_picture` | Same |
 
 ---
@@ -173,6 +174,7 @@ Steps 1–2 are largely **deterministic** today; 3–8 are **partially** impleme
 3. **Binding rules:** **Done (deterministic v1).** `deriveMultiscaleActivatedNodes(MultiscaleSignalSnapshot)` — thresholds aligned with V1 pathway-modulation spirit; audit via sorted `activatedNodeIds`.  
 4. **Adaptive priority / bottleneck:** **Done (interpretation v1).** `computeMetabolicBottleneckView`; `metabolicLevelLabelIt` for UI copy. Does not mutate twin state.  
 5. **UI / API:** **Done (v1).** `GET /api/knowledge/multiscale-bottleneck?athleteId=…` (`includeSubgraph=1` opzionale); pannello in Physiology (`MultiscaleBottleneckPanelPro2`) che legge twin + `resolveCanonicalPhysiologyState` via `buildMultiscaleSignalSnapshotFromAthlete`.
+6. **L8 DB slice:** **Done (schema + RLS).** Tabella `systemic_modulation_snapshots`; ingest in `resolveAthleteMemory` e commit da interpretation staging ancora da collegare.
 
 Public exports: `import { … } from "@empathy/domain-knowledge"` (re-export from `src/index.ts`).
 
