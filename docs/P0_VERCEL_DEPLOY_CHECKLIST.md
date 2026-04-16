@@ -53,7 +53,16 @@ Altre chiavi (Stripe, LogMeal, …) solo se le route che le usano sono in scope 
 
 ---
 
-## 6) Verifica rapida post-fix
+## 6) GitHub Actions (stesso comando di Vercel su Linux)
+
+Dopo il push su `master`, in **GitHub → tab Actions** deve comparire il workflow **CI** (file `.github/workflows/ci.yml`): esegue `npm ci` + `npm run verify` su **ubuntu-latest** (Node 20).
+
+- **Verde** su `master` ma Vercel rosso → controlla solo dashboard Vercel (root, comandi, env), non il lockfile.
+- **Rosso** su Actions → apri il log: stesso errore che vedresti su Vercel con `npm ci` / build; correggi in repo prima di inseguire Vercel.
+
+**Locale Windows / OneDrive:** `npm ci` può fallire con `EPERM` su file `.node` in uso; non è il gate di produzione. Gate = **Actions** + **Vercel Linux**.
+
+## 7) Verifica rapida post-fix (Vercel)
 
 - Deploy **Production** con commit hash uguale all’ultimo su GitHub `master`.
 - Apri [https://empathy-pro-2-web.vercel.app/api/health](https://empathy-pro-2-web.vercel.app/api/health) — risposta JSON con stato ok (se l’endpoint esiste nel progetto).

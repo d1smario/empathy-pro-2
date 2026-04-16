@@ -1,0 +1,32 @@
+# Replica ambiente Vercel (Linux): `npm ci` dalla root + stesso `npm run build` del monorepo.
+# Se questa workflow è verde su `master` ma Vercel fallisce, il problema è quasi sempre configurazione progetto Vercel (vedi docs/P0_VERCEL_DEPLOY_CHECKLIST.md).
+
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install (npm ci, come Vercel)
+        run: npm ci
+
+      - name: Typecheck, lint, production build
+        run: npm run verify
