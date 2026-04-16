@@ -829,6 +829,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     };
   }, [athleteId, pathwayTargetsByMealSlot]);
 
+  /** Evita POST piano con catalogo USDA ancora in caricamento (output instabile / gruppi vuoti). */
+  const mealPathwayUsdaReady = useMemo(
+    () =>
+      MEAL_SLOT_ORDER.every((k) => {
+        const b = mealPathwayBySlot[k];
+        return Boolean(b && !b.loading);
+      }),
+    [mealPathwayBySlot],
+  );
+
   const resolvedMealDailyEnergyKcal = nutritionDayModel?.totals.mealsKcal ?? dailyEnergyKcal;
   const resolvedFuelingChoGPerHour =
     (nutritionDayModel?.fueling.adjustedChoGPerHour ?? 0) > 0
@@ -1798,8 +1808,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
           postCho: dayPost,
           intraTotalCho: dayIntraTotal,
           engineSuffix: engineOne,
-          intraSplitNote:
-            sessions.length === 1 && (fuelingIntraChoSplitBySession?.length ?? 0) >= 2 ? intraSplitFull : "",
+          intraSplitNote: "",
         }),
       ];
     }
@@ -2364,7 +2373,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               intelligentMealPlan={intelligentMealPlan}
               intelligentMealLoading={intelligentMealLoading}
               intelligentMealError={intelligentMealError}
-              canRequestIntelligentPlan={Boolean(intelligentMealPlanRequest)}
+              canRequestIntelligentPlan={Boolean(intelligentMealPlanRequest) && mealPathwayUsdaReady}
+              mealPathwayCatalogPending={Boolean(intelligentMealPlanRequest) && !mealPathwayUsdaReady}
               onGenerateIntelligentMealPlan={handleGenerateIntelligentMealPlan}
               onResetIntelligentMealPlan={() => {
                 setIntelligentMealPlan(null);

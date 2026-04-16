@@ -223,6 +223,8 @@ export type NutritionMealPlanWorkspaceProps = {
   intelligentMealLoading: boolean;
   intelligentMealError: string | null;
   canRequestIntelligentPlan: boolean;
+  /** True mentre i fetch USDA per i 5 slot non sono completati (il pulsante resta disabilitato). */
+  mealPathwayCatalogPending?: boolean;
   onGenerateIntelligentMealPlan: () => void;
   onResetIntelligentMealPlan: () => void;
   coachMealRemovalKeys: Set<string>;
@@ -248,6 +250,7 @@ export function NutritionMealPlanWorkspace({
   intelligentMealLoading,
   intelligentMealError,
   canRequestIntelligentPlan,
+  mealPathwayCatalogPending = false,
   onGenerateIntelligentMealPlan,
   onResetIntelligentMealPlan,
   coachMealRemovalKeys,
@@ -287,11 +290,14 @@ export function NutritionMealPlanWorkspace({
               <span className="nutrition-ui-chip text-[0.7rem] text-slate-400">Assemblaggio deterministico server</span>
             ) : null}
           </div>
+          {mealPathwayCatalogPending ? (
+            <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per i cinque slot pasto… poi potrai generare il piano.</p>
+          ) : null}
           {intelligentMealError ? (
             <div className="alert-error" style={{ marginBottom: 10, fontSize: 13 }}>
               {intelligentMealError}
-              {intelligentMealError.includes("OPENAI_API_KEY") || intelligentMealError.includes("503")
-                ? " — in .env.local nella root del progetto (stesso livello di package.json), poi riavvia npm run dev."
+              {/\b503\b|timeout|ECONNRESET/i.test(intelligentMealError)
+                ? " — server temporaneamente non disponibile o timeout: riprova tra poco."
                 : null}
             </div>
           ) : null}

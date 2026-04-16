@@ -60,7 +60,7 @@ export type IntelligentMealPlanFunctionalFoodGroup = {
 export type IntelligentMealPlanRequestSlot = {
   slot: MealSlotKey;
   labelIt: string;
-  /** Orario pasto lato utente (HH:mm) per allineare timing LLM. */
+  /** Orario pasto lato utente (HH:mm) per idratazione e copy operativo. */
   scheduledTimeLocal: string;
   targetKcal: number;
   targetCarbsG: number;
@@ -73,7 +73,7 @@ export type IntelligentMealPlanRequestSlot = {
     pathwayLabel: string;
     rationaleShort: string;
   }>;
-  /** Opzioni strutturate per nutriente (USDA + curati) — base del piano generativo. */
+  /** Opzioni strutturate per nutriente (USDA + curati) — contesto per gruppi funzionali e filtri slot. */
   functionalFoodGroups: IntelligentMealPlanFunctionalFoodGroup[];
   /** Lista piatta ridondante per compatibilità / ricerca rapida nel prompt. */
   foodCandidates: string[];
@@ -83,7 +83,7 @@ export type IntelligentMealPlanRequestSlot = {
 export type IntelligentMealPlanSolverMeta = {
   /** Σ kcal dei cinque slot — stesso fabbisogno pasti della griglia Nutrition. */
   dailyMealsKcalTotal: number;
-  /** Leve da `nutritionDayModel.performanceIntegration` (testo per LLM/assemblatore). */
+  /** Leve da `nutritionDayModel.performanceIntegration` (testo per assemblatore deterministico). */
   integrationLeverLines: string[];
 };
 
