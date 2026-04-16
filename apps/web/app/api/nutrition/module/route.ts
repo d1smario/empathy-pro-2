@@ -15,6 +15,7 @@ import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathwa
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 // Full nutrition module context endpoint.
 // This route aggregates physiology, twin, memory, execution, and planning inputs.
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
       functionalFoodRecommendations = buildFunctionalFoodRecommendationsViewModel(pathwayModulation.pathways);
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       athleteId,
       from,
       to,
@@ -162,6 +163,8 @@ export async function GET(req: NextRequest) {
       researchTraceSummaries,
       error,
     });
+    res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    return res;
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message, profile: null, physio: null, executed: [], planned: [] }, { status: err.status });

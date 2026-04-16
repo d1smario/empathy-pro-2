@@ -485,6 +485,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [saving, setSaving] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  /** Incrementato al ritorno sul tab: ricarica profilo/fisiologia se aggiornati altrove (altra scheda / profilo). */
+  const [nutritionContextVersion, setNutritionContextVersion] = useState(0);
 
   const [dailyEnergyKcal, setDailyEnergyKcal] = useState(3000);
   const [caloricSplit, setCaloricSplit] = useState({ breakfast: 25, lunch: 35, dinner: 30, snacks: 10 });
@@ -546,6 +548,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   const onDiaryComplianceRows = useCallback((rows: FoodDiaryComplianceRow[]) => {
     setDiaryMacroRows(rows);
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setNutritionContextVersion((v) => v + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   useEffect(() => {
@@ -629,7 +641,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setLoading(false);
     }
     loadData();
-  }, [athleteId, pathname]);
+  }, [athleteId, pathname, nutritionContextVersion]);
 
   const selectedPlanSessions = useMemo(
     () => planned.filter((p) => p.date === selectedPlanDate),
@@ -1221,10 +1233,21 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     });
   }, [mealRows]);
 
-  /** KPI card e barra % kcal allineati al rollup del piano generato (somma item), non solo al target solver. */
+  /** KPI card e barra % kcal: rollup USDA solo se copre il fabbisogno pasti del solver (~≥72%); altrimenti restano i target solver (evita totali ~273 kcal da assemblaggio incompleto). */
   const mealPlanCardsDisplay = useMemo(() => {
     const rollup = intelligentMealPlan?.nutrientRollup;
     if (!rollup?.perSlot?.length) return mealPlanCards;
+
+    const rollupDayKcal = Math.round(
+      typeof rollup.dayTotals?.kcal === "number" && Number.isFinite(rollup.dayTotals.kcal)
+        ? rollup.dayTotals.kcal
+        : rollup.perSlot.reduce((s, p) => s + (Number.isFinite(p.totals?.kcal) ? p.totals.kcal : 0), 0),
+    );
+    const solverDayKcal = Math.max(1, Math.round(mealPlanCards.reduce((s, m) => s + m.kcal, 0)));
+    if (rollupDayKcal < solverDayKcal * 0.72) {
+      return mealPlanCards;
+    }
+
     return mealPlanCards.map((row) => {
       const sub = rollup.perSlot.find((p) => p.slot === row.key)?.totals;
       if (!sub) return row;

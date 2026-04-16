@@ -7,6 +7,7 @@ import { attachSolverBasisToAssembled } from "@/lib/nutrition/meal-plan-solver-b
 import type { IntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-meal-plan-types";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
@@ -65,7 +66,9 @@ export async function POST(req: NextRequest) {
 
     /** Solo assemblaggio deterministico: nessun LLM (generative core EMPATHY — AI non genera piani pasto). */
     const assembled = buildDeterministicMealPlanFromRequest(request);
-    return NextResponse.json(attachSolverBasisToAssembled(assembled, request));
+    const res = NextResponse.json(attachSolverBasisToAssembled(assembled, request));
+    res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    return res;
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
