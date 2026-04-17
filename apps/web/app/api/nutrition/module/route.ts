@@ -12,6 +12,10 @@ import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
+import {
+  mergeNutritionModuleProfileWithAthleteProfileRow,
+  type NutritionModuleFlatProfile,
+} from "@/lib/nutrition/nutrition-module-profile-merge";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export const runtime = "nodejs";
@@ -36,7 +40,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { db } = await requireAthleteReadContext(req, athleteId);
-    const [athleteMemory, trainingWindow, recoverySummary, researchTraceSummaries] = await Promise.all([
+    const [athleteMemory, trainingWindow, recoverySummary, researchTraceSummaries, profileAnthroRes] = await Promise.all([
       resolveAthleteMemory(athleteId),
       queryPlannedExecutedWindow(db, athleteId, from, to),
       resolveLatestRecoverySummary(athleteId),
@@ -47,12 +51,17 @@ export async function GET(req: NextRequest) {
         if (isMissingKnowledgeFoundationError(error)) return [];
         throw error;
       }),
+      db
+        .from("athlete_profiles")
+        .select("birth_date, sex, height_cm, weight_kg, body_fat_pct, muscle_mass_kg")
+        .eq("id", athleteId)
+        .maybeSingle(),
     ]);
     const plannedRes = trainingWindow.planned;
     const execRes = trainingWindow.executed;
     const error = firstWindowQueryError(plannedRes, execRes);
     const plannedRaw = (plannedRes.data ?? []) as PlannedWorkoutDbRow[];
-    const profile = athleteMemory.profile
+    const profileFromMemory: NutritionModuleFlatProfile | null = athleteMemory.profile
       ? {
           id: athleteMemory.profile.id,
           birth_date: athleteMemory.profile.birthDate ?? null,
@@ -73,6 +82,17 @@ export async function GET(req: NextRequest) {
           supplement_config: athleteMemory.profile.supplementConfig ?? null,
         }
       : null;
+
+    const profileAnthroRow: Record<string, unknown> | null = profileAnthroRes.error
+      ? null
+      : ((profileAnthroRes.data ?? null) as Record<string, unknown> | null);
+    const profile = mergeNutritionModuleProfileWithAthleteProfileRow(
+      athleteId,
+      profileFromMemory,
+      profileAnthroRow && typeof profileAnthroRow === "object" && !Array.isArray(profileAnthroRow)
+        ? (profileAnthroRow as Record<string, unknown>)
+        : null,
+    );
     const physiologyState = athleteMemory.physiology;
     const twinState = athleteMemory.twin;
     const {
