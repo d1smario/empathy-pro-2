@@ -3,7 +3,7 @@
  * Se PORT (default 3020) è occupata, prova 3021, 3022, … fino a trovarne una libera.
  */
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import net from "node:net";
@@ -14,6 +14,18 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
+
+/** Workspaces di solito hoistano `next` in root; in alcuni casi resta sotto apps/web. */
+function resolveNextCli() {
+  const candidates = [
+    join(root, "node_modules", "next", "dist", "bin", "next"),
+    join(root, "apps", "web", "node_modules", "next", "dist", "bin", "next"),
+  ];
+  for (const p of candidates) {
+    if (existsSync(p)) return p;
+  }
+  return null;
+}
 
 function portFree(port) {
   return new Promise((resolve, reject) => {
@@ -49,8 +61,18 @@ if (port !== preferred) {
   );
 }
 
-const nextCli = join(root, "node_modules", "next", "dist", "bin", "next");
+const nextCli = resolveNextCli();
 const appDir = join(root, "apps", "web");
+if (!nextCli) {
+  console.error(
+    "\n\x1b[31m[empathy-pro-2]\x1b[0m Next non trovato in node_modules (né in root né in apps/web).\n" +
+      "  Dalla \x1b[1mroot del monorepo\x1b[0m (cartella con package-lock.json) esegui: \x1b[1mnpm install\x1b[0m\n" +
+      "  Poi di nuovo: \x1b[1mnpm run dev\x1b[0m\n" +
+      "  Nota: \x1b[1mnpm run dev:clean\x1b[0m rimuove solo .next / cache build, \x1b[1mnon\x1b[0m cancella node_modules.\n" +
+      "  Se il clone è sotto OneDrive e npm fallisce con EPERM, chiudi editor/process che tengono file in node_modules e riprova.\n",
+  );
+  process.exit(1);
+}
 
 const env = { ...process.env };
 if (process.platform === "win32") {
