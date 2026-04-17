@@ -1,6 +1,6 @@
 # EMPATHY Pro 2.0 — Architettura operativa
 
-**Charter:** `docs/PRODUCT_VISION.md` · **Invarianti:** `CONSTITUTION.md` · **Mappa multilayer unica (organigramma + file + API):** `docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md` · **Sintesi struttura:** `docs/PLATFORM_STRUCTURE_SUMMARY.md` · **Memoria atleta / coach:** `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md` · **Ingest device & lab:** `docs/INGEST_DEVICE_AND_LAB_MATRIX.md` · **Scheletro repo:** `docs/TECHNICAL_BLUEPRINT.md` · **Sicurezza integrazioni:** `docs/ARCHITECTURE_SAFETY_AND_RISKS.md` · **Deploy:** `docs/PLATFORM_AND_DEPLOY.md` · **Diario alimentare + USDA (spec condivisa con V1):** repo `nextjs-empathy-pro` → `docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md`
+**Charter:** `docs/PRODUCT_VISION.md` · **Invarianti:** `CONSTITUTION.md` · **Sistema generativo Pro 2 (ingresso + link alla mappa multilayer):** `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md` · **Mappa multilayer unica (organigramma + file + API):** `docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md` · **Sintesi struttura:** `docs/PLATFORM_STRUCTURE_SUMMARY.md` · **Memoria atleta / coach:** `docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md` · **Ingest device & lab:** `docs/INGEST_DEVICE_AND_LAB_MATRIX.md` · **Scheletro repo:** `docs/TECHNICAL_BLUEPRINT.md` · **Sicurezza integrazioni:** `docs/ARCHITECTURE_SAFETY_AND_RISKS.md` · **Deploy:** `docs/PLATFORM_AND_DEPLOY.md` · **Diario alimentare + USDA (spec condivisa con V1):** repo `nextjs-empathy-pro` → `docs/NUTRITION_FOOD_DIARY_USDA_PIPELINE.md`
 
 ## Piani (layer)
 

@@ -2,12 +2,13 @@
 
 **Repo:** `empathy-pro-2-cursor` · **App:** `apps/web` (Next.js) · **Monorepo:** `packages/*`, `tooling/*`.
 
-Questo file è l’**indice organizzativo** (“cosa c’è, dove sta, come parla con cosa”). Non sostituisce i documenti normativi: li incrocia. Aggiornare questo file quando si aggiungono moduli, gate lettura o pipeline deterministiche.
+Questo file è l’**indice organizzativo** (“cosa c’è, dove sta, come parla con cosa”). Non sostituisce i documenti normativi: li incrocia. **Ingresso dedicato al “sistema generativo” Pro 2 (4 piani + dove approfondire):** `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md`. Aggiornare questo file quando si aggiungono moduli, gate lettura o pipeline deterministiche.
 
 | Fonte | Ruolo |
 |--------|--------|
 | `CONSTITUTION.md` | Invarianti prodotto e tecnici |
 | `docs/ARCHITECTURE.md` | Piani dati e confini monorepo |
+| `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md` | Ingresso “sistema generativo” Pro 2 (4 piani) + puntatore a questa mappa |
 | `docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md` | Rete A/B, nutrizione, gap noti |
 | `docs/EMPATHY_OPERATIONAL_REALIZATION_MAP.md` | Spina lettura, hub, fasi |
 | `docs/EMPATHY_MULTISCALE_BIOLOGICAL_ENGINE.md` | Multiscala / domain-knowledge |
@@ -152,7 +153,7 @@ flowchart LR
 
 | Passo | File |
 |--------|------|
-| Contesto modulo (profilo, planned, segnali) | `GET /api/nutrition/module` → `apps/web/app/api/nutrition/module/route.ts` |
+| Contesto modulo (profilo, planned, segnali) | `GET /api/nutrition/module` → `apps/web/app/api/nutrition/module/route.ts` — dopo `resolveAthleteMemory`, merge antropometria (`birth_date`, `sex`, `height_cm`, `weight_kg`, `body_fat_pct`, `muscle_mass_kg`) da `athlete_profiles` via **`db`** read spine + `lib/nutrition/nutrition-module-profile-merge.ts` |
 | Bundle operativo (twin, loop, **nutritionPerformanceIntegration**) | `apps/web/lib/dashboard/resolve-operational-signals-bundle.ts` |
 | Modello energetico giorno | `apps/web/lib/nutrition/daily-energy-solver.ts` (`computeNutritionDailyEnergyModel`) |
 | UI griglia pasti / % | `apps/web/modules/nutrition/views/NutritionPageView.tsx` (`mealRows`, `caloricSplit`) |

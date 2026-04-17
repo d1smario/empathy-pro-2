@@ -15,6 +15,11 @@ Questo file **non** sostituisce architettura o constitution: serve perché **la 
 | **Production (Vercel)** | [https://empathy-pro-2-web.vercel.app/](https://empathy-pro-2-web.vercel.app/) — **solo** questo progetto Empathy Pro 2; non usare altri progetti Vercel o “estensioni” come destinazione deploy per questo repo. |
 | **Monorepo Next** | App in `apps/web`; build dalla root: `npm run verify` / `npm run build`. Deploy Vercel: vedi `docs/PLATFORM_AND_DEPLOY.md` (Root Directory `apps/web`, install/build da root). |
 
+## Architettura generativa e mappa multilayer
+
+- **Sistema generativo Pro 2 (4 piani, link alla mappa):** `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md`
+- **Mappa multilayer completa (organigramma + file + API):** `docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md`
+
 ## Riallineamento Cursor (bussola)
 
 - **Come usare i testi:** `docs/CURSOR_REALIGN_HOWTO.md`

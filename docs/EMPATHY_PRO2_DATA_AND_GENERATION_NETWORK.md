@@ -1,7 +1,7 @@
 # Empathy Pro 2 — Rete dati, generazione deterministica e dialogo AI
 
 **Repo:** `empathy-pro-2-cursor` · **Status:** mappa concettuale + gap (aprile 2026).  
-**Allineamento:** `CONSTITUTION.md`, `docs/ARCHITECTURE.md`, regole generative (4 piani), `docs/EMPATHY_MULTISCALE_BIOLOGICAL_ENGINE.md`.
+**Allineamento:** `CONSTITUTION.md`, `docs/ARCHITECTURE.md`, `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md` (ingresso sistema generativo) → `docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md` (mappa unica), regole generative (4 piani), `docs/EMPATHY_MULTISCALE_BIOLOGICAL_ENGINE.md`.
 
 ---
 
