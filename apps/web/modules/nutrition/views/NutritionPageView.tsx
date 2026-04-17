@@ -786,6 +786,17 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     });
   }, [athleteId, selectedPlanDate, profile, physio, effectiveDayContext, recoverySummary, nutritionPerformanceIntegration]);
 
+  /** BMR assente o peso non letto → pasti solver ~solo quota training; evita silenzio in UI. */
+  const lowMealsBudgetWarning = useMemo(() => {
+    if (!nutritionDayModel) return null;
+    const meals = nutritionDayModel.totals.mealsKcal;
+    const train = nutritionDayModel.training.kcal;
+    if (meals >= 900) return null;
+    if (train < 220) return null;
+    if (meals > train * 0.55) return null;
+    return { meals, train };
+  }, [nutritionDayModel]);
+
   const pathwayModulation = useMemo((): NutritionPathwayModulationViewModel | null => {
     if (!athleteId) return null;
     return buildNutritionPathwayModulationViewModel({
@@ -1355,7 +1366,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     });
   }, [mealRows]);
 
-  /** KPI card e barra % kcal: rollup USDA solo se copre il fabbisogno pasti del solver (~≥72%); altrimenti restano i target solver (evita totali ~273 kcal da assemblaggio incompleto). */
+  /**
+   * KPI card / barre %: sostituire i target solver con il rollup USDA solo se i due mondi sono allineati.
+   * Se il budget pasti solver è patologicamente basso (es. BMR≈0 → ~0.4× training) ma il rollup USDA è alto,
+   * la vecchia soglia ≥72% era sempre vera e le card mostravano kcal “normali” mentre i KPI restavano ~260 kcal
+   * (incoerenza colazione ~10% vs % profilo). In quel caso restiamo sui target solver finché il modello energetico non torna plausibile.
+   */
   const mealPlanCardsDisplay = useMemo(() => {
     const rollup = intelligentMealPlan?.nutrientRollup;
     if (!rollup?.perSlot?.length) return mealPlanCards;
@@ -1366,7 +1382,15 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         : rollup.perSlot.reduce((s, p) => s + (Number.isFinite(p.totals?.kcal) ? p.totals.kcal : 0), 0),
     );
     const solverDayKcal = Math.max(1, Math.round(mealPlanCards.reduce((s, m) => s + m.kcal, 0)));
+    const plausibleAdultMealsBudgetMin = 800;
+    if (solverDayKcal < plausibleAdultMealsBudgetMin) {
+      return mealPlanCards;
+    }
     if (rollupDayKcal < solverDayKcal * 0.72) {
+      return mealPlanCards;
+    }
+    const rollupVsSolver = rollupDayKcal / solverDayKcal;
+    if (rollupVsSolver > 1.35) {
       return mealPlanCards;
     }
 
@@ -2483,6 +2507,18 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 <NutritionSubnav />
               </div>
             </div>
+            {subRoute === "meal-plan" && lowMealsBudgetWarning ? (
+              <div
+                className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100/95"
+                role="status"
+              >
+                <strong className="font-semibold">Attenzione — budget pasti solver molto basso.</strong>{" "}
+                Target pasti ~{Math.round(lowMealsBudgetWarning.meals)} kcal con allenamento stimato ~
+                {Math.round(lowMealsBudgetWarning.train)} kcal: di solito mancano peso/altezza/data di nascita nel profilo
+                (BMR non calcolabile). Le percentuali colazione/pranzo/cena del profilo si applicano su quel totale basso;
+                controlla <span className="font-medium">Profilo</span> e rigenera il piano dopo il salvataggio.
+              </div>
+            ) : null}
             {subRoute === "meal-plan" ? (
               <NutritionMealPlanDailyTargets
                 complianceTargets={{
@@ -3001,16 +3037,22 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 ))}
               </div>
               {nutritionPerformanceIntegration?.rationale.length ? (
-                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
-                  <summary>Leve operative (rationale solver)</summary>
-                  <ul style={{ margin: "8px 0 0", paddingLeft: "1.1rem", fontSize: "0.85rem" }}>
+                <section
+                  className="collapsible-card"
+                  style={{ marginBottom: "10px", padding: "10px 12px", borderColor: "rgba(56,189,248,0.35)" }}
+                  aria-label="Integrazione performance — rationale solver"
+                >
+                  <h4 className="mb-2 text-[0.7rem] font-bold uppercase tracking-wider text-cyan-200/90">
+                    Integrazione performance · leve solver
+                  </h4>
+                  <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.85rem", lineHeight: 1.45 }}>
                     {nutritionPerformanceIntegration.rationale.map((line) => (
                       <li key={line} style={{ marginBottom: "4px" }}>
                         {line}
                       </li>
                     ))}
                   </ul>
-                </details>
+                </section>
               ) : null}
               {nutritionPerformanceIntegration?.diaryInsight ? (
                 <p className="muted-copy" style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.45 }}>
