@@ -23,6 +23,8 @@ export type MediterraneanDayContext = {
   usedStaples: Set<string>;
   /** Conteggi staple negli altri giorni della settimana ISO (cache client). Soft cap ~2. */
   weekStapleCounts?: Record<string, number>;
+  /** Orario slot spostato vs routine (fine seduta + propagazione): pranzo/cena CHO più refeed; spuntini più CHO / meno grassi. */
+  postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
 };
 
 /** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
@@ -31,12 +33,17 @@ const MAX_STAPLE_USES_PER_WEEK = 3;
 export function createMediterraneanDayContext(
   planDate: string,
   weekStapleCounts?: Record<string, number>,
+  postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>,
 ): MediterraneanDayContext {
   const w =
     weekStapleCounts && Object.keys(weekStapleCounts).length
       ? { ...weekStapleCounts }
       : undefined;
-  return { planDate, usedStaples: new Set(), weekStapleCounts: w };
+  const pw =
+    postWorkoutMealBySlot && Object.keys(postWorkoutMealBySlot).length
+      ? { ...postWorkoutMealBySlot }
+      : undefined;
+  return { planDate, usedStaples: new Set(), weekStapleCounts: w, postWorkoutMealBySlot: pw };
 }
 
 function planDateHash(s: string): number {
@@ -485,6 +492,43 @@ function composeMainMeal(
     fishKind = protKey === "pesce" ? FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]! : null;
   }
 
+  const postWorkout = Boolean(ctx?.postWorkoutMealBySlot?.[slot]);
+  if (postWorkout && (slot === "lunch" || slot === "dinner") && used) {
+    if (carbKey === "pasta" || carbKey === "farro") {
+      const canRiso =
+        !used.has(stapleCarb("riso")) && weekCountFor(stapleCarb("riso"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+      const canPatate =
+        !used.has(stapleCarb("patate")) && weekCountFor(stapleCarb("patate"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+      if (canRiso && (seed % 2 !== 0 || !canPatate)) {
+        carbKey = "riso";
+      } else if (canPatate) {
+        carbKey = "patate";
+      } else if (canRiso) {
+        carbKey = "riso";
+      }
+    }
+    if (carbKey === "patate" && protKey === "legumi") {
+      if (!used.has(stapleProt("pollo"))) {
+        protKey = "pollo";
+        fishKind = null;
+      } else {
+        protKey = "pesce";
+        fishKind = FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]!;
+      }
+    } else if (protKey === "legumi") {
+      if (!used.has(stapleProt("pollo"))) {
+        protKey = "pollo";
+        fishKind = null;
+      } else if (!used.has(stapleProt("pesce"))) {
+        protKey = "pesce";
+        fishKind = FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]!;
+      } else {
+        protKey = "manzo";
+        fishKind = null;
+      }
+    }
+  }
+
   const eggs = protKey === "uova" ? clamp(Math.round(P / 17), 2, 4) : 3;
 
   const fishProtDen =
@@ -646,11 +690,19 @@ function kcalFromDeliLine(line: string): number {
   return Math.round(g * 1.5);
 }
 
-function composeSnack(m: MealMacroTargets, seed: number, variant: "snack_am" | "snack_pm"): MediterraneanComposedMeal {
+function composeSnack(
+  m: MealMacroTargets,
+  seed: number,
+  variant: "snack_am" | "snack_pm",
+  ctx?: MediterraneanDayContext,
+): MediterraneanComposedMeal {
   const K = Math.max(120, m.kcal);
   /** Spuntino mattutino tendenzialmente più “dolce”; pomeridiano più salato (con piccola rotazione). */
   let sweet = variant === "snack_am";
   if (seed % 7 === 0) sweet = !sweet;
+  /** Dopo ricalibrazione orari (es. post-seduta): spuntino più CHO, senza variante salata pesante. */
+  const postSlot = Boolean(ctx?.postWorkoutMealBySlot?.[variant]);
+  if (postSlot) sweet = true;
 
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
@@ -666,19 +718,39 @@ function composeSnack(m: MealMacroTargets, seed: number, variant: "snack_am" | "
     items.push(item("Frutta", fruit, fk, "cho_heavy", "CHO e fibre."));
     lines.push(fruit);
 
-    const cg = clamp(12 + K * 0.03, 12, 35);
+    const cgLo = postSlot ? 18 : 12;
+    const cgHi = postSlot ? 48 : 35;
+    const cg = clamp((postSlot ? 18 : 12) + K * (postSlot ? 0.045 : 0.03), cgLo, cgHi);
     const ck = cg * D.cerealKcalPerG;
-    items.push(item("Cereali", `${clamp(cg, 12, 35)} g cereali / muesli (sul yogurt)`, ck, "cho_heavy", "Completa lo spuntino senza seconda fonte proteica animale."));
-    lines.push(`${clamp(cg, 12, 35)} g cereali o muesli`);
+    items.push(
+      item(
+        "Cereali",
+        `${clamp(cg, cgLo, cgHi)} g cereali / muesli (sul yogurt)`,
+        ck,
+        "cho_heavy",
+        postSlot
+          ? "Spuntino post-rientro orari: più cereali sul target CHO (refeed leggero)."
+          : "Completa lo spuntino senza seconda fonte proteica animale.",
+      ),
+    );
+    lines.push(`${clamp(cg, cgLo, cgHi)} g cereali o muesli`);
   } else {
-    const crG = clamp(28 + (seed % 4) * 6, 24, 48);
+    const crG = postSlot ? clamp(36 + (seed % 4) * 8, 32, 58) : clamp(28 + (seed % 4) * 6, 24, 48);
     const crK = crG * D.crackerKcalPerG;
     items.push(item("Gallette / pane", `${crG} g gallette integrali o pane tostato`, crK, "cho_heavy", "Base croccante; una fonte proteica sotto."));
     lines.push(`${crG} g gallette o pane tostato`);
 
-    const cold = seed % 3 === 0 ? "60 g prosciutto cotto magro" : seed % 3 === 1 ? "50 g bresaola" : "45 g prosciutto crudo";
+    const cold = postSlot
+      ? seed % 2 === 0
+        ? "55 g prosciutto cotto magro"
+        : "50 g bresaola"
+      : seed % 3 === 0
+        ? "60 g prosciutto cotto magro"
+        : seed % 3 === 1
+          ? "50 g bresaola"
+          : "45 g prosciutto crudo";
     const pk = kcalFromDeliLine(cold);
-    items.push(item("Affettato", cold, pk, "protein", "Proteina magra in spuntino salato."));
+    items.push(item("Affettato", cold, pk, "protein", postSlot ? "Proteina magra; variante meno grassa dopo spostamento orari." : "Proteina magra in spuntino salato."));
     lines.push(cold);
 
     const fatPick =
@@ -702,8 +774,8 @@ export function composeMediterraneanMeal(
   const seed = hashSeed(slot, macros.kcal);
   const breakfastCtx = ctx ?? createMediterraneanDayContext("");
   if (slot === "breakfast") return composeBreakfast(macros, seed, breakfastCtx);
-  if (slot === "snack_am") return composeSnack(macros, seed, "snack_am");
-  if (slot === "snack_pm") return composeSnack(macros, seed, "snack_pm");
+  if (slot === "snack_am") return composeSnack(macros, seed, "snack_am", ctx);
+  if (slot === "snack_pm") return composeSnack(macros, seed, "snack_pm", ctx);
   return composeMainMeal(slot, macros, seed, ctx);
 }
 

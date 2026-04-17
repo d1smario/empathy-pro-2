@@ -90,6 +90,10 @@ export async function GET(req: NextRequest) {
       const expiresAt = new Date(
         Date.now() + Math.max(60, tokens.expires_in - 600) * 1000,
       ).toISOString();
+      const oauthRefreshExpiresAt =
+        typeof tokens.refresh_token_expires_in === "number" && Number.isFinite(tokens.refresh_token_expires_in)
+          ? new Date(Date.now() + tokens.refresh_token_expires_in * 1000).toISOString()
+          : null;
 
       const { data: conflict } = await admin
         .from("garmin_athlete_links")
@@ -109,6 +113,7 @@ export async function GET(req: NextRequest) {
           oauth_access_token: tokens.access_token,
           oauth_refresh_token: tokens.refresh_token,
           token_expires_at: expiresAt,
+          oauth_refresh_expires_at: oauthRefreshExpiresAt,
           scope: tokens.scope ?? null,
           updated_at: new Date().toISOString(),
         },

@@ -10,6 +10,8 @@ import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
 import { buildPathwayTimingLinesForMealPlan } from "@/lib/nutrition/meal-plan-pathway-timing-lines";
 import { shortFoodLabelFromUsda } from "@/lib/nutrition/usda-food-label";
+import type { FlatMealTimes } from "@/lib/nutrition/routine-week-plan-meal-times";
+import { buildRoutineDigestForMealPlan, computePostWorkoutMealFlags } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 
 export type PathwaySlotBundleInput = {
   pathwayTargets?: FunctionalFoodTargetViewModel[];
@@ -17,6 +19,18 @@ export type PathwaySlotBundleInput = {
 };
 
 const ORDER: MealSlotKey[] = [...MEAL_SLOT_ORDER];
+
+function routineMealTimesFlat(routine: Record<string, unknown> | null | undefined): FlatMealTimes {
+  const rc = routine && typeof routine === "object" && !Array.isArray(routine) ? routine : {};
+  const mt = rc.meal_times && typeof rc.meal_times === "object" && !Array.isArray(rc.meal_times) ? (rc.meal_times as Record<string, unknown>) : {};
+  return {
+    breakfast: String(mt.breakfast ?? "07:30"),
+    lunch: String(mt.lunch ?? "13:00"),
+    dinner: String(mt.dinner ?? "20:00"),
+    snack_am: String(mt.snack_am ?? "10:30"),
+    snack_pm: String(mt.snack_pm ?? mt.snacks ?? "16:30"),
+  };
+}
 
 export function buildIntelligentMealPlanRequest(input: {
   athleteId: string;
@@ -45,12 +59,23 @@ export function buildIntelligentMealPlanRequest(input: {
   trainingDayLines: string[];
   /** Leve integrazione operativa (solver × training), stesse della UI. */
   integrationLeverLines?: string[];
+  /** Sedute pianificate del giorno: digest orari + flag post-seduta per il composer. */
+  plannedSessionsForDay?: Array<{ duration_minutes?: unknown }>;
 }): IntelligentMealPlanRequest {
   const { mealRows, mealPathwayBySlot } = input;
   const dailyMealsKcalTotal = Math.round(mealRows.reduce((s, r) => s + (Number.isFinite(r.kcal) ? r.kcal : 0), 0));
   const pathwayPathways = input.pathwayModulation?.pathways ?? [];
   const pathwayTimingLines = buildPathwayTimingLinesForMealPlan(input.pathwayModulation);
-  const routineDigest = summarizeRoutine(input.profile?.routine_config);
+  const plannedForDay = input.plannedSessionsForDay ?? [];
+  const routineDigest = buildRoutineDigestForMealPlan(input.profile?.routine_config ?? null, input.planDate, {
+    plannedSessions: plannedForDay,
+  });
+  const postWorkoutMealBySlot = computePostWorkoutMealFlags({
+    routineConfig: input.profile?.routine_config ?? null,
+    planDate: input.planDate,
+    mealTimesFlatFromRoot: routineMealTimesFlat(input.profile?.routine_config ?? null),
+    plannedSessions: plannedForDay,
+  });
 
   const slots = ORDER.map((slot) => {
     const row = mealRows.find((r) => r.key === slot);
@@ -103,6 +128,7 @@ export function buildIntelligentMealPlanRequest(input: {
     filterIntelligentMealPlanRequestFoods({
       athleteId: input.athleteId,
       planDate: input.planDate,
+      postWorkoutMealBySlot: Object.keys(postWorkoutMealBySlot).length ? postWorkoutMealBySlot : undefined,
       mealPlanSolverMeta: {
         dailyMealsKcalTotal,
         integrationLeverLines: (input.integrationLeverLines ?? []).slice(0, 16),
@@ -121,15 +147,4 @@ export function buildIntelligentMealPlanRequest(input: {
       slots,
     }),
   );
-}
-
-function summarizeRoutine(routine: Record<string, unknown> | null | undefined): string | null {
-  if (!routine || typeof routine !== "object") return null;
-  const wake = typeof routine.wake_time === "string" ? routine.wake_time : null;
-  const sleep = typeof routine.sleep_time === "string" ? routine.sleep_time : null;
-  const trainPref = typeof routine.preferred_training_window === "string" ? routine.preferred_training_window : null;
-  const bits = [wake && `sveglia ~${wake}`, sleep && `sonno ~${sleep}`, trainPref && `allenamento: ${trainPref}`].filter(
-    Boolean,
-  ) as string[];
-  return bits.length ? bits.join(" · ") : null;
 }

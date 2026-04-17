@@ -52,7 +52,7 @@ export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRe
   const orderedSlots = MEAL_SLOT_ORDER.map((k) => slotByKey.get(k)).filter(
     (s): s is IntelligentMealPlanRequestSlot => Boolean(s),
   );
-  const dayCtx = createMediterraneanDayContext(req.planDate, req.weeklyStapleCounts);
+  const dayCtx = createMediterraneanDayContext(req.planDate, req.weeklyStapleCounts, req.postWorkoutMealBySlot);
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const items = pickItemsForSlot(slot, dayCtx);

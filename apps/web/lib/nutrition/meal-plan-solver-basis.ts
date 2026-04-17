@@ -18,6 +18,8 @@ function profileConstraintLines(req: IntelligentMealPlanRequest): string[] {
 
 /** Eco strutturata del solver pasti × training + profilo — stessi input del request. */
 export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): IntelligentMealPlanSolverBasis {
+  const postWorkoutMealBySlot =
+    req.postWorkoutMealBySlot && Object.keys(req.postWorkoutMealBySlot).length ? req.postWorkoutMealBySlot : undefined;
   return {
     source: "nutrition_meal_plan_solver",
     planDate: req.planDate,
@@ -29,6 +31,7 @@ export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): In
     integrationLeverLines: [...req.mealPlanSolverMeta.integrationLeverLines],
     pathwayTimingLines: [...req.pathwayTimingLines],
     aggregateInhibitors: req.aggregateInhibitors ? [...req.aggregateInhibitors] : null,
+    postWorkoutMealBySlot,
     slots: req.slots.map((s) => ({
       slot: s.slot,
       labelIt: s.labelIt,

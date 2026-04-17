@@ -399,6 +399,7 @@ export default function ProfilePage() {
   } | null>(null);
   const [garminReturn, setGarminReturn] = useState<string | null>(null);
   const [garminDetail, setGarminDetail] = useState<string | null>(null);
+  const [garminDisconnecting, setGarminDisconnecting] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -553,6 +554,35 @@ export default function ProfilePage() {
       cancelled = true;
     };
   }, [activeAthleteId]);
+
+  async function disconnectGarmin() {
+    if (!activeAthleteId || garminDisconnecting) return;
+    if (!window.confirm("Scollegare Garmin da questo atleta? I dati non verranno più sincronizzati da Garmin.")) {
+      return;
+    }
+    setGarminDisconnecting(true);
+    try {
+      const r = await fetch(`/api/integrations/garmin/disconnect?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const j = (await r.json()) as { ok?: boolean; error?: string; garminPartnerDeregistered?: boolean };
+      if (!r.ok) {
+        window.alert(j.error ?? "Scollegamento non riuscito.");
+        return;
+      }
+      if (j.garminPartnerDeregistered === false) {
+        window.alert(
+          "Collegamento rimosso in Empathy; se Garmin non ha accettato la revoca, rimuovi il consenso anche da Garmin Connect.",
+        );
+      }
+      setGarminLink({ linked: false });
+    } catch {
+      window.alert("Errore di rete durante lo scollegamento.");
+    } finally {
+      setGarminDisconnecting(false);
+    }
+  }
 
   function startEditProfile(p: AthleteProfileRow) {
     const routine = toRecord(p.routine_config);
@@ -1346,18 +1376,33 @@ export default function ProfilePage() {
                     ) : (
                       <p className="muted-copy text-sm">Nessun account Garmin collegato a questo profilo atleta.</p>
                     )}
-                    <a
-                      href={`/api/integrations/garmin/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
-                      target="_self"
-                      rel="noopener noreferrer"
-                      className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
-                    >
-                      {garminLink.linked ? "Ricollega Garmin Connect" : "Collega Garmin Connect"}
-                    </a>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <a
+                        href={`/api/integrations/garmin/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                        target="_self"
+                        rel="noopener noreferrer"
+                        className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                      >
+                        {garminLink.linked ? "Ricollega Garmin Connect" : "Collega Garmin Connect"}
+                      </a>
+                      {garminLink.linked ? (
+                        <Pro2Button
+                          type="button"
+                          variant="secondary"
+                          disabled={garminDisconnecting}
+                          className="border border-rose-500/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
+                          onClick={() => void disconnectGarmin()}
+                        >
+                          {garminDisconnecting ? "Scollegamento…" : "Scollega Garmin"}
+                        </Pro2Button>
+                      ) : null}
+                    </div>
                     <p className="muted-copy text-xs">
                       In produzione configura <code className="text-white/70">GARMIN_OAUTH2_REDIRECT_URI</code>,{" "}
-                      <code className="text-white/70">GARMIN_OAUTH_PKCE_SECRET</code> e il cron che chiama{" "}
-                      <code className="text-white/70">POST /api/integrations/garmin/pull/run</code>.
+                      <code className="text-white/70">GARMIN_OAUTH_PKCE_SECRET</code>, <code className="text-white/70">CRON_SECRET</code> (Vercel) e
+                      worker pull: <code className="text-white/70">GET /api/integrations/garmin/pull/cron</code> (cron Vercel) oppure{" "}
+                      <code className="text-white/70">POST /api/integrations/garmin/pull/run</code> con{" "}
+                      <code className="text-white/70">GARMIN_PULL_RUN_SECRET</code>.
                     </p>
                   </div>
                 ) : null}

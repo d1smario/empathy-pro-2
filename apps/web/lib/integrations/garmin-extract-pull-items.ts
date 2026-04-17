@@ -1,6 +1,9 @@
+import { extractFirstGarminUserIdDeep, isGarminHealthSummaryListKey } from "@/lib/integrations/garmin-health-api-notification-schema";
+
 export type GarminPullItem = {
   streamKey: string;
-  userAccessToken: string;
+  /** OAuth1 dalla push; `null` se assente (post-migrazione) → pull con Bearer OAuth2 + `garmin_user_id`. */
+  userAccessToken: string | null;
   callbackUrl: string;
   /** User ID API Garmin (push / ping) per mappare l’atleta. */
   garminUserId?: string;
@@ -49,43 +52,48 @@ function readGarminUserId(rec: Record<string, unknown>): string | undefined {
 
 function pushItem(streamKey: string, rec: Record<string, unknown>, sink: GarminPullItem[]): void {
   const tokenRaw = rec.userAccessToken ?? rec.user_access_token;
-  const urlRaw = rec.callbackURL ?? rec.callbackUrl ?? rec.callback_url;
-  if (typeof tokenRaw !== "string" || typeof urlRaw !== "string") return;
-  const token = tokenRaw.trim();
+  const urlCandidate = rec.callbackURL ?? rec.callbackUrl ?? rec.callback_url ?? (rec as { CallbackURL?: unknown }).CallbackURL;
+  const urlRaw = typeof urlCandidate === "string" ? urlCandidate : "";
   const url = urlRaw.trim();
-  if (!token || !url) return;
+  if (!url) return;
+  const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
   const garminUserId = readGarminUserId(rec);
+  if (!token && !garminUserId) return;
   sink.push({
     streamKey,
-    userAccessToken: token,
+    userAccessToken: token.length ? token : null,
     callbackUrl: url,
     garminUserId,
     querySnapshot: snapshotFromRecord(rec),
   });
 }
 
-/**
- * Estrae voci pull dalla JSON tipica della push Garmin (array per stream: dailies, activities, …).
- */
 export function extractRootGarminUserId(parsed: unknown): string | null {
-  const root = asRecord(parsed);
-  if (!root) return null;
-  for (const k of ["userId", "user_id", "userUUID", "userUuid"]) {
-    const v = root[k];
-    if (typeof v === "string" && v.trim()) return v.trim();
-  }
-  return null;
+  return extractFirstGarminUserIdDeep(parsed);
 }
 
+/**
+ * Ping (§4.2): radice `{ dailies|epochs|…: [ { userId, callbackURL } ] }`.
+ * Push (§5.1): stesse chiavi ma oggetti summary senza `callbackURL` → nessun elemento pull (solo dati inline).
+ */
 export function extractGarminPullItems(parsed: unknown, endpointKind: string): GarminPullItem[] {
   const sink: GarminPullItem[] = [];
   const root = asRecord(parsed);
   if (!root) return sink;
 
-  for (const [streamKey, value] of Object.entries(root)) {
-    if (streamKey === "raw" || streamKey === "parse_error" || streamKey === "raw_prefix") continue;
-    if (!Array.isArray(value)) continue;
-    for (const el of value) {
+  const entries = Object.entries(root).filter(([k, v]) => {
+    if (k === "raw" || k === "parse_error" || k === "raw_prefix") return false;
+    return Array.isArray(v);
+  });
+  entries.sort(([a], [b]) => {
+    const pa = isGarminHealthSummaryListKey(a) ? 0 : 1;
+    const pb = isGarminHealthSummaryListKey(b) ? 0 : 1;
+    return pa - pb || a.localeCompare(b);
+  });
+
+  for (const [streamKey, value] of entries) {
+    const arr = value as unknown[];
+    for (const el of arr) {
       const rec = asRecord(el);
       if (rec) pushItem(streamKey, rec, sink);
     }

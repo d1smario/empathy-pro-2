@@ -10,6 +10,7 @@ Questo file è l’**indice organizzativo** (“cosa c’è, dove sta, come parl
 | `docs/ARCHITECTURE.md` | Piani dati e confini monorepo |
 | `docs/EMPATHY_PRO2_GENERATIVE_SYSTEM_ARCHITECTURE.md` | Ingresso “sistema generativo” Pro 2 (4 piani) + puntatore a questa mappa |
 | `docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md` | Rete A/B, nutrizione, gap noti |
+| `docs/EMPATHY_PRO2_BIOENERGETIC_TRANSPARENCY_HUB_AND_VIRYA_LOOP.md` | Hub trasparenza bioenergetica, loop giorno → VIRYA → builder |
 | `docs/EMPATHY_OPERATIONAL_REALIZATION_MAP.md` | Spina lettura, hub, fasi |
 | `docs/EMPATHY_MULTISCALE_BIOLOGICAL_ENGINE.md` | Multiscala / domain-knowledge |
 | `docs/EMPATHY_LAYER8_SYSTEMIC_MODULATION.md` | Modulazione sistemica (L8) |
@@ -157,6 +158,7 @@ flowchart LR
 | Bundle operativo (twin, loop, **nutritionPerformanceIntegration**) | `apps/web/lib/dashboard/resolve-operational-signals-bundle.ts` |
 | Modello energetico giorno | `apps/web/lib/nutrition/daily-energy-solver.ts` (`computeNutritionDailyEnergyModel`) |
 | UI griglia pasti / % | `apps/web/modules/nutrition/views/NutritionPageView.tsx` (`mealRows`, `caloricSplit`) |
+| Orari pasti per `planDate` (routine `week_plan` → fallback `meal_times` → **post-seduta**) | `routine-week-plan-meal-times.ts` + `nutrition-meal-times-training-coherence.ts` (fine seduta da `training1_start_time` + somma durate `planned_workouts`) → `NutritionPageView` + digest `buildRoutineDigestForMealPlan` |
 | Request deterministico | `apps/web/lib/nutrition/intelligent-meal-plan-request-builder.ts` |
 | Assemblaggio piano (no LLM) | `POST /api/nutrition/intelligent-meal-plan` → `deterministic-meal-plan-from-request.ts` → `mediterranean-meal-composer.ts` |
 | Composizione canonica alimenti | `canonical-food-composition.ts`, `meal-exposition-helpers.ts` |
@@ -179,7 +181,7 @@ flowchart LR
 | Training | `/training/*` | `planned-window`, builder, calendar |
 | Nutrition | `/nutrition/*` | Module, meal plan, diary, fueling |
 | Health | `/health` | Pannelli, upload |
-| Physiology | `/physiology` | Profile, history, snapshot |
+| Physiology | `/physiology`, `/physiology/bioenergetics` | Metabolic Lab + **hub bioenergetico** (solo lettura: `athlete-hub` + bundle operativo; doc loop VIRYA/builder) |
 | Profile | `/profile` | `GET /api/profile`, `profile/athlete-row` |
 | Athletes (coach) | `/athletes` | Roster, invites |
 

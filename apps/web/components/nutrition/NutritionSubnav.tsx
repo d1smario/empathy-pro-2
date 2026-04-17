@@ -1,8 +1,9 @@
 "use client";
 
-import { Activity, BookMarked, ChefHat, Flame, Workflow } from "lucide-react";
+import { Activity, BookMarked, ChefHat, Flame, Layers, Workflow } from "lucide-react";
 import { usePathname } from "next/navigation";
 import {
+  MODULE_PILL_AMBER,
   MODULE_PILL_CYAN,
   MODULE_PILL_EMERALD,
   MODULE_PILL_FUCHSIA,
@@ -20,6 +21,13 @@ export const NUTRITION_SUBNAV_PATHS = {
 } as const;
 
 const ITEMS: ModulePillLinkItem[] = [
+  {
+    key: "operational-hub",
+    href: "/physiology/bioenergetics",
+    label: "Segnali",
+    icon: Layers,
+    style: MODULE_PILL_AMBER,
+  },
   {
     key: "meal-plan",
     href: NUTRITION_SUBNAV_PATHS.mealPlan,

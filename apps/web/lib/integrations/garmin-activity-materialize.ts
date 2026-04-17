@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { shouldMaterializeGarminActivities } from "@/lib/integrations/garmin-health-api-notification-schema";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -30,7 +31,14 @@ function looksLikeActivitySummary(r: Record<string, unknown>): boolean {
   if (dur == null) return false;
   const date = activityDateString(r);
   if (!date) return false;
-  return Boolean(r.activityType ?? r.activityId ?? r.summaryId ?? r.activityName);
+  return Boolean(
+    r.activityType ??
+      r.activityId ??
+      r.summaryId ??
+      r.activityName ??
+      r.activitySubType ??
+      r.moveIQActivityType,
+  );
 }
 
 function collectActivityRecords(node: unknown, sink: Record<string, unknown>[]): void {
@@ -71,10 +79,17 @@ function inferTss(r: Record<string, unknown>): number {
 export async function materializeGarminActivitiesFromPullResponse(input: {
   athleteId: string;
   endpointKind: string;
+  /** Da `garmin_pull_jobs.stream_key` (es. `activities`); l’URL webhook è spesso `ping`. */
+  streamKey?: string | null;
   responseBody: unknown;
 }): Promise<{ upserted: number }> {
-  const kind = input.endpointKind.toLowerCase();
-  if (!kind.includes("activit") && !kind.includes("moveiq") && !kind.includes("session")) {
+  if (
+    !shouldMaterializeGarminActivities({
+      streamKey: input.streamKey,
+      endpointKind: input.endpointKind,
+      responseBody: input.responseBody,
+    })
+  ) {
     return { upserted: 0 };
   }
 
@@ -94,8 +109,9 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
     const tss = inferTss(r);
     const kcalRaw = r.activeKilocalories ?? r.calories;
     const kcal = typeof kcalRaw === "number" && Number.isFinite(kcalRaw) ? kcalRaw : null;
+    const kj = kcal != null ? Math.round(kcal * 4.184 * 1000) / 1000 : null;
     const externalId = pickExternalId(r);
-    const activityType = r.activityType ?? r.activityName ?? "garmin";
+    const activityType = String(r.activityType ?? r.activityName ?? r.moveIQActivityType ?? "garmin");
 
     const traceSummary = {
       parser_engine: "garmin_wellness_api_summary",
@@ -112,7 +128,7 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       date,
       duration_minutes: durationMinutes,
       tss,
-      kj: null as number | null,
+      kj,
       kcal,
       trace_summary: traceSummary,
       subjective_notes: null as string | null,

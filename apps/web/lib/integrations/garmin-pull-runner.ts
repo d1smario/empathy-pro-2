@@ -3,15 +3,17 @@ import "server-only";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
+import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
 
 type PullJobRow = {
   id: string;
   callback_url: string;
-  user_access_token: string;
+  user_access_token: string | null;
   athlete_id: string | null;
   endpoint_kind: string;
+  stream_key: string | null;
 };
 
 function nowIso() {
@@ -28,8 +30,8 @@ async function safeJsonBody(text: string): Promise<unknown> {
 }
 
 /**
- * Esegue fino a `limit` job in stato `pending` (firma OAuth1 + GET callbackURL).
- * Chiamare da `POST /api/integrations/garmin/pull/run` con segreto.
+ * Esegue fino a `limit` job in stato `pending`: OAuth1 (token push) oppure Bearer OAuth2 se token assente e `athlete_id` risolto.
+ * Chiamare da `POST /api/integrations/garmin/pull/run` o `GET /api/integrations/garmin/pull/cron` (Vercel Cron) con segreto.
  */
 export async function runGarminPullJobs(limit: number): Promise<{
   processed: number;
@@ -45,7 +47,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   const supabase = createServerSupabaseClient();
   const { data: jobs, error } = await supabase
     .from("garmin_pull_jobs")
-    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind")
+    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -63,13 +65,26 @@ export async function runGarminPullJobs(limit: number): Promise<{
     await supabase.from("garmin_pull_jobs").update({ status: "fetching", updated_at: t }).eq("id", job.id);
 
     try {
-      const headers = buildGarminSignedGetHeaders({
-        url: job.callback_url,
-        userAccessToken: job.user_access_token,
-      });
+      const userTok = job.user_access_token?.trim() ?? "";
+      let fetchHeaders: Record<string, string>;
+      if (userTok) {
+        fetchHeaders = {
+          ...buildGarminSignedGetHeaders({ url: job.callback_url, userAccessToken: userTok }),
+          Accept: "application/json",
+        };
+      } else if (job.athlete_id) {
+        const tok = await ensureFreshGarminAccessTokenForAthlete(supabase, job.athlete_id);
+        if ("error" in tok) {
+          throw new Error(`oauth2_pull: ${tok.error}`);
+        }
+        fetchHeaders = { Authorization: `Bearer ${tok.accessToken}`, Accept: "application/json" };
+      } else {
+        throw new Error("pull_job_senza_user_access_token né athlete_id");
+      }
+
       const res = await fetch(job.callback_url, {
         method: "GET",
-        headers: { ...headers, Accept: "application/json" },
+        headers: fetchHeaders,
         cache: "no-store",
         signal: AbortSignal.timeout(90_000),
       });
@@ -95,6 +110,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
           const { upserted } = await materializeGarminActivitiesFromPullResponse({
             athleteId: job.athlete_id,
             endpointKind: job.endpoint_kind,
+            streamKey: job.stream_key,
             responseBody: body,
           });
           activitiesUpserted += upserted;

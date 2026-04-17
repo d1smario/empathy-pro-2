@@ -1,27 +1,8 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
-import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { useAthleteOperationalHub } from "@/lib/dashboard/use-athlete-operational-hub";
 import { Pro2Link } from "@/components/ui/empathy";
-
-type HubOk = {
-  ok: true;
-  athleteId: string;
-  window: { from: string; to: string };
-  profile: { line: string } | null;
-  training: { plannedCount: number; executedCount: number };
-  nutrition: { constraintsLine: string | null; plansCount: number };
-  physiology: { line: string } | null;
-  health: { panelsCount: number; lastPanelLabel: string | null };
-  readSpineCoverage: ReadSpineCoverageSummary;
-  operationalSignals: OperationalSignalsBundle | null;
-  crossModuleDynamicsLines: string[];
-};
-
-type HubErr = { ok: false; error?: string };
 
 function HubRow({
   href,
@@ -45,46 +26,8 @@ function HubRow({
 }
 
 export function DashboardAthleteHubCard() {
-  const { athleteId, loading: ctxLoading } = useActiveAthlete();
-  const [loading, setLoading] = useState(true);
-  const [hub, setHub] = useState<HubOk | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (ctxLoading) return;
-    if (!athleteId) {
-      setHub(null);
-      setErr("Nessun atleta attivo.");
-      setLoading(false);
-      return;
-    }
-    let c = false;
-    (async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await fetch(
-          `/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}&includeOperationalSignals=1`,
-          { cache: "no-store", credentials: "same-origin" },
-        );
-        const json = (await res.json()) as HubOk | HubErr;
-        if (c) return;
-        if (!res.ok || !json.ok) {
-          setHub(null);
-          setErr(("error" in json && json.error) || "Lettura non riuscita.");
-          return;
-        }
-        setHub(json);
-      } catch {
-        if (!c) setErr("Errore di rete.");
-      } finally {
-        if (!c) setLoading(false);
-      }
-    })();
-    return () => {
-      c = true;
-    };
-  }, [athleteId, ctxLoading]);
+  const { ctxLoading, loading, error: err, hub } = useAthleteOperationalHub();
+  const showLoading = ctxLoading || loading;
 
   return (
     <section
@@ -92,22 +35,32 @@ export function DashboardAthleteHubCard() {
       aria-label="Riepilogo atleta"
     >
       <p className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-orange-300">Dashboard · dati reali</p>
-      <h2 className="mt-2 text-lg font-bold text-white">Hub operativo</h2>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+        <h2 className="text-lg font-bold text-white">Hub operativo</h2>
+        <Pro2Link
+          href="/physiology/bioenergetics"
+          variant="secondary"
+          className="shrink-0 border border-emerald-500/35 bg-emerald-500/10 text-xs hover:bg-emerald-500/15"
+        >
+          Trasparenza · ledger
+        </Pro2Link>
+      </div>
       <p className="mt-1 text-xs text-gray-500">
-        Sintesi da Supabase per l&apos;atleta attivo; training con finestra calendario (default −7 / +28 giorni).
+        Sintesi da Supabase per l&apos;atleta attivo; training con finestra calendario (default −7 / +28 giorni). Stesso payload della
+        pagina Physiology hub bioenergetico.
       </p>
 
-      {ctxLoading || loading ? (
+      {showLoading ? (
         <div className="mt-6 h-2 w-48 animate-pulse rounded-full bg-white/10" />
       ) : null}
 
-      {!ctxLoading && !loading && err ? (
+      {!showLoading && err ? (
         <p className="mt-6 text-sm text-amber-300/90" role="alert">
           {err}
         </p>
       ) : null}
 
-      {!ctxLoading && !loading && !err && hub ? (
+      {!showLoading && !err && hub ? (
         <div className="mt-6">
           {hub.operationalSignals ? (
             <details

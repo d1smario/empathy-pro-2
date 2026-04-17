@@ -3,6 +3,7 @@ import { BookOpen, LayoutDashboard, Settings2, Users, Zap } from "lucide-react";
 import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
+import { DashboardAthleteHubCard } from "@/components/dashboard/DashboardAthleteHubCard";
 import { DashboardIntroAndPricing } from "@/components/dashboard/DashboardIntroAndPricing";
 import { DashboardLoadAnalysisSummary } from "@/components/dashboard/DashboardLoadAnalysisSummary";
 import { CoachInviteLinksCard } from "@/components/coach/CoachInviteLinksCard";
@@ -79,6 +80,9 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             trialDaysConfigured={dashboardTrialDays}
           />
           <DashboardLoadAnalysisSummary />
+          <section id="dash-operational" className="scroll-mt-28 flex justify-center">
+            <DashboardAthleteHubCard />
+          </section>
         </div>
       ) : null}
 

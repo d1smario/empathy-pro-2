@@ -111,6 +111,11 @@ export type IntelligentMealPlanRequest = {
    * Inviato dal client con `meal-rotation-week-cache`.
    */
   weeklyStapleCounts?: Record<string, number>;
+  /**
+   * Slot il cui orario risolto (fine seduta + propagazione) è dopo la routine base: il composer favorisce CHO più rapidi
+   * a pranzo/cena, spuntino più “refeed” (dolce / più cereali o salato più magro e croccante).
+   */
+  postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */
@@ -125,6 +130,8 @@ export type IntelligentMealPlanSolverBasis = {
   integrationLeverLines: string[];
   pathwayTimingLines: string[];
   aggregateInhibitors: string[] | null;
+  /** Eco dei flag orario-spostato / post-seduta passati al composer (se presenti). */
+  postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
   slots: Array<{
     slot: MealSlotKey;
     labelIt: string;

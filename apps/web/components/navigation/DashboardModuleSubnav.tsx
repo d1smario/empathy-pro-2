@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Activity, Heart } from "lucide-react";
-import { MODULE_PILL_CYAN, MODULE_PILL_ROSE } from "@/components/navigation/module-pill-styles";
+import { Activity, Heart, Network } from "lucide-react";
+import { MODULE_PILL_AMBER, MODULE_PILL_CYAN, MODULE_PILL_ROSE } from "@/components/navigation/module-pill-styles";
 import { ModulePillSubnav, type ModulePillAnchorItem, scrollToModuleAnchor } from "@/components/navigation/ModulePillSubnav";
 
-export const DASHBOARD_MODULE_ANCHORS = ["dash-intro", "dash-core"] as const;
+export const DASHBOARD_MODULE_ANCHORS = ["dash-intro", "dash-core", "dash-operational"] as const;
 
 const ITEMS: ModulePillAnchorItem[] = [
   {
@@ -21,6 +21,13 @@ const ITEMS: ModulePillAnchorItem[] = [
     label: "Core",
     icon: Activity,
     style: MODULE_PILL_CYAN,
+  },
+  {
+    key: "operational",
+    anchor: "dash-operational",
+    label: "Operativo",
+    icon: Network,
+    style: MODULE_PILL_AMBER,
   },
 ];
 

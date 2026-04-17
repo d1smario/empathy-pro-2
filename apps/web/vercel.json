@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "cd ../.. && npm ci",
-  "buildCommand": "cd ../.. && npm run build"
+  "buildCommand": "cd ../.. && npm run build",
+  "crons": [
+    {
+      "path": "/api/integrations/garmin/pull/cron",
+      "schedule": "*/15 * * * *"
+    }
+  ]
 }

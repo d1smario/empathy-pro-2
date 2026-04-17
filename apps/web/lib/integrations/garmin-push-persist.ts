@@ -5,6 +5,11 @@ import { createHash } from "node:crypto";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
+import { materializeGarminActivitiesFromPullResponse } from "@/lib/integrations/garmin-activity-materialize";
+import {
+  extractFirstGarminUserIdDeep,
+  inferGarminActivityStreamKeyFromRoot,
+} from "@/lib/integrations/garmin-health-api-notification-schema";
 import {
   buildGarminPullRequestUrl,
   extractGarminPullItems,
@@ -96,7 +101,7 @@ export async function persistGarminPushReceipt(input: {
       stream_key: item.streamKey.slice(0, 120),
       endpoint_kind: input.endpointKind.slice(0, 200),
       callback_url: finalUrl,
-      user_access_token: item.userAccessToken,
+      user_access_token: item.userAccessToken ?? null,
       query_snapshot: item.querySnapshot,
       status: "pending",
       athlete_id: athleteId,
@@ -104,6 +109,24 @@ export async function persistGarminPushReceipt(input: {
     });
     if (jobErr) throw new Error(jobErr.message);
     queued += 1;
+  }
+
+  /** Push inline (Health API §5.1): nessun `callbackURL` → nessun job; materializziamo attività se payload compatibile. */
+  if (queued === 0) {
+    const uid = extractFirstGarminUserIdDeep(input.parsedJson) ?? rootUid;
+    const athleteId = uid ? await resolveAthleteIdForGarminUser(supabase, uid) : null;
+    if (athleteId) {
+      try {
+        await materializeGarminActivitiesFromPullResponse({
+          athleteId,
+          endpointKind: input.endpointKind,
+          streamKey: inferGarminActivityStreamKeyFromRoot(input.parsedJson),
+          responseBody: input.parsedJson,
+        });
+      } catch {
+        /* best-effort */
+      }
+    }
   }
 
   return { id: receiptId, pullJobsQueued: queued };

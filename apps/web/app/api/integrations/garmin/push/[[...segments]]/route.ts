@@ -1,23 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { runGarminPartnerAdminEffects } from "@/lib/integrations/garmin-admin-webhooks";
+import { verifyGarminPushWebhookAuth } from "@/lib/integrations/garmin-push-webhook-auth";
 import { persistGarminPushReceipt } from "@/lib/integrations/garmin-push-persist";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Verifica opzionale: imposta `GARMIN_PUSH_WEBHOOK_SECRET` e aggiungi alla URL del portale Garmin
- * `?token=<secret>` oppure header `x-empathy-garmin-secret: <secret>`.
+ * Vedi `verifyGarminPushWebhookAuth`: token Empathy opzionale **oppure** identità app Garmin
+ * (`garmin-client-id` / `oauth_consumer_key` = stesso Client ID del portale), così il portale
+ * non deve appendere `?token=` agli URL fissi (evita 401 su es. CONSUMER_PERMISSIONS).
  */
-function verifyOptionalWebhookSecret(req: NextRequest): boolean {
-  const secret = process.env.GARMIN_PUSH_WEBHOOK_SECRET?.trim();
-  if (!secret) return true;
-  const q = req.nextUrl.searchParams.get("token")?.trim();
-  if (q === secret) return true;
-  const h = req.headers.get("x-empathy-garmin-secret")?.trim();
-  return h === secret;
-}
 
 function endpointKindFromParams(segments: string[] | undefined): string {
   if (!segments?.length) return "unspecified";
@@ -29,11 +23,12 @@ function endpointKindFromParams(segments: string[] | undefined): string {
  * - Deregistration → `.../push/deregistration` (rimuove link atleta in DB se `userId` nel body)
  * - User permissions change → `.../push/userPermissions` (solo audit in `garmin_push_receipts`)
  * - Ping → `.../push/ping` se richiesto dal test (“almeno 1 altro endpoint” oltre ai due sopra)
- * Stesso `?token=` o header se usi `GARMIN_PUSH_WEBHOOK_SECRET`.
+ * Con `GARMIN_PUSH_WEBHOOK_SECRET`: aggiungi `?token=` **oppure** lascia che Garmin invii il client id (vedi `garmin-push-webhook-auth.ts`).
  */
 
 /**
- * GET: verifica reachability (utile per test manuale / alcuni flussi partner).
+ * GET: reachability (test manuale / verifiche che non inviano ancora POST con body).
+ * Non richiede `?token=`: reachability Garmin. Il POST usa `verifyGarminPushWebhookAuth`.
  */
 export async function GET(
   _req: NextRequest,
@@ -48,6 +43,11 @@ export async function GET(
   });
 }
 
+/** Reachability: alcuni check usano HEAD (senza body). */
+export async function HEAD() {
+  return new NextResponse(null, { status: 200 });
+}
+
 /**
  * POST: riceve notifiche push Garmin (metadata + callbackURL per pull).
  * Esempio URL per riga nel portale:
@@ -58,13 +58,19 @@ export async function POST(
   req: NextRequest,
   context: { params: { segments?: string[] } },
 ) {
-  if (!verifyOptionalWebhookSecret(req)) {
-    return NextResponse.json({ error: "Webhook secret non valido." }, { status: 401 });
-  }
-
   const kind = endpointKindFromParams(context.params.segments);
   const contentType = req.headers.get("content-type");
   const raw = await req.text();
+
+  if (!verifyGarminPushWebhookAuth(req, raw)) {
+    return NextResponse.json(
+      {
+        error:
+          "Push non autorizzato. Con GARMIN_PUSH_WEBHOOK_SECRET: ?token= / x-empathy-garmin-secret, oppure firma OAuth1 HMAC-SHA1 valida (consumer key+secret come in Vercel), oppure garmin-client-id. Se la firma fallisce per URL, imposta GARMIN_PUSH_PUBLIC_BASE_URL=https://<host> (senza slash finale).",
+      },
+      { status: 401 },
+    );
+  }
   let parsed: unknown = { raw: raw.slice(0, 50_000) };
   if (raw.trim().length > 0) {
     try {

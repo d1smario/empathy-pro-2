@@ -15,6 +15,7 @@ Leggere sempre insieme:
 | `docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md` | Indice organizzativo + diagrammi + matrice API/file |
 | `docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md` | Rete dati, flussi (es. nutrizione), gap noti |
 | `docs/EMPATHY_OPERATIONAL_REALIZATION_MAP.md` | L1–L4 operativi, spina lettura, fasi |
+| `docs/EMPATHY_PRO2_BIOENERGETIC_TRANSPARENCY_HUB_AND_VIRYA_LOOP.md` | Hub trasparenza (solo lettura), ordine VIRYA vs builder, influence ledger |
 | `.cursor/rules/empathy_generative_core.mdc` | Regole Cursor (reality > plan, AI non motore numerico) |
 
 ## Sintesi normativa (4 piani)
@@ -25,6 +26,8 @@ Leggere sempre insieme:
 4. **Application** — UI e API sottili: moduli, gate `requireAthleteReadContext`, export.
 
 **AI / LLM:** interpretazione, ricerca, etichettatura; **non** genera piano pasto canonico né sostituisce i motori per i numeri (vedi route deterministiche nutrizione).
+
+**Adattamento “doppio” solo in superficie:** la dashboard (twin, loop, dial) e il percorso knowledge/microbiota/epigenetica/AI operano su piani diversi (**Compute** vs **Interpretation**), ma devono **convogliare** su un’unica verità numerica e un unico commit verso memoria/piano. Dettaglio: `docs/EMPATHY_PRO2_BIOENERGETIC_TRANSPARENCY_HUB_AND_VIRYA_LOOP.md` §3.
 
 ## Integrazione con la mappa multilayer
 

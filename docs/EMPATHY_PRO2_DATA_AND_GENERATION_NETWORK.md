@@ -61,8 +61,8 @@ flowchart TB
 
 | Area | File / modulo | Legge | Scrive / espone |
 |------|----------------|-------|-----------------|
-| Profilo → pasti | `NutritionPageView.tsx` | `profile`, `routine_config.meal_times`, calendario giorno | `mealRows`, `intelligentMealPlanRequest` |
-| Request API | `intelligent-meal-plan-request-builder.ts` | profile, mealRows, pathway, `trainingDayLines`, `routineDigest` (parziale) | `IntelligentMealPlanRequest` |
+| Profilo → pasti | `NutritionPageView.tsx` | `profile`, `routine_config.meal_times` + **`routine_config.week_plan`** per `planDate` (`routine-week-plan-meal-times.ts`), calendario giorno | `mealRows`, `intelligentMealPlanRequest` |
+| Request API | `intelligent-meal-plan-request-builder.ts` | profile, mealRows, pathway, `trainingDayLines`, `routineDigest` (include orari pasti giorno + sveglia/sonno) | `IntelligentMealPlanRequest` |
 | Pathway testuale | `meal-plan-pathway-timing-lines.ts`, `pathway-modulation-model.ts` | twin/physiology-like, sessioni | righe timing nel request |
 | API route | `app/api/nutrition/intelligent-meal-plan/route.ts` | body request | JSON piano + `solverBasis` |
 | Assembler | `deterministic-meal-plan-from-request.ts` | request | slot + items |
@@ -73,8 +73,7 @@ flowchart TB
 
 **Lacune note nella Rete A (routine vs calendario):**
 
-- `routine_config.week_plan` (orari per giorno + training disegnato) **non** alimenta ancora in modo completo `mealTimes` per la data selezionata né il composer (solo `meal_times` flat + testo `routineDigest` ridotto).
-- **Post-workout / timing pasto vs fine sessione:** nessun segnale strutturato verso `mediterranean-meal-composer` — serve regola deterministica aggiuntiva (vedi §5).
+- **Grafo tempo routine ↔ calendario ↔ pasti:** orari slot da `week_plan` + `meal_times` sono in `routine-week-plan-meal-times.ts` (UI + `routineDigest`). Manca ancora il **cablaggio verso il composer** (fine sessione vs pranzo/cena, post-workout strutturato; vedi §5.2–5.3).
 
 ---
 
@@ -156,8 +155,8 @@ Questo è il pezzo “**legge tutto e modula**” allineato a **V1 `GET /api/das
 | Flusso / modulo | Legge già bene | Usa bene in Compute | Solo testo / parziale | Serve estensione deterministica |
 |-----------------|----------------|----------------------|------------------------|--------------------------------|
 | Macro pasto da profilo + solver | Sì (`mealRows`) | Sì | — | Affinare con `week_plan` per data |
-| Timing pasti | `meal_times` | Sì in slot | `week_plan` ignorato | Parser giorno → `scheduledTimeLocal` |
-| Allenamento vs pasto | Sessioni calendario | `trainingDayLines` | Non incrocia orari routine | **Grafo tempo:** fine sessione vs pranzo/cena |
+| Timing pasti | `meal_times` + `week_plan` + **fine seduta** (`nutrition-meal-times-training-coherence`) | Sì in slot UI + digest request | Composer USDA ancora neutro su template CHO | `postTrainingLunch` / template composer (§5.2) |
+| Allenamento vs pasto | Sessioni calendario + routine `training1_start_time` | `trainingDayLines` + shift orari pasto | — | Affinare composer (CHO post-workout) |
 | CHO post-workout | — | — | — | **Regole composer** (flag `postTrainingLunch`) |
 | Twin / lab → pathway | Sì | — | Modulation | Opzionale: pesi su template |
 | Multiscala bottleneck | Sì | — | Interpretazione UI | Opzionale: hint su priorità copy |
@@ -169,10 +168,10 @@ Questo è il pezzo “**legge tutto e modula**” allineato a **V1 `GET /api/das
 
 ## 5. Priorità coerenti con l’architettura
 
-1. **Routine → request:** per `planDate`, risolvere orari da `week_plan[weekday]` con fallback a `meal_times`; estendere `summarizeRoutine` con stringhe auditabili (senza cambiare twin).
-2. **Training timing:** da sessioni calendario (start/end o durata + default) + orario pasto slot → booleani `mealFollowsTrainingWithin(slot, minutes)`.
-3. **Composer:** ramo deterministico (es. preferire amido rapido / ridurre legumi massivi a pranzo se `lunch` post-workout).
-4. **Multiscala / AI:** restano sopra la Rete A; possono arricchire disclaimer e priorità narrative, non sostituire il passo 1–3.
+1. **Training timing:** da sessioni calendario (start/end o durata + default) + orario pasto slot → booleani `mealFollowsTrainingWithin(slot, minutes)`.
+2. **Composer:** ramo deterministico (es. preferire amido rapido / ridurre legumi massivi a pranzo se `lunch` post-workout).
+3. **Multiscala / AI:** restano sopra la Rete A; possono arricchire disclaimer e priorità narrative, non sostituire il passo 1–2.
+4. **Routine → orari/digest (UI + request):** `routine-week-plan-meal-times.ts` + `nutrition-meal-times-training-coherence.ts` (pranzo/merenda/cena dopo fine seduta pianificata, default +30 min al pranzo).
 
 ---
 

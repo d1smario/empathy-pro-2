@@ -19,6 +19,8 @@ export const dynamic = "force-dynamic";
  *     -H "Authorization: Bearer $GARMIN_PULL_RUN_SECRET" \
  *     -H "Content-Type: application/json" \
  *     -d '{"limit":5}'
+ *
+ * Su **Vercel Cron** (solo GET) usa `GET /api/integrations/garmin/pull/cron` con `CRON_SECRET` (vedi `vercel.json`).
  */
 export async function GET() {
   return NextResponse.json(

@@ -78,6 +78,8 @@ import {
   pathwayNutrientSummaryToMicroLines,
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
 import { buildIntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-meal-plan-request-builder";
+import { profileWeekDayKeyFromIsoLocal } from "@/lib/nutrition/routine-week-plan-meal-times";
+import { resolveMealTimesForNutritionPlanDate } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import {
   MEAL_SLOT_ORDER,
   type IntelligentMealPlanResponseBody,
@@ -471,15 +473,6 @@ function n(v: unknown, fallback = 0): number {
 
 function record(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-}
-
-/** Allineato a `week_plan` in ProfilePageView (`Mon` … `Sun`). */
-function profileWeekDayKeyFromIsoLocal(isoDate: string): string {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "Mon";
-  const d = new Date(`${isoDate}T12:00:00`);
-  if (Number.isNaN(d.getTime())) return "Mon";
-  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  return labels[d.getDay()] ?? "Mon";
 }
 
 /** `meal_count_mode` nel diet week → `meal_strategy` usato in Nutrizione. */
@@ -1113,7 +1106,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       lastNutritionHydrationKey.current = "";
       return;
     }
-    const hydrationKey = `${athleteId ?? ""}|${selectedPlanDate}|${JSON.stringify(profile.nutrition_config ?? null)}|${JSON.stringify(profile.routine_config ?? null)}`;
+    const dayPlannedSig = planned
+      .filter((p) => String(p.date ?? "").slice(0, 10) === selectedPlanDate)
+      .map((p) => `${String(p.id)}:${String(p.duration_minutes ?? "")}`)
+      .sort()
+      .join(";");
+    const hydrationKey = `${athleteId ?? ""}|${selectedPlanDate}|${JSON.stringify(profile.nutrition_config ?? null)}|${JSON.stringify(profile.routine_config ?? null)}|${dayPlannedSig}`;
     if (hydrationKey === lastNutritionHydrationKey.current) return;
     lastNutritionHydrationKey.current = hydrationKey;
 
@@ -1183,13 +1181,22 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setDailyEnergyKcal(n(mealPlan.daily_kcal, 3000));
 
     const times = record(record(rc.meal_times));
-    setMealTimes({
+    const flatMealTimes = {
       breakfast: String(times.breakfast ?? "07:30"),
       lunch: String(times.lunch ?? "13:00"),
       dinner: String(times.dinner ?? "20:00"),
       snack_am: String(times.snack_am ?? "10:30"),
       snack_pm: String(times.snack_pm ?? times.snacks ?? "16:30"),
-    });
+    };
+    const sessionsThisDay = planned.filter((p) => p.date === selectedPlanDate);
+    setMealTimes(
+      resolveMealTimesForNutritionPlanDate({
+        routineConfig: rc,
+        planDate: selectedPlanDate,
+        mealTimesFlatFromRoot: flatMealTimes,
+        plannedSessions: sessionsThisDay,
+      }),
+    );
 
     const fuelingCfg = record(nc.fueling);
     const predictorCfg = record(nc.performance_predictor);
@@ -1204,7 +1211,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setPredictorDistanceKm(n(predictorCfg.distance_km, 21));
     setPredictorTimeMin(n(predictorCfg.event_time_min, 95));
     setPredictorIntensityPctFtp(n(predictorCfg.intensity_pct_ftp, 84));
-  }, [profile, athleteId, selectedPlanDate]);
+  }, [profile, athleteId, selectedPlanDate, planned]);
 
   const profileSupplements = useMemo(() => {
     const fromSupp = profile?.supplements ?? [];
@@ -1464,6 +1471,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const base = buildIntelligentMealPlanRequest({
       athleteId,
       planDate: selectedPlanDate,
+      plannedSessionsForDay: selectedPlanSessions,
       profile: {
         diet_type: profile.diet_type,
         intolerances: profile.intolerances,
@@ -1513,6 +1521,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     trainingDayLinesForMealPlan,
     mealPlanIntegrationSolverLines,
     coachSessionFoodExclusions,
+    selectedPlanSessions,
   ]);
 
   const removeCoachMealPlanItem = useCallback((slot: MealSlotKey, index: number, foodLabel: string) => {
