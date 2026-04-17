@@ -133,10 +133,18 @@ export function NutritionMealPlanDailyTargets({
               <li>
                 <span className="text-slate-500">Σ piano USDA assemblato (voci alimenti):</span>{" "}
                 <span className="font-semibold text-orange-100/95">{round(ledger.assembledUsdaKcalSum)} kcal</span>
-                {ledger.mealsKcalSolver != null && Math.abs(ledger.assembledUsdaKcalSum - ledger.mealsKcalSolver) > 25 ? (
-                  <span className="block pt-1 text-[10px] text-amber-300/90">
-                    Diverso dal target pasti solver: l&apos;assemblaggio USDA non è vincolato a restare esattamente sul target slot-per-slot.
-                  </span>
+                {ledger.mealsKcalSolver != null && ledger.mealsKcalSolver > 0 ? (
+                  ledger.assembledUsdaKcalSum < ledger.mealsKcalSolver - 60 ? (
+                    <span className="block pt-1 text-[10px] text-amber-300/90">
+                      Sotto il target pasti solver: assemblaggio incompleto o porzioni conservative — prova a rigenerare il piano o rivedere le
+                      voci.
+                    </span>
+                  ) : ledger.assembledUsdaKcalSum > ledger.mealsKcalSolver + 120 ? (
+                    <span className="block pt-1 text-[10px] text-slate-500">
+                      Sopra il target pasti solver: la somma USDA è orientativa (porzioni indicative) e non è vincolata slot-per-slot al
+                      fabbisogno pasti del solver.
+                    </span>
+                  ) : null
                 ) : null}
               </li>
             ) : null}

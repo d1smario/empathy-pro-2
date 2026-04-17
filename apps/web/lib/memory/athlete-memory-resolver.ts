@@ -75,6 +75,16 @@ function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+/** Campi `numeric` / driver DB: possono arrivare come stringa — serve per BMR e solver nutrizione. */
+function asNumberFromDb(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 function toAthleteProfile(row: Record<string, unknown>, athleteId: string): AthleteProfile {
   const routineConfig = asRecord(row.routine_config);
   return {
@@ -86,20 +96,20 @@ function toAthleteProfile(row: Record<string, unknown>, athleteId: string): Athl
     sex: typeof row.sex === "string" ? (row.sex as AthleteProfile["sex"]) : undefined,
     timezone: typeof row.timezone === "string" ? row.timezone : undefined,
     activityLevel: typeof row.activity_level === "string" ? (row.activity_level as AthleteProfile["activityLevel"]) : undefined,
-    heightCm: typeof row.height_cm === "number" ? row.height_cm : undefined,
-    weightKg: typeof row.weight_kg === "number" ? row.weight_kg : undefined,
-    bodyFatPct: typeof row.body_fat_pct === "number" ? row.body_fat_pct : undefined,
-    muscleMassKg: typeof row.muscle_mass_kg === "number" ? row.muscle_mass_kg : undefined,
-    restingHrBpm: typeof row.resting_hr_bpm === "number" ? row.resting_hr_bpm : undefined,
-    maxHrBpm: typeof row.max_hr_bpm === "number" ? row.max_hr_bpm : undefined,
-    thresholdHrBpm: typeof row.threshold_hr_bpm === "number" ? row.threshold_hr_bpm : undefined,
+    heightCm: asNumberFromDb(row.height_cm),
+    weightKg: asNumberFromDb(row.weight_kg),
+    bodyFatPct: asNumberFromDb(row.body_fat_pct),
+    muscleMassKg: asNumberFromDb(row.muscle_mass_kg),
+    restingHrBpm: asNumberFromDb(row.resting_hr_bpm),
+    maxHrBpm: asNumberFromDb(row.max_hr_bpm),
+    thresholdHrBpm: asNumberFromDb(row.threshold_hr_bpm),
     dietType: typeof row.diet_type === "string" ? (row.diet_type as AthleteProfile["dietType"]) : undefined,
     intolerances: asStringArray(row.intolerances),
     allergies: asStringArray(row.allergies),
     foodPreferences: asStringArray(row.food_preferences),
     foodExclusions: asStringArray(row.food_exclusions),
     supplements: asStringArray(row.supplements),
-    preferredMealCount: typeof row.preferred_meal_count === "number" ? row.preferred_meal_count : undefined,
+    preferredMealCount: asNumberFromDb(row.preferred_meal_count),
     lifestyleActivityClass:
       typeof routineConfig?.lifestyle_activity_class === "string"
         ? (routineConfig.lifestyle_activity_class as AthleteProfile["lifestyleActivityClass"])
@@ -109,8 +119,8 @@ function toAthleteProfile(row: Record<string, unknown>, athleteId: string): Athl
     nutritionConfig: row.nutrition_config && typeof row.nutrition_config === "object" ? (row.nutrition_config as Record<string, unknown>) : undefined,
     supplementConfig: row.supplement_config && typeof row.supplement_config === "object" ? (row.supplement_config as Record<string, unknown>) : undefined,
     trainingAvailability: {
-      daysPerWeek: typeof row.training_days_per_week === "number" ? row.training_days_per_week : undefined,
-      maxSessionMinutes: typeof row.training_max_session_minutes === "number" ? row.training_max_session_minutes : undefined,
+      daysPerWeek: asNumberFromDb(row.training_days_per_week),
+      maxSessionMinutes: asNumberFromDb(row.training_max_session_minutes),
     },
     connectedDevices: [],
     createdAt: typeof row.created_at === "string" ? row.created_at : undefined,
