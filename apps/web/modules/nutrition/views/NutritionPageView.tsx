@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Package } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
@@ -428,6 +428,28 @@ function record(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
+/** Allineato a `week_plan` in ProfilePageView (`Mon` … `Sun`). */
+function profileWeekDayKeyFromIsoLocal(isoDate: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return "Mon";
+  const d = new Date(`${isoDate}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return "Mon";
+  const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  return labels[d.getDay()] ?? "Mon";
+}
+
+/** `meal_count_mode` nel diet week → `meal_strategy` usato in Nutrizione. */
+function mapMealCountModeToMealStrategy(mode: unknown): string | null {
+  const m = String(mode ?? "").trim();
+  if (!m || m === "4") return null;
+  if (m === "1") return "1-meal";
+  if (m === "2") return "2-meals";
+  if (m === "3") return "3-meals";
+  if (m === "5") return "5-meals";
+  if (m === "6") return "6-meals";
+  if (m === "fasting" || m.startsWith("semi-")) return m;
+  return null;
+}
+
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
 }
@@ -483,8 +505,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const lastNutritionHydrationKey = useRef<string>("");
   /** Incrementato al ritorno sul tab: ricarica profilo/fisiologia se aggiornati altrove (altra scheda / profilo). */
   const [nutritionContextVersion, setNutritionContextVersion] = useState(0);
 
@@ -1028,28 +1050,80 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, []);
 
   useEffect(() => {
-    if (!profile || hydrated) return;
+    if (!profile) {
+      lastNutritionHydrationKey.current = "";
+      return;
+    }
+    const hydrationKey = `${athleteId ?? ""}|${selectedPlanDate}|${JSON.stringify(profile.nutrition_config ?? null)}|${JSON.stringify(profile.routine_config ?? null)}`;
+    if (hydrationKey === lastNutritionHydrationKey.current) return;
+    lastNutritionHydrationKey.current = hydrationKey;
+
     const nc = record(profile.nutrition_config);
     const rc = record(profile.routine_config);
-    const mealCfg = record(nc.meal_plan);
-    const split = record(mealCfg.caloric_split);
-    const macro = record(mealCfg.macro_split);
+    const mealPlan = record(nc.meal_plan);
+    const splitFromMealPlan = record(mealPlan.caloric_split);
+    const splitRoot = record(nc.caloric_split);
+    const macroFromMealPlan = record(mealPlan.macro_split);
+    const macroRoot = record(nc.macro_split);
+
+    const wd = profileWeekDayKeyFromIsoLocal(selectedPlanDate);
+    const weekPlan = record(nc.week_plan);
+    const dayDiet = record(weekPlan[wd]);
+    const dist = record(dayDiet.caloric_distribution);
+    const dayMacros = record(dayDiet.daily_macros);
+
+    const hasWeekDayCal =
+      Number.isFinite(n(dist.breakfast, NaN)) ||
+      Number.isFinite(n(dist.lunch, NaN)) ||
+      Number.isFinite(n(dist.dinner, NaN)) ||
+      Number.isFinite(n(dist.snacks, NaN));
+
+    if (hasWeekDayCal) {
+      setCaloricSplit({
+        breakfast: n(dist.breakfast, 25),
+        lunch: n(dist.lunch, 35),
+        dinner: n(dist.dinner, 30),
+        snacks: n(dist.snacks, 10),
+      });
+    } else {
+      const useMealPlanSplit =
+        splitFromMealPlan.breakfast_pct != null ||
+        splitFromMealPlan.lunch_pct != null ||
+        splitFromMealPlan.dinner_pct != null ||
+        splitFromMealPlan.snacks_pct != null;
+      const split = useMealPlanSplit ? splitFromMealPlan : splitRoot;
+      setCaloricSplit({
+        breakfast: n(split.breakfast_pct, 25),
+        lunch: n(split.lunch_pct, 35),
+        dinner: n(split.dinner_pct, 30),
+        snacks: n(split.snacks_pct, 10),
+      });
+    }
+
+    const hasDayMacro =
+      dayMacros.cho_pct != null || dayMacros.carbs_pct != null || dayMacros.pro_pct != null || dayMacros.fat_pct != null;
+    if (hasDayMacro) {
+      setMacroSplit({
+        carbs: n(dayMacros.cho_pct ?? dayMacros.carbs_pct, 50),
+        protein: n(dayMacros.pro_pct, 25),
+        fat: n(dayMacros.fat_pct, 25),
+      });
+    } else {
+      const useMealPlanMacro = macroFromMealPlan.carbs_pct != null || macroFromMealPlan.protein_pct != null;
+      const macro = useMealPlanMacro ? macroFromMealPlan : macroRoot;
+      setMacroSplit({
+        carbs: n(macro.carbs_pct, 50),
+        protein: n(macro.protein_pct, 25),
+        fat: n(macro.fat_pct, 25),
+      });
+    }
+
+    const fromCountMode = mapMealCountModeToMealStrategy(dayDiet.meal_count_mode);
+    setMealStrategy(fromCountMode ?? String(mealPlan.meal_strategy ?? nc.meal_strategy ?? "3-meals"));
+
+    setDailyEnergyKcal(n(mealPlan.daily_kcal, 3000));
+
     const times = record(record(rc.meal_times));
-    const fuelingCfg = record(nc.fueling);
-    const predictorCfg = record(nc.performance_predictor);
-    setDailyEnergyKcal(n(mealCfg.daily_kcal, 3000));
-    setCaloricSplit({
-      breakfast: n(split.breakfast_pct, 25),
-      lunch: n(split.lunch_pct, 35),
-      dinner: n(split.dinner_pct, 30),
-      snacks: n(split.snacks_pct, 10),
-    });
-    setMacroSplit({
-      carbs: n(macro.carbs_pct, 50),
-      protein: n(macro.protein_pct, 25),
-      fat: n(macro.fat_pct, 25),
-    });
-    setMealStrategy(String(mealCfg.meal_strategy ?? "3-meals"));
     setMealTimes({
       breakfast: String(times.breakfast ?? "07:30"),
       lunch: String(times.lunch ?? "13:00"),
@@ -1058,6 +1132,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       snack_pm: String(times.snack_pm ?? times.snacks ?? "16:30"),
     });
 
+    const fuelingCfg = record(nc.fueling);
+    const predictorCfg = record(nc.performance_predictor);
     setSessionDurationMin(n(fuelingCfg.session_duration_min, 120));
     setSessionIntensityPctFtp(n(fuelingCfg.session_intensity_pct_ftp, 78));
     setFuelingChoGPerHour(n(fuelingCfg.cho_g_h, 75));
@@ -1069,9 +1145,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setPredictorDistanceKm(n(predictorCfg.distance_km, 21));
     setPredictorTimeMin(n(predictorCfg.event_time_min, 95));
     setPredictorIntensityPctFtp(n(predictorCfg.intensity_pct_ftp, 84));
-
-    setHydrated(true);
-  }, [profile, hydrated]);
+  }, [profile, athleteId, selectedPlanDate]);
 
   const profileSupplements = useMemo(() => {
     const fromSupp = profile?.supplements ?? [];
@@ -2144,6 +2218,19 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
     const payloadNutrition = {
       ...existingNutrition,
+      /** Allineato a Profile: split anche a root così `caloric_split` non dipende solo da `meal_plan`. */
+      meal_strategy: mealStrategy,
+      caloric_split: {
+        breakfast_pct: caloricSplit.breakfast,
+        lunch_pct: caloricSplit.lunch,
+        dinner_pct: caloricSplit.dinner,
+        snacks_pct: caloricSplit.snacks,
+      },
+      macro_split: {
+        carbs_pct: macroSplit.carbs,
+        protein_pct: macroSplit.protein,
+        fat_pct: macroSplit.fat,
+      },
       meal_plan: {
         daily_kcal: round(resolvedMealDailyEnergyKcal),
         meal_strategy: mealStrategy,
