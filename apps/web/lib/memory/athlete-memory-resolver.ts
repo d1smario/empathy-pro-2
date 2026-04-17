@@ -137,7 +137,7 @@ function toNutritionConstraints(athleteId: string, row: Record<string, unknown>)
     excludedFoods: asStringArray(row.food_exclusions),
     excludedSupplements: [],
     preferredFoods: asStringArray(row.food_preferences),
-    preferredMealCount: typeof row.preferred_meal_count === "number" ? row.preferred_meal_count : undefined,
+    preferredMealCount: asNumberFromDb(row.preferred_meal_count),
     updatedAt: typeof row.updated_at === "string" ? row.updated_at : undefined,
   };
 }

@@ -1367,10 +1367,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [mealRows]);
 
   /**
-   * KPI card / barre %: sostituire i target solver con il rollup USDA solo se i due mondi sono allineati.
-   * Se il budget pasti solver è patologicamente basso (es. BMR≈0 → ~0.4× training) ma il rollup USDA è alto,
-   * la vecchia soglia ≥72% era sempre vera e le card mostravano kcal “normali” mentre i KPI restavano ~260 kcal
-   * (incoerenza colazione ~10% vs % profilo). In quel caso restiamo sui target solver finché il modello energetico non torna plausibile.
+   * KPI card / barre %: quando il rollup USDA è plausibile vs il solver, aggiorniamo il **totale giorno** mostrato,
+   * ma ripartiamo le kcal per slot con le **stesse % profilo** dei target solver (`row.pct`). Così “colazione 10%”
+   * resta coerente col generativo (stessi pesi del request) invece di copiare i subtotali compositi per slot,
+   * che spesso distorcono la ripartizione (somma voci ≠ ripartizione %).
    */
   const mealPlanCardsDisplay = useMemo(() => {
     const rollup = intelligentMealPlan?.nutrientRollup;
@@ -1394,20 +1394,27 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       return mealPlanCards;
     }
 
-    return mealPlanCards.map((row) => {
-      const sub = rollup.perSlot.find((p) => p.slot === row.key)?.totals;
-      if (!sub) return row;
-      const kcal = round(sub.kcal);
+    const macro = effectiveMacroSplit;
+    const slotKcals = mealPlanCards.map((row) => round((rollupDayKcal * row.pct) / 100));
+    let drift = rollupDayKcal - slotKcals.reduce((s, k) => s + k, 0);
+    const adjustedKcals = [...slotKcals];
+    if (drift !== 0 && adjustedKcals.length) {
+      let pick = adjustedKcals.reduce((bestI, k, i, arr) => (k > arr[bestI] ? i : bestI), 0);
+      adjustedKcals[pick] = Math.max(50, adjustedKcals[pick] + drift);
+    }
+
+    return mealPlanCards.map((row, i) => {
+      const kcal = adjustedKcals[i] ?? row.kcal;
       return {
         ...row,
         kcal,
-        carbs: round(sub.carbsG, 1),
-        protein: round(sub.proteinG, 1),
-        fat: round(sub.fatG, 1),
+        carbs: round((kcal * (macro.carbs / 100)) / 4),
+        protein: round((kcal * (macro.protein / 100)) / 4),
+        fat: round((kcal * (macro.fat / 100)) / 9),
         portionHint: portionHintForMealKcal(kcal),
       };
     });
-  }, [mealPlanCards, intelligentMealPlan?.nutrientRollup]);
+  }, [mealPlanCards, intelligentMealPlan?.nutrientRollup, effectiveMacroSplit]);
 
   const mealDisplayByKey = useMemo(() => {
     const m = new Map<MealSlotKey, (typeof mealPlanCardsDisplay)[number]>();
