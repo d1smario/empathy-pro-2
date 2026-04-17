@@ -25,8 +25,9 @@ Ogni modifica va trattata come effetto sul **sistema**, non come task locale chi
 
 ## Deploy (solo Empathy Pro 2)
 
-- Il deploy di **questo** monorepo riguarda **unicamente** il prodotto **Empathy Pro 2** sul progetto Vercel documentato in `docs/AGENT_STATIC_CONTEXT_PRO2.md` (URL produzione: `empathy-pro-2-web.vercel.app`). **Non** trattare come target altri progetti Vercel, app generiche, estensioni o workspace collegati casualmente al CLI (`vercel link` su progetti non Empathy Pro 2).
-- **Mai** eseguire dall’agente `vercel deploy --prod`, `npx vercel --prod` o comandi equivalenti: rischio di progetto sbagliato e impatto su produzione. La produzione si aggiorna con **push su `master` del repo canonico** → integrazione GitHub→Vercel già configurata, oppure con azione **esplicita** dell’utente in dashboard Vercel.
+- Il deploy di **questo** monorepo riguarda **unicamente** il progetto Vercel **`empathy-pro-2-web`** (URL: `https://empathy-pro-2-web.vercel.app/`), come in `docs/AGENT_STATIC_CONTEXT_PRO2.md` e `docs/PLATFORM_AND_DEPLOY.md`. **Non** usare altri progetti (es. nomi generici tipo `web` su altre org) né creare `vercel.json` / `.vercel` in root che puntino altrove.
+- Prima di qualsiasi comando `vercel`: controllare che `.vercel/project.json` locale abbia **`"projectName":"empathy-pro-2-web"`** (o l’ID progetto corrispondente in dashboard). Se non coincide, **non** deployare dall’agente: l’utente deve `vercel link` al progetto giusto.
+- **Mai** eseguire dall’agente `vercel deploy --prod`, `npx vercel --prod` o comandi equivalenti: rischio di progetto sbagliato e impatto su produzione. La produzione canonica si aggiorna con **push su `master`** → GitHub→Vercel sul progetto **`empathy-pro-2-web`**, oppure con azione **esplicita** dell’utente in dashboard / CLI sul progetto corretto.
 
 ## Toolchain (Next, npm, audit)
 
