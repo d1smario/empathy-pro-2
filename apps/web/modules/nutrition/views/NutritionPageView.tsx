@@ -297,6 +297,51 @@ function mapAthleteMemoryToPhysio(memory: AthleteMemory | null | undefined): Phy
   };
 }
 
+/** Memory profile can omit anthropometry while the module row still has DB values; do not let nulls shadow. */
+function mergeNutritionProfileForSolver(mem: AthleteNutritionRow | null, mod: AthleteNutritionRow | null): AthleteNutritionRow | null {
+  if (!mem && !mod) return null;
+  if (!mem) return mod;
+  if (!mod) return mem;
+  return {
+    ...mod,
+    ...mem,
+    id: mem.id || mod.id,
+    birth_date: mem.birth_date ?? mod.birth_date,
+    sex: mem.sex ?? mod.sex,
+    diet_type: mem.diet_type ?? mod.diet_type,
+    intolerances: mem.intolerances ?? mod.intolerances,
+    allergies: mem.allergies ?? mod.allergies,
+    food_preferences: mem.food_preferences ?? mod.food_preferences,
+    food_exclusions: mem.food_exclusions ?? mod.food_exclusions,
+    supplements: mem.supplements ?? mod.supplements,
+    height_cm: mem.height_cm ?? mod.height_cm,
+    weight_kg: mem.weight_kg ?? mod.weight_kg,
+    body_fat_pct: mem.body_fat_pct ?? mod.body_fat_pct,
+    muscle_mass_kg: mem.muscle_mass_kg ?? mod.muscle_mass_kg,
+    lifestyle_activity_class: mem.lifestyle_activity_class ?? mod.lifestyle_activity_class,
+    routine_config: mem.routine_config ?? mod.routine_config,
+    nutrition_config: mem.nutrition_config ?? mod.nutrition_config,
+    supplement_config: mem.supplement_config ?? mod.supplement_config,
+  };
+}
+
+function mergePhysioForSolver(mem: PhysioRow | null, mod: PhysioRow | null): PhysioRow | null {
+  if (!mem && !mod) return null;
+  if (!mem) return mod;
+  if (!mod) return mem;
+  return {
+    ...mod,
+    ...mem,
+    athlete_id: mem.athlete_id || mod.athlete_id,
+    ftp_watts: mem.ftp_watts ?? mod.ftp_watts,
+    lt1_watts: mem.lt1_watts ?? mod.lt1_watts,
+    lt2_watts: mem.lt2_watts ?? mod.lt2_watts,
+    v_lamax: mem.v_lamax ?? mod.v_lamax,
+    vo2max_ml_min_kg: mem.vo2max_ml_min_kg ?? mod.vo2max_ml_min_kg,
+    baseline_hrv_ms: mem.baseline_hrv_ms ?? mod.baseline_hrv_ms,
+  };
+}
+
 const SPORTS = ["Running", "Ciclismo", "Nuoto", "XC Ski", "Triathlon", "Canoa", "MTB"];
 
 export type NutritionSubRoute = "meal-plan" | "fueling" | "integration" | "predictor" | "diary";
@@ -626,8 +671,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       }
 
       const memory = moduleData.athleteMemory ?? null;
-      const p = mapAthleteMemoryToNutritionProfile(memory) ?? ((moduleData.profile as AthleteNutritionRow | null) ?? null);
-      const ph = mapAthleteMemoryToPhysio(memory) ?? ((moduleData.physio as PhysioRow | null) ?? null);
+      const p = mergeNutritionProfileForSolver(
+        mapAthleteMemoryToNutritionProfile(memory),
+        (moduleData.profile as AthleteNutritionRow | null) ?? null,
+      );
+      const ph = mergePhysioForSolver(mapAthleteMemoryToPhysio(memory), (moduleData.physio as PhysioRow | null) ?? null);
       const physiology = (memory?.physiology as PhysiologyState | null) ?? ((moduleData.physiologyState as PhysiologyState | null) ?? null);
       const twin = (memory?.twin as TwinStateRow | null) ?? ((moduleData.twinState as TwinStateRow | null) ?? null);
       const recovery = (moduleData.recoverySummary as RecoverySummaryRow | null) ?? null;

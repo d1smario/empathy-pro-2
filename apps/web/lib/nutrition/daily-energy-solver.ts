@@ -49,8 +49,16 @@ function round(value: number, digits = 0) {
   return Math.round(value * factor) / factor;
 }
 
+/** Coerces finite numbers from JSON/DB (PostgREST numeric columns may arrive as strings). */
 function asFinite(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const t = value.trim();
+    if (!t) return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
 }
 
 function deriveAgeYears(birthDate?: string | null): number | null {
