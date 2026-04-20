@@ -2,7 +2,7 @@
 -- Non seleziona i token in chiaro: solo flag di presenza e metadati.
 -- Nella sezione (3) sostituisci l'UUID placeholder con l'atleta reale (es. da Profile / URL).
 
--- 1) Tabelle attese (migrations 006–008, 012)
+-- 1) Tabelle attese (migrations 006–008, 012, 013)
 SELECT table_schema, table_name
 FROM information_schema.tables
 WHERE table_schema = 'public'
@@ -13,7 +13,7 @@ WHERE table_schema = 'public'
   )
 ORDER BY table_name;
 
--- 2) Colonne garmin_athlete_links (OAuth2 + refresh expiry da 012)
+-- 2) Colonne garmin_athlete_links (OAuth2 + refresh expiry da 012; user_permissions da 013)
 SELECT column_name, data_type, is_nullable
 FROM information_schema.columns
 WHERE table_schema = 'public'
@@ -29,6 +29,7 @@ SELECT
   token_expires_at,
   oauth_refresh_expires_at,
   scope,
+  user_permissions,
   (oauth_access_token IS NOT NULL) AS has_access_token,
   (oauth_refresh_token IS NOT NULL) AS has_refresh_token
 FROM public.garmin_athlete_links

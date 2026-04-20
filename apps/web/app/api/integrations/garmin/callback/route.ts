@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
-import { exchangeGarminAuthorizationCode, fetchGarminApiUserId } from "@/lib/integrations/garmin-oauth2-api";
+import {
+  exchangeGarminAuthorizationCode,
+  fetchGarminApiUserId,
+  fetchGarminUserPermissions,
+} from "@/lib/integrations/garmin-oauth2-api";
 import { resolveGarminAppBaseUrl } from "@/lib/integrations/garmin-app-base-url";
 import { GARMIN_PKCE_COOKIE, unsealGarminPkceCookie } from "@/lib/integrations/garmin-pkce-cookie";
 import { parseRealityCallbackState, persistRealityProviderCallback } from "@/lib/reality/provider-adapters";
@@ -87,6 +91,7 @@ export async function GET(req: NextRequest) {
         redirectUri,
       });
       const garminUserId = await fetchGarminApiUserId(tokens.access_token);
+      const userPermissions = await fetchGarminUserPermissions(tokens.access_token);
       const expiresAt = new Date(
         Date.now() + Math.max(60, tokens.expires_in - 600) * 1000,
       ).toISOString();
@@ -115,6 +120,7 @@ export async function GET(req: NextRequest) {
           token_expires_at: expiresAt,
           oauth_refresh_expires_at: oauthRefreshExpiresAt,
           scope: tokens.scope ?? null,
+          user_permissions: userPermissions,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "athlete_id" },

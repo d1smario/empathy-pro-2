@@ -4,6 +4,7 @@ import { GARMIN_WELLNESS_USER_REST_PATHS, garminWellnessAbsoluteUrl } from "@/li
 
 const TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token";
 const USER_ID_URL = garminWellnessAbsoluteUrl(GARMIN_WELLNESS_USER_REST_PATHS.id);
+const USER_PERMISSIONS_URL = garminWellnessAbsoluteUrl(GARMIN_WELLNESS_USER_REST_PATHS.permissions);
 const USER_REGISTRATION_URL = garminWellnessAbsoluteUrl(GARMIN_WELLNESS_USER_REST_PATHS.registration);
 
 export type GarminTokenResponse = {
@@ -125,4 +126,43 @@ export async function fetchGarminApiUserId(accessToken: string): Promise<string>
     throw new Error("Risposta Garmin user id senza userId.");
   }
   return id.trim();
+}
+
+function normalizeGarminUserPermissionsPayload(parsed: unknown): string[] | null {
+  if (Array.isArray(parsed)) {
+    const strings = parsed.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+    return strings.length ? strings : null;
+  }
+  if (parsed && typeof parsed === "object") {
+    for (const v of Object.values(parsed as Record<string, unknown>)) {
+      if (Array.isArray(v)) {
+        const strings = v.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
+        if (strings.length) return strings;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * GET /wellness-api/rest/user/permissions — permessi **effettivamente concessi** dall’utente (Bearer).
+ * Garmin non espone un elenco “negati”; si confronta con quanto offerto dal programma in portale.
+ * In caso di errore HTTP / JSON non atteso → `null` (non bloccare il link OAuth).
+ */
+export async function fetchGarminUserPermissions(accessToken: string): Promise<string[] | null> {
+  const res = await fetch(USER_PERMISSIONS_URL, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+    cache: "no-store",
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(text) as unknown;
+    return normalizeGarminUserPermissionsPayload(parsed);
+  } catch {
+    return null;
+  }
 }
