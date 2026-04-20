@@ -357,10 +357,12 @@ export default function TrainingCalendarPageView() {
           setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
         }
       } else {
+        /** Sempre un giorno canonico: la cella selezionata vince se il campo data è vuoto (evita FIT/TCX su “altro” giorno). */
+        const effectiveExecutedDate = normalizeDateKey(fileImportForm.date) || selectedDate;
         const json = await importExecutedWorkoutFile({
           athleteId,
           file: fileImportForm.file,
-          date: fileImportForm.date || undefined,
+          date: effectiveExecutedDate,
           notes: fileImportForm.notes || undefined,
           device: fileImportForm.device !== "auto" ? fileImportForm.device : undefined,
         });
@@ -510,8 +512,8 @@ export default function TrainingCalendarPageView() {
             {showFileImport ? "Chiudi import" : "Importa file"}
           </button>
         </div>
-        <p className="font-mono text-xs text-gray-500" title="Finestra API (include margine oltre il mese della griglia)">
-          {fetchFrom} → {fetchTo} · griglia {monthFrom}…{monthTo}
+        <p className="max-w-md text-xs text-slate-500" title={`API: ${fetchFrom} → ${fetchTo}`}>
+          I dati caricati includono alcuni giorni prima e dopo il mese visibile, così le sedute ai bordi non spariscono dalla griglia.
         </p>
       </div>
 
@@ -658,9 +660,14 @@ export default function TrainingCalendarPageView() {
                     <select
                       className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm text-white"
                       value={fileImportForm.mode}
-                      onChange={(e) =>
-                        setFileImportForm((f) => ({ ...f, mode: e.target.value as "executed" | "planned" }))
-                      }
+                      onChange={(e) => {
+                        const mode = e.target.value as "executed" | "planned";
+                        setFileImportForm((f) => ({
+                          ...f,
+                          mode,
+                          ...(mode === "executed" ? { date: normalizeDateKey(f.date) || selectedDate } : {}),
+                        }));
+                      }}
                     >
                       <option value="executed">Workout eseguito</option>
                       <option value="planned">Programmazione coach (planned)</option>
@@ -704,13 +711,16 @@ export default function TrainingCalendarPageView() {
                 </label>
                 {fileImportForm.mode === "executed" ? (
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Data override (opzionale)
+                    Giorno nel calendario
                     <input
                       type="date"
                       className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm text-white"
                       value={fileImportForm.date}
                       onChange={(e) => setFileImportForm((f) => ({ ...f, date: e.target.value }))}
                     />
+                    <span className="mt-1 block font-normal normal-case text-slate-500">
+                      Di default è il giorno selezionato sulla griglia. Cambialo solo se il file va registrato su un altro giorno.
+                    </span>
                   </label>
                 ) : null}
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -724,7 +734,7 @@ export default function TrainingCalendarPageView() {
                 <p className="text-xs text-slate-500">
                   {fileImportForm.mode === "planned"
                     ? "Programmazione: CSV/JSON (export TrainingPeaks). Righe → planned_workouts."
-                    : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX (Garmin, Wahoo, Suunto, Polar, COROS, Karoo, Apple export, Zwift, Strava, TP…). Device: auto o manuale. Se manca la data, usa override."}
+                    : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX. Il salvataggio usa il giorno indicato sopra (cella corrente se non modifichi la data). Device: auto o manuale."}
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -753,6 +763,7 @@ export default function TrainingCalendarPageView() {
                   type="button"
                   className="group w-full rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-950/25 via-black/50 to-black/70 p-5 text-left shadow-inner transition hover:border-cyan-400/45 hover:bg-cyan-950/30"
                   onClick={() => {
+                    setFileImportForm((f) => ({ ...f, date: selectedDate }));
                     setShowFileImport(true);
                     window.setTimeout(() => {
                       document.getElementById("training-calendar-file-import")?.scrollIntoView({
