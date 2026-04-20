@@ -492,9 +492,10 @@ export default function TrainingCalendarPageView() {
             type="button"
             className="ml-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/15"
             onClick={() => {
-              setShowFileImport((v) => {
-                const next = !v;
+              setShowFileImport((open) => {
+                const next = !open;
                 if (next) {
+                  setFileImportForm((f) => ({ ...f, date: selectedDate }));
                   window.setTimeout(() => {
                     document.getElementById("training-calendar-file-import")?.scrollIntoView({
                       behavior: "smooth",

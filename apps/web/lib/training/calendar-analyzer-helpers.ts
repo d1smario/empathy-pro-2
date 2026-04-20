@@ -60,10 +60,13 @@ export function traceRecord(w: ExecutedWorkout): Record<string, unknown> | null 
   return null;
 }
 
+/** Allinea la cella al `date` persistito (stesso filtro API calendario); trace solo se `date` assente. */
 export function workoutDayKey(row: ExecutedWorkout): string {
+  const dbKey = normalizeDateKey(row.date);
+  if (dbKey) return dbKey;
   const tr = traceRecord(row);
   const fromTrace = pickText(tr, ["session_day_key", "date_key", "workout_day_key"]);
-  return normalizeDateKey(fromTrace ?? row.date);
+  return normalizeDateKey(fromTrace ?? "");
 }
 
 export type FitQuality = {
