@@ -155,8 +155,9 @@ export function CalendarPlannedBuilderDetail({
 
       {!contract ? (
         <p className="mt-3 text-sm text-gray-500">
-          Nessun payload <code className="text-gray-600">BUILDER_SESSION_JSON</code> in notes: seduta manuale legacy o creata fuori
-          builder.
+          Nessun contratto Builder in <code className="text-gray-600">notes</code> (tipico import TrainingPeaks / CSV: solo
+          riepilogo). Il grafico a blocchi e le zone compaiono dopo aver definito la sessione nel Builder — usa{" "}
+          <span className="text-gray-400">Modifica</span> qui sopra.
         </p>
       ) : (
         <details

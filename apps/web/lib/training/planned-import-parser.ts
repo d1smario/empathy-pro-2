@@ -22,15 +22,40 @@ function asNumber(v: unknown): number | null {
   return null;
 }
 
+function padYmd(y: number, month: number, day: number): string {
+  return `${y}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+/** True se (year, month 1–12, day) è un giorno reale del calendario locale. */
+function isValidCalendarYmd(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+  const dt = new Date(year, month - 1, day);
+  return dt.getFullYear() === year && dt.getMonth() === month - 1 && dt.getDate() === day;
+}
+
+/**
+ * Data solo-giorno da CSV/JSON (TrainingPeaks, export EU/US).
+ * Slash: prova DMY poi MDY; se entrambe valide preferisce DMY (coerente con 22/04/2026).
+ * ISO `YYYY-MM-DD` letto prima del parse `Date` (evita shift fuso su stringhe ambigue).
+ */
 function asDateOnly(input: string | null): string | null {
   if (!input) return null;
   const compact = input.trim();
-  const dmY = compact.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
-  if (dmY) {
-    const d = dmY[1].padStart(2, "0");
-    const m = dmY[2].padStart(2, "0");
-    const y = dmY[3];
-    return `${y}-${m}-${d}`;
+  const isoHead = compact.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoHead) return `${isoHead[1]}-${isoHead[2]}-${isoHead[3]}`;
+  const slash = compact.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);
+  if (slash) {
+    const a = Number(slash[1]);
+    const b = Number(slash[2]);
+    const y = Number(slash[3]);
+    const dmy = isValidCalendarYmd(y, b, a); // giorno=a, mese=b
+    const mdy = isValidCalendarYmd(y, a, b); // mese=a, giorno=b
+    if (dmy && !mdy) return padYmd(y, b, a);
+    if (!dmy && mdy) return padYmd(y, a, b);
+    if (dmy && mdy) return padYmd(y, b, a); // es. 02/01/2026 → 2 gen (DMY)
+    if (dmy) return padYmd(y, b, a);
+    if (mdy) return padYmd(y, a, b);
+    return null;
   }
   const d = new Date(compact);
   if (!Number.isFinite(d.getTime())) return null;
@@ -61,12 +86,12 @@ function parseCsv(text: string): PlannedImportResult {
   const headers = lines[0].split(sep).map((h) => h.trim().toLowerCase());
   const indexOf = (...keys: string[]) => headers.findIndex((h) => keys.some((k) => h.includes(k)));
 
-  const idxDate = indexOf("date", "giorno", "day", "workout day");
-  const idxType = indexOf("type", "workout", "sport", "session", "name");
-  const idxDur = indexOf("duration", "durata", "minutes", "time");
-  const idxTss = indexOf("tss", "training stress");
-  const idxKcal = indexOf("kcal", "calories", "energy");
-  const idxNotes = indexOf("note", "notes", "descr", "description");
+  const idxDate = indexOf("date", "giorno", "workout day", "calendar day", "scheduled date", "plan date");
+  const idxType = indexOf("type", "workout", "sport", "session", "name", "title", "workout title", "activity");
+  const idxDur = indexOf("duration", "durata", "minutes", "time", "planned duration", "planned time", "length");
+  const idxTss = indexOf("tss", "training stress", "planned tss", "planned load");
+  const idxKcal = indexOf("kcal", "calories", "energy", "planned kcal");
+  const idxNotes = indexOf("note", "notes", "descr", "description", "comments", "coach");
   if (idxDate < 0) throw new Error("CSV pianificazione: colonna data mancante.");
 
   const rows: PlannedImportRow[] = [];

@@ -349,7 +349,9 @@ export default function TrainingCalendarPageView() {
           notes: fileImportForm.notes || undefined,
         });
         const n = typeof json.importedCount === "number" ? json.importedCount : 0;
-        setSuccess(`Programmazione importata: ${n} sedute.`);
+        setSuccess(
+          `Programmazione importata: ${n} sedute. Compaiono come chip PLAN (tipo, durata, TSS). Il grafico a blocchi del Builder non viene creato da file TrainingPeaks: usa «Modifica» sulla seduta o il Builder per strutturare la sessione.`,
+        );
         const fd = json.firstDate;
         if (fd && /^\d{4}-\d{2}-\d{2}$/.test(fd)) {
           setSelectedDate(fd);
@@ -733,7 +735,7 @@ export default function TrainingCalendarPageView() {
                 </label>
                 <p className="text-xs text-slate-500">
                   {fileImportForm.mode === "planned"
-                    ? "Programmazione: CSV/JSON (export TrainingPeaks). Righe → planned_workouts."
+                    ? "Programmazione: CSV/JSON (es. export calendario TrainingPeaks). Crea righe planned (data, tipo, durata, TSS); non è un file struttura Builder — per blocchi/intensità apri «Modifica» o il Builder su quella data."
                     : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX. Il salvataggio usa il giorno indicato sopra (cella corrente se non modifichi la data). Device: auto o manuale."}
                 </p>
                 <div className="flex flex-wrap gap-2">
