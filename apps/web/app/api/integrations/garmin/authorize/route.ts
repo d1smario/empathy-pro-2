@@ -21,11 +21,17 @@ function accessNextUrl(req: NextRequest, nextPath: string): URL {
   return u;
 }
 
-const GARMIN_OAUTH2_AUTHORIZE_FALLBACK = "https://connect.garmin.com/oauth2Confirm";
+/**
+ * Superficie authorize effettiva lato Garmin (Connect).
+ * Verificato con `curl -I "https://connect.garmin.com/oauth2Confirm?...PKCE..."`:
+ * Garmin risponde **302** con `Location: https://connect.garmin.com/partner/oauth2Confirm?` + stessi query.
+ * Default = partner per allinearsi a quel redirect (un hop in meno; stessa semantica del PDF che cita oauth2Confirm come ingresso).
+ */
+const GARMIN_OAUTH2_AUTHORIZE_FALLBACK = "https://connect.garmin.com/partner/oauth2Confirm";
 
 /**
  * Base authorize Garmin: da env solo origin + pathname (mai query/hash).
- * Evita copia-incolla da browser su Vercel con `permissionsUpdated` / `selectedCapabilities` / altro.
+ * Evita copia-incolla da browser su Vercel con query tipo `permissionsUpdated` / `selectedCapabilities` (non le aggiungiamo noi; Garmin le può appendere dopo login).
  */
 function garminOAuth2AuthorizeBaseFromEnv(): string {
   const raw = process.env.GARMIN_OAUTH2_AUTHORIZE_URL?.trim();
@@ -92,10 +98,7 @@ export async function GET(req: NextRequest) {
     /** Solo `athleteId`: il callback usa default `provider`/`domain`/`sourceKind` se assenti (`callback/route.ts`). */
     const state = JSON.stringify({ athleteId });
 
-    /**
-     * Default = endpoint PKCE documentato (allineato a `apis.garmin.com/tools/oauth2/authorizeUser` e OAuth2PKCE_1.pdf).
-     * Override: solo URL base senza query (es. `https://connect.garmin.com/partner/oauth2Confirm` se Garmin lo richiede).
-     */
+    /** Parametri PKCE solo quelli documentati; path = fallback sopra salvo `GARMIN_OAUTH2_AUTHORIZE_URL`. */
     const authorize = new URL(garminOAuth2AuthorizeBaseFromEnv());
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("client_id", clientId);
@@ -113,7 +116,7 @@ export async function GET(req: NextRequest) {
       maxAge: 600,
     });
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
-    /** Debug: conferma path inviato da Empathy (Garmin può poi riscrivere la barra su `/partner/...` + capability). */
+    /** Debug: path authorize inviato da Empathy (stesso che Garmin espone dopo 302 da oauth2Confirm). */
     res.headers.set("X-Empathy-Garmin-Authorize-Base", `${authorize.origin}${authorize.pathname}`);
     return res;
   } catch (e) {
