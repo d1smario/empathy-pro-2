@@ -113,6 +113,8 @@ export async function GET(req: NextRequest) {
       maxAge: 600,
     });
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
+    /** Debug: conferma path inviato da Empathy (Garmin può poi riscrivere la barra su `/partner/...` + capability). */
+    res.headers.set("X-Empathy-Garmin-Authorize-Base", `${authorize.origin}${authorize.pathname}`);
     return res;
   } catch (e) {
     if (e instanceof AthleteReadContextError) {
