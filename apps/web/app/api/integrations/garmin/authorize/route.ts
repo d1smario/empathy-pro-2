@@ -69,16 +69,16 @@ export async function GET(req: NextRequest) {
     }
 
     const challenge = garminPkceChallengeS256(verifier);
-    /** Solo `athleteId`: il callback usa default `provider`/`domain`/`sourceKind` se assenti (`callback/route.ts`). URL più corto = meno rischio con proxy/limiti Garmin su `/partner/oauth2Confirm`. */
+    /** Solo `athleteId`: il callback usa default `provider`/`domain`/`sourceKind` se assenti (`callback/route.ts`). */
     const state = JSON.stringify({ athleteId });
 
     /**
-     * Connect Developer in browser usa di norma `…/partner/oauth2Confirm` (come nel redirect utente).
-     * PDF Garmin PKCE cita anche `https://connect.garmin.com/oauth2Confirm` — override con `GARMIN_OAUTH2_AUTHORIZE_URL` se serve.
+     * Default = endpoint PKCE documentato (allineato a `apis.garmin.com/tools/oauth2/authorizeUser` e OAuth2PKCE_1.pdf).
+     * Se Garmin / programma richiede il path partner, imposta `GARMIN_OAUTH2_AUTHORIZE_URL=https://connect.garmin.com/partner/oauth2Confirm`.
      */
     const authorizeBase =
       process.env.GARMIN_OAUTH2_AUTHORIZE_URL?.trim() ||
-      "https://connect.garmin.com/partner/oauth2Confirm";
+      "https://connect.garmin.com/oauth2Confirm";
     const authorize = new URL(authorizeBase);
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("client_id", clientId);
