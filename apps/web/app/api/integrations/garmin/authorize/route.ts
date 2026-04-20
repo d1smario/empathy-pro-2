@@ -21,6 +21,26 @@ function accessNextUrl(req: NextRequest, nextPath: string): URL {
   return u;
 }
 
+const GARMIN_OAUTH2_AUTHORIZE_FALLBACK = "https://connect.garmin.com/oauth2Confirm";
+
+/**
+ * Base authorize Garmin: da env solo origin + pathname (mai query/hash).
+ * Evita copia-incolla da browser su Vercel con `permissionsUpdated` / `selectedCapabilities` / altro.
+ */
+function garminOAuth2AuthorizeBaseFromEnv(): string {
+  const raw = process.env.GARMIN_OAUTH2_AUTHORIZE_URL?.trim();
+  if (!raw) return GARMIN_OAUTH2_AUTHORIZE_FALLBACK;
+  try {
+    const u = new URL(raw);
+    const host = u.hostname.toLowerCase();
+    if (!host.endsWith("garmin.com")) return GARMIN_OAUTH2_AUTHORIZE_FALLBACK;
+    const path = u.pathname.startsWith("/") ? u.pathname : `/${u.pathname}`;
+    return `${u.origin}${path}`;
+  } catch {
+    return GARMIN_OAUTH2_AUTHORIZE_FALLBACK;
+  }
+}
+
 /**
  * Avvia OAuth2 PKCE Garmin: redirect a connect.garmin.com. Richiede sessione + accesso all’atleta.
  * Query: athleteId (uuid).
@@ -74,12 +94,9 @@ export async function GET(req: NextRequest) {
 
     /**
      * Default = endpoint PKCE documentato (allineato a `apis.garmin.com/tools/oauth2/authorizeUser` e OAuth2PKCE_1.pdf).
-     * Se Garmin / programma richiede il path partner, imposta `GARMIN_OAUTH2_AUTHORIZE_URL=https://connect.garmin.com/partner/oauth2Confirm`.
+     * Override: solo URL base senza query (es. `https://connect.garmin.com/partner/oauth2Confirm` se Garmin lo richiede).
      */
-    const authorizeBase =
-      process.env.GARMIN_OAUTH2_AUTHORIZE_URL?.trim() ||
-      "https://connect.garmin.com/oauth2Confirm";
-    const authorize = new URL(authorizeBase);
+    const authorize = new URL(garminOAuth2AuthorizeBaseFromEnv());
     authorize.searchParams.set("response_type", "code");
     authorize.searchParams.set("client_id", clientId);
     authorize.searchParams.set("redirect_uri", redirectUri);
