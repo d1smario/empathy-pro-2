@@ -93,6 +93,12 @@ type LabRun = {
   output_payload: Record<string, unknown> | null;
 };
 
+function labHistorySectionTitle(section: LabSection): string {
+  if (section === "metabolic_profile") return "Metabolic profile";
+  if (section === "lactate_analysis") return "Lactate analysis";
+  return "Max Oxidate";
+}
+
 type WorkoutSample = {
   id: string;
   date: string;
@@ -331,6 +337,7 @@ export default function MetabolicLabPage() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<LabRun[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   const [autoInfo, setAutoInfo] = useState<string | null>(null);
   const [evidenceItems, setEvidenceItems] = useState<PubmedItem[]>([]);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
@@ -380,6 +387,11 @@ export default function MetabolicLabPage() {
   const cpCurveHasData = useMemo(
     () => CP_POINTS.some((p) => (parseFloat(String(cpInputs[p.label] ?? "").replace(",", ".")) || 0) > 0),
     [cpInputs],
+  );
+
+  const selectedHistoryRow = useMemo(
+    () => (selectedHistoryId ? history.find((r) => r.id === selectedHistoryId) ?? null : null),
+    [history, selectedHistoryId],
   );
 
   function microbiotaPresetValues(level: DysbiosisPreset) {
@@ -952,6 +964,7 @@ export default function MetabolicLabPage() {
     setSelectedWorkoutId("");
     setWorkouts([]);
     setHistory([]);
+    setSelectedHistoryId(null);
     setAutoInfo(null);
     setSaveMessage(null);
     setError(null);
@@ -1004,6 +1017,7 @@ export default function MetabolicLabPage() {
 
   async function loadHistory(activeAthleteId: string) {
     setHistoryLoading(true);
+    setSelectedHistoryId(null);
     try {
       const payload = await fetchPhysiologyHistoryAndFtp(activeAthleteId);
       const hist = (payload.history as LabRun[]) ?? [];
@@ -1102,6 +1116,7 @@ export default function MetabolicLabPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento storico physiology");
       setHistory([]);
+      setSelectedHistoryId(null);
       setWorkouts([]);
       setSelectedWorkoutId("");
       setProfileVo2maxLMin(null);
@@ -2463,44 +2478,94 @@ export default function MetabolicLabPage() {
         accent="slate"
         icon={Layers}
         title="Metabolic Lab history"
-        subtitle="Snapshot salvati (ultimi run per sezione)"
+        subtitle="Ultimi snapshot salvati — clicca una riga per leggere input e output (JSON)"
       >
         <p className="mb-3 text-xs leading-relaxed text-slate-500">
-          <strong>Preview</strong> = JSON congelato al salvataggio. I KPI nella pagina usano il <strong>motore attuale</strong> (
+          I KPI nella pagina usano il <strong>motore attuale</strong> (
           <code className="rounded bg-black/30 px-1 font-mono text-[0.65rem]">{METABOLIC_CP_ENGINE_REVISION}</code>
-          ).
+          ). Qui sotto è lo <strong>snapshot congelato</strong> al salvataggio.
         </p>
         {historyLoading ? (
           <p className="text-sm text-slate-500">Caricamento storico…</p>
         ) : history.length === 0 ? (
           <p className="text-sm text-slate-500">Nessuno snapshot salvato.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] border-collapse text-left text-sm text-slate-200">
-              <thead>
-                <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-500">
-                  <th className="pb-2 pr-4 font-semibold">Data</th>
-                  <th className="pb-2 pr-4 font-semibold">Section</th>
-                  <th className="pb-2 pr-4 font-semibold">Model</th>
-                  <th className="pb-2 font-semibold">Preview</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {history.map((row) => (
-                  <tr key={row.id} className="text-slate-300">
-                    <td className="py-2 pr-4 align-top tabular-nums text-slate-400">
-                      {new Date(row.created_at).toLocaleString("it-IT")}
-                    </td>
-                    <td className="py-2 pr-4 align-top">{row.section}</td>
-                    <td className="py-2 pr-4 align-top">{row.model_version}</td>
-                    <td className="max-w-[min(28rem,55vw)] truncate py-2 align-top font-mono text-xs text-slate-500">
-                      {JSON.stringify(row.output_payload ?? {})}
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[520px] border-collapse text-left text-sm text-slate-200">
+                <thead>
+                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-500">
+                    <th className="pb-2 pr-4 font-semibold">Data</th>
+                    <th className="pb-2 pr-4 font-semibold">Sezione</th>
+                    <th className="pb-2 pr-4 font-semibold">Model</th>
+                    <th className="pb-2 font-semibold"> </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {history.map((row) => {
+                    const selected = selectedHistoryId === row.id;
+                    return (
+                      <tr
+                        key={row.id}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={selected}
+                        onClick={() => setSelectedHistoryId((prev) => (prev === row.id ? null : row.id))}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setSelectedHistoryId((prev) => (prev === row.id ? null : row.id));
+                          }
+                        }}
+                        className={`cursor-pointer text-slate-300 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${
+                          selected ? "bg-cyan-500/15" : "hover:bg-white/5"
+                        }`}
+                      >
+                        <td className="py-2 pr-4 align-top tabular-nums text-slate-400">
+                          {new Date(row.created_at).toLocaleString("it-IT")}
+                        </td>
+                        <td className="py-2 pr-4 align-top">{labHistorySectionTitle(row.section)}</td>
+                        <td className="py-2 pr-4 align-top font-mono text-xs text-slate-400">{row.model_version}</td>
+                        <td className="py-2 align-top text-xs text-cyan-300/90">{selected ? "▼" : "⋯"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {selectedHistoryRow ? (
+              <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div className="text-xs text-slate-400">
+                    <span className="font-semibold text-slate-200">
+                      {labHistorySectionTitle(selectedHistoryRow.section)}
+                    </span>
+                    {" · "}
+                    {new Date(selectedHistoryRow.created_at).toLocaleString("it-IT")}
+                    {" · "}
+                    <span className="font-mono">{selectedHistoryRow.model_version}</span>
+                  </div>
+                  <Pro2Button type="button" variant="secondary" className="text-xs" onClick={() => setSelectedHistoryId(null)}>
+                    Chiudi
+                  </Pro2Button>
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">input_payload</p>
+                    <pre className="max-h-72 overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 font-mono text-[0.7rem] leading-relaxed text-slate-300">
+                      {JSON.stringify(selectedHistoryRow.input_payload ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">output_payload</p>
+                    <pre className="max-h-72 overflow-auto rounded-lg border border-white/10 bg-black/40 p-3 font-mono text-[0.7rem] leading-relaxed text-slate-300">
+                      {JSON.stringify(selectedHistoryRow.output_payload ?? {}, null, 2)}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </>
         )}
       </Pro2SectionCard>
 
