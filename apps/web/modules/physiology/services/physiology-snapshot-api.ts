@@ -14,6 +14,8 @@ export async function fetchPhysiologyHistoryAndFtp(athleteId: string) {
   }
   return (await response.json()) as {
     history: Array<Record<string, unknown>>;
+    /** Ultimo run `metabolic_profile` per ripopolare la curva CP anche se non è tra le ultime 8 righe miste. */
+    latestMetabolicProfileRun?: Record<string, unknown> | null;
     ftpW: number | null;
     profileVo2maxMlMinKg?: number | null;
     profileVo2maxLMin?: number | null;

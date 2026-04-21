@@ -1008,8 +1008,10 @@ export default function MetabolicLabPage() {
       const payload = await fetchPhysiologyHistoryAndFtp(activeAthleteId);
       const hist = (payload.history as LabRun[]) ?? [];
       setHistory(hist);
-      const latestMetabolic = hist.find((r) => r.section === "metabolic_profile");
-      const inp = latestMetabolic?.input_payload;
+      const latestMetabolicRow =
+        (payload.latestMetabolicProfileRun as LabRun | null | undefined) ??
+        hist.find((r) => r.section === "metabolic_profile");
+      const inp = latestMetabolicRow?.input_payload;
       setCpInputs(() => {
         const next = initialEmptyCpInputs();
         if (inp && typeof inp === "object") {
@@ -1286,7 +1288,7 @@ export default function MetabolicLabPage() {
     setProfileLastRecalcAt(Date.now());
     setSaveMessage(null);
     setProfileRecalcHint(
-      "Calcolo aggiornato in questa pagina. Non scrive su Supabase: usa «Salva snapshot Metabolic profile» in alto.",
+      "Calcolo aggiornato in questa pagina. La curva CP non si archivia da sola: premi «Salva snapshot Metabolic profile» (Supabase + profilo fisiologico). Alla riapertura si ricarica l’ultimo salvataggio Metabolic profile per questo atleta.",
     );
     window.setTimeout(() => setProfileRecalcHint(null), 14000);
     requestAnimationFrame(() => {

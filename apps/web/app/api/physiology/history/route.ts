@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes, bloodPanelRes] =
+    const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes, bloodPanelRes, latestMetabolicRes] =
       await Promise.all([
       db
         .from("metabolic_lab_runs")
@@ -107,6 +107,15 @@ export async function GET(req: NextRequest) {
         .order("sample_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1),
+      /** Ultimo snapshot Metabolic profile (indipendente dalle ultime 8 righe miste: evita form CP vuoto). */
+      db
+        .from("metabolic_lab_runs")
+        .select("id, section, model_version, created_at, input_payload, output_payload")
+        .eq("athlete_id", athleteId)
+        .eq("section", "metabolic_profile")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (historyRes.error) return NextResponse.json({ error: historyRes.error.message }, { status: 500 });
@@ -114,6 +123,8 @@ export async function GET(req: NextRequest) {
     if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
     if (microbiotaPanelRes.error) return NextResponse.json({ error: microbiotaPanelRes.error.message }, { status: 500 });
     if (bloodPanelRes.error) return NextResponse.json({ error: bloodPanelRes.error.message }, { status: 500 });
+    const latestMetabolicProfileRun =
+      latestMetabolicRes.error || !latestMetabolicRes.data ? null : latestMetabolicRes.data;
 
     const ftp = Number(physiologyState.physiologicalProfile.ftpWatts ?? 0);
     const vo2maxMlMinKgCanon = physiologyState.physiologicalProfile.vo2maxMlMinKg ?? null;
@@ -396,6 +407,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       history: historyRes.data ?? [],
+      latestMetabolicProfileRun,
       ftpW: Number.isFinite(ftp) && ftp > 0 ? ftp : null,
       profileVo2maxMlMinKg: vo2maxMlMinKgCanon,
       profileVo2maxLMin: vo2FromProfileLMin,
