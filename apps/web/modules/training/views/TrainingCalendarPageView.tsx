@@ -197,6 +197,7 @@ export default function TrainingCalendarPageView() {
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
+  const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
   const [showFileImport, setShowFileImport] = useState(false);
   const [fileImportForm, setFileImportForm] = useState({
     mode: "executed" as "executed" | "planned",
@@ -237,6 +238,7 @@ export default function TrainingCalendarPageView() {
       setExecuted([]);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       setErr("Nessun atleta attivo.");
       setLoading(false);
       return;
@@ -258,6 +260,7 @@ export default function TrainingCalendarPageView() {
         setExecuted([]);
         setReadSpineCoverage(null);
         setTwinContextStrip(null);
+        setPlannedProvenanceSummary(null);
         setFetchDiag({
           status: res.status,
           plannedN: 0,
@@ -273,6 +276,7 @@ export default function TrainingCalendarPageView() {
       setExecuted(ex);
       setReadSpineCoverage(json.readSpineCoverage ?? null);
       setTwinContextStrip(json.twinContextStrip ?? null);
+      setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
@@ -287,6 +291,7 @@ export default function TrainingCalendarPageView() {
       setExecuted([]);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       setFetchDiag({ status: 0, plannedN: 0, executedN: 0, apiError: "network" });
     } finally {
       if (!isStale()) {
@@ -435,6 +440,8 @@ export default function TrainingCalendarPageView() {
           label="Calendario"
           readSpineCoverage={readSpineCoverage}
           twinContextStrip={twinContextStrip}
+          athleteId={athleteId}
+          plannedProvenanceSummary={plannedProvenanceSummary}
         />
       ) : null}
 

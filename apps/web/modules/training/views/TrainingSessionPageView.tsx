@@ -41,6 +41,7 @@ export default function TrainingSessionPageView() {
   const [executed, setExecuted] = useState<ExecutedWorkout[]>([]);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
+  const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
 
   useEffect(() => {
     if (!dateValid) {
@@ -50,6 +51,7 @@ export default function TrainingSessionPageView() {
       setExecuted([]);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       return;
     }
     if (ctxLoading) return;
@@ -59,6 +61,7 @@ export default function TrainingSessionPageView() {
       setExecuted([]);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       setErr("Nessun atleta attivo.");
       return;
     }
@@ -80,6 +83,7 @@ export default function TrainingSessionPageView() {
           setExecuted([]);
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
           setErr(("error" in json && json.error) || "Lettura non riuscita.");
           return;
         }
@@ -87,6 +91,7 @@ export default function TrainingSessionPageView() {
         setExecuted(json.executed);
         setReadSpineCoverage(json.readSpineCoverage ?? null);
         setTwinContextStrip(json.twinContextStrip ?? null);
+        setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
       } catch {
         if (!cancelled) {
           setErr("Errore di rete.");
@@ -94,6 +99,7 @@ export default function TrainingSessionPageView() {
           setExecuted([]);
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -202,6 +208,8 @@ export default function TrainingSessionPageView() {
           label="Giornata"
           readSpineCoverage={readSpineCoverage}
           twinContextStrip={twinContextStrip}
+          athleteId={athleteId}
+          plannedProvenanceSummary={plannedProvenanceSummary}
         />
       ) : null}
 

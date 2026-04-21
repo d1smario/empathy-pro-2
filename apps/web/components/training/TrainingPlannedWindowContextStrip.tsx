@@ -2,6 +2,7 @@
 
 import type { TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
+import { formatPlannedProvenanceSummaryIt } from "@/lib/training/planned-provenance";
 import { cn } from "@/lib/cn";
 
 type Props = {
@@ -10,6 +11,10 @@ type Props = {
   className?: string;
   /** Etichetta breve nel summary (es. "Calendario", "Giornata", "Builder"). */
   label?: string;
+  /** Stesso `athleteId` della query `planned-window` (diagnostica / confronto DB). */
+  athleteId?: string | null;
+  /** Da `planned-window` → `plannedProvenanceSummary` (demo / builder / import coach). */
+  plannedProvenanceSummary?: Partial<Record<string, number>> | null;
 };
 
 function twinLine(t: TrainingTwinContextStripViewModel): string {
@@ -29,8 +34,13 @@ export function TrainingPlannedWindowContextStrip({
   twinContextStrip,
   className,
   label = "Training",
+  athleteId,
+  plannedProvenanceSummary,
 }: Props) {
   if (!readSpineCoverage) return null;
+
+  const aid = athleteId?.trim() ?? "";
+  const showProv = plannedProvenanceSummary != null;
 
   return (
     <details
@@ -43,6 +53,17 @@ export function TrainingPlannedWindowContextStrip({
         {label} · spina lettura {readSpineCoverage.spineScore}%
         {twinContextStrip ? " · twin" : ""}
       </summary>
+      {aid ? (
+        <p className="mt-2 break-all font-mono text-[0.6rem] leading-snug text-slate-500" title="athlete_id usato da planned-window">
+          atleta {aid}
+        </p>
+      ) : null}
+      {showProv ? (
+        <p className="mt-1 text-xs text-slate-500">
+          <span className="font-semibold text-slate-400">Origine pianificati · </span>
+          {formatPlannedProvenanceSummaryIt(plannedProvenanceSummary)}
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {(
           [

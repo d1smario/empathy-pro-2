@@ -385,6 +385,7 @@ export default function TrainingBuilderRichPageView() {
   const [calendarRefresh, setCalendarRefresh] = useState(0);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
+  const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
   /** Deve stare prima del fetch calendario: la finestra include queste date ± margine (non solo oggi±7/28). */
   const [plannedDate, setPlannedDate] = useState(() => localCalendarDateString());
   const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
@@ -405,6 +406,7 @@ export default function TrainingBuilderRichPageView() {
       setRange(null);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       setErr("Seleziona un atleta attivo (coach) o completa il profilo.");
       setLoading(false);
       return;
@@ -433,6 +435,7 @@ export default function TrainingBuilderRichPageView() {
           setRange(null);
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
           setErr(("error" in json && json.error) || "Lettura calendario non riuscita.");
           return;
         }
@@ -441,11 +444,13 @@ export default function TrainingBuilderRichPageView() {
         setRange({ from: json.from, to: json.to });
         setReadSpineCoverage(json.readSpineCoverage ?? null);
         setTwinContextStrip(json.twinContextStrip ?? null);
+        setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
       } catch {
         if (!c) {
           setErr("Errore di rete.");
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
         }
       } finally {
         if (!c) setLoading(false);
@@ -1001,6 +1006,8 @@ export default function TrainingBuilderRichPageView() {
             label="Builder"
             readSpineCoverage={readSpineCoverage}
             twinContextStrip={twinContextStrip}
+            athleteId={athleteId}
+            plannedProvenanceSummary={plannedProvenanceSummary}
           />
         ) : null}
 

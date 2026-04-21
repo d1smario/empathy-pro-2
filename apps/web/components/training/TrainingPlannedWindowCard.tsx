@@ -25,6 +25,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
   const [err, setErr] = useState<string | null>(null);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
+  const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -34,6 +35,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
       setRange(null);
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
+      setPlannedProvenanceSummary(null);
       setErr("No active athlete: open Settings or complete profile (private / coach).");
       setLoading(false);
       return;
@@ -57,6 +59,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
           setRange(null);
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
           setErr(("error" in json && json.error) || "Could not load data.");
           return;
         }
@@ -65,11 +68,13 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
         setRange({ from: json.from, to: json.to });
         setReadSpineCoverage(json.readSpineCoverage ?? null);
         setTwinContextStrip(json.twinContextStrip ?? null);
+        setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
       } catch {
         if (!cancelled) {
           setErr("Network error.");
           setReadSpineCoverage(null);
           setTwinContextStrip(null);
+          setPlannedProvenanceSummary(null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -105,6 +110,8 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
           label="Calendar"
           readSpineCoverage={readSpineCoverage}
           twinContextStrip={twinContextStrip}
+          athleteId={athleteId}
+          plannedProvenanceSummary={plannedProvenanceSummary}
         />
       ) : null}
 
