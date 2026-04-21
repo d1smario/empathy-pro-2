@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -157,6 +158,10 @@ export function PhysiologyPro2MetabolicDashboard({
   profileVo2maxMlMinKg,
   profileVo2maxLMin,
 }: PhysiologyPro2MetabolicDashboardProps) {
+  const cpCurveHasData = useMemo(
+    () => cpPointDefs.some((p) => parseW(cpInputs[p.label] ?? "") > 0),
+    [cpPointDefs, cpInputs],
+  );
   const p5W = parseW(cpInputs["5s"] ?? "");
   const peakLacHint = estimatePeakBloodLactateMmol(model.vlamax);
   const curveData = cpPointDefs.map((p) => ({
@@ -188,35 +193,43 @@ export function PhysiologyPro2MetabolicDashboard({
       </div>
 
       <div className="rounded-2xl border border-cyan-500/35 bg-gradient-to-br from-cyan-500/10 to-black/40 p-4">
-        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-cyan-200/90">VO₂max stimato</span>
-          <span className="text-2xl font-extrabold text-cyan-50">
-            {model.vo2maxMlMinKg.toFixed(1)}{" "}
-            <span className="text-sm font-semibold text-cyan-200/80">ml/kg/min</span>
-          </span>
-          <span className="text-sm text-slate-400">
-            ≈ {model.vo2maxLMin.toFixed(2)} L/min @ {bodyMassKg.toFixed(0)} kg · {model.vo2maxEstimate.modelVersion}
-          </span>
-          <span className="font-mono text-[0.65rem] text-slate-500">{METABOLIC_CP_ENGINE_REVISION}</span>
-        </div>
-        {profileVo2maxMlMinKg != null && profileVo2maxMlMinKg > 0 ? (
-          <div className="mt-3 rounded-xl border border-amber-500/35 bg-black/30 px-3 py-2">
-            <p className="text-[0.65rem] font-bold uppercase tracking-wide text-amber-200/90">VO₂max profilo / lab</p>
-            <p className="text-lg font-bold text-amber-50">
-              {profileVo2maxMlMinKg.toFixed(1)} <span className="text-sm font-semibold">ml/kg/min</span>
-              {profileVo2maxLMin != null ? (
-                <span className="ml-2 text-sm font-normal text-slate-400">≈ {profileVo2maxLMin.toFixed(2)} L/min</span>
-              ) : null}
+        {cpCurveHasData ? (
+          <>
+            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-cyan-200/90">VO₂max stimato</span>
+              <span className="text-2xl font-extrabold text-cyan-50">
+                {model.vo2maxMlMinKg.toFixed(1)}{" "}
+                <span className="text-sm font-semibold text-cyan-200/80">ml/kg/min</span>
+              </span>
+              <span className="text-sm text-slate-400">
+                ≈ {model.vo2maxLMin.toFixed(2)} L/min @ {bodyMassKg.toFixed(0)} kg · {model.vo2maxEstimate.modelVersion}
+              </span>
+              <span className="font-mono text-[0.65rem] text-slate-500">{METABOLIC_CP_ENGINE_REVISION}</span>
+            </div>
+            {profileVo2maxMlMinKg != null && profileVo2maxMlMinKg > 0 ? (
+              <div className="mt-3 rounded-xl border border-amber-500/35 bg-black/30 px-3 py-2">
+                <p className="text-[0.65rem] font-bold uppercase tracking-wide text-amber-200/90">VO₂max profilo / lab</p>
+                <p className="text-lg font-bold text-amber-50">
+                  {profileVo2maxMlMinKg.toFixed(1)} <span className="text-sm font-semibold">ml/kg/min</span>
+                  {profileVo2maxLMin != null ? (
+                    <span className="ml-2 text-sm font-normal text-slate-400">≈ {profileVo2maxLMin.toFixed(2)} L/min</span>
+                  ) : null}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Nessun VO₂max da lab sul profilo: salva da Metabolic Lab o da Profile quando disponibile.
+              </p>
+            )}
+            <p className="mt-2 text-[0.7rem] leading-relaxed text-slate-500">
+              Stima da curva CP (non spirometria). <strong>Ricalcola</strong> aggiorna solo lo schermo; <strong>Salva snapshot</strong> scrive su Supabase e aggiorna il profilo fisiologico.
             </p>
-          </div>
+          </>
         ) : (
-          <p className="mt-2 text-xs text-slate-500">
-            Nessun VO₂max da lab sul profilo: salva da Metabolic Lab o da Profile quando disponibile.
+          <p className="text-sm leading-relaxed text-slate-400">
+            Inserisci almeno un punto potenza (W) sulla curva Critical Power qui sotto: finché la curva è vuota non mostriamo VO₂max stimato, zone o grafici derivati (evitiamo numeri da fallback motore).
           </p>
         )}
-        <p className="mt-2 text-[0.7rem] leading-relaxed text-slate-500">
-          Stima da curva CP (non spirometria). <strong>Ricalcola</strong> aggiorna solo lo schermo; <strong>Salva snapshot</strong> scrive su Supabase e aggiorna il profilo fisiologico.
-        </p>
       </div>
 
       <div className="physiology-pro2-lab-banner physiology-pro2-lab-banner--cp">
@@ -255,6 +268,14 @@ export function PhysiologyPro2MetabolicDashboard({
         })}
       </div>
 
+      {!cpCurveHasData ? (
+        <p className="mt-4 rounded-xl border border-slate-600/40 bg-black/25 px-4 py-3 text-sm text-slate-400">
+          Dopo aver compilato la CP, usa <strong>Ricalcola</strong> e <strong>Salva snapshot</strong> nella scheda principale; i dati del laboratorio restano legati all&apos;atleta attivo.
+        </p>
+      ) : null}
+
+      {cpCurveHasData ? (
+      <>
       <div className="physiology-pro2-lab-chart-card">
         <h3 className="physiology-pro2-lab-chart-title">Power Duration Curve</h3>
         <div className="physiology-pro2-lab-chart-wrap">
@@ -475,6 +496,8 @@ export function PhysiologyPro2MetabolicDashboard({
           </ResponsiveContainer>
         </div>
       </div>
+      </>
+      ) : null}
     </div>
   );
 }

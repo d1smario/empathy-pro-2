@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { Pro2Button } from "@/components/ui/empathy";
-import { clearActiveAthleteId } from "@/lib/app-session";
+import { clearPro2ClientSessionKeys } from "@/lib/app-session";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 
 /**
@@ -47,7 +47,7 @@ export function SidebarSessionActions() {
     setBusy(true);
     const sb = createEmpathyBrowserSupabase();
     if (sb) await sb.auth.signOut();
-    clearActiveAthleteId();
+    clearPro2ClientSessionKeys();
     router.push("/access");
     router.refresh();
     setBusy(false);

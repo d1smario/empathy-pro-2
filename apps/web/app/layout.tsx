@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
+import { ClientRootProviders } from "@/app/client-root-providers";
 import { getMetadataBaseUrl, isSiteIndexingDisabled } from "@/lib/site-url";
 import "./globals.css";
 
@@ -65,7 +66,7 @@ export default function RootLayout({
         >
           Salta al contenuto
         </a>
-        {children}
+        <ClientRootProviders>{children}</ClientRootProviders>
       </body>
     </html>
   );

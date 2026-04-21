@@ -141,6 +141,12 @@ export function LactateEnginePro2Viz({ model, choGapG }: LactateEnginePro2VizPro
         <p className="lactate-engine-viz-sub">
           Ingeriti totali <strong>{model.choIngestedTotalG.toFixed(1)} g</strong> · ossidati esogeni {model.exogenousOxidizedG.toFixed(1)} g · CHO gap strategia{" "}
           <strong style={{ color: choGapG > 15 ? "#ff5d5d" : choGapG > 5 ? "#ffd60a" : "#00e08d" }}>{choGapG.toFixed(0)} g</strong>
+          {model.bloodGlucoseMmolL != null ? (
+            <>
+              {" "}
+              · glucosiemia sensore <strong>{model.bloodGlucoseMmolL.toFixed(2)} mmol/L</strong>
+            </>
+          ) : null}
         </p>
         <SegmentedBar segments={pipeSegs} unit="g" />
         <p className="lactate-engine-viz-hint">

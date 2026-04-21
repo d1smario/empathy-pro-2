@@ -23,6 +23,10 @@ export async function fetchPhysiologyHistoryAndFtp(athleteId: string) {
       lactate?: Record<string, number>;
       maxox?: Record<string, number>;
     };
+    /** Glicemia allineata: pannello sangue Health → baseline profilo → media sessioni. */
+    healthBioGlucose?: { mmol_l: number; source: "blood_panel" | "physiological_baseline" | "session_roll" } | null;
+    /** Temperatura core da `physiological_profiles.baseline_temp_c` (°C). */
+    healthBioCoreTempC?: number | null;
     microbiotaProfile?: {
       source: string;
       candida_overgrowth_pct: number;

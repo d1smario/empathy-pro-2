@@ -8,8 +8,18 @@ import {
   computeMetabolicProfileEngine,
   METABOLIC_CP_ENGINE_REVISION,
 } from "@/lib/engines/critical-power-engine";
+import { parseGasExchangeExport } from "@/lib/physiology/gas-exchange-file-parser";
+import type { GasExchangeParseResult } from "@/lib/physiology/gas-exchange-file-parser";
+import { substrateOxidationRatesFromGasExchange } from "@/lib/physiology/substrate-from-gas-exchange";
+import { vo2LMinAtTimeOnset, vo2OnsetFractionAtTime } from "@/lib/physiology/vo2-on-kinetics";
 import { estimatePeakBloodLactateMmol } from "@/lib/physiology/lactate-steady-state-curve";
 import { METABOLIC_SIGNAL_SCHEMA_VERSION } from "@/lib/physiology/metabolic-signal-contracts";
+import { gutMetricsFromTaxa } from "@/lib/physiology/derive-gut-metrics-from-context";
+import {
+  LactateAnalysisDataSourcesCard,
+  type HealthBioGlucoseMeta,
+  type SegmentAttachmentMeta,
+} from "@/components/physiology/LactateAnalysisDataSourcesCard";
 import { LactateMetabolicContextTiles } from "@/components/physiology/LactateMetabolicContextTiles";
 import { LactatePro2NumericEngineParams } from "@/components/physiology/LactatePro2NumericEngineParams";
 import { LactateWorkoutPickerPro2 } from "@/components/physiology/LactateWorkoutPickerPro2";
@@ -30,7 +40,8 @@ import {
   fetchPhysiologyHistoryAndFtp,
   savePhysiologySnapshot,
 } from "@/modules/physiology/services/physiology-snapshot-api";
-import { Layers, Network } from "lucide-react";
+import { clearVo2maxLab, saveVo2maxLab } from "@/modules/physiology/services/vo2max-lab-api";
+import { Activity, Layers, Network } from "lucide-react";
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -123,49 +134,55 @@ const CP_POINTS: CpPoint[] = [
   { label: "20m", sec: 1200 },
 ];
 
+function initialEmptyCpInputs(): Record<string, string> {
+  return Object.fromEntries(CP_POINTS.map((p) => [p.label, ""]));
+}
+
+/** Campi vuoti per atleta: si compilano a mano o da import sessione (nessun demo pre-fill). */
 const LACTATE_DEFAULT_INPUT: Record<string, string> = {
-    duration_min: "60",
-    power_w: "460",
-    ftp_w: "380",
-  body_mass_kg: "70",
-  velocity_m_min: "0",
-  grade_pct: "0",
-    efficiency: "0.24",
-    vo2_l_min: "5.75",
-  vco2_l_min: "0",
-    rer: "0.95",
-    smo2_rest: "70",
-    smo2_work: "40",
-    lactate_oxidation_pct: "70",
-    cori_pct: "18",
-    cho_ingested_g_h: "90",
-    gut_absorption_pct: "88",
-    microbiota_sequestration_pct: "6",
-    gut_training_pct: "75",
-  core_temp_c: "37.2",
-  candida_overgrowth_pct: "12",
-  bifidobacteria_pct: "8",
-  akkermansia_pct: "3",
-  butyrate_producers_pct: "20",
-  endotoxin_risk_pct: "20",
+  duration_min: "",
+  power_w: "",
+  ftp_w: "",
+  body_mass_kg: "",
+  velocity_m_min: "",
+  grade_pct: "",
+  efficiency: "",
+  vo2_l_min: "",
+  vco2_l_min: "",
+  rer: "",
+  smo2_rest: "",
+  smo2_work: "",
+  lactate_oxidation_pct: "",
+  cori_pct: "",
+  cho_ingested_g_h: "",
+  gut_absorption_pct: "",
+  microbiota_sequestration_pct: "",
+  gut_training_pct: "",
+  core_temp_c: "",
+  glucose_mmol_l: "",
+  candida_overgrowth_pct: "",
+  bifidobacteria_pct: "",
+  akkermansia_pct: "",
+  butyrate_producers_pct: "",
+  endotoxin_risk_pct: "",
 };
 
 const MAXOX_DEFAULT_INPUT: Record<string, string> = {
-    vo2_l_min: "5.75",
-    body_mass_kg: "70",
-    power_w: "300",
-  velocity_m_min: "0",
-  grade_pct: "0",
-    ftp_w: "380",
-    efficiency: "0.24",
-    rer: "0.92",
-    smo2_rest_pct: "70",
-    smo2_work_pct: "40",
-    lactate_mmol_l: "4.0",
-    lactate_trend_mmol_h: "2.2",
-  core_temp_c: "37.6",
-    hemoglobin_g_dl: "14.5",
-    sao2_pct: "97",
+  vo2_l_min: "",
+  body_mass_kg: "",
+  power_w: "",
+  velocity_m_min: "",
+  grade_pct: "",
+  ftp_w: "",
+  efficiency: "",
+  rer: "",
+  smo2_rest_pct: "",
+  smo2_work_pct: "",
+  lactate_mmol_l: "",
+  lactate_trend_mmol_h: "",
+  core_temp_c: "",
+  hemoglobin_g_dl: "",
+  sao2_pct: "",
 };
 
 type SourceTag = "auto" | "manual" | "default" | "mixed";
@@ -307,7 +324,7 @@ function estimateUncertaintyPct(sources: PrecedenceSource[]) {
 }
 
 export default function MetabolicLabPage() {
-  const { athleteId, role, loading } = useAthleteContext();
+  const { athleteId, role, loading, userId } = useAthleteContext();
   const [section, setSection] = useState<"profile" | "lactate" | "maxox">("profile");
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -327,11 +344,14 @@ export default function MetabolicLabPage() {
   const [microbiotaSourceMode, setMicrobiotaSourceMode] = useState<MicrobiotaSourceMode>("health_bio");
   const [dysbiosisPreset, setDysbiosisPreset] = useState<DysbiosisPreset>("eubiosi");
   const [hasHealthMicrobiotaProfile, setHasHealthMicrobiotaProfile] = useState(false);
+  const [healthBioGlucoseMeta, setHealthBioGlucoseMeta] = useState<HealthBioGlucoseMeta | null>(null);
+  const [healthBioCoreTempCBaseline, setHealthBioCoreTempCBaseline] = useState<number | null>(null);
   const [profileVo2maxLMin, setProfileVo2maxLMin] = useState<number | null>(null);
   const [profileVo2maxMlMinKg, setProfileVo2maxMlMinKg] = useState<number | null>(null);
   const [fatOxAdaptation, setFatOxAdaptation] = useState(0.5);
   const [profileCalcTick, setProfileCalcTick] = useState(0);
   const [lactateCalcTick, setLactateCalcTick] = useState(0);
+  const [lactateSegmentAttachment, setLactateSegmentAttachment] = useState<SegmentAttachmentMeta>(null);
   const [maxOxCalcTick, setMaxOxCalcTick] = useState(0);
   const [profileLastRecalcAt, setProfileLastRecalcAt] = useState<number | null>(null);
   const [lactateLastRecalcAt, setLactateLastRecalcAt] = useState<number | null>(null);
@@ -345,21 +365,22 @@ export default function MetabolicLabPage() {
   const [maxOxVo2Mode, setMaxOxVo2Mode] = useState<Vo2InputMode>("device");
   const [profileRecalcHint, setProfileRecalcHint] = useState<string | null>(null);
   const [metabolicProfileJsonHint, setMetabolicProfileJsonHint] = useState<string | null>(null);
+  const [labVo2ManualInput, setLabVo2ManualInput] = useState("");
+  const [labVo2Saving, setLabVo2Saving] = useState(false);
+  const [labVo2Message, setLabVo2Message] = useState<string | null>(null);
+  const [gasFileName, setGasFileName] = useState<string | null>(null);
+  const [gasParseResult, setGasParseResult] = useState<GasExchangeParseResult | null>(null);
 
-  const [cpInputs, setCpInputs] = useState<Record<string, string>>({
-    "5s": "1100",
-    "15s": "980",
-    "30s": "880",
-    "60s": "760",
-    "3m": "620",
-    "5m": "560",
-    "12m": "500",
-    "20m": "470",
-  });
+  const [cpInputs, setCpInputs] = useState<Record<string, string>>(() => initialEmptyCpInputs());
 
   const [lactateInput, setLactateInput] = useState({ ...LACTATE_DEFAULT_INPUT });
 
   const [maxOxInput, setMaxOxInput] = useState({ ...MAXOX_DEFAULT_INPUT });
+
+  const cpCurveHasData = useMemo(
+    () => CP_POINTS.some((p) => (parseFloat(String(cpInputs[p.label] ?? "").replace(",", ".")) || 0) > 0),
+    [cpInputs],
+  );
 
   function microbiotaPresetValues(level: DysbiosisPreset) {
     if (level === "eubiosi") {
@@ -431,6 +452,32 @@ export default function MetabolicLabPage() {
     return Number.isFinite(m) && m > 30 ? m : 70;
   }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg]);
 
+  const gasExchangeSubstrateProfile = useMemo(() => {
+    const vo2 = parseFloat(String(lactateInput.vo2_l_min).replace(",", "."));
+    const vco2Raw = parseFloat(String(lactateInput.vco2_l_min).replace(",", "."));
+    const vco2 =
+      Number.isFinite(vco2Raw) && vco2Raw > 0.02 ? vco2Raw : Number.isFinite(vo2) && vo2 > 0 ? vo2 * 0.92 : NaN;
+    if (!Number.isFinite(vo2) || vo2 < 0.15 || !Number.isFinite(vco2)) return null;
+    return substrateOxidationRatesFromGasExchange(vo2, vco2);
+  }, [lactateInput.vo2_l_min, lactateInput.vco2_l_min]);
+
+  const vo2OnsetPreview = useMemo(() => {
+    const tau = cpModel.vo2OnsetTauSecDefault;
+    const vmax = cpModel.vo2maxLMin;
+    const t = 60;
+    return {
+      tau,
+      vo2At60sLMin: vo2LMinAtTimeOnset(vmax, t, tau),
+      fracAt60s: vo2OnsetFractionAtTime(t, tau),
+    };
+  }, [cpModel.vo2OnsetTauSecDefault, cpModel.vo2maxLMin]);
+
+  const athleteBodyMassForGasImport = useMemo(() => {
+    const m = parseFloat(String(lactateInput.body_mass_kg).replace(",", ".")) ||
+      parseFloat(String(maxOxInput.body_mass_kg).replace(",", "."));
+    return Number.isFinite(m) && m > 30 ? m : undefined;
+  }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg]);
+
   const lactateResolved = useMemo(() => {
     const values: Record<string, number> = {};
     const sources: Record<string, PrecedenceSource> = {};
@@ -457,6 +504,54 @@ export default function MetabolicLabPage() {
     };
   }, [lactateInput, autoLactateBaseline, lactateVo2Mode, lactateRerMode, microbiotaSourceMode]);
 
+  const lactateGutDerived = useMemo(() => {
+    if (microbiotaSourceMode === "manual") return null;
+    const v = lactateResolved.values;
+    return gutMetricsFromTaxa({
+      candida_overgrowth_pct: v.candida_overgrowth_pct,
+      bifidobacteria_pct: v.bifidobacteria_pct,
+      akkermansia_pct: v.akkermansia_pct,
+      butyrate_producers_pct: v.butyrate_producers_pct,
+      endotoxin_risk_pct: v.endotoxin_risk_pct,
+    });
+  }, [microbiotaSourceMode, lactateResolved]);
+
+  const lactateEngineNumericValues = useMemo(() => {
+    const v = { ...lactateResolved.values };
+    if (microbiotaSourceMode !== "manual" && lactateGutDerived) {
+      v.gut_absorption_pct = lactateGutDerived.gut_absorption_pct;
+      v.microbiota_sequestration_pct = lactateGutDerived.microbiota_sequestration_pct;
+      v.gut_training_pct = lactateGutDerived.gut_training_pct;
+    }
+    return v;
+  }, [lactateResolved, microbiotaSourceMode, lactateGutDerived]);
+
+  const lactateSourcesForSnapshot = useMemo(() => {
+    const s = { ...lactateResolved.sources };
+    if (microbiotaSourceMode !== "manual") {
+      const tag: PrecedenceSource = microbiotaSourceMode === "health_bio" ? "measured" : "preset";
+      s.gut_absorption_pct = tag;
+      s.microbiota_sequestration_pct = tag;
+      s.gut_training_pct = tag;
+    }
+    return s;
+  }, [lactateResolved, microbiotaSourceMode]);
+
+  const lactateUncertaintyPct = useMemo(
+    () => estimateUncertaintyPct(Object.values(lactateSourcesForSnapshot)),
+    [lactateSourcesForSnapshot],
+  );
+
+  const lactateParamsDisplayInput = useMemo(() => {
+    if (microbiotaSourceMode === "manual" || !lactateGutDerived) return lactateInput;
+    return {
+      ...lactateInput,
+      gut_absorption_pct: String(lactateGutDerived.gut_absorption_pct),
+      microbiota_sequestration_pct: String(lactateGutDerived.microbiota_sequestration_pct),
+      gut_training_pct: String(lactateGutDerived.gut_training_pct),
+    };
+  }, [lactateInput, microbiotaSourceMode, lactateGutDerived]);
+
   const maxOxResolved = useMemo(() => {
     const values: Record<string, number> = {};
     const sources: Record<string, PrecedenceSource> = {};
@@ -479,15 +574,17 @@ export default function MetabolicLabPage() {
     };
   }, [maxOxInput, autoMaxOxBaseline, maxOxVo2Mode]);
 
-  /** %FTP e motori Lactate/MaxOx: stesso denominatore del pannello LT (max tra FTP profilo CP e campo lab). */
-  const physiologyLabFtpW = useMemo(
-    () => Math.max(1, cpModel.ftp, lactateResolved.values.ftp_w || 0),
-    [cpModel.ftp, lactateResolved.values.ftp_w],
-  );
-  const maxOxLabFtpW = useMemo(
-    () => Math.max(1, cpModel.ftp, maxOxResolved.values.ftp_w || 0),
-    [cpModel.ftp, maxOxResolved.values.ftp_w],
-  );
+  /** %FTP e motori Lactate/MaxOx: con curva CP vuota non usare FTP derivato dal fallback motore CP. */
+  const physiologyLabFtpW = useMemo(() => {
+    const labFtp = lactateResolved.values.ftp_w || 0;
+    if (cpCurveHasData) return Math.max(1, cpModel.ftp, labFtp);
+    return Math.max(1, labFtp);
+  }, [cpCurveHasData, cpModel.ftp, lactateResolved.values.ftp_w]);
+  const maxOxLabFtpW = useMemo(() => {
+    const labFtp = maxOxResolved.values.ftp_w || 0;
+    if (cpCurveHasData) return Math.max(1, cpModel.ftp, labFtp);
+    return Math.max(1, labFtp);
+  }, [cpCurveHasData, cpModel.ftp, maxOxResolved.values.ftp_w]);
 
   const lactateVo2Estimate = useMemo(() => {
     return estimateVo2FromDevice({
@@ -557,7 +654,12 @@ export default function MetabolicLabPage() {
       parseFloat(maxOxInput.efficiency.replace(",", ".")) ||
       0.24;
     const bm = profileDisplayMassKg;
-    const ftp = Math.max(1, cpModel.ftp);
+    const ftpFromForm =
+      Math.max(
+        parseFloat(String(maxOxInput.ftp_w).replace(",", ".")) || 0,
+        parseFloat(String(lactateInput.ftp_w).replace(",", ".")) || 0,
+      ) || 0;
+    const ftp = Math.max(1, ftpFromForm, cpCurveHasData ? cpModel.ftp : 0);
 
     const elev = parseFloat(String(form.elevation_m).replace(",", "."));
     const dist = parseFloat(String(form.distance_km).replace(",", "."));
@@ -616,38 +718,44 @@ export default function MetabolicLabPage() {
   }
 
   const lactateModel = useMemo(() => {
+    const v = lactateEngineNumericValues;
     return computeLactateEngine({
-      durationMin: lactateResolved.values.duration_min || 60,
-      powerW: lactateResolved.values.power_w || 0,
+      durationMin: v.duration_min || 60,
+      powerW: v.power_w || 0,
       ftpW: physiologyLabFtpW,
-      efficiency: lactateResolved.values.efficiency || 0.24,
+      efficiency: v.efficiency || 0.24,
       vo2LMin: lactateVo2Used,
-      vco2LMin: lactateResolved.values.vco2_l_min || undefined,
+      vco2LMin: v.vco2_l_min || undefined,
       rer: lactateRerUsed,
-      smo2Rest: lactateResolved.values.smo2_rest || 70,
-      smo2Work: lactateResolved.values.smo2_work || 40,
-      lactateOxidationPct: lactateResolved.values.lactate_oxidation_pct || 70,
-      coriPct: lactateResolved.values.cori_pct || 18,
-      choIngestedGH: lactateResolved.values.cho_ingested_g_h || 0,
-      gutAbsorptionPct: lactateResolved.values.gut_absorption_pct || 88,
-      microbiotaSequestrationPct: lactateResolved.values.microbiota_sequestration_pct || 6,
-      gutTrainingPct: lactateResolved.values.gut_training_pct || 75,
-      coreTempC: lactateResolved.values.core_temp_c || undefined,
-      candidaOvergrowthPct: lactateResolved.values.candida_overgrowth_pct || undefined,
-      bifidobacteriaPct: lactateResolved.values.bifidobacteria_pct || undefined,
-      akkermansiaPct: lactateResolved.values.akkermansia_pct || undefined,
-      butyrateProducersPct: lactateResolved.values.butyrate_producers_pct || undefined,
-      endotoxinRiskPct: lactateResolved.values.endotoxin_risk_pct || undefined,
-      cpW: cpModel.cp,
-      wPrimeJ: cpModel.wPrimeJ,
-      glycolyticIndexProxy: cpModel.vlamax,
+      smo2Rest: v.smo2_rest || 70,
+      smo2Work: v.smo2_work || 40,
+      lactateOxidationPct: v.lactate_oxidation_pct || 70,
+      coriPct: v.cori_pct || 18,
+      choIngestedGH: v.cho_ingested_g_h || 0,
+      gutAbsorptionPct: v.gut_absorption_pct || 88,
+      microbiotaSequestrationPct: v.microbiota_sequestration_pct || 6,
+      gutTrainingPct: v.gut_training_pct || 75,
+      coreTempC: v.core_temp_c || undefined,
+      candidaOvergrowthPct: v.candida_overgrowth_pct || undefined,
+      bifidobacteriaPct: v.bifidobacteria_pct || undefined,
+      akkermansiaPct: v.akkermansia_pct || undefined,
+      butyrateProducersPct: v.butyrate_producers_pct || undefined,
+      endotoxinRiskPct: v.endotoxin_risk_pct || undefined,
+      bloodGlucoseMmolL: (() => {
+        const g = v.glucose_mmol_l;
+        return Number.isFinite(g) && g >= 2.2 && g <= 22 ? g : undefined;
+      })(),
+      ...(cpCurveHasData
+        ? { cpW: cpModel.cp, wPrimeJ: cpModel.wPrimeJ, glycolyticIndexProxy: cpModel.vlamax }
+        : {}),
     });
   }, [
-    lactateResolved,
+    lactateEngineNumericValues,
     lactateVo2Used,
     lactateRerUsed,
     lactateCalcTick,
     physiologyLabFtpW,
+    cpCurveHasData,
     cpModel.cp,
     cpModel.wPrimeJ,
     cpModel.vlamax,
@@ -672,6 +780,8 @@ export default function MetabolicLabPage() {
     if (lactateModel.intensityPctFtp > 110 && lactateModel.anaerobicKcal < 0.08 * lactateModel.energyDemandKcal) score -= 20;
     if (lactateModel.choAvailableG < lactateModel.exogenousOxidizedG) score -= 10;
     if (lactateModel.glucoseRequiredForStrategyG < 0 || lactateModel.glycogenCombustedNetG < 0) score -= 10;
+    const bgObs = lactateModel.bloodGlucoseMmolL;
+    if (bgObs != null && bgObs < 4.0 && lactateModel.intensityPctFtp > 92) score -= 12;
     if (lactateVo2Mode === "test") {
       const gap = Math.abs(lactateVo2Used - lactateVo2Estimate.vo2LMin) / Math.max(0.2, lactateVo2Estimate.vo2LMin);
       if (gap > 0.18) score -= 20;
@@ -709,16 +819,16 @@ export default function MetabolicLabPage() {
     | "test_manual" => {
     if (maxOxVo2Mode === "test") return "test_manual";
     if (profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35) return "profile_vo2max";
-    if (cpModel.vo2maxLMin >= 0.35) return "metabolic_engine_vo2max";
+    if (cpCurveHasData && cpModel.vo2maxLMin >= 0.35) return "metabolic_engine_vo2max";
     return "power_estimate";
-  }, [maxOxVo2Mode, profileVo2LMinForModel, cpModel.vo2maxLMin]);
+  }, [maxOxVo2Mode, profileVo2LMinForModel, cpCurveHasData, cpModel.vo2maxLMin]);
 
   const maxOxVo2Used =
     maxOxVo2Mode === "test"
       ? maxOxResolved.values.vo2_l_min || maxOxVo2AtPowerL
       : profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35
         ? profileVo2LMinForModel
-        : cpModel.vo2maxLMin >= 0.35
+        : cpCurveHasData && cpModel.vo2maxLMin >= 0.35
           ? cpModel.vo2maxLMin
           : maxOxVo2AtPowerL;
   const maxOxBodyMassKg = maxOxResolved.values.body_mass_kg || 70;
@@ -726,9 +836,9 @@ export default function MetabolicLabPage() {
 
   const maxOxOxidativeCeilingVo2LMin = useMemo(() => {
     if (profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35) return profileVo2LMinForModel;
-    if (cpModel.vo2maxLMin >= 0.35) return cpModel.vo2maxLMin;
+    if (cpCurveHasData && cpModel.vo2maxLMin >= 0.35) return cpModel.vo2maxLMin;
     return undefined;
-  }, [profileVo2LMinForModel, cpModel.vo2maxLMin]);
+  }, [profileVo2LMinForModel, cpCurveHasData, cpModel.vo2maxLMin]);
 
   const maxOxModel = useMemo(() => {
     return computeMaxOxidateEngine({
@@ -736,7 +846,7 @@ export default function MetabolicLabPage() {
       bodyMassKg: maxOxResolved.values.body_mass_kg || 70,
       powerW: maxOxResolved.values.power_w || 0,
       ftpW: maxOxLabFtpW,
-      cpW: cpModel.cp,
+      ...(cpCurveHasData ? { cpW: cpModel.cp } : {}),
       oxidativeCeilingVo2LMin: maxOxOxidativeCeilingVo2LMin,
       efficiency: maxOxResolved.values.efficiency || 0.24,
       rer: maxOxResolved.values.rer || 0.92,
@@ -748,7 +858,7 @@ export default function MetabolicLabPage() {
       hemoglobinGdL: maxOxResolved.values.hemoglobin_g_dl || 14.5,
       sao2Pct: maxOxResolved.values.sao2_pct || 97,
     });
-  }, [maxOxResolved, maxOxVo2Used, maxOxCalcTick, cpModel.cp, maxOxLabFtpW, maxOxOxidativeCeilingVo2LMin]);
+  }, [maxOxResolved, maxOxVo2Used, maxOxCalcTick, cpCurveHasData, cpModel.cp, maxOxLabFtpW, maxOxOxidativeCeilingVo2LMin]);
 
   const maxOxReliability = useMemo(() => {
     let score = 100;
@@ -802,6 +912,7 @@ export default function MetabolicLabPage() {
       const fallbackVo2 = Number.isFinite(parseFloat(s.vo2_l_min)) ? parseFloat(s.vo2_l_min) : 0;
       const fallbackVco2 = Number.isFinite(parseFloat(s.vco2_l_min)) ? parseFloat(s.vco2_l_min) : (fallbackVo2 * fallbackRer);
       const fallbackCoreTemp = Number.isFinite(parseFloat(s.core_temp_c)) ? parseFloat(s.core_temp_c) : 37.2;
+      const fallbackGlucose = Number.isFinite(parseFloat(s.glucose_mmol_l)) ? parseFloat(s.glucose_mmol_l) : NaN;
 
       const duration = Math.max(1, workout.duration_min || fallbackDuration);
       const power = Math.max(0, (workout.power_w ?? fallbackPower));
@@ -812,6 +923,8 @@ export default function MetabolicLabPage() {
       const vo2 = workout.vo2_l_min ?? fallbackVo2;
       const vco2 = workout.vco2_l_min ?? fallbackVco2;
       const coreTemp = workout.core_temp_c ?? fallbackCoreTemp;
+      const glucoseRaw = workout.glucose_mmol_l ?? fallbackGlucose;
+      const glucose = Number.isFinite(glucoseRaw) ? glucoseRaw : NaN;
 
       return {
         ...s,
@@ -825,9 +938,35 @@ export default function MetabolicLabPage() {
         vo2_l_min: String(Number(vo2.toFixed(2))),
         vco2_l_min: String(Number(vco2.toFixed(2))),
         core_temp_c: String(Number(coreTemp.toFixed(2))),
+        glucose_mmol_l: Number.isFinite(glucose) ? String(Number(glucose.toFixed(2))) : s.glucose_mmol_l,
       };
     });
   }
+
+  const resetPhysiologyDraftForAthleteSwitch = useCallback(() => {
+    setCpInputs(initialEmptyCpInputs());
+    setLactateInput({ ...LACTATE_DEFAULT_INPUT });
+    setMaxOxInput({ ...MAXOX_DEFAULT_INPUT });
+    setAutoLactateBaseline(null);
+    setAutoMaxOxBaseline(null);
+    setSelectedWorkoutId("");
+    setWorkouts([]);
+    setHistory([]);
+    setAutoInfo(null);
+    setSaveMessage(null);
+    setError(null);
+    setGasFileName(null);
+    setGasParseResult(null);
+    setLabVo2ManualInput("");
+    setLabVo2Message(null);
+    setProfileRecalcHint(null);
+    setMetabolicProfileJsonHint(null);
+    setEvidenceItems([]);
+    setEvidenceError(null);
+    setLactateSegmentAttachment(null);
+    setHealthBioGlucoseMeta(null);
+    setHealthBioCoreTempCBaseline(null);
+  }, []);
 
   function applyWorkoutToMaxOx(workout: WorkoutSample) {
     const mappedSport = toSupportedSport(workout.sport);
@@ -838,7 +977,7 @@ export default function MetabolicLabPage() {
       const fallbackGrade = Number.isFinite(parseFloat(s.grade_pct)) ? parseFloat(s.grade_pct) : 0;
       const fallbackRer = Number.isFinite(parseFloat(s.rer)) ? parseFloat(s.rer) : 0.92;
       const fallbackVo2 = Number.isFinite(parseFloat(s.vo2_l_min)) ? parseFloat(s.vo2_l_min) : 0;
-      const fallbackLactate = Number.isFinite(parseFloat(s.lactate_mmol_l)) ? parseFloat(s.lactate_mmol_l) : 2;
+      const fallbackLactate = Number.isFinite(parseFloat(s.lactate_mmol_l)) ? parseFloat(s.lactate_mmol_l) : 0;
       const fallbackSmo2 = Number.isFinite(parseFloat(s.smo2_work_pct)) ? parseFloat(s.smo2_work_pct) : 40;
 
       const power = Math.max(0, (workout.power_w ?? fallbackPower));
@@ -871,21 +1010,19 @@ export default function MetabolicLabPage() {
       setHistory(hist);
       const latestMetabolic = hist.find((r) => r.section === "metabolic_profile");
       const inp = latestMetabolic?.input_payload;
-      if (inp && typeof inp === "object") {
-        setCpInputs((prev) => {
-          const next = { ...prev };
-          let any = false;
+      setCpInputs(() => {
+        const next = initialEmptyCpInputs();
+        if (inp && typeof inp === "object") {
           for (const p of CP_POINTS) {
             const raw = (inp as Record<string, unknown>)[p.label];
             if (raw == null || raw === "") continue;
             const s = String(raw).trim();
             if (s === "") continue;
             next[p.label] = s;
-            any = true;
           }
-          return any ? next : prev;
-        });
-      }
+        }
+        return next;
+      });
       const apiWorkouts = (payload.workouts as WorkoutSample[] | undefined) ?? [];
       setWorkouts(apiWorkouts);
       if (apiWorkouts.length > 0) {
@@ -909,20 +1046,6 @@ export default function MetabolicLabPage() {
       setProfileVo2maxLMin(pVo2L);
       setProfileVo2maxMlMinKg(pVo2Ml);
 
-      if (payload.ftpW != null && Number.isFinite(payload.ftpW) && payload.ftpW > 0) {
-        const ftp = Math.round(payload.ftpW);
-        setLactateInput((s) => ({ ...s, ftp_w: String(ftp) }));
-        setMaxOxInput((s) => ({ ...s, ftp_w: String(ftp) }));
-      }
-      if (payload.autoInputs?.lactate) {
-        setAutoLactateBaseline(payload.autoInputs.lactate);
-        setLactateInput((s) => ({
-          ...s,
-          ...Object.fromEntries(
-            Object.entries(payload.autoInputs?.lactate ?? {}).map(([k, v]) => [k, String(v)]),
-          ),
-        }));
-      }
       if (payload.microbiotaProfile) {
         setHasHealthMicrobiotaProfile(true);
         if (microbiotaSourceMode === "health_bio") {
@@ -941,13 +1064,37 @@ export default function MetabolicLabPage() {
           setMicrobiotaSourceMode("preset");
         }
       }
-      if (payload.autoInputs?.maxox) {
-        setAutoMaxOxBaseline(payload.autoInputs.maxox);
-        setMaxOxInput((s) => ({
+
+      setHealthBioGlucoseMeta(payload.healthBioGlucose ?? null);
+      setHealthBioCoreTempCBaseline(
+        payload.healthBioCoreTempC != null && Number.isFinite(payload.healthBioCoreTempC)
+          ? payload.healthBioCoreTempC
+          : null,
+      );
+
+      const lacAuto = payload.autoInputs?.lactate;
+      const lactateBaselinePartial: Record<string, number> = {};
+      if (lacAuto && typeof lacAuto.glucose_mmol_l === "number" && Number.isFinite(lacAuto.glucose_mmol_l)) {
+        lactateBaselinePartial.glucose_mmol_l = lacAuto.glucose_mmol_l;
+      }
+      if (lacAuto && typeof lacAuto.core_temp_c === "number" && Number.isFinite(lacAuto.core_temp_c)) {
+        lactateBaselinePartial.core_temp_c = lacAuto.core_temp_c;
+      }
+      setAutoLactateBaseline(Object.keys(lactateBaselinePartial).length ? lactateBaselinePartial : null);
+
+      if (payload.healthBioGlucose != null) {
+        const hbG = payload.healthBioGlucose;
+        setLactateInput((s) => ({
           ...s,
-          ...Object.fromEntries(
-            Object.entries(payload.autoInputs?.maxox ?? {}).map(([k, v]) => [k, String(v)]),
-          ),
+          glucose_mmol_l:
+            s.glucose_mmol_l.trim() === "" ? String(Number(hbG.mmol_l.toFixed(2))) : s.glucose_mmol_l,
+        }));
+      }
+      if (payload.healthBioCoreTempC != null && Number.isFinite(payload.healthBioCoreTempC)) {
+        const hbT = payload.healthBioCoreTempC;
+        setLactateInput((s) => ({
+          ...s,
+          core_temp_c: s.core_temp_c.trim() === "" ? String(Number(hbT.toFixed(2))) : s.core_temp_c,
         }));
       }
     } catch (err) {
@@ -957,14 +1104,19 @@ export default function MetabolicLabPage() {
       setSelectedWorkoutId("");
       setProfileVo2maxLMin(null);
       setProfileVo2maxMlMinKg(null);
+      setAutoLactateBaseline(null);
+      setAutoMaxOxBaseline(null);
+      setHealthBioGlucoseMeta(null);
+      setHealthBioCoreTempCBaseline(null);
     }
     setHistoryLoading(false);
   }
 
   useEffect(() => {
-    if (!athleteId) return;
-    loadHistory(athleteId);
-  }, [athleteId]);
+    if (!athleteId || !userId) return;
+    resetPhysiologyDraftForAthleteSwitch();
+    void loadHistory(athleteId);
+  }, [athleteId, userId, resetPhysiologyDraftForAthleteSwitch]);
 
   useEffect(() => {
     if (microbiotaSourceMode !== "preset") return;
@@ -1050,7 +1202,7 @@ export default function MetabolicLabPage() {
         keys: string[];
       }> = [
         { key: "intensity", label: "Intensity %FTP", value: lactateModel.intensityPctFtp, valueText: `${lactateModel.intensityPctFtp.toFixed(0)} %FTP`, min: 40, max: 140, keys: ["power_w", "ftp_w"] },
-        { key: "glycolytic", label: "CHO share", value: lactateModel.glycolyticSharePct, valueText: `${lactateModel.glycolyticSharePct.toFixed(0)}%`, min: 25, max: 98, keys: ["rer", "smo2_work", "smo2_rest"] },
+        { key: "glycolytic", label: "CHO share", value: lactateModel.glycolyticSharePct, valueText: `${lactateModel.glycolyticSharePct.toFixed(0)}%`, min: 25, max: 98, keys: ["rer", "smo2_work", "smo2_rest", "glucose_mmol_l"] },
         { key: "lactate_prod", label: "Lattato prodotto", value: lactateModel.lactateProducedG, valueText: `${lactateModel.lactateProducedG.toFixed(1)} g`, min: 5, max: 450, keys: ["power_w", "duration_min", "smo2_work"] },
         { key: "lactate_acc", label: "Lattato accumulato", value: lactateModel.lactateAccumG, valueText: `${lactateModel.lactateAccumG.toFixed(1)} g`, min: 0, max: 220, keys: ["lactate_oxidation_pct", "cori_pct"] },
         { key: "cho_avail", label: "CHO disponibili", value: lactateModel.choAvailableG, valueText: `${lactateModel.choAvailableG.toFixed(1)} g`, min: 0, max: 220, keys: ["cho_ingested_g_h", "gut_absorption_pct", "microbiota_sequestration_pct"] },
@@ -1134,7 +1286,7 @@ export default function MetabolicLabPage() {
     setProfileLastRecalcAt(Date.now());
     setSaveMessage(null);
     setProfileRecalcHint(
-      "Calcolo aggiornato in questa pagina. Non scrive su Supabase: usa «Salva snapshot Metabolic Profile» (sotto).",
+      "Calcolo aggiornato in questa pagina. Non scrive su Supabase: usa «Salva snapshot Metabolic profile» in alto.",
     );
     window.setTimeout(() => setProfileRecalcHint(null), 14000);
     requestAnimationFrame(() => {
@@ -1273,7 +1425,7 @@ export default function MetabolicLabPage() {
               MaxOx reliability: <strong style={{ color: reliabilityBadge(maxOxReliability).color }}>{maxOxReliability}%</strong>
             </span>
             <span style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: "999px", padding: "4px 10px" }}>
-              Lactate uncertainty: <strong style={{ color: "#ffd60a" }}>±{lactateResolved.uncertaintyPct}%</strong>
+              Lactate uncertainty: <strong style={{ color: "#ffd60a" }}>±{lactateUncertaintyPct}%</strong>
             </span>
             <span style={{ border: "1px solid rgba(255,255,255,0.2)", borderRadius: "999px", padding: "4px 10px" }}>
               MaxOx uncertainty: <strong style={{ color: "#ffd60a" }}>±{maxOxResolved.uncertaintyPct}%</strong>
@@ -1369,22 +1521,30 @@ export default function MetabolicLabPage() {
         id="physiology-live-metabolic-summary"
         className="rounded-2xl border border-cyan-500/30 bg-gradient-to-b from-slate-900/95 to-black/50 p-4"
       >
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-          <span className="text-xs font-bold text-cyan-200/90">VO₂max stimato</span>
-          <span className="text-xl font-extrabold text-cyan-50">
-            {cpModel.vo2maxMlMinKg.toFixed(1)}{" "}
-            <span className="text-sm font-semibold text-cyan-200/80">ml/kg/min</span>
-          </span>
-          <span className="text-sm text-slate-400">≈ {cpModel.vo2maxLMin.toFixed(2)} L/min</span>
-          <span className="text-sm text-slate-500">
-            · CP {cpModel.cp.toFixed(0)} W · FTP {cpModel.ftp.toFixed(0)} W
-          </span>
-          <span className="font-mono text-[0.65rem] text-slate-600">{METABOLIC_CP_ENGINE_REVISION}</span>
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-slate-500">
-          Valori sempre calcolati dai punti CP (scheda Metabolic profile). La colonna Preview nello storico è lo snapshot salvato; i numeri qui sono dal motore attuale. Se non vedi la revisione motore sopra, riavvia{" "}
-          <code className="rounded bg-black/40 px-1">npm run dev</code> e hard refresh.
-        </p>
+        {cpCurveHasData ? (
+          <>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-xs font-bold text-cyan-200/90">VO₂max stimato</span>
+              <span className="text-xl font-extrabold text-cyan-50">
+                {cpModel.vo2maxMlMinKg.toFixed(1)}{" "}
+                <span className="text-sm font-semibold text-cyan-200/80">ml/kg/min</span>
+              </span>
+              <span className="text-sm text-slate-400">≈ {cpModel.vo2maxLMin.toFixed(2)} L/min</span>
+              <span className="text-sm text-slate-500">
+                · CP {cpModel.cp.toFixed(0)} W · FTP {cpModel.ftp.toFixed(0)} W
+              </span>
+              <span className="font-mono text-[0.65rem] text-slate-600">{METABOLIC_CP_ENGINE_REVISION}</span>
+            </div>
+            <p className="mt-2 text-xs leading-relaxed text-slate-500">
+              Valori sempre calcolati dai punti CP (scheda Metabolic profile). La colonna Preview nello storico è lo snapshot salvato; i numeri qui sono dal motore attuale. Se non vedi la revisione motore sopra, riavvia{" "}
+              <code className="rounded bg-black/40 px-1">npm run dev</code> e hard refresh.
+            </p>
+          </>
+        ) : (
+          <p className="text-sm leading-relaxed text-slate-400">
+            Curva CP vuota per questo atleta: compila le potenze in Metabolic profile (o ripristinale dallo snapshot) prima di usare i numeri riassuntivi CP/FTP/VO₂max stimato.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -1413,6 +1573,356 @@ export default function MetabolicLabPage() {
 
       {section === "profile" ? (
         <div className="space-y-8">
+          <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <Pro2Button
+                type="button"
+                variant="primary"
+                disabled={saving || !cpCurveHasData}
+                onClick={() =>
+                  saveSnapshot("metabolic_profile", cpInputs, {
+                    cp: cpModel.cp,
+                    ftp: cpModel.ftp,
+                    lt1: cpModel.lt1,
+                    lt2: cpModel.lt2,
+                    fatmax: cpModel.fatmax,
+                    vlamax: cpModel.vlamax,
+                    vo2max_ml_min_kg: cpModel.vo2maxMlMinKg,
+                    vo2max_l_min: cpModel.vo2maxLMin,
+                    vo2max_estimate: cpModel.vo2maxEstimate,
+                    vo2max_model_version: "empathy-vo2max-metabolic-v2",
+                    sprintReserve: cpModel.sprintReserve,
+                    wPrimeJ: cpModel.wPrimeJ,
+                    pcrCapacityJ: cpModel.pcrCapacityJ,
+                    glycolyticCapacityJ: cpModel.glycolyticCapacityJ,
+                    fitR2: cpModel.fitR2,
+                    fitConfidence: cpModel.fitConfidence,
+                    fitModel: cpModel.fitModel,
+                    phenotype: cpModel.phenotype,
+                    substrateTable: cpModel.substrateTable,
+                    powerComponents: cpModel.powerComponents,
+                    cpWorkTimeLinear: cpModel.cpWorkTimeLinear,
+                    vo2OnsetTauSecDefault: cpModel.vo2OnsetTauSecDefault,
+                    gasExchangeSubstrate: gasExchangeSubstrateProfile,
+                    metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
+                    metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
+                  })
+                }
+              >
+                {saving ? "Salvataggio…" : "Salva snapshot Metabolic profile"}
+              </Pro2Button>
+              <Pro2Button
+                type="button"
+                variant="secondary"
+                className="border border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15"
+                onClick={runProfileRecalc}
+              >
+                Ricalcola (solo schermo)
+              </Pro2Button>
+              <Pro2Button
+                type="button"
+                variant="secondary"
+                className="border border-slate-500/35 bg-slate-500/10 hover:bg-slate-500/15"
+                onClick={async () => {
+                  const cpPoints = CP_POINTS.map((p) => ({
+                    sec: p.sec,
+                    powerW: parseFloat(cpInputs[p.label]) || 0,
+                  }));
+                  const payload = {
+                    export_version: "empathy-metabolic-profile-v1",
+                    exported_at: new Date().toISOString(),
+                    body_mass_kg: profileDisplayMassKg,
+                    vo2max: {
+                      estimated_ml_kg_min: cpModel.vo2maxMlMinKg,
+                      estimated_l_min: cpModel.vo2maxLMin,
+                      estimate_model_version: cpModel.vo2maxEstimate.modelVersion,
+                      profile_lab_ml_kg_min: profileVo2maxMlMinKg,
+                      profile_lab_l_min: profileVo2maxLMin,
+                    },
+                    glycolytic_index_proxy: cpModel.vlamax,
+                    glycolytic_index_note:
+                      "Adimensional glycolytic proxy from CP engine, typical band ~0.3–0.8; not laboratory V̇La max (mmol·L⁻¹·s⁻¹).",
+                    peak_blood_lactate_schematic_mmol_l: estimatePeakBloodLactateMmol(cpModel.vlamax),
+                    critical_power_model: {
+                      cp_w: cpModel.cp,
+                      ftp_w: cpModel.ftp,
+                      w_prime_j: cpModel.wPrimeJ,
+                      lt1_w: cpModel.lt1,
+                      lt2_w: cpModel.lt2,
+                      fatmax_w: cpModel.fatmax,
+                      sprint_reserve_w: cpModel.sprintReserve,
+                      phenotype: cpModel.phenotype,
+                      fit_r2: cpModel.fitR2,
+                      fit_confidence: cpModel.fitConfidence,
+                      cp_input_points: cpPoints,
+                    },
+                    vo2max_estimate_detail: cpModel.vo2maxEstimate,
+                    cp_work_time_linear: cpModel.cpWorkTimeLinear,
+                    vo2_onset_tau_sec_default: cpModel.vo2OnsetTauSecDefault,
+                    vo2_onset_preview_60s: vo2OnsetPreview,
+                    gas_exchange_substrate: gasExchangeSubstrateProfile,
+                    metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
+                    metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
+                  };
+                  try {
+                    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+                    setMetabolicProfileJsonHint("JSON copiato.");
+                    window.setTimeout(() => setMetabolicProfileJsonHint(null), 2800);
+                  } catch {
+                    setMetabolicProfileJsonHint("Copia non riuscita.");
+                    window.setTimeout(() => setMetabolicProfileJsonHint(null), 4000);
+                  }
+                }}
+              >
+                Copia JSON profilo
+              </Pro2Button>
+              {metabolicProfileJsonHint ? (
+                <span className="text-xs text-slate-500">{metabolicProfileJsonHint}</span>
+              ) : null}
+            </div>
+            <p className="text-xs leading-relaxed text-slate-400 sm:max-w-md">
+              Stesso flusso V1: verde = snapshot + profilo. VO₂max da carta/file nella card sotto. Substrati da gas quando imposti VO₂/VCO₂ in{" "}
+              <span
+                role="button"
+                tabIndex={0}
+                className="cursor-pointer text-cyan-300 underline"
+                onClick={() => setSection("lactate")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setSection("lactate");
+                  }
+                }}
+              >
+                Lactate analysis
+              </span>
+              .
+            </p>
+            {profileLastRecalcAt ? (
+              <p className="text-[0.7rem] text-slate-500 sm:ml-auto sm:text-right">
+                Ultimo ricalcolo locale: {new Date(profileLastRecalcAt).toLocaleTimeString("it-IT")}
+              </p>
+            ) : null}
+          </div>
+
+          <Pro2SectionCard
+            accent="cyan"
+            title="VO₂max da laboratorio"
+            subtitle="Manuale o import CSV/TXT (Cosmed / export tabulare). Aggiorna physiological_profiles + audit metabolic_lab_runs (vo2max_lab)."
+            icon={Activity}
+          >
+            <p className="mb-3 text-sm text-slate-400">
+              {profileVo2maxMlMinKg != null ? (
+                <>
+                  <strong className="text-slate-200">Profilo attuale:</strong> {profileVo2maxMlMinKg.toFixed(1)} ml/kg/min
+                  {profileVo2maxLMin != null ? ` (~${profileVo2maxLMin.toFixed(2)} L/min)` : ""}.
+                </>
+              ) : (
+                <>Nessun VO₂max da lab sul profilo: inserisci un valore o importa un file.</>
+              )}
+            </p>
+            {labVo2Message ? <p className="mb-3 text-sm text-emerald-300/95">{labVo2Message}</p> : null}
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                VO₂max noto (ml/kg/min)
+                <input
+                  className="mt-1 w-full rounded-lg border border-slate-600/60 bg-black/40 px-3 py-2 text-sm text-white"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="es. 58.5"
+                  value={labVo2ManualInput}
+                  onChange={(e) => setLabVo2ManualInput(e.target.value)}
+                />
+              </label>
+              <div className="flex items-end">
+                <Pro2Button
+                  type="button"
+                  variant="primary"
+                  disabled={labVo2Saving || !athleteId}
+                  onClick={async () => {
+                    if (!athleteId) return;
+                    const v = parseFloat(labVo2ManualInput.replace(",", "."));
+                    if (!Number.isFinite(v) || v < 10 || v > 100) {
+                      setLabVo2Message("Inserisci un valore plausibile (circa 20–95 ml/kg/min).");
+                      return;
+                    }
+                    setLabVo2Saving(true);
+                    setLabVo2Message(null);
+                    setError(null);
+                    try {
+                      const res = await saveVo2maxLab({
+                        athleteId,
+                        vo2max_ml_min_kg: v,
+                        source: "manual",
+                      });
+                      setProfileVo2maxMlMinKg(res.vo2max_ml_min_kg);
+                      const bm =
+                        parseFloat(String(lactateInput.body_mass_kg).replace(",", ".")) ||
+                        parseFloat(String(maxOxInput.body_mass_kg).replace(",", ".")) ||
+                        70;
+                      setProfileVo2maxLMin((res.vo2max_ml_min_kg * bm) / 1000);
+                      setLabVo2Message("Salvato sul profilo fisiologico e registrato in Metabolic Lab (vo2max_lab).");
+                      await loadHistory(athleteId);
+                    } catch (err) {
+                      setLabVo2Message(err instanceof Error ? err.message : "Errore salvataggio");
+                    } finally {
+                      setLabVo2Saving(false);
+                    }
+                  }}
+                >
+                  {labVo2Saving ? "Salvataggio…" : "Salva VO₂max manuale"}
+                </Pro2Button>
+              </div>
+            </div>
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wide text-slate-400">
+              File export (Cosmed / Cortex / CSV)
+              <input
+                className="mt-1 block w-full text-sm text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-cyan-600/80 file:px-3 file:py-1.5 file:text-white"
+                type="file"
+                accept=".csv,.txt,text/csv,text/plain"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  setGasFileName(f.name);
+                  setLabVo2Message(null);
+                  try {
+                    const text = await f.text();
+                    setGasParseResult(parseGasExchangeExport(text, { bodyMassKg: athleteBodyMassForGasImport }));
+                  } catch {
+                    setGasParseResult({ ok: false, error: "Lettura file non riuscita." });
+                  }
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {gasFileName ? (
+              <p className="mb-2 text-xs text-slate-500">
+                File: <strong className="text-slate-300">{gasFileName}</strong>
+                {athleteBodyMassForGasImport != null
+                  ? ` · massa per parser: ${athleteBodyMassForGasImport} kg`
+                  : " · imposta massa in Lactate/MaxOx se l’export ha solo VO₂ assoluto"}
+              </p>
+            ) : null}
+            {gasParseResult ? (
+              gasParseResult.ok ? (
+                <div className="mb-3 space-y-2">
+                  <p className="text-sm text-slate-300">
+                    Picco stimato: <strong>{gasParseResult.vo2maxMlMinKg.toFixed(1)} ml/kg/min</strong>
+                    {gasParseResult.vo2maxLMin != null ? ` (~${gasParseResult.vo2maxLMin.toFixed(2)} L/min)` : ""} · riga #
+                    {gasParseResult.peakRowIndex + 1} · {gasParseResult.rowCount} righe
+                  </p>
+                  <Pro2Button
+                    type="button"
+                    variant="secondary"
+                    className="border border-cyan-500/40"
+                    disabled={labVo2Saving || !athleteId}
+                    onClick={async () => {
+                      if (!athleteId || !gasParseResult.ok) return;
+                      setLabVo2Saving(true);
+                      setLabVo2Message(null);
+                      setError(null);
+                      try {
+                        const res = await saveVo2maxLab({
+                          athleteId,
+                          vo2max_ml_min_kg: gasParseResult.vo2maxMlMinKg,
+                          source: "gas_exchange_file",
+                          note: gasFileName,
+                          parsePreview: {
+                            matchedColumns: gasParseResult.matchedColumns,
+                            peakRowIndex: gasParseResult.peakRowIndex,
+                            rowCount: gasParseResult.rowCount,
+                          },
+                        });
+                        setProfileVo2maxMlMinKg(res.vo2max_ml_min_kg);
+                        const bm =
+                          parseFloat(String(lactateInput.body_mass_kg).replace(",", ".")) ||
+                          parseFloat(String(maxOxInput.body_mass_kg).replace(",", ".")) ||
+                          70;
+                        setProfileVo2maxLMin((res.vo2max_ml_min_kg * bm) / 1000);
+                        setLabVo2Message("VO₂max da file salvato sul profilo.");
+                        await loadHistory(athleteId);
+                      } catch (err) {
+                        setLabVo2Message(err instanceof Error ? err.message : "Errore salvataggio");
+                      } finally {
+                        setLabVo2Saving(false);
+                      }
+                    }}
+                  >
+                    {labVo2Saving ? "Salvataggio…" : "Applica VO₂max da file al profilo"}
+                  </Pro2Button>
+                </div>
+              ) : (
+                <p className="mb-3 text-sm text-rose-300">{gasParseResult.error}</p>
+              )
+            ) : null}
+            <Pro2Button
+              type="button"
+              variant="secondary"
+              className="border border-slate-600/50"
+              disabled={labVo2Saving || !athleteId}
+              onClick={async () => {
+                if (!athleteId) return;
+                setLabVo2Saving(true);
+                setLabVo2Message(null);
+                try {
+                  await clearVo2maxLab(athleteId);
+                  setProfileVo2maxMlMinKg(null);
+                  setProfileVo2maxLMin(null);
+                  setGasParseResult(null);
+                  setGasFileName(null);
+                  setLabVo2Message("VO₂max da lab rimosso dal profilo.");
+                  await loadHistory(athleteId);
+                } catch (err) {
+                  setLabVo2Message(err instanceof Error ? err.message : "Errore reset");
+                } finally {
+                  setLabVo2Saving(false);
+                }
+              }}
+            >
+              Rimuovi VO₂max da lab dal profilo
+            </Pro2Button>
+          </Pro2SectionCard>
+
+          {cpCurveHasData ? (
+            <details className="collapsible-card">
+              <summary className="cursor-pointer text-sm font-semibold text-slate-300">
+                Cross-check: cinetica VO₂ (60 s) e substrati da gas (Lactate)
+              </summary>
+              <div className="mt-3 space-y-3 text-sm text-slate-400">
+                <table className="table-shell">
+                  <tbody>
+                    <tr>
+                      <th scope="row" className="text-left">
+                        τ VO₂ default (onset)
+                      </th>
+                      <td>
+                        {vo2OnsetPreview.tau} s ({cpModel.phenotype})
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row" className="text-left">
+                        VO₂ a 60 s (modello)
+                      </th>
+                      <td>
+                        {vo2OnsetPreview.vo2At60sLMin.toFixed(2)} L/min ≈ {(vo2OnsetPreview.fracAt60s * 100).toFixed(0)}% di VO₂max stimato (
+                        {cpModel.vo2maxLMin.toFixed(2)} L/min)
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                {gasExchangeSubstrateProfile ? (
+                  <p>
+                    RER {gasExchangeSubstrateProfile.rer.toFixed(3)} · CHO {gasExchangeSubstrateProfile.choGPerMin.toFixed(3)} g/min · FAT{" "}
+                    {gasExchangeSubstrateProfile.fatGPerMin.toFixed(3)} g/min
+                    {!gasExchangeSubstrateProfile.plausible ? " (fuori banda consigliata)" : ""}
+                  </p>
+                ) : (
+                  <p>Substrati da gas: imposta VO₂ e VCO₂ (L/min) in Lactate analysis (stesso schema V1).</p>
+                )}
+              </div>
+            </details>
+          ) : null}
+
           <PhysiologyPro2MetabolicDashboard
             cpPointDefs={CP_POINTS}
             cpInputs={cpInputs}
@@ -1425,6 +1935,8 @@ export default function MetabolicLabPage() {
             profileVo2maxLMin={profileVo2maxLMin}
           />
 
+          {cpCurveHasData ? (
+            <>
           <MetabolicPowerComponentsStackChart
             rows={cpModel.powerComponents}
             engineRevision={METABOLIC_CP_ENGINE_REVISION}
@@ -1510,114 +2022,8 @@ export default function MetabolicLabPage() {
               </tbody>
             </table>
           </details>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <Pro2Button
-              type="button"
-              variant="primary"
-              disabled={saving}
-              onClick={() =>
-                saveSnapshot("metabolic_profile", cpInputs, {
-                  cp: cpModel.cp,
-                  ftp: cpModel.ftp,
-                  lt1: cpModel.lt1,
-                  lt2: cpModel.lt2,
-                  fatmax: cpModel.fatmax,
-                  vlamax: cpModel.vlamax,
-                  vo2max_ml_min_kg: cpModel.vo2maxMlMinKg,
-                  vo2max_l_min: cpModel.vo2maxLMin,
-                  vo2max_estimate: cpModel.vo2maxEstimate,
-                  vo2max_model_version: "empathy-vo2max-metabolic-v2",
-                  sprintReserve: cpModel.sprintReserve,
-                  wPrimeJ: cpModel.wPrimeJ,
-                  pcrCapacityJ: cpModel.pcrCapacityJ,
-                  glycolyticCapacityJ: cpModel.glycolyticCapacityJ,
-                  fitR2: cpModel.fitR2,
-                  fitConfidence: cpModel.fitConfidence,
-                  fitModel: cpModel.fitModel,
-                  phenotype: cpModel.phenotype,
-                  substrateTable: cpModel.substrateTable,
-                  powerComponents: cpModel.powerComponents,
-                  cpWorkTimeLinear: cpModel.cpWorkTimeLinear,
-                  vo2OnsetTauSecDefault: cpModel.vo2OnsetTauSecDefault,
-                  metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
-                  metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
-                })
-              }
-            >
-              {saving ? "Salvataggio…" : "Salva snapshot (server + profilo)"}
-            </Pro2Button>
-            <Pro2Button
-              type="button"
-              variant="secondary"
-              className="border border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15"
-              onClick={runProfileRecalc}
-            >
-              Ricalcola (solo schermo)
-            </Pro2Button>
-            <Pro2Button
-              type="button"
-              variant="secondary"
-              className="border border-slate-500/35 bg-slate-500/10 hover:bg-slate-500/15"
-              onClick={async () => {
-                const cpPoints = CP_POINTS.map((p) => ({
-                  sec: p.sec,
-                  powerW: parseFloat(cpInputs[p.label]) || 0,
-                }));
-                const payload = {
-                  export_version: "empathy-metabolic-profile-v1",
-                  exported_at: new Date().toISOString(),
-                  body_mass_kg: profileDisplayMassKg,
-                  vo2max: {
-                    estimated_ml_kg_min: cpModel.vo2maxMlMinKg,
-                    estimated_l_min: cpModel.vo2maxLMin,
-                    estimate_model_version: cpModel.vo2maxEstimate.modelVersion,
-                    profile_lab_ml_kg_min: profileVo2maxMlMinKg,
-                    profile_lab_l_min: profileVo2maxLMin,
-                  },
-                  glycolytic_index_proxy: cpModel.vlamax,
-                  glycolytic_index_note:
-                    "Adimensional glycolytic proxy from CP engine, typical band ~0.3–0.8; not laboratory V̇La max (mmol·L⁻¹·s⁻¹).",
-                  peak_blood_lactate_schematic_mmol_l: estimatePeakBloodLactateMmol(cpModel.vlamax),
-                  critical_power_model: {
-                    cp_w: cpModel.cp,
-                    ftp_w: cpModel.ftp,
-                    w_prime_j: cpModel.wPrimeJ,
-                    lt1_w: cpModel.lt1,
-                    lt2_w: cpModel.lt2,
-                    fatmax_w: cpModel.fatmax,
-                    sprint_reserve_w: cpModel.sprintReserve,
-                    phenotype: cpModel.phenotype,
-                    fit_r2: cpModel.fitR2,
-                    fit_confidence: cpModel.fitConfidence,
-                    cp_input_points: cpPoints,
-                  },
-                  vo2max_estimate_detail: cpModel.vo2maxEstimate,
-                  cp_work_time_linear: cpModel.cpWorkTimeLinear,
-                  vo2_onset_tau_sec_default: cpModel.vo2OnsetTauSecDefault,
-                  metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
-                  metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
-                };
-                try {
-                  await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-                  setMetabolicProfileJsonHint("JSON copiato.");
-                  window.setTimeout(() => setMetabolicProfileJsonHint(null), 2800);
-                } catch {
-                  setMetabolicProfileJsonHint("Copia non riuscita.");
-                  window.setTimeout(() => setMetabolicProfileJsonHint(null), 4000);
-                }
-              }}
-            >
-              Copia JSON profilo
-            </Pro2Button>
-            {metabolicProfileJsonHint ? (
-              <span className="text-xs text-slate-500">{metabolicProfileJsonHint}</span>
-            ) : null}
-            <small className="text-xs text-slate-500">
-              {profileLastRecalcAt
-                ? `Ultimo ricalcolo locale: ${new Date(profileLastRecalcAt).toLocaleTimeString("it-IT")}`
-                : "Salva = DB + physiological_profiles."}
-            </small>
-          </div>
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -1626,7 +2032,7 @@ export default function MetabolicLabPage() {
           <PhysiologyPro2LactateLab
             model={lactateModel}
             reliabilityPct={lactateReliability}
-            uncertaintyPct={lactateResolved.uncertaintyPct}
+            uncertaintyPct={lactateUncertaintyPct}
             vo2Used={lactateVo2Used}
             vo2EstL={lactateVo2Estimate.vo2LMin}
             vo2MlKg={lactateVo2Estimate.vo2MlKgMin}
@@ -1674,9 +2080,18 @@ export default function MetabolicLabPage() {
               lactateVo2MlKg={lactateVo2Estimate.vo2MlKgMin}
             />
           </div>
+          <div className="physiology-pro2-lab-page-panel physiology-pro2-lab-page-panel--lac-sources">
+            <LactateAnalysisDataSourcesCard
+              segmentAttachment={lactateSegmentAttachment}
+              onSegmentFile={setLactateSegmentAttachment}
+              hasHealthMicrobiotaProfile={hasHealthMicrobiotaProfile}
+              healthBioGlucose={healthBioGlucoseMeta}
+              healthBioCoreTempC={healthBioCoreTempCBaseline}
+            />
+          </div>
           <div className="physiology-pro2-lab-page-panel">
             <LactatePro2NumericEngineParams
-              input={lactateInput}
+              input={lactateParamsDisplayInput}
               onInputChange={(key, v) => setLactateInput((s) => ({ ...s, [key]: v }))}
               vo2Mode={lactateVo2Mode}
               rerMode={lactateRerMode}
@@ -1724,6 +2139,13 @@ export default function MetabolicLabPage() {
                   "lactate_analysis",
                   {
                     ...lactateInput,
+                    ...(lactateGutDerived
+                      ? {
+                          gut_absorption_pct: String(lactateGutDerived.gut_absorption_pct),
+                          microbiota_sequestration_pct: String(lactateGutDerived.microbiota_sequestration_pct),
+                          gut_training_pct: String(lactateGutDerived.gut_training_pct),
+                        }
+                      : {}),
                     sport: lactateSport,
                     vo2_mode: lactateVo2Mode,
                     vo2_estimated_l_min: lactateVo2Estimate.vo2LMin,
@@ -1732,13 +2154,16 @@ export default function MetabolicLabPage() {
                     rer_mode: lactateRerMode,
                     rer_used: lactateRerUsed,
                     input_precedence_policy: "measured>manual>preset>default",
-                    input_uncertainty_pct: lactateResolved.uncertaintyPct,
-                    input_sources: lactateResolved.sources,
+                    input_uncertainty_pct: lactateUncertaintyPct,
+                    input_sources: lactateSourcesForSnapshot,
                     microbiota_source_mode: microbiotaSourceMode,
                     dysbiosis_preset: dysbiosisPreset,
                     fat_oxidation_adaptation: fatOxAdaptation,
                     source_workout_id: selectedWorkout?.id ?? null,
                     source_workout_date: selectedWorkout?.date ?? null,
+                    segment_attachment: lactateSegmentAttachment,
+                    health_bio_glucose: healthBioGlucoseMeta,
+                    health_bio_core_temp_c: healthBioCoreTempCBaseline,
                   },
                   lactateModel,
                 )

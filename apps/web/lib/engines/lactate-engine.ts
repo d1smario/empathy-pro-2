@@ -22,6 +22,8 @@ export type LactateEngineInput = {
   akkermansiaPct?: number;
   butyrateProducersPct?: number;
   endotoxinRiskPct?: number;
+  /** Glucosiemia da sensore/CGM o campione seduta (mmol/L); modula leggermente lo stress glicolitico se bassa in intenso. */
+  bloodGlucoseMmolL?: number;
   /**
    * Da Metabolic Profile: CP (W) e W′ (J) per P=CP+W′/t — pressione glicolitica oltre sostenibilità a t.
    */
@@ -78,7 +80,9 @@ export type LactateEngineOutput = {
   profileMetabolicCouplingActive: boolean;
   /** 0–1: peso integrato da modello anaerobico profilo (iperbola + fenotipo). */
   profileAnaerobicModulation01: number;
-  version: "lactate-engine-v1.4";
+  /** Eco del valore in ingresso (se valido), per UI / snapshot. */
+  bloodGlucoseMmolL?: number;
+  version: "lactate-engine-v1.5";
 };
 
 function clamp(v: number, min: number, max: number) {
@@ -108,6 +112,14 @@ export function computeLactateEngine(input: LactateEngineInput): LactateEngineOu
   const gutTrainingPct = clamp(input.gutTrainingPct, 0, 100);
 
   const intensityPctFtp = (powerW / ftpW) * 100;
+
+  const bgSensor = input.bloodGlucoseMmolL;
+  const bloodGlucoseMmolL =
+    bgSensor != null && Number.isFinite(bgSensor) && bgSensor >= 2.2 && bgSensor <= 22 ? round(bgSensor, 2) : undefined;
+  const glucoseDeficitStress01 =
+    bloodGlucoseMmolL != null
+      ? clamp((5.0 - bloodGlucoseMmolL) / 2.0, 0, 1) * clamp((intensityPctFtp - 70) / 50, 0, 1)
+      : 0;
 
   // Accoppiamento Metabolic Profile: sostenibilità iperbolica + motore glicolitico dell'atleta.
   let profileAnaerobicModulation01 = 0;
@@ -197,7 +209,8 @@ export function computeLactateEngine(input: LactateEngineInput): LactateEngineOu
     0.34 * Math.max(0, (intensityPctFtp - 70) / 50) +
     0.2 * Math.max(0, (rer - 0.82) / 0.2) +
     0.22 * anaerobicShare +
-    0.12 * smo2Drop;
+    0.12 * smo2Drop +
+    0.07 * glucoseDeficitStress01;
   const glycolyticFloor =
     intensityPctFtp >= 120 ? 0.98 :
     intensityPctFtp >= 108 ? 0.97 :
@@ -322,6 +335,7 @@ export function computeLactateEngine(input: LactateEngineInput): LactateEngineOu
     glucoseRequiredForStrategyG: round(glucoseRequiredForStrategyG),
     profileMetabolicCouplingActive,
     profileAnaerobicModulation01: round(clamp(profileAnaerobicModulation01, 0, 1.2), 3),
-    version: "lactate-engine-v1.4",
+    ...(bloodGlucoseMmolL != null ? { bloodGlucoseMmolL } : {}),
+    version: "lactate-engine-v1.5",
   };
 }

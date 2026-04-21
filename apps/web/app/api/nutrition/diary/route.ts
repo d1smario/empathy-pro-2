@@ -51,7 +51,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json(
           {
             error:
-              "Tabella food_diary_entries non presente: applica la migrazione 021_food_diary_entries.sql su Supabase.",
+              "Tabella food_diary_entries non presente: applica su Supabase la migrazione V1 021_food_diary_entries.sql oppure Pro 2 016_nutrition_catalog_and_food_diary_v1.sql.",
             athleteId,
             from,
             to,

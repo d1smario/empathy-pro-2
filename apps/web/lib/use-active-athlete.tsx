@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { dedupeAthletesByEmail, pickCanonicalAthlete, type CanonicalAthleteRow } from "@/lib/athletes/canonical-profile";
-import { AppRole, clearActiveAthleteId, readActiveAthleteId, writeActiveAthleteId } from "@/lib/app-session";
+import {
+  AppRole,
+  clearActiveAthleteId,
+  clearPro2ClientSessionKeys,
+  readActiveAthleteId,
+  writeActiveAthleteId,
+  writeAuditUserId,
+} from "@/lib/app-session";
 import { coachOrgIdForClient } from "@/lib/coach-org-id";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 
@@ -42,11 +49,45 @@ type UserProfileRow = {
 const ATHLETE_SELECT =
   "id, email, first_name, last_name, height_cm, weight_kg, body_fat_pct, muscle_mass_kg, resting_hr_bpm, max_hr_bpm, threshold_hr_bpm, diet_type, training_days_per_week, training_max_session_minutes, routine_config, nutrition_config, supplement_config, goals, intolerances, allergies, food_preferences, food_exclusions, supplements, created_at";
 
+export type ActiveAthleteContextValue = {
+  athleteId: string | null;
+  activeAthleteId: string | null;
+  role: AppRole;
+  athletes: AthleteOption[];
+  loading: boolean;
+  signedIn: boolean;
+  userId: string | null;
+  setActiveAthleteId: (id: string | null) => void;
+  refresh: () => void;
+};
+
+const ActiveAthleteContext = createContext<ActiveAthleteContextValue | null>(null);
+
+/**
+ * Un solo store atleta per albero React: evita N fetch `ensure-profile` / Supabase e stati divergenti tra shell e moduli.
+ * Montare nel layout root (`ClientRootProviders`).
+ */
+export function ActiveAthleteProvider({ children }: { children: ReactNode }) {
+  const providerValue = useActiveAthleteState();
+  return <ActiveAthleteContext.Provider value={providerValue}>{children}</ActiveAthleteContext.Provider>;
+}
+
+export function useActiveAthlete(): ActiveAthleteContextValue {
+  const ctx = useContext(ActiveAthleteContext);
+  if (!ctx) {
+    throw new Error(
+      "useActiveAthlete richiede ActiveAthleteProvider nel layout root (vedi app/client-root-providers.tsx).",
+    );
+  }
+  return ctx;
+}
+
 /**
  * Allineato a V1: Supabase browser + `POST /api/access/ensure-profile` (cookie, no Bearer).
  * Merge duplicati email server-side (`/api/athletes/repair`) non incluso: richiede service role V1.
  */
-export function useActiveAthlete() {
+function useActiveAthleteState(): ActiveAthleteContextValue {
+  const lastAuthenticatedUserIdRef = useRef<string | null>(null);
   const [athleteId, setAthleteId] = useState<string | null>(null);
   const [role, setRole] = useState<AppRole>("private");
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
@@ -95,7 +136,7 @@ export function useActiveAthlete() {
         setRole("private");
         setAthletes([]);
         setAthleteId(ok ? readActiveAthleteId() : null);
-        if (!ok) clearActiveAthleteId();
+        if (!ok) clearPro2ClientSessionKeys();
       } finally {
         if (active) setLoading(false);
       }
@@ -119,10 +160,19 @@ export function useActiveAthlete() {
           setRole("private");
           setSignedIn(false);
           setUserId(null);
-          clearActiveAthleteId();
+          lastAuthenticatedUserIdRef.current = null;
+          clearPro2ClientSessionKeys();
           setLoading(false);
           return;
         }
+
+        const prevUserId = lastAuthenticatedUserIdRef.current;
+        if (prevUserId && prevUserId !== user.id) {
+          clearPro2ClientSessionKeys();
+          setAthleteId(null);
+          setAthletes([]);
+        }
+        lastAuthenticatedUserIdRef.current = user.id;
 
         setSignedIn(true);
         setUserId(user.id);
@@ -153,6 +203,7 @@ export function useActiveAthlete() {
             setAthletes([]);
             clearActiveAthleteId();
             setAthleteId(null);
+            writeAuditUserId(user.id);
             setLoading(false);
             return;
           }
@@ -172,15 +223,32 @@ export function useActiveAthlete() {
             clearActiveAthleteId();
           }
           setAthleteId(resolvedCoachAthleteId);
+          writeAuditUserId(user.id);
           setLoading(false);
           return;
         }
 
-        const { data: listData } = await supabase
-          .from("athlete_profiles")
-          .select(ATHLETE_SELECT)
-          .order("created_at", { ascending: false });
-        const rawList = (listData as AthleteOption[]) ?? [];
+        /**
+         * Private: **non** elencare tutti gli `athlete_profiles` visibili da RLS (su DB condivisi/demo può
+         * esporre altri atleti → contesto UI sbagliato). Solo email dell’account o riga già collegata.
+         */
+        let rawList: AthleteOption[] = [];
+        if (user.email) {
+          const { data: listData } = await supabase
+            .from("athlete_profiles")
+            .select(ATHLETE_SELECT)
+            .eq("email", user.email)
+            .order("created_at", { ascending: false })
+            .limit(50);
+          rawList = (listData as AthleteOption[]) ?? [];
+        } else if (profile?.athlete_id) {
+          const { data: oneRow } = await supabase
+            .from("athlete_profiles")
+            .select(ATHLETE_SELECT)
+            .eq("id", profile.athlete_id)
+            .maybeSingle();
+          rawList = oneRow ? ([oneRow] as AthleteOption[]) : [];
+        }
         const list = dedupeAthletesByEmail(rawList);
         if (!active) return;
         setAthletes(list);
@@ -238,11 +306,12 @@ export function useActiveAthlete() {
           );
           writeActiveAthleteId(resolvedAthleteId);
         } else {
-          clearActiveAthleteId();
+          clearPro2ClientSessionKeys();
         }
 
         if (!active) return;
         setAthleteId(resolvedAthleteId);
+        writeAuditUserId(user.id);
       } finally {
         if (active) setLoading(false);
       }
@@ -264,7 +333,8 @@ export function useActiveAthlete() {
         setRole("private");
         setSignedIn(false);
         setUserId(null);
-        clearActiveAthleteId();
+        lastAuthenticatedUserIdRef.current = null;
+        clearPro2ClientSessionKeys();
         setLoading(false);
         return;
       }
@@ -276,9 +346,7 @@ export function useActiveAthlete() {
     const handleStorage = (event: StorageEvent) => {
       if (!active) return;
       if (event.key !== "empathy_active_athlete_id") return;
-      const nextId = event.newValue;
-      if (!nextId) return;
-      setAthleteId(nextId);
+      setAthleteId(event.newValue);
     };
     window.addEventListener("storage", handleStorage);
 

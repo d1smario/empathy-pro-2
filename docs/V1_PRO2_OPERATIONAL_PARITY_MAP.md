@@ -35,19 +35,34 @@ Ordine **consigliato** sul DB Pro 2 (file in `supabase/migrations/`):
 | L4.7 | `012`–`013` | Pro 2 | Garmin OAuth / permessi |
 | L4.8 | **`014_training_planned_executed_import_jobs_v1.sql`** | `001` (training) + `016` + `017` | Calendario + import |
 | L4.9 | **`015_read_spine_metabolic_and_evidence_v1.sql`** | `005` + `010` | `metabolic_lab_runs`, `knowledge_evidence_hits` |
+| L4.10 | **`016_nutrition_catalog_and_food_diary_v1.sql`** | V1 `007` + `008` + `021` | Catalogo nutrizione + `food_diary_entries` |
+| L4.11 | **`017_manual_actions_and_athlete_update_locks_v1.sql`** | V1 `014` + `015_athlete_update_locks` | Coda manual actions + lock aggiornamenti |
+| L4.12 | **`018_knowledge_library_and_research_traces_v1.sql`** | V1 `019` + `020` | Knowledge library + research traces |
+| L4.13 | **`019_billing_stripe_v1.sql`** | V1 `024` | `billing_*`, `stripe_webhook_events` + RLS |
+| L4.14 | **`020_biomech_session_imports_and_capture_jobs_v1.sql`** | V1 `022` | Import biomech + coda capture jobs |
+| L4.15 | **`021_biomech_capture_storage_bucket_v1.sql`** | V1 `023` | Bucket `biomech-capture` |
+| L4.16 | **`022_metabolic_lab_vo2max_section_v1.sql`** | V1 `027` | Sezione `vo2max_lab` su `metabolic_lab_runs` |
+| L4.17 | **`023_biomarker_panels_rls_v1.sql`** | V1 `006` | RLS `biomarker_panels` (dopo tabella in `001`) |
 
 - [x] L4.2 `001` aggiunto (greenfield + DB già migrati: `IF NOT EXISTS` dove possibile)
 - [x] L4.9 `015` aggiunto
-- [ ] **DB:** eseguire su Supabase **Empatia-Pro-2.0** le migrazioni mancanti (o `supabase db push` dal clone)
-- [ ] L4.r **Resto V1 non ancora in Pro 2:** `001` completo (nutrition `nutrition_*`, `meals`, `load_series`, `twin_states`, `empathy_events`…), `006` biomarker RLS, `007–008` catalogo nutrizione, `014–015` manual actions / locks, `018` device expansion, **`019–020` knowledge library**, `021` food diary, `022–023` biomech, `024` Stripe, `027` lab VO2 — **tracciare in sotto-sezioni sotto quando servono i moduli**
+- [x] L4.10–L4.17 `016`–`023` (L4.r: nutrition, manual/knowledge, billing, biomech, lab VO2, biomarker RLS)
+- [ ] **DB:** eseguire su Supabase le migrazioni mancanti (vedi nota DB condiviso in L4.r; range file Pro 2 `016`–`023`)
+- [ ] L4.r **Resto V1 non ancora in Pro 2:** `001` completo (nutrition `nutrition_*`, `meals`, `load_series`, `twin_states`, `empathy_events`…), V1 `018` device expansion export provider — **tracciare quando servono i moduli**
 
 ### L4.r — Backlog schema V1 → Pro 2 (dettaglio)
 
-- [ ] Nutrition: `007_nutrition_product_catalog.sql`, `008_*_write_policy.sql`, `021_food_diary_entries.sql`
-- [ ] Knowledge: `019_knowledge_library_foundation.sql`, `020_knowledge_research_traces.sql`, `010`/`011` (dedup) se non coperti solo da `015` evidence
-- [ ] Health / manual: `014_manual_actions_queue.sql`, `015_athlete_update_locks.sql` (V1 naming; non confondere con Pro2 `015_read_spine_*`)
-- [ ] Billing: `024_billing_stripe.sql`
-- [ ] Biomech: `022_*`, `023_*`
+- [x] Nutrition (repo Pro 2): `016_nutrition_catalog_and_food_diary_v1.sql` (= V1 `007` + `008` + `021`)
+- [x] Knowledge library + research traces (repo Pro 2): `018_knowledge_library_and_research_traces_v1.sql` (= V1 `019` + `020`). **Nota:** V1 `010`/`011` evidence + dedup restano coperti da `015_read_spine_metabolic_and_evidence_v1.sql` lato `knowledge_evidence_hits`; non duplicare senza verificare oggetti già creati.
+- [x] Health / manual (repo Pro 2): `017_manual_actions_and_athlete_update_locks_v1.sql` (= V1 `014` + `015_athlete_update_locks`; non confondere con Pro 2 `015_read_spine_*`)
+- [x] Billing (repo Pro 2): `019_billing_stripe_v1.sql` (= V1 `024`)
+- [x] Biomech (repo Pro 2): `020_biomech_session_imports_and_capture_jobs_v1.sql`, `021_biomech_capture_storage_bucket_v1.sql` (= V1 `022` + `023`)
+- [x] Lab VO2max section (repo Pro 2): `022_metabolic_lab_vo2max_section_v1.sql` (= V1 `027`; richiede `metabolic_lab_runs` da `015`)
+- [x] Biomarker RLS (repo Pro 2): `023_biomarker_panels_rls_v1.sql` (= V1 `006`)
+
+**DB condiviso già migrato da V1 (`001`…`031`):** le migrazioni Pro 2 `016`–`023` sono in gran parte **idempotenti** (`IF NOT EXISTS`, `ON CONFLICT DO UPDATE` sul bucket, `DROP CONSTRAINT IF EXISTS` + nuovo check su lab). Per **solo DDL** senza history Pro 2, incollale nell’**SQL Editor** (no-op se V1 ha già applicato gli equivalenti `024`, `022`–`023`, `027`, …).
+
+**`supabase db push` dal clone Pro 2** su un progetto la cui history è stata creata **solo** da V1 fallisce con: *Remote migration versions not found in local migrations directory* (nomi file diversi tra i due repo). Opzioni: allineare la cartella `supabase/migrations` alla history remota (`supabase db pull` / repair secondo [Supabase CLI](https://supabase.com/docs/guides/cli/managing-environments)), oppure usare **un solo repo** come fonte di `db push` per quel progetto cloud. **Greenfield** solo Pro 2: `db push` dal clone Pro 2: `000`→`023`.
 
 ---
 
@@ -55,14 +70,15 @@ Ordine **consigliato** sul DB Pro 2 (file in `supabase/migrations/`):
 
 Conta indicativa: V1 ~141 route, Pro 2 ~59. Allineamento **per modulo** (stesso contratto o deprecazione esplicita documentata qui).
 
-- [ ] **Training:** `calendar` (V1) vs `planned-window` (Pro 2) — già documentato in `CURSOR_REALIGN_DAILY.md`; altre: `import-jobs`, `trend`, `session`, `builder/save`, `presentation-brief`, `engine/evidence-basis`, …
+- [~] **Training:** `GET /api/training/import-jobs` aggiunto (parità V1, auth `requireAthleteReadContext`). Restano `calendar` vs `planned-window`, `trend`, `session`, `builder/save`, `presentation-brief`, `engine/evidence-basis`, …
 - [ ] **Nutrition:** `food-lookup`, `profile-config`, `device-export`, `media`, `catalog`, `usda-by-nutrient`, …
-- [ ] **Physiology:** `vo2max-lab`, moduli health aggregati
+- [~] **Physiology:** route `POST/DELETE /api/physiology/vo2max-lab` + UI Metabolic profile (salvataggio in alto, VO₂max manuale/file gas, cross-check) allineati a V1; resto health aggregati da verificare
 - [ ] **Profile / access:** `athletes`, `repair`, `access/*` vs Pro 2 `ensure-profile`, `roster`
 - [ ] **Health:** `health/module`, `health/evidence`, `panels` vs Pro 2 `panels-latest`, `panels-timeline`
 - [ ] **Dashboard:** `dashboard` vs `dashboard/athlete-hub`
-- [ ] **Knowledge:** `research-traces`, `research-plan`, `pubmed/ingest`, `bindings`, …
-- [ ] **Biomechanics / billing / webhooks:** porting dove il prodotto Pro 2 deve egualiare V1
+- [~] **Knowledge:** `GET/POST /api/knowledge/research-traces`, `GET /api/knowledge/bindings` (stesso contratto V1 + store già in repo). Restano `research-plan`, `pubmed/ingest`, `corpus`, `mechanisms`, `omics`, `research-traces/hop-links`, …
+- [~] **Biomechanics / billing / webhooks:** schema L4 `019`–`021` in repo; route Pro 2 già presenti (`/api/billing/*`, `/api/webhooks/stripe`, integrazioni) — verificare parità contratti con V1 modulo per modulo
+- [x] **Manual actions (coda coach):** `GET/POST /api/manual-actions`, `PATCH /api/manual-actions/[id]` + `api/manual-actions/contracts` + `lib/coach-actions/manual-action-policy` (POST: `createdByUserId` deve coincidere con l’utente autenticato; GET/POST usano contesto atleta Pro 2)
 
 ---
 
@@ -85,9 +101,10 @@ Conta indicativa: V1 ~141 route, Pro 2 ~59. Allineamento **per modulo** (stesso 
 1. [x] Aggiungere migrazione **`001_pro2_v1_canonical_prereq_read_spine.sql`** (prerequisito **prima** di `002`)
 2. [x] Aggiungere migrazione **`015_read_spine_metabolic_and_evidence_v1.sql`**
 3. [x] Aggiornare commento in `002_coach_athletes_org_multitenant.sql` (riferimento a `001`)
-4. [ ] **Tu:** applicare le migrazioni sul progetto Supabase Pro 2 (`supabase db push` dal clone **oppure** SQL Editor incollando i file in ordine) e ridistribuire Vercel. Se il DB era nato senza `001`, la prima `db push` applicherà `001` **retroattivamente** (idempotente); verificare che non ci siano conflitti con oggetti creati a mano con nomi uguali.
-5. [ ] Prossimo punto operativo consigliato: **L4.r nutrition** oppure **Fase API Training** (scegli priorità prodotto)
+4. [x] L4.r — `016`–`023` (vedi tabella L4.10–L4.17 incluso `023_biomarker_panels_rls_v1`)
+5. [ ] **Tu:** `supabase db push` dal clone Pro 2 **oppure** SQL Editor per `016`–`023` se la history migrazioni è gestita solo da V1 (vedi nota sopra).
+6. [ ] Prossimo punto operativo consigliato: **L4.r** resto (V1 `018` device expansion export) **oppure** **Fase L3 API** (training import-jobs / manual-actions / knowledge research-plan & bindings) — vedi tabella L3.
 
 ---
 
-*Ultimo aggiornamento: mappa creata insieme alle migrazioni `001` e `015` in repo.*
+*Ultimo aggiornamento: L4.r `016`–`023` (billing, biomech, VO2max, biomarker RLS).*

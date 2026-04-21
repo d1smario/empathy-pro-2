@@ -143,6 +143,8 @@ function mergeLactateEngineOutputs(
   let maxGutRisk = 0;
   let profileMetabolicCouplingActive = false;
   let profileAnaerobicMax = 0;
+  let bloodGlucoseNum = 0;
+  let bloodGlucoseW = 0;
 
   for (let i = 0; i < parts.length; i += 1) {
     const { out: o, durationMin: dm } = parts[i];
@@ -187,6 +189,11 @@ function mergeLactateEngineOutputs(
     maxGutRisk = Math.max(maxGutRisk, gutRiskRank(o.gutPathwayRisk));
     profileMetabolicCouplingActive = profileMetabolicCouplingActive || o.profileMetabolicCouplingActive;
     profileAnaerobicMax = Math.max(profileAnaerobicMax, o.profileAnaerobicModulation01);
+    const bg = o.bloodGlucoseMmolL;
+    if (bg != null && Number.isFinite(bg)) {
+      bloodGlucoseNum += bg * w;
+      bloodGlucoseW += w;
+    }
   }
 
   const lp = Math.max(1e-9, lactateProducedG);
@@ -239,7 +246,8 @@ function mergeLactateEngineOutputs(
     glucoseRequiredForStrategyG: round(glucoseRequiredForStrategyG),
     profileMetabolicCouplingActive,
     profileAnaerobicModulation01: round(clamp(profileAnaerobicMax, 0, 1.2), 3),
-    version: "lactate-engine-v1.4",
+    ...(bloodGlucoseW > 0.01 ? { bloodGlucoseMmolL: round(bloodGlucoseNum / bloodGlucoseW, 2) } : {}),
+    version: "lactate-engine-v1.5",
   };
 }
 

@@ -32,6 +32,27 @@ function pickValue(record: Record<string, unknown>, keys: string[]): number | nu
   return null;
 }
 
+/** Valori pannello sangue Health → mmol/L per il lab Lactate (allineato a `HealthPageView` rowFromBloodPanel). */
+function bloodGlucoseMmolFromPanel(values: Record<string, unknown>): number | null {
+  const mmolExplicit = pickValue(values, [
+    "glicemia_mmol_l",
+    "glucose_mmol_l",
+    "blood_glucose_mmol_l",
+    "fasting_glucose_mmol_l",
+    "glucose_mmol",
+  ]);
+  if (mmolExplicit != null && mmolExplicit >= 2 && mmolExplicit <= 15) return mmolExplicit;
+
+  const mgDl = pickValue(values, ["fasting_glucose_mg_dl", "glucose_mg_dl", "glicemia_mg_dl"]);
+  if (mgDl != null && mgDl > 40 && mgDl < 500) return mgDl / 18;
+
+  const ambig = pickValue(values, ["glicemia", "glucose", "glucosio"]);
+  if (ambig == null) return null;
+  if (ambig >= 2 && ambig <= 15) return ambig;
+  if (ambig > 25) return ambig / 18;
+  return null;
+}
+
 function fromTraceText(trace: unknown, keys: string[]): string | null {
   if (!trace || typeof trace !== "object") return null;
   const rec = trace as Record<string, unknown>;
@@ -50,7 +71,8 @@ export async function GET(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes] = await Promise.all([
+    const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes, bloodPanelRes] =
+      await Promise.all([
       db
         .from("metabolic_lab_runs")
         .select("id, section, model_version, created_at, input_payload, output_payload")
@@ -77,12 +99,21 @@ export async function GET(req: NextRequest) {
         .order("sample_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1),
+      db
+        .from("biomarker_panels")
+        .select("id, type, sample_date, values, source, created_at")
+        .eq("athlete_id", athleteId)
+        .eq("type", "blood")
+        .order("sample_date", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1),
     ]);
 
     if (historyRes.error) return NextResponse.json({ error: historyRes.error.message }, { status: 500 });
     if (executedRes.error) return NextResponse.json({ error: executedRes.error.message }, { status: 500 });
     if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
     if (microbiotaPanelRes.error) return NextResponse.json({ error: microbiotaPanelRes.error.message }, { status: 500 });
+    if (bloodPanelRes.error) return NextResponse.json({ error: bloodPanelRes.error.message }, { status: 500 });
 
     const ftp = Number(physiologyState.physiologicalProfile.ftpWatts ?? 0);
     const vo2maxMlMinKgCanon = physiologyState.physiologicalProfile.vo2maxMlMinKg ?? null;
@@ -125,11 +156,18 @@ export async function GET(req: NextRequest) {
     const lactateList = executed
       .map((row) => asNum(row.lactate_mmoll) ?? fromTrace(row.trace_summary, ["lactate_mmoll", "lactate_mmol_l"]))
       .filter((v): v is number => v != null);
+    const glucoseSessionList = executed
+      .map((row) => asNum(row.glucose_mmol) ?? fromTrace(row.trace_summary, ["glucose_mmol", "blood_glucose_mmol_l"]))
+      .filter((v): v is number => v != null && v >= 2 && v <= 22);
 
     const avgHr = hrAvgList.length > 0 ? hrAvgList.reduce((s, v) => s + v, 0) / hrAvgList.length : 150;
     const maxHr = hrMaxList.length > 0 ? Math.max(...hrMaxList) : 185;
     const avgSmo2 = smo2List.length > 0 ? smo2List.reduce((s, v) => s + v, 0) / smo2List.length : 45;
     const avgLactate = lactateList.length > 0 ? lactateList.reduce((s, v) => s + v, 0) / lactateList.length : 4.0;
+    const avgGlucoseSessions =
+      glucoseSessionList.length > 0
+        ? glucoseSessionList.reduce((s, v) => s + v, 0) / glucoseSessionList.length
+        : null;
 
     const rerProxy = Math.max(0.82, Math.min(1.02, 0.84 + intensityFactor * 0.16));
     const restingHrProxy = Math.max(40, Math.round(avgHr * 0.72));
@@ -152,34 +190,36 @@ export async function GET(req: NextRequest) {
     const smo2RestProxy = Math.max(58, Math.min(78, avgSmo2 + 22));
     const smo2WorkProxy = Math.max(12, Math.min(65, avgSmo2));
 
+    const lactateAuto: Record<string, number> = {
+      duration_min: Math.round(durationAvg),
+      power_w: Math.round(inferredPower),
+      ftp_w: Math.round(inferredFtp),
+      body_mass_kg: Math.round(bodyMassKg),
+      velocity_m_min: 0,
+      grade_pct: 0,
+      efficiency: 0.24,
+      vo2_l_min: Number(vo2ForAuto.toFixed(2)),
+      vco2_l_min: Number((vo2ForAuto * rerProxy).toFixed(2)),
+      rer: Number(rerProxy.toFixed(2)),
+      smo2_rest: Math.round(smo2RestProxy),
+      smo2_work: Math.round(smo2WorkProxy),
+      lactate_oxidation_pct: 70,
+      cori_pct: 18,
+      cho_ingested_g_h: 90,
+      gut_absorption_pct: 88,
+      microbiota_sequestration_pct: 8,
+      gut_training_pct: 75,
+      candida_overgrowth_pct: 12,
+      bifidobacteria_pct: 8,
+      akkermansia_pct: 3,
+      butyrate_producers_pct: 20,
+      endotoxin_risk_pct: 20,
+    };
+
     const autoInputs = {
       source: "executed_workouts_rolling",
       sessionsAnalyzed: executed.length,
-      lactate: {
-        duration_min: Math.round(durationAvg),
-        power_w: Math.round(inferredPower),
-        ftp_w: Math.round(inferredFtp),
-        body_mass_kg: Math.round(bodyMassKg),
-        velocity_m_min: 0,
-        grade_pct: 0,
-        efficiency: 0.24,
-        vo2_l_min: Number(vo2ForAuto.toFixed(2)),
-        vco2_l_min: Number((vo2ForAuto * rerProxy).toFixed(2)),
-        rer: Number(rerProxy.toFixed(2)),
-        smo2_rest: Math.round(smo2RestProxy),
-        smo2_work: Math.round(smo2WorkProxy),
-        lactate_oxidation_pct: 70,
-        cori_pct: 18,
-        cho_ingested_g_h: 90,
-        gut_absorption_pct: 88,
-        microbiota_sequestration_pct: 8,
-        gut_training_pct: 75,
-        candida_overgrowth_pct: 12,
-        bifidobacteria_pct: 8,
-        akkermansia_pct: 3,
-        butyrate_producers_pct: 20,
-        endotoxin_risk_pct: 20,
-      },
+      lactate: lactateAuto,
       maxox: {
         vo2_l_min: Number(vo2ForAuto.toFixed(2)),
         body_mass_kg: bodyMassKg,
@@ -261,14 +301,41 @@ export async function GET(req: NextRequest) {
           };
 
     if (microbiotaProfile) {
-      autoInputs.lactate = {
-        ...autoInputs.lactate,
+      Object.assign(lactateAuto, {
         candida_overgrowth_pct: Number(microbiotaProfile.candida_overgrowth_pct.toFixed(2)),
         bifidobacteria_pct: Number(microbiotaProfile.bifidobacteria_pct.toFixed(2)),
         akkermansia_pct: Number(microbiotaProfile.akkermansia_pct.toFixed(2)),
         butyrate_producers_pct: Number(microbiotaProfile.butyrate_producers_pct.toFixed(2)),
         endotoxin_risk_pct: Number(microbiotaProfile.endotoxin_risk_pct.toFixed(2)),
-      };
+      });
+    }
+
+    const bloodPanel = ((bloodPanelRes.data ?? [])[0] as { values?: Record<string, unknown> | null } | undefined) ?? null;
+    const bloodValues = (bloodPanel?.values ?? {}) as Record<string, unknown>;
+    const glucoseFromBloodPanel = bloodGlucoseMmolFromPanel(bloodValues);
+    const baselineGlucoseMmol = physiologyState.physiologicalProfile.baselineGlucoseMmol ?? null;
+    const baselineTempC = physiologyState.physiologicalProfile.baselineTempC ?? null;
+
+    type GlucoseHealthSource = "blood_panel" | "physiological_baseline" | "session_roll";
+    let healthBioGlucose: { mmol_l: number; source: GlucoseHealthSource } | null = null;
+    if (glucoseFromBloodPanel != null) {
+      healthBioGlucose = { mmol_l: glucoseFromBloodPanel, source: "blood_panel" };
+    } else if (baselineGlucoseMmol != null && baselineGlucoseMmol >= 2 && baselineGlucoseMmol <= 15) {
+      healthBioGlucose = { mmol_l: baselineGlucoseMmol, source: "physiological_baseline" };
+    } else if (avgGlucoseSessions != null) {
+      healthBioGlucose = { mmol_l: avgGlucoseSessions, source: "session_roll" };
+    }
+
+    if (healthBioGlucose != null) {
+      lactateAuto.glucose_mmol_l = Number(healthBioGlucose.mmol_l.toFixed(2));
+    }
+
+    const healthBioCoreTempC =
+      baselineTempC != null && Number.isFinite(baselineTempC) && baselineTempC >= 35 && baselineTempC <= 41.5
+        ? Number(baselineTempC.toFixed(2))
+        : null;
+    if (healthBioCoreTempC != null) {
+      lactateAuto.core_temp_c = healthBioCoreTempC;
     }
 
     const workouts = executed.map((row, idx) => {
@@ -334,6 +401,8 @@ export async function GET(req: NextRequest) {
       profileVo2maxLMin: vo2FromProfileLMin,
       autoInputs,
       microbiotaProfile,
+      healthBioGlucose,
+      healthBioCoreTempC,
       workouts,
     });
   } catch (err) {

@@ -5,6 +5,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeftRight,
+  Beaker,
   Bug,
   Droplets,
   Flame,
@@ -198,6 +199,15 @@ const LACTATE_ENGINE_PARAM_DEFS: ParamDef[] = [
     inputStep: "0.1",
   },
   {
+    key: "glucose_mmol_l",
+    label: "Glucose",
+    unit: "mmol/L",
+    gradient: "linear-gradient(145deg, #22d3ee, #0e7490)",
+    glow: "0 0 22px rgba(34,211,238,0.28)",
+    Icon: Beaker,
+    inputStep: "0.1",
+  },
+  {
     key: "candida_overgrowth_pct",
     label: "Candida",
     unit: "%",
@@ -247,6 +257,13 @@ const MICROBIOTA_MANUAL_KEYS = new Set([
   "endotoxin_risk_pct",
 ]);
 
+/** Con fonte microbiota ≠ manuale il motore deriva questi tre valori dai taxa (Health&Bio / preset). */
+const GUT_DERIVED_FROM_MICROBIOTA_KEYS = new Set([
+  "gut_absorption_pct",
+  "microbiota_sequestration_pct",
+  "gut_training_pct",
+]);
+
 function fieldDisabled(
   key: string,
   vo2Mode: LactateVo2Mode,
@@ -256,6 +273,7 @@ function fieldDisabled(
   if (key === "vo2_l_min" && vo2Mode === "device") return true;
   if (key === "rer" && rerMode === "auto") return true;
   if (MICROBIOTA_MANUAL_KEYS.has(key) && microbiotaSourceMode !== "manual") return true;
+  if (GUT_DERIVED_FROM_MICROBIOTA_KEYS.has(key) && microbiotaSourceMode !== "manual") return true;
   return false;
 }
 
