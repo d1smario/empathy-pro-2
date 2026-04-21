@@ -1,4 +1,5 @@
--- Allinea `coach_athletes` a Pro 2 (PK org_id + coach + athlete). Richiede `000_pro2_orgs.sql` e tabella da V1 `004_auth_user_context.sql`.
+-- Allinea `coach_athletes` a Pro 2 (PK org_id + coach + athlete).
+-- Richiede `000_pro2_orgs.sql` e la tabella `coach_athletes` già creata da `001_pro2_v1_canonical_prereq_read_spine.sql` (parità V1 `004_auth_user_context.sql`).
 
 ALTER TABLE public.coach_athletes
   ADD COLUMN IF NOT EXISTS org_id uuid REFERENCES public.orgs (id) ON DELETE CASCADE;

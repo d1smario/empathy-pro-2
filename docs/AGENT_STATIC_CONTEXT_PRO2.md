@@ -32,6 +32,8 @@ Questo file **non** sostituisce architettura o constitution: serve perché **la 
 
 Gli stessi `CURSOR_REALIGN_*` possono esistere anche in `nextjs-empathy-pro/docs/` (workspace V1): non duplicare logica Pro 2 lì; per **fatti deploy Pro 2** la fonte è **questo repo** (`empathy-pro-2-cursor`).
 
+- **Parità schema/API V1 → Pro 2 (mappa operativa + checklist):** `docs/V1_PRO2_OPERATIONAL_PARITY_MAP.md`
+
 ## Regola Cursor nel repo
 
 La rule `.cursor/rules/empathy_pro2_agent_static_context.mdc` punta a questo documento così ogni sessione agent sul clone ha i riferimenti senza dipendere dalla memoria della chat. In aggiunta, **`.cursor/rules/empathy_pro2_integrated_agent_execution.mdc`** (`alwaysApply`) vincola ogni patch al generativo e allo schema condiviso; è richiamata anche da `.cursor/rules/empathy_generative_core.mdc`.
