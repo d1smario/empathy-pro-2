@@ -1,9 +1,9 @@
-/**
- * Linear critical-power model in work–time form: W(t) = W′ + CP·t (Joules).
- * Cross-check against hybrid CP fit: large ΔCP or negative R² flags inconsistent inputs.
+﻿/**
+ * Linear critical-power model in workâ€“time form: W(t) = Wâ€² + CPÂ·t (Joules).
+ * Cross-check against hybrid CP fit: large Î”CP or negative RÂ² flags inconsistent inputs.
  */
 
-import type { CpInputPoint } from "@/lib/engines/critical-power-engine";
+import type { CpInputPoint } from "@/lib/engines/cp-input-point";
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -43,7 +43,7 @@ function weightedLinearRegression(xs: number[], ys: number[], ws: number[]) {
 }
 
 /**
- * Fit CP and W′ from work = power·t vs t (30 s–3600 s), weighted like CP engine long-domain points.
+ * Fit CP and Wâ€² from work = powerÂ·t vs t (30 sâ€“3600 s), weighted like CP engine long-domain points.
  */
 export function fitCpWorkTimeLinearModel(points: CpInputPoint[]): CpWorkTimeLinearFitResult | null {
   const set = points
@@ -72,9 +72,9 @@ export function fitCpWorkTimeLinearModel(points: CpInputPoint[]): CpWorkTimeLine
 }
 
 export type CpWorkTimeLinearCrossCheck = CpWorkTimeLinearFitResult & {
-  /** 100·(CP_linear − CP_hybrid) / CP_hybrid */
+  /** 100Â·(CP_linear âˆ’ CP_hybrid) / CP_hybrid */
   deltaHybridCpPct: number;
-  /** 100·(W′_linear − W′_hybrid) / W′_hybrid */
+  /** 100Â·(Wâ€²_linear âˆ’ Wâ€²_hybrid) / Wâ€²_hybrid */
   deltaHybridWPrimePct: number;
 };
 
@@ -93,3 +93,4 @@ export function buildCpWorkTimeCrossCheck(
     deltaHybridWPrimePct: (100 * (fit.wPrimeJ - hW)) / hW,
   };
 }
+
