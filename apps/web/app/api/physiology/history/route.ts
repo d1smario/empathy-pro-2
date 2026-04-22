@@ -71,8 +71,17 @@ export async function GET(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const [historyRes, physiologyState, executedRes, profileRes, microbiotaPanelRes, bloodPanelRes, latestMetabolicRes] =
-      await Promise.all([
+    const [
+      historyRes,
+      physiologyState,
+      executedRes,
+      profileRes,
+      microbiotaPanelRes,
+      bloodPanelRes,
+      latestMetabolicRes,
+      latestLactateRes,
+      latestMaxOxRes,
+    ] = await Promise.all([
       db
         .from("metabolic_lab_runs")
         .select("id, section, model_version, created_at, input_payload, output_payload")
@@ -116,6 +125,22 @@ export async function GET(req: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      db
+        .from("metabolic_lab_runs")
+        .select("id, section, model_version, created_at, input_payload, output_payload")
+        .eq("athlete_id", athleteId)
+        .eq("section", "lactate_analysis")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      db
+        .from("metabolic_lab_runs")
+        .select("id, section, model_version, created_at, input_payload, output_payload")
+        .eq("athlete_id", athleteId)
+        .eq("section", "max_oxidate")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
     if (historyRes.error) return NextResponse.json({ error: historyRes.error.message }, { status: 500 });
@@ -125,6 +150,9 @@ export async function GET(req: NextRequest) {
     if (bloodPanelRes.error) return NextResponse.json({ error: bloodPanelRes.error.message }, { status: 500 });
     const latestMetabolicProfileRun =
       latestMetabolicRes.error || !latestMetabolicRes.data ? null : latestMetabolicRes.data;
+    const latestLactateRun =
+      latestLactateRes.error || !latestLactateRes.data ? null : latestLactateRes.data;
+    const latestMaxOxRun = latestMaxOxRes.error || !latestMaxOxRes.data ? null : latestMaxOxRes.data;
 
     const ftp = Number(physiologyState.physiologicalProfile.ftpWatts ?? 0);
     const vo2maxMlMinKgCanon = physiologyState.physiologicalProfile.vo2maxMlMinKg ?? null;
@@ -416,6 +444,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       history: historyRes.data ?? [],
       latestMetabolicProfileRun,
+      latestLactateRun,
+      latestMaxOxRun,
       ftpW: Number.isFinite(ftp) && ftp > 0 ? ftp : null,
       athleteWeightKg,
       profileVo2maxMlMinKg: vo2maxMlMinKgCanon,

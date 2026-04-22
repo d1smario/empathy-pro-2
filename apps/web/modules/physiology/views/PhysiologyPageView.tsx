@@ -41,7 +41,8 @@ import {
   savePhysiologySnapshot,
 } from "@/modules/physiology/services/physiology-snapshot-api";
 import { clearVo2maxLab, saveVo2maxLab } from "@/modules/physiology/services/vo2max-lab-api";
-import { Activity, Layers, Network } from "lucide-react";
+import Link from "next/link";
+import { Activity, BookOpen, Layers, Network } from "lucide-react";
 
 function clamp(v: number, min: number, max: number) {
   return Math.max(min, Math.min(max, v));
@@ -190,6 +191,18 @@ const MAXOX_DEFAULT_INPUT: Record<string, string> = {
   hemoglobin_g_dl: "",
   sao2_pct: "",
 };
+
+/** Campi stringa lab ripristinabili da `input_payload` snapshot. */
+function patchLabStringsFromPayload(payload: Record<string, unknown>, allowedKeys: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of allowedKeys) {
+    const raw = payload[k];
+    if (raw == null || raw === "") continue;
+    const s = typeof raw === "number" && Number.isFinite(raw) ? String(raw) : String(raw).trim();
+    if (s !== "") out[k] = s;
+  }
+  return out;
+}
 
 type SourceTag = "auto" | "manual" | "default" | "mixed";
 type PrecedenceSource = "measured" | "manual" | "preset" | "default";
@@ -357,6 +370,12 @@ export default function MetabolicLabPage() {
   const [profileVo2maxMlMinKg, setProfileVo2maxMlMinKg] = useState<number | null>(null);
   /** Peso profilo da API (allinea motore CP / L·min quando i campi lab massa sono vuoti). */
   const [athleteProfileWeightKg, setAthleteProfileWeightKg] = useState<number | null>(null);
+  /** ISO `created_at` ultimo snapshot salvato per sezione (da `metabolic_lab_runs`). */
+  const [lastLabSavedAt, setLastLabSavedAt] = useState<{
+    metabolic: string | null;
+    lactate: string | null;
+    maxox: string | null;
+  }>({ metabolic: null, lactate: null, maxox: null });
   const [fatOxAdaptation, setFatOxAdaptation] = useState(0.5);
   const [profileCalcTick, setProfileCalcTick] = useState(0);
   const [lactateCalcTick, setLactateCalcTick] = useState(0);
@@ -973,6 +992,7 @@ export default function MetabolicLabPage() {
     setHistory([]);
     setSelectedHistoryId(null);
     setAthleteProfileWeightKg(null);
+    setLastLabSavedAt({ metabolic: null, lactate: null, maxox: null });
     setAutoInfo(null);
     setSaveMessage(null);
     setError(null);
@@ -1027,12 +1047,17 @@ export default function MetabolicLabPage() {
     setHistoryLoading(true);
     setSelectedHistoryId(null);
     try {
+      setLastLabSavedAt({ metabolic: null, lactate: null, maxox: null });
       const payload = await fetchPhysiologyHistoryAndFtp(activeAthleteId);
       const hist = (payload.history as LabRun[]) ?? [];
       setHistory(hist);
       const latestMetabolicRow =
         (payload.latestMetabolicProfileRun as LabRun | null | undefined) ??
         hist.find((r) => r.section === "metabolic_profile");
+      setLastLabSavedAt((prev) => ({
+        ...prev,
+        metabolic: typeof latestMetabolicRow?.created_at === "string" ? latestMetabolicRow.created_at : null,
+      }));
       const inp = latestMetabolicRow?.input_payload;
       setCpInputs(() => {
         const next = initialEmptyCpInputs();
@@ -1137,10 +1162,73 @@ export default function MetabolicLabPage() {
           core_temp_c: s.core_temp_c.trim() === "" ? String(Number(hbT.toFixed(2))) : s.core_temp_c,
         }));
       }
+
+      const lacRow =
+        (payload.latestLactateRun as LabRun | null | undefined) ??
+        hist.find((r) => r.section === "lactate_analysis");
+      setLastLabSavedAt((prev) => ({
+        ...prev,
+        lactate: typeof lacRow?.created_at === "string" ? lacRow.created_at : null,
+      }));
+      const lacIn = lacRow?.input_payload;
+      if (lacIn && typeof lacIn === "object") {
+        const rec = lacIn as Record<string, unknown>;
+        const patch = patchLabStringsFromPayload(rec, Object.keys(LACTATE_DEFAULT_INPUT));
+        if (Object.keys(patch).length > 0) {
+          setLactateInput((s) => ({ ...s, ...patch }));
+        }
+        if (typeof rec.sport === "string") setLactateSport(toSupportedSport(rec.sport));
+        if (rec.vo2_mode === "device" || rec.vo2_mode === "test") setLactateVo2Mode(rec.vo2_mode);
+        if (rec.rer_mode === "auto" || rec.rer_mode === "manual") setLactateRerMode(rec.rer_mode);
+        if (
+          rec.microbiota_source_mode === "health_bio" ||
+          rec.microbiota_source_mode === "preset" ||
+          rec.microbiota_source_mode === "manual"
+        ) {
+          setMicrobiotaSourceMode(rec.microbiota_source_mode);
+        }
+        const dp = rec.dysbiosis_preset;
+        if (dp === "eubiosi" || dp === "lieve" || dp === "moderata" || dp === "severa" || dp === "grave") {
+          setDysbiosisPreset(dp);
+        }
+        const foa = rec.fat_oxidation_adaptation;
+        if (typeof foa === "number" && Number.isFinite(foa)) {
+          setFatOxAdaptation(clamp(foa, 0, 1));
+        }
+        if (rec.segment_attachment != null && typeof rec.segment_attachment === "object") {
+          setLactateSegmentAttachment(rec.segment_attachment as SegmentAttachmentMeta);
+        }
+        if (rec.health_bio_glucose != null && typeof rec.health_bio_glucose === "object") {
+          setHealthBioGlucoseMeta(rec.health_bio_glucose as HealthBioGlucoseMeta);
+        }
+        if (typeof rec.health_bio_core_temp_c === "number" && Number.isFinite(rec.health_bio_core_temp_c)) {
+          setHealthBioCoreTempCBaseline(rec.health_bio_core_temp_c);
+        }
+        setLactateCalcTick((n) => n + 1);
+      }
+
+      const oxRow =
+        (payload.latestMaxOxRun as LabRun | null | undefined) ?? hist.find((r) => r.section === "max_oxidate");
+      setLastLabSavedAt((prev) => ({
+        ...prev,
+        maxox: typeof oxRow?.created_at === "string" ? oxRow.created_at : null,
+      }));
+      const oxIn = oxRow?.input_payload;
+      if (oxIn && typeof oxIn === "object") {
+        const rec = oxIn as Record<string, unknown>;
+        const patch = patchLabStringsFromPayload(rec, Object.keys(MAXOX_DEFAULT_INPUT));
+        if (Object.keys(patch).length > 0) {
+          setMaxOxInput((s) => ({ ...s, ...patch }));
+        }
+        if (typeof rec.sport === "string") setMaxOxSport(toSupportedSport(rec.sport));
+        if (rec.vo2_mode === "device" || rec.vo2_mode === "test") setMaxOxVo2Mode(rec.vo2_mode);
+        setMaxOxCalcTick((n) => n + 1);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento storico physiology");
       setHistory([]);
       setAthleteProfileWeightKg(null);
+      setLastLabSavedAt({ metabolic: null, lactate: null, maxox: null });
       setSelectedHistoryId(null);
       setWorkouts([]);
       setSelectedWorkoutId("");
@@ -1559,6 +1647,38 @@ export default function MetabolicLabPage() {
       </div>
       ) : null}
 
+      <Pro2SectionCard accent="slate" icon={BookOpen} title="Ruolo Metabolic Lab nella piattaforma" subtitle="Cosa salviamo, cosa vedi al rientro, dove fluiscono i dati">
+        <details className="group">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-200 marker:text-cyan-400/80">
+            Integrazione Training, Nutrition e roadmap Builder
+          </summary>
+          <div className="mt-3 space-y-3 text-xs leading-relaxed text-slate-400">
+            <p>
+              <strong className="text-slate-200">Metabolic profile</strong> — Curva Critical Power (durate → W), FTP/LT, VO₂max stimato, tabelle zona/substrato. All&apos;ingresso ripristiniamo{" "}
+              <strong>l&apos;ultimo snapshot salvato</strong> su Supabase. Il profilo canonico (stesso schema usato da Virya/Builder) include FTP, CP, LT e i punti CP (
+              <code className="rounded bg-black/30 px-1 font-mono text-[0.65rem]">cpCurveInputsW</code>
+              ) per allineare le zone: oggi le zone in{" "}
+              <Link href="/training" className="text-cyan-300 underline-offset-2 hover:underline">
+                Training
+              </Link>{" "}
+              seguono il <strong>profilo fisiologico</strong> (FTP/LT); il collegamento puntuale di ogni durata CP al calendario è il passo successivo esplicito in product.
+            </p>
+            <p>
+              <strong className="text-slate-200">Lactate analysis</strong> — Ripristino dell&apos;<strong>ultimo test salvato</strong> (input + motore). Serve a quantificare uso CHO, assorbimento intestinale, ossidazione e{" "}
+              <strong>ciclo di Cori</strong> (riconversione lattato → glucosio): segnali strutturati consumabili da{" "}
+              <Link href="/nutrition" className="text-cyan-300 underline-offset-2 hover:underline">
+                Nutrition
+              </Link>{" "}
+              per fueling e aderenza (non sostituisce il solver pasti: arricchisce i vincoli metabolici).
+            </p>
+            <p>
+              <strong className="text-slate-200">Max oxidate</strong> — Capacità ossidativa e andamento nel tempo; ripristino dell&apos;<strong>ultima analisi salvata</strong>. Utile per sforzi aerobici prolungati e, in roadmap, per affinare{" "}
+              <strong>zone aerobiche</strong> e strategie nel Builder quando il contesto fisiologico sarà cablato anche lì.
+            </p>
+          </div>
+        </details>
+      </Pro2SectionCard>
+
       <div
         id="physiology-live-metabolic-summary"
         className="rounded-2xl border border-cyan-500/30 bg-gradient-to-b from-slate-900/95 to-black/50 p-4"
@@ -1615,6 +1735,18 @@ export default function MetabolicLabPage() {
 
       {section === "profile" ? (
         <div className="space-y-8">
+          {lastLabSavedAt.metabolic ? (
+            <p className="text-xs text-slate-400">
+              Ultimo snapshot <strong className="text-slate-200">Metabolic profile</strong> salvato:{" "}
+              <span className="tabular-nums text-cyan-200/90">
+                {new Date(lastLabSavedAt.metabolic).toLocaleString("it-IT")}
+              </span>
+            </p>
+          ) : (
+            <p className="text-xs text-amber-200/85">
+              Nessuno snapshot Metabolic profile in archivio: dopo aver compilato la curva CP, usa <strong>Salva snapshot</strong> per conservare l&apos;analisi e vederla al prossimo accesso.
+            </p>
+          )}
           <div className="flex flex-col gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-950/15 p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <div className="flex flex-wrap items-center gap-3">
               <Pro2Button
@@ -2071,6 +2203,18 @@ export default function MetabolicLabPage() {
 
       {section === "lactate" ? (
         <div>
+          {lastLabSavedAt.lactate ? (
+            <p className="mb-3 text-xs text-slate-400">
+              Ultimo snapshot <strong className="text-slate-200">Lactate analysis</strong> caricato:{" "}
+              <span className="tabular-nums text-amber-200/90">
+                {new Date(lastLabSavedAt.lactate).toLocaleString("it-IT")}
+              </span>
+            </p>
+          ) : (
+            <p className="mb-3 text-xs text-amber-200/85">
+              Nessuno snapshot Lactate salvato: dopo l&apos;analisi premi <strong>Salva snapshot Lactate Analysis</strong> per conservare input e output e ritrovarli qui.
+            </p>
+          )}
           <PhysiologyPro2LactateLab
             model={lactateModel}
             reliabilityPct={lactateReliability}
@@ -2220,6 +2364,18 @@ export default function MetabolicLabPage() {
 
       {section === "maxox" ? (
         <div>
+          {lastLabSavedAt.maxox ? (
+            <p className="mb-3 text-xs text-slate-400">
+              Ultimo snapshot <strong className="text-slate-200">Max oxidate</strong> caricato:{" "}
+              <span className="tabular-nums text-rose-200/90">
+                {new Date(lastLabSavedAt.maxox).toLocaleString("it-IT")}
+              </span>
+            </p>
+          ) : (
+            <p className="mb-3 text-xs text-amber-200/85">
+              Nessuno snapshot Max oxidate salvato: dopo l&apos;analisi usa <strong>Salva snapshot Max Oxidate</strong> per conservare capacità ossidativa e indici.
+            </p>
+          )}
           <PhysiologyPro2MaxOxLab
             model={maxOxModel}
             reliabilityPct={maxOxReliability}
@@ -2332,7 +2488,7 @@ export default function MetabolicLabPage() {
                 <div className="physiology-lab-pro2-kpi-label">VO₂max capacità (L/min · ml/kg/min)</div>
                 <div className="physiology-lab-pro2-kpi-value physiology-lab-pro2-kpi-value--cyan">
                   {maxOxVo2Used.toFixed(2)} ·{" "}
-                  {((maxOxVo2Used * 1000) / Math.max(1, maxOxResolved.values.body_mass_kg || 70)).toFixed(1)}
+                  {((maxOxVo2Used * 1000) / Math.max(1, labBodyMassKg)).toFixed(1)}
                 </div>
               </div>
               <div className="physiology-lab-pro2-kpi">

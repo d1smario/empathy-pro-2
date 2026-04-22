@@ -68,6 +68,8 @@ export type MetabolicProfile = {
   substrateRates?: Record<string, number>;
   substrateTable?: Array<Record<string, unknown>>;
   powerComponents?: Array<Record<string, unknown>>;
+  /** Potenze (W) per durata (etichette 5s…20m) dall’ultimo Metabolic Lab salvato — esposta a Training / twin. */
+  cpCurveInputsW?: Record<string, number>;
   latestValues?: Record<string, unknown>;
 };
 

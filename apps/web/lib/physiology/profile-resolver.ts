@@ -67,6 +67,22 @@ function mergeRecordsByRecency(records: Array<Record<string, unknown>>): Record<
   return merged;
 }
 
+const CP_CURVE_LABELS = ["5s", "15s", "30s", "60s", "3m", "5m", "12m", "20m"] as const;
+
+/** Curva CP durata→W dall’ultimo run Metabolic profile (`input_payload` o `output_payload.cp_curve_inputs_w`). */
+function extractCpCurveInputsWFromLatestMetabolicRun(run: Record<string, unknown> | null): Record<string, number> | undefined {
+  if (!run) return undefined;
+  const input = recordOf(run.input_payload);
+  const output = recordOf(run.output_payload);
+  const embedded = recordOf(output.cp_curve_inputs_w ?? output.cpCurveInputsW);
+  const out: Record<string, number> = {};
+  for (const label of CP_CURVE_LABELS) {
+    const n = asNum(embedded[label]) ?? asNum(input[label]);
+    if (n != null && n > 0) out[label] = n;
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
 function compactNumericRecord(input: Record<string, number | null>): Record<string, number> {
   const out: Record<string, number> = {};
   for (const [key, value] of Object.entries(input)) {
@@ -105,7 +121,7 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
       .maybeSingle(),
     supabase
       .from("metabolic_lab_runs")
-      .select("section, output_payload, created_at")
+      .select("section, input_payload, output_payload, created_at")
       .eq("athlete_id", athleteId)
       .order("created_at", { ascending: false })
       .limit(24),
@@ -136,7 +152,7 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
   const metabolicRuns = runs.filter((run) => String(run.section ?? "") === "metabolic_profile");
   const lactateRuns = runs.filter((run) => String(run.section ?? "") === "lactate_analysis");
   const performanceRuns = runs.filter((run) => String(run.section ?? "") === "max_oxidate");
-  const metabolicRun = metabolicRuns[0] ?? null;
+  const metabolicRun = (metabolicRuns[0] as Record<string, unknown> | undefined) ?? null;
   const lactateRun = lactateRuns[0] ?? null;
   const performanceRun = performanceRuns[0] ?? null;
 
@@ -244,6 +260,7 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
     powerComponents: Array.isArray(metabolicValues.powerComponents)
       ? (metabolicValues.powerComponents as Array<Record<string, unknown>>)
       : undefined,
+    cpCurveInputsW: extractCpCurveInputsWFromLatestMetabolicRun(metabolicRun),
     latestValues: metabolicValues,
   };
 
