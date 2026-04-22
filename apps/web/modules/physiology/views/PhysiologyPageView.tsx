@@ -355,6 +355,8 @@ export default function MetabolicLabPage() {
   const [healthBioCoreTempCBaseline, setHealthBioCoreTempCBaseline] = useState<number | null>(null);
   const [profileVo2maxLMin, setProfileVo2maxLMin] = useState<number | null>(null);
   const [profileVo2maxMlMinKg, setProfileVo2maxMlMinKg] = useState<number | null>(null);
+  /** Peso profilo da API (allinea motore CP / L·min quando i campi lab massa sono vuoti). */
+  const [athleteProfileWeightKg, setAthleteProfileWeightKg] = useState<number | null>(null);
   const [fatOxAdaptation, setFatOxAdaptation] = useState(0.5);
   const [profileCalcTick, setProfileCalcTick] = useState(0);
   const [lactateCalcTick, setLactateCalcTick] = useState(0);
@@ -440,29 +442,32 @@ export default function MetabolicLabPage() {
     };
   }
 
+  const labBodyMassKg = useMemo(() => {
+    const l = parseFloat(String(lactateInput.body_mass_kg).replace(",", "."));
+    const m = parseFloat(String(maxOxInput.body_mass_kg).replace(",", "."));
+    const lactateT = String(lactateInput.body_mass_kg ?? "").trim();
+    const maxOxT = String(maxOxInput.body_mass_kg ?? "").trim();
+    if (lactateT !== "" && Number.isFinite(l) && l > 30 && l < 250) return l;
+    if (maxOxT !== "" && Number.isFinite(m) && m > 30 && m < 250) return m;
+    if (athleteProfileWeightKg != null && athleteProfileWeightKg > 30 && athleteProfileWeightKg < 250) {
+      return athleteProfileWeightKg;
+    }
+    if (Number.isFinite(l) && l > 30) return l;
+    if (Number.isFinite(m) && m > 30) return m;
+    return 70;
+  }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg, athleteProfileWeightKg]);
+
   const cpModel = useMemo(() => {
     const cpPoints = CP_POINTS.map((p) => ({
       sec: p.sec,
       powerW: parseFloat(cpInputs[p.label]) || 0,
     }));
-    const bodyMassKg =
-      parseFloat(lactateInput.body_mass_kg) ||
-      parseFloat(maxOxInput.body_mass_kg) ||
-      70;
     return computeMetabolicProfileEngine({
       cpPoints,
-      bodyMassKg,
+      bodyMassKg: labBodyMassKg,
       efficiency: parseFloat(lactateInput.efficiency) || 0.24,
     });
-  }, [cpInputs, lactateInput.body_mass_kg, lactateInput.efficiency, maxOxInput.body_mass_kg, profileCalcTick]);
-
-  const profileDisplayMassKg = useMemo(() => {
-    const m =
-      parseFloat(String(lactateInput.body_mass_kg).replace(",", ".")) ||
-      parseFloat(String(maxOxInput.body_mass_kg).replace(",", ".")) ||
-      70;
-    return Number.isFinite(m) && m > 30 ? m : 70;
-  }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg]);
+  }, [cpInputs, lactateInput.efficiency, labBodyMassKg, profileCalcTick]);
 
   const gasExchangeSubstrateProfile = useMemo(() => {
     const vo2 = parseFloat(String(lactateInput.vo2_l_min).replace(",", "."));
@@ -487,8 +492,10 @@ export default function MetabolicLabPage() {
   const athleteBodyMassForGasImport = useMemo(() => {
     const m = parseFloat(String(lactateInput.body_mass_kg).replace(",", ".")) ||
       parseFloat(String(maxOxInput.body_mass_kg).replace(",", "."));
-    return Number.isFinite(m) && m > 30 ? m : undefined;
-  }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg]);
+    if (Number.isFinite(m) && m > 30) return m;
+    if (athleteProfileWeightKg != null && athleteProfileWeightKg > 30) return athleteProfileWeightKg;
+    return undefined;
+  }, [lactateInput.body_mass_kg, maxOxInput.body_mass_kg, athleteProfileWeightKg]);
 
   const lactateResolved = useMemo(() => {
     const values: Record<string, number> = {};
@@ -626,7 +633,7 @@ export default function MetabolicLabPage() {
     setMaxOxInput((s) => ({
       ...s,
       ftp_w: String(Math.round(cpModel.ftp)),
-      body_mass_kg: String(profileDisplayMassKg.toFixed(1)),
+      body_mass_kg: String(labBodyMassKg.toFixed(1)),
       efficiency: String(eff),
     }));
     setMaxOxVo2Mode("device");
@@ -665,7 +672,7 @@ export default function MetabolicLabPage() {
       parseFloat(lactateInput.efficiency.replace(",", ".")) ||
       parseFloat(maxOxInput.efficiency.replace(",", ".")) ||
       0.24;
-    const bm = profileDisplayMassKg;
+    const bm = labBodyMassKg;
     const ftpFromForm =
       Math.max(
         parseFloat(String(maxOxInput.ftp_w).replace(",", ".")) || 0,
@@ -965,6 +972,7 @@ export default function MetabolicLabPage() {
     setWorkouts([]);
     setHistory([]);
     setSelectedHistoryId(null);
+    setAthleteProfileWeightKg(null);
     setAutoInfo(null);
     setSaveMessage(null);
     setError(null);
@@ -1062,6 +1070,22 @@ export default function MetabolicLabPage() {
       setProfileVo2maxLMin(pVo2L);
       setProfileVo2maxMlMinKg(pVo2Ml);
 
+      const aw =
+        payload.athleteWeightKg != null && Number.isFinite(payload.athleteWeightKg) && payload.athleteWeightKg > 30
+          ? Number(payload.athleteWeightKg)
+          : null;
+      setAthleteProfileWeightKg(aw);
+      if (aw != null) {
+        setLactateInput((s) => ({
+          ...s,
+          body_mass_kg: s.body_mass_kg.trim() === "" ? String(Number(aw.toFixed(1))) : s.body_mass_kg,
+        }));
+        setMaxOxInput((s) => ({
+          ...s,
+          body_mass_kg: s.body_mass_kg.trim() === "" ? String(Number(aw.toFixed(1))) : s.body_mass_kg,
+        }));
+      }
+
       if (payload.microbiotaProfile) {
         setHasHealthMicrobiotaProfile(true);
         if (microbiotaSourceMode === "health_bio") {
@@ -1116,6 +1140,7 @@ export default function MetabolicLabPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore caricamento storico physiology");
       setHistory([]);
+      setAthleteProfileWeightKg(null);
       setSelectedHistoryId(null);
       setWorkouts([]);
       setSelectedWorkoutId("");
@@ -1648,7 +1673,7 @@ export default function MetabolicLabPage() {
                   const payload = {
                     export_version: "empathy-metabolic-profile-v1",
                     exported_at: new Date().toISOString(),
-                    body_mass_kg: profileDisplayMassKg,
+                    body_mass_kg: labBodyMassKg,
                     vo2max: {
                       estimated_ml_kg_min: cpModel.vo2maxMlMinKg,
                       estimated_l_min: cpModel.vo2maxLMin,
@@ -1947,7 +1972,7 @@ export default function MetabolicLabPage() {
             model={cpModel}
             sessionCount={workouts.length}
             autoDecodeText={autoInfo}
-            bodyMassKg={profileDisplayMassKg}
+            bodyMassKg={labBodyMassKg}
             profileVo2maxMlMinKg={profileVo2maxMlMinKg}
             profileVo2maxLMin={profileVo2maxLMin}
           />
@@ -2274,7 +2299,7 @@ export default function MetabolicLabPage() {
                   <>
                     <strong className="text-slate-200">VO₂max da Metabolic Profile</strong> (blend CP/W′):{" "}
                     {cpModel.vo2maxMlMinKg.toFixed(1)} ml/kg/min · {maxOxVo2Used.toFixed(2)} L/min @{" "}
-                    {profileDisplayMassKg.toFixed(0)} kg. A questa potenza ~{maxOxVo2Estimate.vo2LMin.toFixed(2)} L/min.
+                    {labBodyMassKg.toFixed(0)} kg. A questa potenza ~{maxOxVo2Estimate.vo2LMin.toFixed(2)} L/min.
                   </>
                 ) : (
                   <>

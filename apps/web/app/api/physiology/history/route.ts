@@ -140,6 +140,14 @@ export async function GET(req: NextRequest) {
         smo2: number | null;
       }>) ?? [];
     const profile = (profileRes.data as { weight_kg?: number | null } | null) ?? null;
+    const rawProfileWeight = profile?.weight_kg;
+    const athleteWeightKg =
+      rawProfileWeight != null &&
+      Number.isFinite(Number(rawProfileWeight)) &&
+      Number(rawProfileWeight) > 25 &&
+      Number(rawProfileWeight) < 250
+        ? Number(rawProfileWeight)
+        : null;
     const microbiotaPanel = ((microbiotaPanelRes.data ?? [])[0] as { values?: Record<string, unknown> | null } | undefined) ?? null;
     const microbiotaValues = (microbiotaPanel?.values ?? {}) as Record<string, unknown>;
 
@@ -409,6 +417,7 @@ export async function GET(req: NextRequest) {
       history: historyRes.data ?? [],
       latestMetabolicProfileRun,
       ftpW: Number.isFinite(ftp) && ftp > 0 ? ftp : null,
+      athleteWeightKg,
       profileVo2maxMlMinKg: vo2maxMlMinKgCanon,
       profileVo2maxLMin: vo2FromProfileLMin,
       autoInputs,
