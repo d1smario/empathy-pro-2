@@ -124,7 +124,7 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
       .select("section, input_payload, output_payload, created_at")
       .eq("athlete_id", athleteId)
       .order("created_at", { ascending: false })
-      .limit(24),
+      .limit(80),
     supabase
       .from("athlete_profiles")
       .select("weight_kg, resting_hr_bpm, max_hr_bpm")

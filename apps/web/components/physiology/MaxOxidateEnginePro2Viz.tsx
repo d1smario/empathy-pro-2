@@ -63,7 +63,7 @@ export function MaxOxidateEnginePro2Viz({ model }: { model: MaxOxidateOutput }) 
   const reqOx = Math.max(0, model.oxidativeDemandKcalMin);
   const headroom = Math.max(0, cap - reqOx);
   const fluxSegs: Seg[] = [
-    { key: "req", label: "Domanda ossidativa (≤CP)", value: reqOx, tone: "rose" },
+    { key: "req", label: "Domanda ossidativa (P_oss @ durata)", value: reqOx, tone: "rose" },
     { key: "head", label: "Margine capacità", value: headroom, tone: "cyan" },
   ];
 
@@ -90,7 +90,7 @@ export function MaxOxidateEnginePro2Viz({ model }: { model: MaxOxidateOutput }) 
 
       <div className="maxox-engine-viz-card">
         <h4 className="maxox-engine-viz-title">Substrati · potenziale ossidativo (g/min)</h4>
-        <p className="maxox-engine-viz-sub">Partizione stimata da intensità, RER e lattato (motore v1.2).</p>
+        <p className="maxox-engine-viz-sub">Partizione stimata da intensità, RER e lattato (max-oxidate v1.5).</p>
         <SegmentedBar segments={subSegs} unit="g/min" />
       </div>
 

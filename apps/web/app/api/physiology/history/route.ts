@@ -87,7 +87,7 @@ export async function GET(req: NextRequest) {
         .select("id, section, model_version, created_at, input_payload, output_payload")
         .eq("athlete_id", athleteId)
         .order("created_at", { ascending: false })
-        .limit(8),
+        .limit(80),
       resolveCanonicalPhysiologyState(athleteId),
       db
         .from("executed_workouts")
@@ -116,7 +116,7 @@ export async function GET(req: NextRequest) {
         .order("sample_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1),
-      /** Ultimo snapshot Metabolic profile (indipendente dalle ultime 8 righe miste: evita form CP vuoto). */
+      /** Ultimo snapshot Metabolic profile (indipendente dalla finestra mista in `history`: evita form CP vuoto). */
       db
         .from("metabolic_lab_runs")
         .select("id, section, model_version, created_at, input_payload, output_payload")

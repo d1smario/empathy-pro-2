@@ -13,14 +13,13 @@ export type PhysiologyPro2MaxOxLabProps = {
   bottleneckLabel: string;
   ratioSummary: string;
   redoxSummary: string;
-  /** VO₂ capacità nel modello (profilo VO2max o fallback stima). */
+  /** VO₂ capacità nel modello (curva CP / test / stima potenza). */
   vo2Used: number;
   vo2AtPowerL: number;
   vo2MlKgCapacity: number;
   vo2MlKgAtPower: number;
-  vo2CapacitySource: "profile_vo2max" | "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
-  profileVo2maxMlMinKg: number | null;
-  /** Per caption Max Oxidate: profilo o, se assente, VO₂max da motore Metabolic Profile. */
+  vo2CapacitySource: "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
+  /** Per caption Max Oxidate: VO₂max da Metabolic Profile (curva CP), se disponibile. */
   vo2maxMlMinKgForCaption?: number | null;
   vo2maxLMinForCaption?: number | null;
   maxOxVo2Mode: "device" | "test";
@@ -41,7 +40,6 @@ export function PhysiologyPro2MaxOxLab({
   vo2MlKgCapacity,
   vo2MlKgAtPower,
   vo2CapacitySource,
-  profileVo2maxMlMinKg,
   vo2maxMlMinKgForCaption,
   vo2maxLMinForCaption,
   maxOxVo2Mode,
@@ -75,7 +73,7 @@ export function PhysiologyPro2MaxOxLab({
 
       <MaxOxidateLabPro2Panel
         model={model}
-        vo2maxMlMinKg={vo2maxMlMinKgForCaption ?? profileVo2maxMlMinKg}
+        vo2maxMlMinKg={vo2maxMlMinKgForCaption ?? null}
         vo2maxLMin={vo2maxLMinForCaption ?? null}
         maxOxVo2UsedLMin={vo2Used}
         vo2CapacitySource={vo2CapacitySource}
@@ -93,7 +91,6 @@ export function PhysiologyPro2MaxOxLab({
         vo2MlKgCapacity={vo2MlKgCapacity}
         vo2MlKgAtPower={vo2MlKgAtPower}
         vo2CapacitySource={vo2CapacitySource}
-        profileVo2maxMlMinKg={profileVo2maxMlMinKg}
         maxOxVo2Mode={maxOxVo2Mode}
       />
 

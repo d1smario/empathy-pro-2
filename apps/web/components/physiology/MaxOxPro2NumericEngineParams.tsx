@@ -11,6 +11,7 @@ import {
   Scale,
   Target,
   ThermometerSun,
+  Timer,
   TrendingUp,
   Wind,
   Zap,
@@ -54,6 +55,15 @@ const MAXOX_ENGINE_PARAM_DEFS: ParamDef[] = [
     gradient: "linear-gradient(145deg, #f97316, #ea580c)",
     glow: "0 0 22px rgba(249,115,22,0.32)",
     Icon: Zap,
+  },
+  {
+    key: "duration_min",
+    label: "Durata test",
+    unit: "min",
+    gradient: "linear-gradient(145deg, #64748b, #475569)",
+    glow: "0 0 18px rgba(100,116,139,0.35)",
+    Icon: Timer,
+    inputStep: "0.5",
   },
   {
     key: "velocity_m_min",

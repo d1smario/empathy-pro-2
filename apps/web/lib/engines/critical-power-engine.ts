@@ -540,3 +540,21 @@ export function labelMetabolicFitModel(m: MetabolicCpFitModel): string {
   if (m === "blended-work-hybrid") return "Ibrido work–time + multi-fit";
   return "Multi-fit iperbolico";
 }
+
+/**
+ * Tabella `powerComponents` (60s … 3600s): riga più vicina alla durata del test (s).
+ * Usata da Max Oxidate per il **tetto meccanico ossidativo** a quella scala temporale (P_oss da CP+W′).
+ */
+export function powerComponentRowNearestSec(rows: PowerComponentRow[], durationSec: number): PowerComponentRow | null {
+  if (!rows.length || !Number.isFinite(durationSec) || durationSec < 30) return null;
+  let best = rows[0]!;
+  let bestD = Math.abs(rows[0]!.sec - durationSec);
+  for (const r of rows) {
+    const d = Math.abs(r.sec - durationSec);
+    if (d < bestD) {
+      bestD = d;
+      best = r;
+    }
+  }
+  return best;
+}

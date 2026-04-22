@@ -76,7 +76,6 @@ export function MaxOxPro2EngineReport({
   vo2MlKgCapacity,
   vo2MlKgAtPower,
   vo2CapacitySource,
-  profileVo2maxMlMinKg,
   maxOxVo2Mode,
 }: {
   model: MaxOxidateOutput;
@@ -89,18 +88,15 @@ export function MaxOxPro2EngineReport({
   vo2AtPowerL: number;
   vo2MlKgCapacity: number;
   vo2MlKgAtPower: number;
-  vo2CapacitySource: "profile_vo2max" | "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
-  profileVo2maxMlMinKg: number | null;
+  vo2CapacitySource: "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
   maxOxVo2Mode: Vo2LabMode;
 }) {
   const capLab =
     maxOxVo2Mode === "test"
       ? "VO₂ test (manuale)"
-      : vo2CapacitySource === "profile_vo2max"
-        ? "Profilo VO2max"
-        : vo2CapacitySource === "metabolic_engine_vo2max"
-          ? "VO₂max (modello Metabolic Profile)"
-          : "Capacità (stima potenza)";
+      : vo2CapacitySource === "metabolic_engine_vo2max"
+        ? "VO₂max (modello Metabolic Profile)"
+        : "Capacità (stima potenza)";
   const sat = model.utilizationRatioPct;
   const oversaturated = sat > 100;
   const satVisualMax = 150;
@@ -130,9 +126,6 @@ export function MaxOxPro2EngineReport({
             <span className="physiology-pro2-eng-vo2-lab">{capLab}</span>
             <strong>{vo2Used.toFixed(1)}</strong>
             <span className="physiology-pro2-eng-vo2-unit">L/min</span>
-            {profileVo2maxMlMinKg != null && vo2CapacitySource === "profile_vo2max" ? (
-              <span className="physiology-pro2-eng-vo2-hint">{profileVo2maxMlMinKg.toFixed(1)} ml/kg/min in anagrafica</span>
-            ) : null}
           </div>
           <div className="physiology-pro2-eng-vo2-cell physiology-pro2-eng-vo2-cell--blue">
             <span className="physiology-pro2-eng-vo2-lab">A questa potenza</span>
@@ -185,7 +178,7 @@ export function MaxOxPro2EngineReport({
             <span className="physiology-pro2-eng-sat-ok">Within capacity</span>
           )}
           <p className="physiology-pro2-eng-sat-foot">
-            Domanda aerobica (≤CP) vs capacità netta. Coerenza carico totale vs VO₂ grezzo:{" "}
+            Domanda ossidativa (P_oss @ durata) vs capacità netta. Coerenza carico totale vs VO₂ grezzo:{" "}
             <strong>{model.utilizationVo2CoherencePct.toFixed(0)}%</strong> · stress delivery (totale / netta):{" "}
             <strong>{model.utilizationDeliveryStressPct.toFixed(0)}%</strong>
           </p>
@@ -223,10 +216,10 @@ export function MaxOxPro2EngineReport({
           <span className="physiology-pro2-eng-mbkpi-sub">kcal/min totale</span>
         </div>
         <div className="physiology-pro2-eng-mbkpi physiology-pro2-eng-mbkpi--rose">
-          <span className="physiology-pro2-eng-mbkpi-lab">Domanda ossidativa (≤CP)</span>
+          <span className="physiology-pro2-eng-mbkpi-lab">Domanda ossidativa (P_oss)</span>
           <strong>{model.oxidativeDemandKcalMin.toFixed(2)}</strong>
           <span className="physiology-pro2-eng-mbkpi-sub">
-            kcal/min · &gt;CP {model.glycolyticPowerDemandW.toFixed(0)} W
+            kcal/min · non ossid. {model.glycolyticPowerDemandW.toFixed(0)} W
           </span>
         </div>
       </div>

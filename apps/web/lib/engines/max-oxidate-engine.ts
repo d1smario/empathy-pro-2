@@ -22,6 +22,13 @@ export type MaxOxidateInput = {
    * `vo2LMin` è una lettura sottomassimale (es. stima da potenza).
    */
   oxidativeCeilingVo2LMin?: number;
+  /**
+   * Potenza **ossidativa** (W) alla durata del test, da `MetabolicProfileOutput.powerComponents`
+   * (stesso split P = P_PCr + P_glic + P_oss del motore CP). Se assente si usa solo CP come prima.
+   */
+  cpAerobicWFromProfile?: number;
+  /** Durata test (s) usata per scegliere la riga powerComponents (audit / UI). */
+  durationSecForCpSplit?: number;
 };
 
 export type MaxOxidateOutput = {
@@ -32,11 +39,11 @@ export type MaxOxidateOutput = {
   oxidativeCapacityFatGMin: number;
   /** Domanda metabolica totale (tutta la potenza meccanica → energia). */
   requiredKcalMin: number;
-  /** Domanda che deve essere coperta dal metabolismo ossidativo (min(P, CP) in logica CP). */
+  /** Domanda che deve essere coperta dal metabolismo ossidativo (ossidativo meccanico a scala durata se noto). */
   oxidativeDemandKcalMin: number;
-  /** Potenza con copertura primaria aerobica; sopra CP il resto è anaerobico (W′). */
+  /** Potenza coperta come flusso ossidativo (min(P, P_oss@durata) se noto, altrimenti min(P, CP)). */
   aerobicPowerDemandW: number;
-  /** Stima potenza oltre CP (glicolisi + alattacida nel modello). */
+  /** Potenza oltre la quota ossidativa a questa scala (residuo vs P). */
   glycolyticPowerDemandW: number;
   utilizationRatioPct: number;
   extractionPct: number;
@@ -47,7 +54,12 @@ export type MaxOxidateOutput = {
   redoxStressIndex: number;
   nadhPressureIndex: number;
   reoxidationCapacityIndex: number;
-  bottleneckType: "central_delivery" | "peripheral_utilization" | "glycolytic_pressure" | "balanced";
+  bottleneckType:
+    | "central_delivery"
+    | "peripheral_utilization"
+    | "glycolytic_pressure"
+    | "oxidative_ceiling"
+    | "balanced";
   state: string;
   intensityPctFtp: number;
   /** VO₂ (L/min) usato per la capacità ossidativa (dopo eventuale tetto profilo). */
@@ -56,7 +68,7 @@ export type MaxOxidateOutput = {
   vo2CapacityRelMlKgMin: number;
   /** True se il tetto profilo ha aumentato il VO₂ rispetto alla sola lettura in input. */
   profileVo2maxCouplingActive: boolean;
-  /** Quota di potenza coperta come flusso aerobico stazionario (≤CP) in %. */
+  /** Quota di potenza coperta come flusso ossidativo meccanico (P vs P_oss@durata o CP legacy) in %. */
   aerobicDemandPctOfPower: number;
   /** Capacità kcal/min da VO₂ for capacity, prima del fattore delivery/periferico (≈ grezzo). */
   oxidativeCapacityKcalMinGross: number;
@@ -64,7 +76,11 @@ export type MaxOxidateOutput = {
   utilizationVo2CoherencePct: number;
   /** Domanda energetica totale vs capacità ossidativa netta (totale/netta). */
   utilizationDeliveryStressPct: number;
-  version: "max-oxidate-engine-v1.3";
+  /** P_oss (W) dal Metabolic profile alla durata usata; se assente ≈ CP. */
+  cpMechanicalAerobicCeilingW: number;
+  /** Durata (s) associata al split powerComponents (0 se non usato). */
+  cpPowerSplitDurationSec: number;
+  version: "max-oxidate-engine-v1.5";
 };
 
 function clamp(v: number, min: number, max: number) {
@@ -95,15 +111,32 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
   const vo2Rel = (vo2 * 1000) / bodyMass;
 
   const cpW = Math.max(1, input.cpW ?? ftpW * 0.97);
-  const aerobicPowerDemandW = powerW <= cpW ? powerW : cpW;
-  const glycolyticPowerDemandW = Math.max(0, powerW - cpW);
+  const cpAerobicW =
+    input.cpAerobicWFromProfile != null &&
+    Number.isFinite(input.cpAerobicWFromProfile) &&
+    input.cpAerobicWFromProfile > 5
+      ? clamp(input.cpAerobicWFromProfile, 1, cpW * 1.05)
+      : null;
+  const aerobicPowerDemandW =
+    cpAerobicW != null ? Math.min(powerW, cpAerobicW) : powerW <= cpW ? powerW : cpW;
+  const glycolyticPowerDemandW =
+    cpAerobicW != null ? Math.max(0, powerW - aerobicPowerDemandW) : Math.max(0, powerW - cpW);
   const aerobicDemandPctOfPower = powerW > 1 ? clamp((100 * aerobicPowerDemandW) / powerW, 0, 100) : 0;
 
-  const ceilV = input.oxidativeCeilingVo2LMin;
+  const splitDur =
+    input.durationSecForCpSplit != null && Number.isFinite(input.durationSecForCpSplit) && input.durationSecForCpSplit > 30
+      ? input.durationSecForCpSplit
+      : 0;
+  const mechanicalOxidCeilW = cpAerobicW ?? cpW;
+
+  const ceilVRaw = input.oxidativeCeilingVo2LMin;
+  const aerobicMechanicalFraction = cpAerobicW != null && cpW > 1 ? clamp(cpAerobicW / cpW, 0.45, 1) : 1;
+  const ceilVScaled =
+    ceilVRaw != null && Number.isFinite(ceilVRaw) && ceilVRaw >= 0.35 ? ceilVRaw * aerobicMechanicalFraction : null;
   const profileVo2maxCouplingActive =
-    ceilV != null && Number.isFinite(ceilV) && ceilV >= 0.35 && vo2 < ceilV * 0.97;
+    ceilVRaw != null && Number.isFinite(ceilVRaw) && ceilVRaw >= 0.35 && vo2 < ceilVRaw * 0.97;
   const vo2ForCapacity =
-    ceilV != null && Number.isFinite(ceilV) && ceilV >= 0.35 ? Math.max(vo2, ceilV * 0.88) : vo2;
+    ceilVScaled != null && Number.isFinite(ceilVScaled) && ceilVScaled >= 0.3 ? Math.max(vo2, ceilVScaled * 0.88) : vo2;
   const vo2CapacityRelMlKgMin = (vo2ForCapacity * 1000) / bodyMass;
 
   // Equivalent energetic rate from VO2 and RER (capacità = tetto profilo se utile).
@@ -145,6 +178,11 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
   const oxidativeCapacityFatGMin = (oxidativeCapacityKcalMin * (1 - choFraction)) / 9;
   const utilizationRatioPct = (oxidativeDemandKcalMin / Math.max(0.1, oxidativeCapacityKcalMin)) * 100;
 
+  const powerCeilingRatio = mechanicalOxidCeilW > 1 ? powerW / mechanicalOxidCeilW : 0;
+  const aerobicCeilingProximity = clamp((powerCeilingRatio - 0.74) / 0.28, 0, 1);
+  const utilizationStress = clamp((utilizationRatioPct - 68) / 32, 0, 1);
+  const aerobicLoadScore = clamp(0.5 * aerobicCeilingProximity + 0.5 * utilizationStress, 0, 1);
+
   const centralScore = clamp((1 - centralDeliveryIndex) * 1.25 + Math.max(0, 92 - sao2) / 20, 0, 1);
   const peripheralScore = clamp((1 - peripheralUtilizationIndex) + Math.max(0, 25 - extractionPct) / 60, 0, 1);
   const glycolyticScore = clamp(
@@ -153,10 +191,16 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
     1
   );
 
-  const bottleneckIndex = Math.max(centralScore, peripheralScore, glycolyticScore);
+  const bottleneckIndex = Math.max(centralScore, peripheralScore, glycolyticScore, aerobicLoadScore);
   let bottleneckType: MaxOxidateOutput["bottleneckType"] = "balanced";
   if (bottleneckIndex >= 0.2) {
-    if (centralScore >= peripheralScore && centralScore >= glycolyticScore) bottleneckType = "central_delivery";
+    if (
+      aerobicLoadScore >= centralScore &&
+      aerobicLoadScore >= peripheralScore &&
+      aerobicLoadScore >= glycolyticScore
+    ) {
+      bottleneckType = "oxidative_ceiling";
+    } else if (centralScore >= peripheralScore && centralScore >= glycolyticScore) bottleneckType = "central_delivery";
     else if (peripheralScore >= centralScore && peripheralScore >= glycolyticScore) bottleneckType = "peripheral_utilization";
     else bottleneckType = "glycolytic_pressure";
   }
@@ -168,16 +212,20 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
         ? "Bottleneck periferico: utilizzo mitocondriale limitante"
         : bottleneckType === "glycolytic_pressure"
           ? "Pressione glicolitica elevata sopra la capacita ossidativa"
-          : "Sistema bilanciato: nessun collo di bottiglia dominante";
+          : bottleneckType === "oxidative_ceiling"
+            ? "Vicino al tetto ossidativo meccanico (P_oss a scala durata) vs capacità VO₂"
+            : "Sistema bilanciato: nessun collo di bottiglia dominante";
 
   // Redox proxy block:
   // - NADH pressure rises with intensity, lactate, rising lactate trend, and high RER.
   // - Reoxidation capacity falls when peripheral/central O2 handling is limited.
   const nadhPressureIndex = clamp(
-    0.35 * clamp((intensityPctFtp - 78) / 32, 0, 1) +
-      0.25 * clamp((lactateMmolL - 2.2) / 4.8, 0, 1) +
-      0.2 * clamp(lactateTrend / 5, 0, 1) +
-      0.2 * clamp((rer - 0.86) / 0.16, 0, 1),
+    0.28 * clamp((intensityPctFtp - 72) / 34, 0, 1) +
+      0.22 * aerobicLoadScore +
+      0.22 * utilizationStress +
+      0.2 * clamp((lactateMmolL - 2.2) / 4.8, 0, 1) +
+      0.18 * clamp(lactateTrend / 5, 0, 1) +
+      0.1 * clamp((rer - 0.86) / 0.16, 0, 1),
     0,
     1,
   );
@@ -193,7 +241,7 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
     100,
   );
   const oxidativeBottleneckIndex = clamp(
-    (0.6 * bottleneckIndex + 0.4 * Math.max(0, (utilizationRatioPct - 90) / 50)) * 100,
+    (0.55 * bottleneckIndex + 0.45 * Math.max(0, (utilizationRatioPct - 82) / 38)) * 100,
     0,
     100,
   );
@@ -227,6 +275,8 @@ export function computeMaxOxidateEngine(input: MaxOxidateInput): MaxOxidateOutpu
     oxidativeCapacityKcalMinGross: round(oxidativeCapacityKcalMinGross),
     utilizationVo2CoherencePct: round(utilizationVo2CoherencePct),
     utilizationDeliveryStressPct: round(utilizationDeliveryStressPct),
-    version: "max-oxidate-engine-v1.3",
+    cpMechanicalAerobicCeilingW: round(mechanicalOxidCeilW),
+    cpPowerSplitDurationSec: round(splitDur),
+    version: "max-oxidate-engine-v1.5",
   };
 }

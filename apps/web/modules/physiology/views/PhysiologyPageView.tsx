@@ -7,6 +7,7 @@ import { estimateVo2FromDevice, type SupportedSport } from "@/lib/engines/vo2-es
 import {
   computeMetabolicProfileEngine,
   METABOLIC_CP_ENGINE_REVISION,
+  powerComponentRowNearestSec,
 } from "@/lib/engines/critical-power-engine";
 import { parseGasExchangeExport } from "@/lib/physiology/gas-exchange-file-parser";
 import type { GasExchangeParseResult } from "@/lib/physiology/gas-exchange-file-parser";
@@ -80,6 +81,7 @@ function maxOxBottleneckLabel(kind: string): string {
   if (kind === "central_delivery") return "Delivery centrale O2";
   if (kind === "peripheral_utilization") return "Utilizzo periferico/mitocondriale";
   if (kind === "glycolytic_pressure") return "Pressione glicolitica";
+  if (kind === "oxidative_ceiling") return "Tetto aerobico (CP / capacità)";
   return "Bilanciato";
 }
 
@@ -177,6 +179,8 @@ const LACTATE_DEFAULT_INPUT: Record<string, string> = {
 const MAXOX_DEFAULT_INPUT: Record<string, string> = {
   vo2_l_min: "",
   body_mass_kg: "",
+  /** Durata finestra test (min): allinea il split CP (P_oss) in Metabolic profile. */
+  duration_min: "60",
   power_w: "",
   velocity_m_min: "",
   grade_pct: "",
@@ -666,6 +670,7 @@ export default function MetabolicLabPage() {
     setMaxOxInput((s) => ({
       ...s,
       body_mass_kg: String(lv.body_mass_kg),
+      duration_min: String(Math.max(0.5, lv.duration_min || 60)),
       ftp_w: String(Math.round(lv.ftp_w)),
       efficiency: String(lv.efficiency),
       rer: String(Number(rer.toFixed(3))),
@@ -737,6 +742,7 @@ export default function MetabolicLabPage() {
 
     setMaxOxInput((s) => ({
       ...s,
+      duration_min: String(Number(dur.toFixed(1))),
       power_w: String(Math.round(p)),
       ftp_w: String(Math.round(ftp)),
       body_mass_kg: String(bm.toFixed(1)),
@@ -841,51 +847,67 @@ export default function MetabolicLabPage() {
 
   const maxOxVo2AtPowerL = maxOxVo2Estimate.vo2LMin;
 
-  const profileVo2LMinForModel = useMemo(() => {
-    const bm = maxOxResolved.values.body_mass_kg || 70;
-    if (profileVo2maxMlMinKg != null && profileVo2maxMlMinKg > 0) {
-      return (profileVo2maxMlMinKg * bm) / 1000;
-    }
-    if (profileVo2maxLMin != null && profileVo2maxLMin > 0) return profileVo2maxLMin;
-    return null;
-  }, [profileVo2maxMlMinKg, profileVo2maxLMin, maxOxResolved.values.body_mass_kg]);
-
   const maxOxVo2CapacitySource = useMemo(():
-    | "profile_vo2max"
     | "metabolic_engine_vo2max"
     | "power_estimate"
     | "test_manual" => {
     if (maxOxVo2Mode === "test") return "test_manual";
-    if (profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35) return "profile_vo2max";
     if (cpCurveHasData && cpModel.vo2maxLMin >= 0.35) return "metabolic_engine_vo2max";
     return "power_estimate";
-  }, [maxOxVo2Mode, profileVo2LMinForModel, cpCurveHasData, cpModel.vo2maxLMin]);
+  }, [maxOxVo2Mode, cpCurveHasData, cpModel.vo2maxLMin]);
 
+  /** Capacità ossidativa massima nel modello: solo curva CP (VO₂max motore), mai VO₂max anagrafico isolato. */
   const maxOxVo2Used =
     maxOxVo2Mode === "test"
-      ? maxOxResolved.values.vo2_l_min || maxOxVo2AtPowerL
-      : profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35
-        ? profileVo2LMinForModel
-        : cpCurveHasData && cpModel.vo2maxLMin >= 0.35
-          ? cpModel.vo2maxLMin
-          : maxOxVo2AtPowerL;
+      ? maxOxResolved.values.vo2_l_min > 0.2
+        ? maxOxResolved.values.vo2_l_min
+        : maxOxVo2AtPowerL
+      : cpCurveHasData && cpModel.vo2maxLMin >= 0.35
+        ? cpModel.vo2maxLMin
+        : maxOxVo2AtPowerL;
+
+  /** Lettura VO₂ a carico (stima da potenza o valore test): input al motore per coerenza domanda vs tetto. */
+  const maxOxVo2AtLoadLMin =
+    maxOxVo2Mode === "test"
+      ? maxOxResolved.values.vo2_l_min > 0.2
+        ? maxOxResolved.values.vo2_l_min
+        : maxOxVo2AtPowerL
+      : maxOxVo2AtPowerL;
+
   const maxOxBodyMassKg = maxOxResolved.values.body_mass_kg || 70;
   const maxOxVo2MlKgCapacity = (maxOxVo2Used * 1000) / Math.max(1, maxOxBodyMassKg);
 
   const maxOxOxidativeCeilingVo2LMin = useMemo(() => {
-    if (profileVo2LMinForModel != null && profileVo2LMinForModel >= 0.35) return profileVo2LMinForModel;
     if (cpCurveHasData && cpModel.vo2maxLMin >= 0.35) return cpModel.vo2maxLMin;
     return undefined;
-  }, [profileVo2LMinForModel, cpCurveHasData, cpModel.vo2maxLMin]);
+  }, [cpCurveHasData, cpModel.vo2maxLMin]);
+
+  /** Durata finestra test (s): tabella CP usa 60…3600 s — oltre 60′ si aggancia alla riga più vicina. */
+  const maxOxTestDurationSec = useMemo(() => {
+    const m = parseFloat(String(maxOxInput.duration_min).replace(",", "."));
+    const dm = Number.isFinite(m) && m > 0.05 ? m : 60;
+    return Math.round(Math.min(180, Math.max(0.5, dm)) * 60);
+  }, [maxOxInput.duration_min]);
+
+  const maxOxCpPowerSplitRow = useMemo(() => {
+    if (!cpCurveHasData || !cpModel.powerComponents?.length) return null;
+    return powerComponentRowNearestSec(cpModel.powerComponents, maxOxTestDurationSec);
+  }, [cpCurveHasData, cpModel.powerComponents, maxOxTestDurationSec]);
 
   const maxOxModel = useMemo(() => {
     return computeMaxOxidateEngine({
-      vo2LMin: maxOxVo2Used,
+      vo2LMin: maxOxVo2AtLoadLMin,
       bodyMassKg: maxOxResolved.values.body_mass_kg || 70,
       powerW: maxOxResolved.values.power_w || 0,
       ftpW: maxOxLabFtpW,
       ...(cpCurveHasData ? { cpW: cpModel.cp } : {}),
       oxidativeCeilingVo2LMin: maxOxOxidativeCeilingVo2LMin,
+      ...(cpCurveHasData && maxOxCpPowerSplitRow != null && maxOxCpPowerSplitRow.aerobicW > 1
+        ? {
+            cpAerobicWFromProfile: maxOxCpPowerSplitRow.aerobicW,
+            durationSecForCpSplit: maxOxTestDurationSec,
+          }
+        : {}),
       efficiency: maxOxResolved.values.efficiency || 0.24,
       rer: maxOxResolved.values.rer || 0.92,
       smo2RestPct: maxOxResolved.values.smo2_rest_pct || 70,
@@ -896,14 +918,24 @@ export default function MetabolicLabPage() {
       hemoglobinGdL: maxOxResolved.values.hemoglobin_g_dl || 14.5,
       sao2Pct: maxOxResolved.values.sao2_pct || 97,
     });
-  }, [maxOxResolved, maxOxVo2Used, maxOxCalcTick, cpCurveHasData, cpModel.cp, maxOxLabFtpW, maxOxOxidativeCeilingVo2LMin]);
+  }, [
+    maxOxResolved,
+    maxOxVo2AtLoadLMin,
+    maxOxCalcTick,
+    cpCurveHasData,
+    cpModel.cp,
+    maxOxLabFtpW,
+    maxOxOxidativeCeilingVo2LMin,
+    maxOxCpPowerSplitRow,
+    maxOxTestDurationSec,
+  ]);
 
   const maxOxReliability = useMemo(() => {
     let score = 100;
     if (maxOxModel.oxidativeCapacityKcalMin <= 0) score -= 25;
     const pwr = maxOxResolved.values.power_w || 0;
     if (pwr > 25 && maxOxModel.requiredKcalMin <= 0) score -= 20;
-    if (maxOxModel.oxidativeDemandKcalMin > maxOxModel.requiredKcalMin + 1e-6) score -= 20;
+    if (maxOxModel.oxidativeDemandKcalMin > maxOxModel.requiredKcalMin + 0.5) score -= 20;
     if (maxOxModel.utilizationRatioPct < 5 || maxOxModel.utilizationRatioPct > 250) score -= 20;
     if (maxOxModel.extractionPct < 5 || maxOxModel.extractionPct > 85) score -= 10;
     if (maxOxModel.centralDeliveryIndex < 0.55 || maxOxModel.centralDeliveryIndex > 1.2) score -= 10;
@@ -1020,6 +1052,7 @@ export default function MetabolicLabPage() {
       const fallbackVo2 = Number.isFinite(parseFloat(s.vo2_l_min)) ? parseFloat(s.vo2_l_min) : 0;
       const fallbackLactate = Number.isFinite(parseFloat(s.lactate_mmol_l)) ? parseFloat(s.lactate_mmol_l) : 0;
       const fallbackSmo2 = Number.isFinite(parseFloat(s.smo2_work_pct)) ? parseFloat(s.smo2_work_pct) : 40;
+      const fallbackDur = Number.isFinite(parseFloat(s.duration_min)) ? parseFloat(s.duration_min) : 60;
 
       const power = Math.max(0, (workout.power_w ?? fallbackPower));
       const velocity = workout.velocity_m_min ?? fallbackVelocity;
@@ -1029,8 +1062,10 @@ export default function MetabolicLabPage() {
       const lactate = workout.lactate_mmol_l ?? fallbackLactate;
       const workSmo2 = workout.smo2 ?? fallbackSmo2;
       const inferredRestSmo2 = Math.max(55, Math.min(85, workSmo2 + 18));
+      const duration = Math.max(0.5, workout.duration_min || fallbackDur);
       return {
         ...s,
+        duration_min: String(Math.round(duration)),
         power_w: String(Math.round(power)),
         velocity_m_min: String(Number(velocity.toFixed(2))),
         grade_pct: String(Number(grade.toFixed(2))),
@@ -1041,6 +1076,87 @@ export default function MetabolicLabPage() {
         smo2_rest_pct: String(Math.round(inferredRestSmo2)),
       };
     });
+  }
+
+  function importHistoryRowToForms(row: LabRun) {
+    if (row.section === "metabolic_profile") {
+      setSection("profile");
+      const inp = row.input_payload;
+      setCpInputs(() => {
+        const next = initialEmptyCpInputs();
+        if (inp && typeof inp === "object") {
+          for (const p of CP_POINTS) {
+            const raw = (inp as Record<string, unknown>)[p.label];
+            if (raw == null || raw === "") continue;
+            const s = String(raw).trim();
+            if (s === "") continue;
+            next[p.label] = s;
+          }
+        }
+        return next;
+      });
+      setSaveMessage("Snapshot Metabolic profile importato negli input.");
+      setError(null);
+      return;
+    }
+    if (row.section === "lactate_analysis") {
+      setSection("lactate");
+      const lacIn = row.input_payload;
+      if (lacIn && typeof lacIn === "object") {
+        const rec = lacIn as Record<string, unknown>;
+        const patch = patchLabStringsFromPayload(rec, Object.keys(LACTATE_DEFAULT_INPUT));
+        if (Object.keys(patch).length > 0) {
+          setLactateInput((s) => ({ ...s, ...patch }));
+        }
+        if (typeof rec.sport === "string") setLactateSport(toSupportedSport(rec.sport));
+        if (rec.vo2_mode === "device" || rec.vo2_mode === "test") setLactateVo2Mode(rec.vo2_mode);
+        if (rec.rer_mode === "auto" || rec.rer_mode === "manual") setLactateRerMode(rec.rer_mode);
+        if (
+          rec.microbiota_source_mode === "health_bio" ||
+          rec.microbiota_source_mode === "preset" ||
+          rec.microbiota_source_mode === "manual"
+        ) {
+          setMicrobiotaSourceMode(rec.microbiota_source_mode);
+        }
+        const dp = rec.dysbiosis_preset;
+        if (dp === "eubiosi" || dp === "lieve" || dp === "moderata" || dp === "severa" || dp === "grave") {
+          setDysbiosisPreset(dp);
+        }
+        const foa = rec.fat_oxidation_adaptation;
+        if (typeof foa === "number" && Number.isFinite(foa)) {
+          setFatOxAdaptation(clamp(foa, 0, 1));
+        }
+        if (rec.segment_attachment != null && typeof rec.segment_attachment === "object") {
+          setLactateSegmentAttachment(rec.segment_attachment as SegmentAttachmentMeta);
+        }
+        if (rec.health_bio_glucose != null && typeof rec.health_bio_glucose === "object") {
+          setHealthBioGlucoseMeta(rec.health_bio_glucose as HealthBioGlucoseMeta);
+        }
+        if (typeof rec.health_bio_core_temp_c === "number" && Number.isFinite(rec.health_bio_core_temp_c)) {
+          setHealthBioCoreTempCBaseline(rec.health_bio_core_temp_c);
+        }
+        setLactateCalcTick((n) => n + 1);
+      }
+      setSaveMessage("Snapshot Lactate analysis importato negli input.");
+      setError(null);
+      return;
+    }
+    if (row.section === "max_oxidate") {
+      setSection("maxox");
+      const oxIn = row.input_payload;
+      if (oxIn && typeof oxIn === "object") {
+        const rec = oxIn as Record<string, unknown>;
+        const patch = patchLabStringsFromPayload(rec, Object.keys(MAXOX_DEFAULT_INPUT));
+        if (Object.keys(patch).length > 0) {
+          setMaxOxInput((s) => ({ ...s, ...patch }));
+        }
+        if (typeof rec.sport === "string") setMaxOxSport(toSupportedSport(rec.sport));
+        if (rec.vo2_mode === "device" || rec.vo2_mode === "test") setMaxOxVo2Mode(rec.vo2_mode);
+        setMaxOxCalcTick((n) => n + 1);
+      }
+      setSaveMessage("Snapshot Max oxidate importato negli input.");
+      setError(null);
+    }
   }
 
   async function loadHistory(activeAthleteId: string) {
@@ -1367,7 +1483,7 @@ export default function MetabolicLabPage() {
         { key: "vo2rel", label: "VO2 rel", value: maxOxModel.vo2RelMlKgMin, valueText: `${maxOxModel.vo2RelMlKgMin.toFixed(1)} ml/kg/min`, min: 25, max: 95, keys: ["vo2_l_min", "body_mass_kg"] },
         {
           key: "util_ratio",
-          label: "Saturazione ossidativa (≤CP)",
+          label: "Saturazione ossidativa (P_oss / capacità)",
           value: maxOxModel.utilizationRatioPct,
           valueText: `${maxOxModel.utilizationRatioPct.toFixed(0)}%`,
           min: 5,
@@ -1709,7 +1825,7 @@ export default function MetabolicLabPage() {
         )}
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="sticky top-0 z-30 -mx-1 mb-4 flex flex-wrap gap-2 border-b border-white/10 bg-slate-950/90 py-3 backdrop-blur-md supports-[backdrop-filter]:bg-slate-950/80">
         <button
           type="button"
           className={physiologyTabClass(section === "profile", "cyan")}
@@ -2388,11 +2504,8 @@ export default function MetabolicLabPage() {
             vo2MlKgCapacity={maxOxVo2MlKgCapacity}
             vo2MlKgAtPower={maxOxVo2Estimate.vo2MlKgMin}
             vo2CapacitySource={maxOxVo2CapacitySource}
-            profileVo2maxMlMinKg={profileVo2maxMlMinKg}
-            vo2maxMlMinKgForCaption={
-              profileVo2maxMlMinKg ?? (cpModel.vo2maxLMin >= 0.35 ? cpModel.vo2maxMlMinKg : null)
-            }
-            vo2maxLMinForCaption={profileVo2maxLMin ?? (cpModel.vo2maxLMin >= 0.35 ? cpModel.vo2maxLMin : null)}
+            vo2maxMlMinKgForCaption={cpCurveHasData && cpModel.vo2maxLMin >= 0.35 ? cpModel.vo2maxMlMinKg : null}
+            vo2maxLMinForCaption={cpCurveHasData && cpModel.vo2maxLMin >= 0.35 ? cpModel.vo2maxLMin : null}
             maxOxVo2Mode={maxOxVo2Mode}
             sessionCount={workouts.length}
             autoDecodeText={autoInfo}
@@ -2445,12 +2558,6 @@ export default function MetabolicLabPage() {
                     <strong className="text-slate-200">Test manuale.</strong> A questa potenza stimato ~
                     {maxOxVo2Estimate.vo2LMin.toFixed(2)} L/min ({maxOxVo2Estimate.vo2MlKgMin.toFixed(1)} ml/kg/min).
                   </>
-                ) : maxOxVo2CapacitySource === "profile_vo2max" ? (
-                  <>
-                    <strong className="text-slate-200">VO₂max da profilo.</strong>
-                    {profileVo2maxMlMinKg != null ? ` ${profileVo2maxMlMinKg.toFixed(1)} ml/kg/min` : ""} · a questa potenza ~
-                    {maxOxVo2Estimate.vo2LMin.toFixed(2)} L/min (carico).
-                  </>
                 ) : maxOxVo2CapacitySource === "metabolic_engine_vo2max" ? (
                   <>
                     <strong className="text-slate-200">VO₂max da Metabolic Profile</strong> (blend CP/W′):{" "}
@@ -2460,8 +2567,8 @@ export default function MetabolicLabPage() {
                 ) : (
                   <>
                     <strong className="text-slate-200">Solo stima da potenza</strong> ({maxOxVo2Estimate.vo2LMin.toFixed(2)}{" "}
-                    L/min, {maxOxVo2Estimate.vo2MlKgMin.toFixed(1)} ml/kg/min) — la saturazione ossidativa può risultare troppo
-                    alta; compila la curva CP in Metabolic profile o VO₂max in profilo.
+                    L/min, {maxOxVo2Estimate.vo2MlKgMin.toFixed(1)} ml/kg/min) — per una capacità massima credibile compila la
+                    curva CP in Metabolic profile (VO₂max motore); il lab non usa più il VO₂max anagrafico come tetto.
                   </>
                 )}
               </div>
@@ -2482,6 +2589,42 @@ export default function MetabolicLabPage() {
                 <div className="physiology-lab-pro2-kpi-label">Potenza input · CP profilo</div>
                 <div className="physiology-lab-pro2-kpi-value">
                   {(maxOxResolved.values.power_w || 0).toFixed(0)} W · CP {cpModel.cp.toFixed(0)} W
+                </div>
+              </div>
+              <div className="physiology-lab-pro2-kpi">
+                <div className="physiology-lab-pro2-kpi-label">Durata test · riga split CP</div>
+                <div className="physiology-lab-pro2-kpi-value">
+                  {(Number.isFinite(maxOxResolved.values.duration_min) && maxOxResolved.values.duration_min > 0
+                    ? maxOxResolved.values.duration_min
+                    : 60
+                  ).toFixed(1)}{" "}
+                  min
+                  {maxOxCpPowerSplitRow ? (
+                    <>
+                      {" · "}
+                      <span className="text-slate-400">{maxOxCpPowerSplitRow.label}</span>
+                      <span className="tabular-nums text-slate-500">
+                        {" "}
+                        ({(maxOxCpPowerSplitRow.sec / 60).toFixed(0)}′)
+                      </span>
+                    </>
+                  ) : cpCurveHasData ? (
+                    <span className="text-slate-500"> — nessun split</span>
+                  ) : (
+                    <span className="text-slate-500"> — compila CP</span>
+                  )}
+                </div>
+              </div>
+              <div className="physiology-lab-pro2-kpi">
+                <div className="physiology-lab-pro2-kpi-label">Tetto meccanico ossidativo (P_oss)</div>
+                <div className="physiology-lab-pro2-kpi-value physiology-lab-pro2-kpi-value--cyan">
+                  {maxOxModel.cpMechanicalAerobicCeilingW.toFixed(0)} W
+                  {maxOxCpPowerSplitRow ? (
+                    <span className="mt-1 block text-[0.65rem] font-normal leading-snug text-slate-500">
+                      P modello {maxOxCpPowerSplitRow.modelPowerW.toFixed(0)} W · glic {maxOxCpPowerSplitRow.glycolyticW.toFixed(0)} W · PCr{" "}
+                      {maxOxCpPowerSplitRow.pcrW.toFixed(0)} W
+                    </span>
+                  ) : null}
                 </div>
               </div>
               <div className="physiology-lab-pro2-kpi">
@@ -2506,13 +2649,13 @@ export default function MetabolicLabPage() {
                 <div className="physiology-lab-pro2-kpi-value">{maxOxModel.requiredKcalMin.toFixed(2)} kcal/min</div>
               </div>
               <div className="physiology-lab-pro2-kpi">
-                <div className="physiology-lab-pro2-kpi-label">Domanda ossidativa (≤CP)</div>
+                <div className="physiology-lab-pro2-kpi-label">Domanda ossidativa (P_oss @ durata)</div>
                 <div className="physiology-lab-pro2-kpi-value physiology-lab-pro2-kpi-value--cyan">
                   {maxOxModel.oxidativeDemandKcalMin.toFixed(2)} kcal/min
                 </div>
               </div>
               <div className="physiology-lab-pro2-kpi">
-                <div className="physiology-lab-pro2-kpi-label">Quota &gt; CP (stima)</div>
+                <div className="physiology-lab-pro2-kpi-label">Potenza non ossidativa (residuo)</div>
                 <div className="physiology-lab-pro2-kpi-value">{maxOxModel.glycolyticPowerDemandW.toFixed(0)} W</div>
               </div>
               <div className="physiology-lab-pro2-kpi">
@@ -2615,14 +2758,17 @@ export default function MetabolicLabPage() {
                     vo2_estimated_l_min: maxOxVo2AtPowerL,
                     vo2_used_l_min: maxOxVo2Used,
                     vo2_method:
-                      maxOxVo2CapacitySource === "profile_vo2max"
-                        ? "physiological_profile_vo2max"
-                        : maxOxVo2CapacitySource === "metabolic_engine_vo2max"
-                          ? "metabolic_profile_cp_vo2max"
-                          : maxOxVo2CapacitySource === "test_manual"
-                            ? "test_manual"
-                            : maxOxVo2Estimate.method,
+                      maxOxVo2CapacitySource === "metabolic_engine_vo2max"
+                        ? "metabolic_profile_cp_vo2max"
+                        : maxOxVo2CapacitySource === "test_manual"
+                          ? "test_manual"
+                          : maxOxVo2Estimate.method,
                     vo2_capacity_source: maxOxVo2CapacitySource,
+                    vo2_reading_at_load_l_min: maxOxVo2AtLoadLMin,
+                    cp_power_split_duration_sec: maxOxModel.cpPowerSplitDurationSec,
+                    cp_mechanical_aerobic_ceiling_w: maxOxModel.cpMechanicalAerobicCeilingW,
+                    cp_power_component_label: maxOxCpPowerSplitRow?.label ?? null,
+                    metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
                     profile_vo2max_ml_min_kg: profileVo2maxMlMinKg,
                     profile_vo2max_l_min: profileVo2maxLMin,
                     input_precedence_policy: "measured>manual>preset>default",
@@ -2659,7 +2805,7 @@ export default function MetabolicLabPage() {
         accent="slate"
         icon={Layers}
         title="Metabolic Lab history"
-        subtitle="Ultimi snapshot salvati — clicca una riga per leggere input e output (JSON)"
+        subtitle="Tendina snapshot + import negli input — dettaglio JSON sotto"
       >
         <p className="mb-3 text-xs leading-relaxed text-slate-500">
           I KPI nella pagina usano il <strong>motore attuale</strong> (
@@ -2672,47 +2818,45 @@ export default function MetabolicLabPage() {
           <p className="text-sm text-slate-500">Nessuno snapshot salvato.</p>
         ) : (
           <>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse text-left text-sm text-slate-200">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs uppercase tracking-wider text-slate-500">
-                    <th className="pb-2 pr-4 font-semibold">Data</th>
-                    <th className="pb-2 pr-4 font-semibold">Sezione</th>
-                    <th className="pb-2 pr-4 font-semibold">Model</th>
-                    <th className="pb-2 font-semibold"> </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5">
-                  {history.map((row) => {
-                    const selected = selectedHistoryId === row.id;
-                    return (
-                      <tr
-                        key={row.id}
-                        role="button"
-                        tabIndex={0}
-                        aria-pressed={selected}
-                        onClick={() => setSelectedHistoryId((prev) => (prev === row.id ? null : row.id))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            setSelectedHistoryId((prev) => (prev === row.id ? null : row.id));
-                          }
-                        }}
-                        className={`cursor-pointer text-slate-300 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-cyan-400/60 ${
-                          selected ? "bg-cyan-500/15" : "hover:bg-white/5"
-                        }`}
-                      >
-                        <td className="py-2 pr-4 align-top tabular-nums text-slate-400">
-                          {new Date(row.created_at).toLocaleString("it-IT")}
-                        </td>
-                        <td className="py-2 pr-4 align-top">{labHistorySectionTitle(row.section)}</td>
-                        <td className="py-2 pr-4 align-top font-mono text-xs text-slate-400">{row.model_version}</td>
-                        <td className="py-2 align-top text-xs text-cyan-300/90">{selected ? "▼" : "⋯"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+              <label className="flex min-w-[min(100%,280px)] flex-1 flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Archivio snapshot
+                <select
+                  className="w-full max-w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-slate-200 outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/50"
+                  value={selectedHistoryId ?? ""}
+                  onChange={(e) => setSelectedHistoryId(e.target.value ? e.target.value : null)}
+                >
+                  <option value="">Seleziona uno snapshot…</option>
+                  {history.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {new Date(row.created_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })} ·{" "}
+                      {labHistorySectionTitle(row.section)} · {row.model_version}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex flex-wrap gap-2 pb-0.5">
+                <Pro2Button
+                  type="button"
+                  variant="primary"
+                  className="text-xs"
+                  disabled={!selectedHistoryRow}
+                  onClick={() => {
+                    if (selectedHistoryRow) importHistoryRowToForms(selectedHistoryRow);
+                  }}
+                >
+                  Importa negli input
+                </Pro2Button>
+                <Pro2Button
+                  type="button"
+                  variant="secondary"
+                  className="text-xs"
+                  disabled={!selectedHistoryRow}
+                  onClick={() => setSelectedHistoryId(null)}
+                >
+                  Deseleziona
+                </Pro2Button>
+              </div>
             </div>
             {selectedHistoryRow ? (
               <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4">
@@ -2726,9 +2870,6 @@ export default function MetabolicLabPage() {
                     {" · "}
                     <span className="font-mono">{selectedHistoryRow.model_version}</span>
                   </div>
-                  <Pro2Button type="button" variant="secondary" className="text-xs" onClick={() => setSelectedHistoryId(null)}>
-                    Chiudi
-                  </Pro2Button>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>

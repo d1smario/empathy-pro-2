@@ -8,11 +8,11 @@ export type MaxOxidateLabPro2PanelProps = {
   model: MaxOxidateOutput;
   /** VO₂max ml/kg/min da profilo anagrafico/lab, se presente. */
   vo2maxMlMinKg?: number | null;
-  /** VO₂max in L/min da profilo, se presente. */
+  /** VO₂max in L/min da Metabolic Profile, se presente. */
   vo2maxLMin?: number | null;
   /** VO₂ (L/min) effettivamente usato come capacità nel motore Max Oxidate. */
   maxOxVo2UsedLMin: number;
-  vo2CapacitySource: "profile_vo2max" | "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
+  vo2CapacitySource: "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
 };
 
 /**
@@ -30,19 +30,6 @@ export function MaxOxidateLabPro2Panel({
       <>
         Capacità VO₂: <strong>{maxOxVo2UsedLMin.toFixed(2)} L/min</strong> (test manuale).
       </>
-    ) : vo2CapacitySource === "profile_vo2max" ? (
-      <>
-        VO₂max profilo:{" "}
-        {vo2maxMlMinKg != null && vo2maxMlMinKg >= 30 ? (
-          <strong>
-            {vo2maxMlMinKg.toFixed(1)} ml/kg/min
-            {vo2maxLMin != null ? ` · ${vo2maxLMin.toFixed(2)} L/min` : ""}
-          </strong>
-        ) : (
-          <strong>{maxOxVo2UsedLMin.toFixed(2)} L/min</strong>
-        )}{" "}
-        → usato nel modello <strong>{maxOxVo2UsedLMin.toFixed(2)} L/min</strong>.
-      </>
     ) : vo2CapacitySource === "metabolic_engine_vo2max" ? (
       <>
         VO₂max da <strong>Metabolic Profile</strong> (modello CP):{" "}
@@ -57,8 +44,8 @@ export function MaxOxidateLabPro2Panel({
       </>
     ) : (
       <>
-        Attenzione: capacità VO₂ solo da <strong>stima potenza</strong> ({maxOxVo2UsedLMin.toFixed(2)} L/min) — per saturazione credibile usa
-        curva CP o VO₂max in profilo.
+        Attenzione: capacità VO₂ solo da <strong>stima potenza</strong> ({maxOxVo2UsedLMin.toFixed(2)} L/min) — per un tetto
+        credibile compila la <strong>curva CP</strong> in Metabolic profile (VO₂max motore).
       </>
     );
 

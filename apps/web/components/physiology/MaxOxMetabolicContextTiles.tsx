@@ -38,7 +38,7 @@ export function MaxOxMetabolicContextTiles({
   maxOxVo2Used: number;
   maxOxVo2EstL: number;
   maxOxVo2MlKg: number;
-  vo2CapacitySource: "profile_vo2max" | "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
+  vo2CapacitySource: "metabolic_engine_vo2max" | "power_estimate" | "test_manual";
   /** Stima VO₂ sul segmento applicato (informativo; capacità motore = profilo). */
   segmentVo2LMin?: number | null;
   segmentO2TotalL?: number | null;
@@ -65,11 +65,9 @@ export function MaxOxMetabolicContextTiles({
   const vo2Label =
     maxOxVo2Mode === "test"
       ? "VO₂ da test"
-      : vo2CapacitySource === "profile_vo2max"
-        ? "Profilo VO2max"
-        : vo2CapacitySource === "metabolic_engine_vo2max"
-          ? "VO₂max (modello CP)"
-          : "Stima potenza";
+      : vo2CapacitySource === "metabolic_engine_vo2max"
+        ? "VO₂max (modello CP)"
+        : "Stima potenza";
 
   return (
     <div className="physiology-pro2-ctx-shell physiology-pro2-ctx-shell--maxox" ref={shellRef}>
@@ -140,12 +138,10 @@ export function MaxOxMetabolicContextTiles({
             }}
           >
             {vo2CapacitySource === "test_manual"
-              ? "Device: profilo → VO₂max da CP → stima potenza"
-              : vo2CapacitySource === "profile_vo2max"
-                ? "Profilo (VO2max da anagrafica)"
-                : vo2CapacitySource === "metabolic_engine_vo2max"
-                  ? "Capacità da Metabolic Profile (VO₂max da curva CP)"
-                  : "Solo stima potenza (compila VO₂max o curva CP)"}
+              ? "Device: VO₂max da curva CP → stima al carico"
+              : vo2CapacitySource === "metabolic_engine_vo2max"
+                ? "Capacità da Metabolic Profile (VO₂max da curva CP)"
+                : "Solo stima potenza (compila la curva CP per il tetto)"}
           </button>
           <button
             type="button"
