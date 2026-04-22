@@ -19,6 +19,8 @@ const READ_OPTIONS = {
 
 export type FitWorkoutScanResult = {
   workoutSteps: Record<string, unknown>[];
+  /** Ultimo messaggio `workout` nel file (sport, nome, num_valid_steps). */
+  workout: Record<string, unknown> | null;
   recordCount: number;
   fileIds: Record<string, unknown>[];
   /** True se almeno un `file_id` dichiara type workout (Garmin / TP export). */
@@ -64,6 +66,7 @@ function fileIdsDeclareWorkout(fileIds: Record<string, unknown>[]): boolean {
  */
 export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanResult {
   const workoutSteps: Record<string, unknown>[] = [];
+  let lastWorkout: Record<string, unknown> | null = null;
   const file_ids: Record<string, unknown>[] = [];
   let recordCount = 0;
 
@@ -73,6 +76,7 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
     if (!bounds) {
       return {
         workoutSteps: [],
+        workout: null,
         recordCount: 0,
         fileIds: [],
         declaresWorkoutFileType: false,
@@ -121,6 +125,11 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
         case "file_id":
           if (message) file_ids.push(message as Record<string, unknown>);
           break;
+        case "workout":
+          if (message && typeof message === "object") {
+            lastWorkout = message as Record<string, unknown>;
+          }
+          break;
         case "workout_step":
           if (message && typeof message === "object") {
             workoutSteps.push(message as Record<string, unknown>);
@@ -133,6 +142,7 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
   } catch {
     return {
       workoutSteps: [],
+      workout: null,
       recordCount: 0,
       fileIds: [],
       declaresWorkoutFileType: false,
@@ -141,6 +151,7 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
 
   return {
     workoutSteps,
+    workout: lastWorkout,
     recordCount,
     fileIds: file_ids,
     declaresWorkoutFileType: fileIdsDeclareWorkout(file_ids),
