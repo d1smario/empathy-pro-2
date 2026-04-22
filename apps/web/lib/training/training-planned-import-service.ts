@@ -200,7 +200,9 @@ export async function runStructuredPlannedSingleImport(
   });
 
   const jsonLine = serializePro2BuilderSessionContract(parsed.contract);
-  const head = `${STRUCTURED_NOTES_HEAD} ${parsed.sourceVendorTag}`;
+  /** Stesso file + giorno: rimuove duplicati da re-import / doppio invio prima di inserire. */
+  const importChecksumTag = `import_sha1=${input.fileChecksum}`;
+  const head = `${STRUCTURED_NOTES_HEAD} ${parsed.sourceVendorTag} ${importChecksumTag}`;
   const mergedNotes = [head, input.notes?.trim() || null, jsonLine].filter(Boolean).join("\n");
 
   const typeKey = `pro2_builder_structured_${input.format}`.slice(0, 120);
@@ -285,6 +287,27 @@ export async function runStructuredPlannedSingleImport(
     .select("id")
     .single();
   if (!startJob.error) importJobId = startJob.data?.id ?? null;
+
+  const dedupePattern = `%${importChecksumTag}%`;
+  const { error: dedupeErr } = await db
+    .from("planned_workouts")
+    .delete()
+    .eq("athlete_id", input.athleteId)
+    .eq("date", row.date)
+    .ilike("notes", dedupePattern);
+  if (dedupeErr) {
+    if (importJobId) {
+      await db
+        .from("training_import_jobs")
+        .update({
+          status: "error",
+          error_message: dedupeErr.message,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", importJobId);
+    }
+    throw new Error(dedupeErr.message);
+  }
 
   const ins = await db.from("planned_workouts").insert(insertPayload).select("id").single();
   if (ins.error) {

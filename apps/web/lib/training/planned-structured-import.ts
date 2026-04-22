@@ -203,6 +203,19 @@ function pickStepNumber(step: Record<string, unknown>, keys: string[]): number |
   return null;
 }
 
+/** Garmin/TP: spesso `repeat_count` (uint16) su definizione estesa del messaggio. */
+function fitStepRepeatMultiplier(step: Record<string, unknown>): number {
+  const n = pickStepNumber(step, ["repeat_count", "repeatCount", "num_repetitions", "repetitions"]);
+  if (n == null || !Number.isFinite(n) || n < 2) return 1;
+  return Math.min(400, Math.max(2, Math.round(n)));
+}
+
+/** Percentuale FTP ×10000 (es. 7525 → 75,25%) in `custom_target_*` / `target_value`. */
+function maybeScaledPercentFtp(v: number): number | null {
+  if (v >= 2000 && v <= 15000 && Number.isFinite(v)) return clamp(v / 10000, 0.35, 1.55);
+  return null;
+}
+
 /** Allineato a `fit-file-parser` / Garmin `wkt_step_duration` (uint8). */
 const WKT_STEP_DURATION_BY_NUM: Record<number, string> = {
   0: "time",
@@ -332,6 +345,18 @@ function fitStepFtpRange(step: Record<string, unknown>, ftpW: number): { low: nu
     null;
   const mid = pickStepNumber(step, ["target_value", "targetValue", "power", "intensity"]) ?? null;
 
+  if (lowRaw != null && highRaw != null) {
+    const sl = maybeScaledPercentFtp(lowRaw);
+    const sh = maybeScaledPercentFtp(highRaw);
+    if (sl != null && sh != null) {
+      return { low: Math.min(sl, sh), high: Math.max(sl, sh) };
+    }
+  }
+  if (mid != null && lowRaw == null && highRaw == null) {
+    const sm = maybeScaledPercentFtp(mid);
+    if (sm != null) return { low: sm, high: sm };
+  }
+
   if (targetType === "power" && mid != null && lowRaw == null && highRaw == null) {
     if (mid >= 40 && mid <= 190 && Number.isInteger(mid)) {
       const r = clamp(mid / 100, 0.35, 1.5);
@@ -369,8 +394,9 @@ function parseFitWorkoutToManualBlocks(
   const buildBlocks = (legacy: boolean): ManualPlanBlock[] => {
     const blocks: ManualPlanBlock[] = [];
     for (const step of steps) {
-      const durSec = legacy ? fitStepDurationSecLegacy(step) : fitStepDurationSecForImport(step, mps);
+      let durSec = legacy ? fitStepDurationSecLegacy(step) : fitStepDurationSecForImport(step, mps);
       if (durSec == null) continue;
+      durSec *= fitStepRepeatMultiplier(step);
       const { low, high } = fitStepFtpRange(step, ftpW);
       const dm = splitDuration(durSec);
       if (Math.abs(high - low) < 0.04) {

@@ -234,6 +234,8 @@ export default function TrainingCalendarPageView() {
    * (es. dopo elimina seduta: due fetch in parallelo → la vecchia ripristina la riga).
    */
   const plannedWindowFetchGenRef = useRef(0);
+  /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
+  const trainingImportInFlightRef = useRef(false);
 
   const loadMonth = useCallback(
     async (opts?: { anchorDay?: string }) => {
@@ -365,6 +367,8 @@ export default function TrainingCalendarPageView() {
   async function handleFileImportSubmit(e: FormEvent) {
     e.preventDefault();
     if (!athleteId || !fileImportForm.file) return;
+    if (trainingImportInFlightRef.current) return;
+    trainingImportInFlightRef.current = true;
     setSaving(true);
     setErr(null);
     setSuccess(null);
@@ -441,6 +445,7 @@ export default function TrainingCalendarPageView() {
     } catch (x) {
       setErr(x instanceof Error ? x.message : "Errore in fase di import.");
     } finally {
+      trainingImportInFlightRef.current = false;
       setSaving(false);
     }
   }
