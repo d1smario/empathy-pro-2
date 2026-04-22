@@ -38,6 +38,14 @@ function addDaysToIsoDateKey(isoDay: string, deltaDays: number): string {
   return toDateKey(base);
 }
 
+/** Confronto solo giorni `YYYY-MM-DD` (stringa ISO, fuso mezzogiorno già applicato altrove). */
+function minIsoDay(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+function maxIsoDay(a: string, b: string): string {
+  return a >= b ? a : b;
+}
+
 /**
  * La griglia resta sul mese visibile, ma il fetch allarga la finestra (come il Builder):
  * evita sedute “perdute” ai bordi e allinea i dati alla lista “Prossime pianificate”.
@@ -227,7 +235,8 @@ export default function TrainingCalendarPageView() {
    */
   const plannedWindowFetchGenRef = useRef(0);
 
-  const loadMonth = useCallback(async () => {
+  const loadMonth = useCallback(
+    async (opts?: { anchorDay?: string }) => {
     /** Con `athleteId` già noto non bloccare: altrimenti dopo delete il refresh può saltare e la UI resta su dati vecchi. */
     if (ctxLoading && !athleteId) return;
     const fetchGen = ++plannedWindowFetchGenRef.current;
@@ -246,7 +255,18 @@ export default function TrainingCalendarPageView() {
     setLoading(true);
     setErr(null);
     try {
-      const q = new URLSearchParams({ athleteId, from: fetchFrom, to: fetchTo });
+      let from = fetchFrom;
+      let to = fetchTo;
+      const anchorRaw = opts?.anchorDay?.trim() ?? "";
+      const anchor = anchorRaw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
+      if (anchor) {
+        /** Dopo import la `loadMonth` può girare prima che React aggiorni `monthCursor` → finestra mensile troppo stretta; forziamo inclusione del giorno salvato. */
+        const padFrom = addDaysToIsoDateKey(anchor, -60);
+        const padTo = addDaysToIsoDateKey(anchor, 60);
+        from = minIsoDay(from, padFrom);
+        to = maxIsoDay(to, padTo);
+      }
+      const q = new URLSearchParams({ athleteId, from, to });
       const res = await fetch(`/api/training/planned-window?${q}`, {
         cache: "no-store",
         credentials: "same-origin",
@@ -298,7 +318,9 @@ export default function TrainingCalendarPageView() {
         setLoading(false);
       }
     }
-  }, [athleteId, ctxLoading, fetchFrom, fetchTo]);
+  },
+  [athleteId, ctxLoading, fetchFrom, fetchTo],
+);
 
   useEffect(() => {
     void loadMonth();
@@ -347,6 +369,8 @@ export default function TrainingCalendarPageView() {
     setErr(null);
     setSuccess(null);
     try {
+      let refreshAnchor: string | null = null;
+
       if (fileImportForm.mode === "planned") {
         const json = await importPlannedProgramFile({
           athleteId,
@@ -371,6 +395,11 @@ export default function TrainingCalendarPageView() {
           const d = new Date(`${fd}T12:00:00`);
           setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
         }
+        refreshAnchor =
+          normalizeDateKey(typeof json.firstDate === "string" ? json.firstDate : "") ||
+          normalizeDateKey(fileImportForm.date) ||
+          selectedDate ||
+          null;
       } else {
         /** Sempre un giorno canonico: la cella selezionata vince se il campo data è vuoto (evita FIT/TCX su “altro” giorno). */
         const effectiveExecutedDate = normalizeDateKey(fileImportForm.date) || selectedDate;
@@ -396,9 +425,19 @@ export default function TrainingCalendarPageView() {
           const d = new Date(`${key}T12:00:00`);
           setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
         }
+        const fromImpDate =
+          impDate && /^\d{4}-\d{2}-\d{2}$/.test(impDate.slice(0, 10))
+            ? impDate.slice(0, 10)
+            : null;
+        const fromParsedDate = normalizeDateKey(
+          json.parsed && typeof json.parsed.date === "string" ? json.parsed.date : "",
+        );
+        refreshAnchor = fromImpDate ?? (fromParsedDate || effectiveExecutedDate || null);
       }
       setFileImportForm((f) => ({ ...f, file: null }));
-      await loadMonth();
+
+      const anchorKey = (refreshAnchor ?? "").trim().slice(0, 10);
+      await loadMonth(/^\d{4}-\d{2}-\d{2}$/.test(anchorKey) ? { anchorDay: anchorKey } : undefined);
     } catch (x) {
       setErr(x instanceof Error ? x.message : "Errore in fase di import.");
     } finally {
