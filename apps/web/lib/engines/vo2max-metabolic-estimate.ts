@@ -1,25 +1,16 @@
 /**
- * Field cycling VO2max (ml/kg/min) from Critical Power + W′ and aerobic/anaerobic split.
+ * Field cycling VO2max from Critical Power + W′ and aerobic/anaerobic split.
  *
- * Design intent (aligned with CP literature and common training-software practice — WKO5-style
- * power-duration curve, INSCYD/Aerotune-style separation of oxidative vs glycolytic lanes at a
- * given duration, without claiming their proprietary fits):
+ * **v3 (mass-consistent):** canonical **absolute** VO₂ (L/min) is blended from gross-efficiency
+ * oxygen equivalents at reference powers — **independent of body mass** (same watts → same
+ * O₂ demand). **Relative** VO₂max (ml/kg/min) is then **V̇O₂ (L/min) × 1000 / mass**.
+ * This matches physiology: changing reported mass rescales ml/kg/min while absolute consumption
+ * at a given metabolic power stays fixed.
  *
- * - **Hyperbolic model** P(t) = CP + W′/t (Monod–Scherrer; Poole et al., MSSE).
- * - At **5–6 min**, mean power is **only slightly above CP** in trained cyclists (W′/t small);
- *   many platforms use this band as a **practical correlate** of maximal aerobic power / VO2max
- *   field tests (alongside shorter severe-domain points).
- * - **Aerobic share** at duration t is CP/P(t); **anaerobic rate** is W′/t. Short-interval
- *   anaerobic work does not add 1:1 to **steady O2 demand** in the same way as CP-level power;
- *   we down-weight the W′ term when estimating **oxidative-relevant** power for VO2 (γ < 1), with
- *   γ rising when the 5–6 min effort is **more aerobic** (high CP/P ratio), similar in spirit to
- *   comparing oxidative vs glycolytic contribution in metabolic profiling tools.
+ * v2 blended ml/kg/min paths (ACSM + energy) then multiplied by mass for L/min, which let mass
+ * drift into both terms and broke L/min stability when correcting weight.
  *
- * Anchors retained for cross-check: FTP-line proxy (threshold fraction), CP+W′/180 s (severe domain),
- * gross-efficiency energy balance at RER ~1.
- *
- * Not a laboratory cardiopulmonary VO2max. Down-weight short-domain extrapolation when CP fit
- * confidence is low.
+ * ACSM-style ml/kg/min values remain in `methods` for diagnostics / cross-check only.
  */
 
 export type MetabolicVo2maxPhenotype = "oxidative" | "balanced" | "glycolytic";
@@ -42,7 +33,7 @@ export type Vo2maxMetabolicEstimateInput = {
 export type Vo2maxMetabolicEstimateOutput = {
   vo2maxMlMinKg: number;
   vo2maxLMin: number;
-  modelVersion: "empathy-vo2max-metabolic-v2";
+  modelVersion: "empathy-vo2max-metabolic-v3";
   /** FTP / f(threshold) — legacy MAP-style proxy */
   pVo2ProxyW: number;
   /** CP + W′/180 s */
@@ -89,20 +80,25 @@ function round(v: number, digits = 2) {
   return Math.round(v * m) / m;
 }
 
-/** ACSM-style cycling: VO2 (ml/kg/min) ≈ 10.8·(W/kg) + 7 */
+/** ACSM-style cycling: VO2 (ml/kg/min) ≈ 10.8·(W/kg) + 7 — diagnostic only in v3 */
 function acsmCyclingVo2MlKgMin(powerW: number, bodyMassKg: number): number {
   const wKg = clamp(bodyMassKg, 35, 120);
   const p = Math.max(0, powerW);
   return 10.8 * (p / wKg) + 7;
 }
 
-/** VO2 ml/kg/min from mechanical power, η, RER≈1 oxygen equivalent */
-function vo2MlKgMinFromPowerEnergy(powerW: number, bodyMassKg: number, efficiency: number): number {
-  const wKg = clamp(bodyMassKg, 35, 120);
+/** Absolute V̇O₂ (L/min) from mechanical power, η, RER≈1 oxygen equivalent — **no body mass**. */
+function vo2LMinFromPowerEnergy(powerW: number, efficiency: number): number {
   const eta = clamp(efficiency, 0.18, 0.32);
   const p = Math.max(0, powerW);
   const kcalPerLO2 = 3.815 + 1.232 * 1.0;
-  const vo2LMin = (p / eta) * 60 / (4186 * kcalPerLO2);
+  return (p / eta) * 60 / (4186 * kcalPerLO2);
+}
+
+/** VO2 ml/kg/min from mechanical power, η, RER≈1 oxygen equivalent */
+function vo2MlKgMinFromPowerEnergy(powerW: number, bodyMassKg: number, efficiency: number): number {
+  const wKg = clamp(bodyMassKg, 35, 120);
+  const vo2LMin = vo2LMinFromPowerEnergy(powerW, efficiency);
   return (vo2LMin * 1000) / wKg;
 }
 
@@ -161,8 +157,8 @@ export function computeVo2maxMetabolicEstimate(input: Vo2maxMetabolicEstimateInp
   const conf = clamp(input.fitConfidence / 100, 0.35, 1);
 
   /**
-   * Blend: prioritize modulated (aerobic/anaerobic-aware) and 5–6 min band; keep FTP-line and
-   * 3-min severe as anchors; small CP floor for stability.
+   * Blend weights: same structure as v2; primary VO₂ is blended in **L/min** from energy balance
+   * only (mass-invariant for fixed watts).
    */
   let wModulated = 0.34 + 0.22 * conf;
   let wP56 = 0.28 + 0.12 * conf * aerobicFractionAt56;
@@ -177,20 +173,22 @@ export function computeVo2maxMetabolicEstimate(input: Vo2maxMetabolicEstimateInp
   wP3 /= s;
   wCpFloor /= s;
 
-  const blended =
-    wModulated * (0.55 * energyFromModulatedMlKgMin + 0.45 * acsmFromModulatedMlKgMin) +
-    wP56 * (0.5 * energyFromP56MeanMlKgMin + 0.5 * acsmFromP56MeanMlKgMin) +
-    wFtpLine * acsmFromPVo2ProxyMlKgMin +
-    wP3 * (0.55 * energyFromP3MlKgMin + 0.45 * acsmFromP3MlKgMin) +
-    wCpFloor * acsmFromCpMlKgMin;
+  const absMod = vo2LMinFromPowerEnergy(pEffModulatedW, eta);
+  const absP56 = vo2LMinFromPowerEnergy(pRef56W, eta);
+  const absFtp = vo2LMinFromPowerEnergy(pVo2ProxyW, eta);
+  const absP3 = vo2LMinFromPowerEnergy(pThreeMinW, eta);
+  const absCp = vo2LMinFromPowerEnergy(cp, eta);
 
-  const vo2maxMlMinKg = round(clamp(blended, 28, 92), 2);
-  const vo2maxLMin = round((vo2maxMlMinKg * mass) / 1000, 3);
+  const blendedLMin =
+    wModulated * absMod + wP56 * absP56 + wFtpLine * absFtp + wP3 * absP3 + wCpFloor * absCp;
+
+  const vo2maxLMin = round(clamp(blendedLMin, 0.35, 7.5), 3);
+  const vo2maxMlMinKg = round((vo2maxLMin * 1000) / mass, 2);
 
   return {
     vo2maxMlMinKg,
     vo2maxLMin,
-    modelVersion: "empathy-vo2max-metabolic-v2",
+    modelVersion: "empathy-vo2max-metabolic-v3",
     pVo2ProxyW: round(pVo2ProxyW, 1),
     pThreeMinW: round(pThreeMinW, 1),
     pFiveMinW: round(pFiveMinW, 1),

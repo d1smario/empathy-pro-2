@@ -68,7 +68,7 @@ export type MetabolicProfileOutput = {
   phenotype: "oxidative" | "balanced" | "glycolytic";
   substrateTable: ZoneRow[];
   powerComponents: PowerComponentRow[];
-  /** Field VO2max: CP+W′ model, 5–6 min band + aerobic/anaerobic modulation (`vo2max-metabolic-estimate` v2). */
+  /** Field VO2max: CP+W′ model, 5–6 min band + aerobic/anaerobic modulation (`vo2max-metabolic-estimate` v3, L/min first). */
   vo2maxMlMinKg: number;
   vo2maxLMin: number;
   vo2maxEstimate: Vo2maxMetabolicEstimateOutput;

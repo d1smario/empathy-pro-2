@@ -1632,7 +1632,7 @@ export default function MetabolicLabPage() {
                     vo2max_ml_min_kg: cpModel.vo2maxMlMinKg,
                     vo2max_l_min: cpModel.vo2maxLMin,
                     vo2max_estimate: cpModel.vo2maxEstimate,
-                    vo2max_model_version: "empathy-vo2max-metabolic-v2",
+                    vo2max_model_version: "empathy-vo2max-metabolic-v3",
                     sprintReserve: cpModel.sprintReserve,
                     wPrimeJ: cpModel.wPrimeJ,
                     pcrCapacityJ: cpModel.pcrCapacityJ,
