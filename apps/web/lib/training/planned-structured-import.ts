@@ -5,10 +5,11 @@ import {
   defaultManualPlanBlock,
   manualPlanBlocksToChartSegments,
   type ManualPlanBlock,
+  type PlanChartSegment,
   type PlanExpandOpts,
 } from "@/lib/training/builder/manual-plan-block";
 import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
-import type { Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
+import { intensityToRelativeLoad, type Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
 import { extractSessionDurationHintSec, scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
 
 const DEFAULT_IMPORT_RENDER_PROFILE: Pro2RenderProfile = {
@@ -50,6 +51,70 @@ function wattsToZone(w: number, ftpW: number): Pro2IntensityLabel {
 function splitDuration(totalSec: number): { minutes: number; seconds: number } {
   const s = Math.max(1, Math.round(totalSec));
   return { minutes: Math.floor(s / 60), seconds: s % 60 };
+}
+
+/** Scala intervalli esportabile (CSV / companion): come TrainingPeaks, durata + watt per segmento. */
+export type StructuredIntervalRow = {
+  index: number;
+  durationSec: number;
+  powerAvgW: number;
+  powerLowW: number;
+  powerHighW: number;
+  durationType: string;
+  kind: "steady" | "ramp";
+  label?: string;
+};
+
+function formatDurationMmss(totalSec: number): string {
+  const s = Math.max(0, Math.round(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = s % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
+}
+
+export function formatStructuredIntervalLadderCsv(rows: StructuredIntervalRow[]): string {
+  const header =
+    "index,duration_sec,duration_mmss,power_avg_w,power_low_w,power_high_w,duration_type,kind,label";
+  const lines = [header];
+  for (const r of rows) {
+    const lab = r.label != null && r.label.trim() ? `"${r.label.replace(/"/g, '""')}"` : "";
+    lines.push(
+      [
+        r.index,
+        r.durationSec,
+        formatDurationMmss(r.durationSec),
+        r.powerAvgW,
+        r.powerLowW,
+        r.powerHighW,
+        r.durationType,
+        r.kind,
+        lab,
+      ].join(","),
+    );
+  }
+  return lines.join("\n");
+}
+
+function planChartSegmentsToStructuredLadder(
+  segments: PlanChartSegment[],
+  ftpW: number,
+): StructuredIntervalRow[] {
+  return segments.map((seg, i) => {
+    const rel = intensityToRelativeLoad(seg.intensityLabel);
+    const w = Math.round(Math.max(45, rel * ftpW));
+    return {
+      index: i + 1,
+      durationSec: Math.max(1, Math.round(seg.durationSeconds)),
+      powerAvgW: w,
+      powerLowW: w,
+      powerHighW: w,
+      durationType: "time",
+      kind: "steady",
+      label: seg.label?.slice(0, 120),
+    };
+  });
 }
 
 function parseXmlAttrs(attrStr: string): Record<string, string> {
@@ -149,6 +214,27 @@ function parseZwoToManualBlocks(xml: string, ftpW: number): ManualPlanBlock[] {
 }
 
 type ErgPoint = { tSec: number; watts: number };
+
+function ergPointsToIntervalLadder(points: ErgPoint[]): StructuredIntervalRow[] {
+  const rows: StructuredIntervalRow[] = [];
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    const d = Math.max(1, Math.round(b.tSec - a.tSec));
+    const w = Math.round(a.watts);
+    rows.push({
+      index: rows.length + 1,
+      durationSec: d,
+      powerAvgW: w,
+      powerLowW: w,
+      powerHighW: w,
+      durationType: "time",
+      kind: "steady",
+      label: `${w}W`,
+    });
+  }
+  return rows;
+}
 
 function parseErgMrcPowerCourse(text: string): ErgPoint[] {
   const lines = text.split(/\r?\n/);
@@ -410,10 +496,27 @@ function scaleManualPlanBlocksByFactor(blocks: ManualPlanBlock[], factor: number
   }
 }
 
+function scaleIntervalLadderByFactor(rows: StructuredIntervalRow[], factor: number): void {
+  if (!Number.isFinite(factor) || factor < 1.06) return;
+  const f = Math.min(factor, 80);
+  for (const r of rows) {
+    r.durationSec = Math.max(20, Math.round(r.durationSec * f));
+  }
+}
+
+function fitStepLabel(step: Record<string, unknown>): string | undefined {
+  const keys = ["custom_name", "customName", "wkt_step_name", "wktStepName", "notes", "message", "name"];
+  for (const k of keys) {
+    const v = step[k];
+    if (typeof v === "string" && v.trim()) return v.trim().slice(0, 120);
+  }
+  return undefined;
+}
+
 function parseFitWorkoutToManualBlocks(
   buffer: Buffer,
   ftpW: number,
-): { blocks: ManualPlanBlock[]; wktName: string | null } {
+): { blocks: ManualPlanBlock[]; wktName: string | null; intervalLadder: StructuredIntervalRow[] } {
   const scan = scanFitWorkoutStepsFromBuffer(buffer);
   const steps = scan.workoutSteps;
   if (!steps.length) throw new Error("FIT: nessun workout step decodificabile.");
@@ -421,15 +524,31 @@ function parseFitWorkoutToManualBlocks(
   const wn = scan.workout?.wkt_name ?? scan.workout?.wktName;
   const wktName = typeof wn === "string" && wn.trim() ? wn.trim().slice(0, 200) : null;
 
-  const buildBlocks = (legacy: boolean): ManualPlanBlock[] => {
+  const buildBlocksAndLadder = (legacy: boolean): { blocks: ManualPlanBlock[]; ladder: StructuredIntervalRow[] } => {
     const blocks: ManualPlanBlock[] = [];
+    const ladder: StructuredIntervalRow[] = [];
     for (const step of steps) {
       let durSec = legacy ? fitStepDurationSecLegacy(step) : fitStepDurationSecForImport(step, mps);
       if (durSec == null) continue;
       durSec *= fitStepRepeatMultiplier(step);
       const { low, high } = fitStepFtpRange(step, ftpW);
+      const dtype = normalizeFitWktDurationType(step);
+      const wLow = Math.round(low * ftpW);
+      const wHigh = Math.round(high * ftpW);
+      const wAvg = Math.round(((low + high) / 2) * ftpW);
+      const isRamp = Math.abs(high - low) >= 0.04;
+      ladder.push({
+        index: ladder.length + 1,
+        durationSec: durSec,
+        powerAvgW: wAvg,
+        powerLowW: wLow,
+        powerHighW: wHigh,
+        durationType: dtype,
+        kind: isRamp ? "ramp" : "steady",
+        label: fitStepLabel(step),
+      });
       const dm = splitDuration(durSec);
-      if (Math.abs(high - low) < 0.04) {
+      if (!isRamp) {
         const b = defaultManualPlanBlock("steady", "FIT step");
         b.minutes = dm.minutes;
         b.seconds = dm.seconds;
@@ -445,11 +564,12 @@ function parseFitWorkoutToManualBlocks(
         blocks.push(b);
       }
     }
-    return blocks;
+    return { blocks, ladder };
   };
 
-  let blocks = buildBlocks(false);
-  if (!blocks.length) blocks = buildBlocks(true);
+  let first = buildBlocksAndLadder(false);
+  if (!first.blocks.length) first = buildBlocksAndLadder(true);
+  const { blocks, ladder: intervalLadder } = first;
   if (!blocks.length) {
     throw new Error(
       "FIT: nessuno step con durata decodificabile (solo contenitori repeat/open?). Prova export ZWO/ERG o un FIT workout con step «time»/«distance».",
@@ -467,10 +587,16 @@ function parseFitWorkoutToManualBlocks(
     hintSec >= 40 * 60 &&
     hintSec <= 14 * 3600
   ) {
-    scaleManualPlanBlocksByFactor(blocks, hintSec / sumSec);
+    const factor = hintSec / sumSec;
+    scaleManualPlanBlocksByFactor(blocks, factor);
+    scaleIntervalLadderByFactor(intervalLadder, factor);
   }
 
-  return { blocks, wktName };
+  for (let i = 0; i < intervalLadder.length; i += 1) {
+    intervalLadder[i]!.index = i + 1;
+  }
+
+  return { blocks, wktName, intervalLadder };
 }
 
 export type PlannedStructuredFormat = "zwo" | "erg" | "mrc" | "fit_workout";
@@ -484,9 +610,12 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
   discipline: string;
   contract: Pro2BuilderSessionContract;
   sourceVendorTag: string;
+  intervalLadder: StructuredIntervalRow[];
+  intervalLadderCsv: string;
 }> {
   const ftpW = DEFAULT_IMPORT_RENDER_PROFILE.ftpW;
   let blocks: ManualPlanBlock[];
+  let intervalLadder: StructuredIntervalRow[] = [];
   let sessionName = input.fileName.replace(/\.[^.]+$/, "");
 
   if (input.format === "zwo") {
@@ -496,10 +625,12 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
   } else if (input.format === "erg" || input.format === "mrc") {
     const text = input.buffer.toString("utf8");
     const pts = parseErgMrcPowerCourse(text);
+    intervalLadder = ergPointsToIntervalLadder(pts);
     blocks = ergCourseToManualBlocks(pts, ftpW);
   } else if (input.format === "fit_workout") {
     const parsedFit = parseFitWorkoutToManualBlocks(input.buffer, ftpW);
     blocks = parsedFit.blocks;
+    intervalLadder = parsedFit.intervalLadder;
     if (parsedFit.wktName) sessionName = parsedFit.wktName;
   } else {
     throw new Error("Formato strutturato non supportato.");
@@ -512,10 +643,13 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
     lengthMode: DEFAULT_IMPORT_RENDER_PROFILE.lengthMode,
     speedRefKmh: DEFAULT_IMPORT_RENDER_PROFILE.speedRefKmh,
   };
-  const durationSec = manualPlanBlocksToChartSegments(blocks, expandOpts).reduce(
-    (sum, seg) => sum + seg.durationSeconds,
-    0,
-  );
+  const segments = manualPlanBlocksToChartSegments(blocks, expandOpts);
+  if (!intervalLadder.length) {
+    intervalLadder = planChartSegmentsToStructuredLadder(segments, ftpW);
+  }
+  const intervalLadderCsv = formatStructuredIntervalLadderCsv(intervalLadder);
+
+  const durationSec = segments.reduce((sum, seg) => sum + seg.durationSeconds, 0);
   const plannedSessionDurationMinutes = Math.max(1, Math.round(durationSec / 60));
 
   const contract = buildPro2BuilderSessionContract({
@@ -541,5 +675,7 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
     discipline: contract.discipline,
     contract,
     sourceVendorTag,
+    intervalLadder,
+    intervalLadderCsv,
   };
 }

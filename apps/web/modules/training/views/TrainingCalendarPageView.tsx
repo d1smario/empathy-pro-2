@@ -398,8 +398,16 @@ export default function TrainingCalendarPageView() {
           } else if (sc?.status === "skipped" && typeof sc.reason === "string" && sc.reason.trim()) {
             companionHint = ` Traccia companion non creata: ${sc.reason.trim()}`;
           }
+          const nRows =
+            Array.isArray(json.intervalLadder) && json.intervalLadder.length > 0
+              ? json.intervalLadder.length
+              : null;
+          const ladderHint =
+            nRows != null
+              ? ` Scala intervalli: ${nRows} righe (durata + watt per blocco); nella risposta JSON trovi anche "intervalLadderCsv" (formato CSV per Excel).`
+              : "";
           setSuccess(
-            `Seduta pianificata importata (${sf}). In notes è stato salvato il contratto Builder (BUILDER_SESSION_JSON) per il grafico a blocchi; apri la seduta su quel giorno per rivederla.${companionHint}`,
+            `Seduta pianificata importata (${sf}). In notes è stato salvato il contratto Builder (BUILDER_SESSION_JSON) per il grafico a blocchi; apri la seduta su quel giorno per rivederla.${ladderHint}${companionHint}`,
           );
         } else {
           const n = typeof json.importedCount === "number" ? json.importedCount : 0;

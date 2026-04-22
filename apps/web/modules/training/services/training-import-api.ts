@@ -78,5 +78,16 @@ export async function importPlannedProgramFile(input: {
     structured?: boolean;
     structuredFormat?: string;
     structuredCompanion?: { status: string; message?: string; mode?: string; reason?: string };
+    intervalLadder?: Array<{
+      index: number;
+      durationSec: number;
+      powerAvgW: number;
+      powerLowW: number;
+      powerHighW: number;
+      durationType: string;
+      kind: string;
+      label?: string;
+    }>;
+    intervalLadderCsv?: string;
   };
 }

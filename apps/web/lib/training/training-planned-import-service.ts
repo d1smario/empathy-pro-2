@@ -10,6 +10,7 @@ import { clampPlannedWorkoutRow } from "@/lib/training/planned/clamp-planned-row
 import { parsePlannedProgramFile } from "@/lib/training/planned-import-parser";
 import {
   type PlannedStructuredFormat,
+  type StructuredIntervalRow,
   parseStructuredPlannedWorkoutFromBuffer,
 } from "@/lib/training/planned-structured-import";
 import {
@@ -33,6 +34,9 @@ export type PlannedImportServiceOk = {
   structuredFormat?: PlannedStructuredFormat;
   /** Traccia `executed_workouts` companion per Analyzer (durata/TSS come seduta strutturata). */
   structuredCompanion?: StructuredCompanionResult;
+  /** Scala intervalli (durata sec + watt) come TrainingPeaks; `intervalLadderCsv` è pronto per Excel. */
+  intervalLadder?: StructuredIntervalRow[];
+  intervalLadderCsv?: string;
 };
 
 export async function runPlannedProgramFileImport(
@@ -265,6 +269,7 @@ export async function runStructuredPlannedSingleImport(
       imported_planned_count: 1,
       first_date: sessionDate,
       structured_session_name: parsed.sessionName,
+      structured_interval_rows: parsed.intervalLadder.length,
     },
     rawRefs: {
       row_count: 1,
@@ -343,6 +348,8 @@ export async function runStructuredPlannedSingleImport(
       plannedWorkoutId,
       contract: parsed.contract,
       structuredFormat: input.format,
+      intervalLadder: parsed.intervalLadder,
+      intervalLadderCsv: parsed.intervalLadderCsv,
     });
   }
 
@@ -379,6 +386,8 @@ export async function runStructuredPlannedSingleImport(
     importJobId,
     structured: true,
     structuredFormat: input.format,
+    intervalLadder: parsed.intervalLadder,
+    intervalLadderCsv: parsed.intervalLadderCsv,
     ...(structuredCompanion ? { structuredCompanion } : {}),
   };
 }

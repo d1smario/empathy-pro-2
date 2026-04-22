@@ -4,8 +4,10 @@ import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { intensityToRelativeLoad } from "@/lib/training/builder/pro2-intensity";
+import { estimateTssFromWattBlocks } from "@/lib/training/builder/tss-estimate";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
+import type { StructuredIntervalRow } from "@/lib/training/planned-structured-import";
 
 function buildCompanionExternalId(input: { athleteId: string; date: string; fileChecksumSha1: string }): string {
   const digest = createHash("sha1")
@@ -73,8 +75,37 @@ function buildSyntheticPowerSeriesFromContract(contract: Pro2BuilderSessionContr
   return series;
 }
 
+function buildSyntheticPowerSeriesFromIntervalLadder(rows: StructuredIntervalRow[]): number[] {
+  const totalSec = Math.max(60, rows.reduce((s, r) => s + r.durationSec, 0));
+  const targetPoints = Math.min(4000, Math.max(400, Math.floor(totalSec / 3)));
+  const stepSec = Math.max(2, Math.floor(totalSec / targetPoints));
+  const series: number[] = [];
+  for (const r of rows) {
+    const d = Math.max(1, r.durationSec);
+    if (r.kind === "ramp" && Math.abs(r.powerHighW - r.powerLowW) > 3) {
+      for (let t = 0; t < d; t += stepSec) {
+        const u = d <= 1 ? 0 : t / Math.max(1, d - 1);
+        series.push(Math.round(r.powerLowW + (r.powerHighW - r.powerLowW) * u));
+      }
+    } else {
+      const w = r.powerAvgW;
+      for (let t = 0; t < d; t += stepSec) {
+        series.push(w);
+      }
+    }
+  }
+  if (series.length < 8 && rows.length) {
+    const w = rows[0]!.powerAvgW;
+    const n = Math.min(120, Math.ceil(totalSec / stepSec));
+    for (let i = 0; i < n; i += 1) series.push(w);
+  }
+  return series;
+}
+
 function buildSyntheticExecutedPayload(input: {
   contract: Pro2BuilderSessionContract;
+  intervalLadder?: StructuredIntervalRow[] | null;
+  intervalLadderCsv?: string | null;
   fileName: string;
   fileChecksumSha1: string;
   date: string;
@@ -86,8 +117,65 @@ function buildSyntheticExecutedPayload(input: {
   kj: number | null;
   traceSummary: Record<string, unknown>;
 } {
-  const power = buildSyntheticPowerSeriesFromContract(input.contract);
+  const ftpW = input.contract.renderProfile?.ftpW ?? 250;
+  const ladder = input.intervalLadder?.length ? input.intervalLadder : null;
   const s = input.contract.summary;
+
+  if (ladder) {
+    const totalSec = ladder.reduce((acc, r) => acc + r.durationSec, 0);
+    const totalJ = ladder.reduce((acc, r) => {
+      const avgW = (r.powerLowW + r.powerHighW) / 2;
+      return acc + r.durationSec * avgW;
+    }, 0);
+    const durationMinutes = Math.max(1, Math.round(totalSec / 60));
+    const avgPowerW = totalSec > 0 ? Math.round(totalJ / totalSec) : 0;
+    const tss = estimateTssFromWattBlocks(
+      ladder.map((r) => ({
+        durationSeconds: r.durationSec,
+        powerLowW: r.powerLowW,
+        powerHighW: r.powerHighW,
+      })),
+      ftpW,
+    );
+    const kj = Math.round(totalJ / 1000);
+    const kcal = Math.round(Math.max(0, tss) * 9.3);
+    const power = buildSyntheticPowerSeriesFromIntervalLadder(ladder);
+    const traceSummary: Record<string, unknown> = {
+      source_format: "structured_companion_synthetic",
+      parser_engine: "pro2_structured_companion_interval_ladder",
+      parser_version: "1",
+      power_series_w: power,
+      power_avg_w: avgPowerW,
+      trackpoint_count: power.length,
+      fit_record_messages: power.length,
+      channels_available: {
+        power: true,
+        hr: false,
+        speed: false,
+        cadence: false,
+        altitude: false,
+        temperature: false,
+      },
+      structured_companion: true,
+      companion_for_planned_workout_id: input.plannedWorkoutId,
+      imported_file_name: input.fileName,
+      import_file_checksum_sha1: input.fileChecksumSha1,
+      session_day_key: input.date,
+      structured_interval_ladder: ladder,
+      ...(input.intervalLadderCsv
+        ? { structured_interval_ladder_csv: input.intervalLadderCsv.slice(0, 120_000) }
+        : {}),
+    };
+    return {
+      durationMinutes,
+      tss: Math.max(0, tss),
+      kcal,
+      kj,
+      traceSummary,
+    };
+  }
+
+  const power = buildSyntheticPowerSeriesFromContract(input.contract);
   const durationMinutes = Math.max(1, Math.round(s.durationSec / 60));
   const traceSummary: Record<string, unknown> = {
     source_format: "structured_companion_synthetic",
@@ -121,14 +209,14 @@ function buildSyntheticExecutedPayload(input: {
 }
 
 export type StructuredCompanionResult =
-  | { status: "ok"; executedId: string; mode: "parsed_fit" | "synthetic_contract" }
+  | { status: "ok"; executedId: string; mode: "parsed_fit" | "synthetic_contract" | "synthetic_interval_ladder" }
   | { status: "skipped"; reason: string }
   | { status: "error"; message: string };
 
 /**
  * Dopo import Builder (ZWO/ERG/MRC/FIT workout), crea un `executed_workouts` «companion»:
  * - se il buffer è FIT e `parseTrainingFile` produce abbastanza serie potenza → traccia reale;
- * - altrimenti → serie sintetica dal contratto (durata/TSS come TrainingPeaks / Builder).
+ * - altrimenti → serie sintetica dalla scala intervalli (durata/watt per riga, stile TrainingPeaks) se disponibile, altrimenti dal contratto Builder.
  */
 export async function upsertStructuredCompanionExecuted(
   db: SupabaseClient,
@@ -142,6 +230,8 @@ export async function upsertStructuredCompanionExecuted(
     plannedWorkoutId: string;
     contract: Pro2BuilderSessionContract;
     structuredFormat: "zwo" | "erg" | "mrc" | "fit_workout";
+    intervalLadder?: StructuredIntervalRow[] | null;
+    intervalLadderCsv?: string | null;
   },
 ): Promise<StructuredCompanionResult> {
   const externalId = buildCompanionExternalId({
@@ -150,7 +240,7 @@ export async function upsertStructuredCompanionExecuted(
     fileChecksumSha1: input.fileChecksumSha1,
   });
 
-  let mode: "parsed_fit" | "synthetic_contract" = "synthetic_contract";
+  let mode: "parsed_fit" | "synthetic_contract" | "synthetic_interval_ladder" = "synthetic_contract";
   let durationMinutes = Math.max(1, Math.round(input.contract.summary.durationSec / 60));
   let tss = Math.max(0, Math.round(input.contract.summary.tss));
   let kcal: number | null =
@@ -204,6 +294,8 @@ export async function upsertStructuredCompanionExecuted(
       } else {
         const syn = buildSyntheticExecutedPayload({
           contract: input.contract,
+          intervalLadder: input.intervalLadder,
+          intervalLadderCsv: input.intervalLadderCsv,
           fileName: input.fileName,
           fileChecksumSha1: input.fileChecksumSha1,
           date: input.date.slice(0, 10),
@@ -214,10 +306,15 @@ export async function upsertStructuredCompanionExecuted(
         tss = syn.tss;
         kcal = syn.kcal;
         kj = syn.kj;
+        if (syn.traceSummary.parser_engine === "pro2_structured_companion_interval_ladder") {
+          mode = "synthetic_interval_ladder";
+        }
       }
     } catch {
       const syn = buildSyntheticExecutedPayload({
         contract: input.contract,
+        intervalLadder: input.intervalLadder,
+        intervalLadderCsv: input.intervalLadderCsv,
         fileName: input.fileName,
         fileChecksumSha1: input.fileChecksumSha1,
         date: input.date.slice(0, 10),
@@ -228,10 +325,15 @@ export async function upsertStructuredCompanionExecuted(
       tss = syn.tss;
       kcal = syn.kcal;
       kj = syn.kj;
+      if (syn.traceSummary.parser_engine === "pro2_structured_companion_interval_ladder") {
+        mode = "synthetic_interval_ladder";
+      }
     }
   } else {
     const syn = buildSyntheticExecutedPayload({
       contract: input.contract,
+      intervalLadder: input.intervalLadder,
+      intervalLadderCsv: input.intervalLadderCsv,
       fileName: input.fileName,
       fileChecksumSha1: input.fileChecksumSha1,
       date: input.date.slice(0, 10),
@@ -242,6 +344,9 @@ export async function upsertStructuredCompanionExecuted(
     tss = syn.tss;
     kcal = syn.kcal;
     kj = syn.kj;
+    if (syn.traceSummary.parser_engine === "pro2_structured_companion_interval_ladder") {
+      mode = "synthetic_interval_ladder";
+    }
   }
 
   const sourceTag = `structured_plan_companion:${input.structuredFormat}:${mode}`;
