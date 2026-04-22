@@ -3,9 +3,9 @@ import "server-only";
 /**
  * fit-file-parser in mode `list` sovrascrive `fitObj.workout_step` ad ogni messaggio (vedi `dist/fit-parser.js` default branch).
  * Per import programmato FIT serve l’elenco completo degli step: replichiamo il loop binario usando `readRecord` esportato.
+ * Import tramite alias webpack (`next.config.mjs`): il package non esporta `./dist/binary.js`.
  */
-// @ts-expect-error sotto-percorso senza types nel package; runtime ESM risolve.
-import { calculateCRC, getArrayBuffer, readRecord } from "fit-file-parser/dist/binary.js";
+import { calculateCRC, getArrayBuffer, readRecord } from "empathy-fit-file-parser-binary";
 
 const READ_OPTIONS = {
   force: true,

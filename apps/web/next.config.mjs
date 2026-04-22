@@ -1,5 +1,9 @@
+import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+const require = createRequire(import.meta.url);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +32,35 @@ const distDir = process.env.NEXT_DIST_DIR?.trim() || ".next";
 /** Cache filesystem webpack disattivata: evita chunk mancanti (`592.js`) e pack.gz ENOENT su sync cloud. */
 const disableWebpackCache =
   process.env.EMPATHY_PRO2_NO_WEBPACK_CACHE === "1";
+
+/** `fit-file-parser` non esporta `./dist/binary.js` né `./package.json`; risolviamo la cartella del pacchetto. */
+function resolveFitFileParserRoot() {
+  const candidates = [
+    path.join(__dirname, "..", "..", "node_modules", "fit-file-parser"),
+    path.join(__dirname, "node_modules", "fit-file-parser"),
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(path.join(p, "package.json"))) return p;
+  }
+  const main = require.resolve("fit-file-parser");
+  let dir = path.dirname(main);
+  for (let i = 0; i < 8; i += 1) {
+    if (fs.existsSync(path.join(dir, "package.json"))) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+        if (pkg?.name === "fit-file-parser") return dir;
+      } catch {
+        // continue
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  throw new Error("fit-file-parser: impossibile risolvere la directory del pacchetto per l’alias webpack.");
+}
+
+const FIT_FILE_PARSER_BINARY = path.join(resolveFitFileParserRoot(), "dist", "binary.js");
 
 const nextConfig = {
   poweredByHeader: false,
@@ -72,6 +105,10 @@ const nextConfig = {
     dirs: ["app", "components", "core", "lib"],
   },
   webpack: (config, { dev }) => {
+    config.resolve.alias = {
+      ...(config.resolve.alias ?? {}),
+      "empathy-fit-file-parser-binary": FIT_FILE_PARSER_BINARY,
+    };
     if (dev && disableWebpackCache) {
       config.cache = false;
     }
