@@ -7,6 +7,14 @@ import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-impor
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
+import {
+  normalizeTrainingImportIntent,
+  resolveTrainingImportRoute,
+} from "@/lib/training/training-import-routing";
+import {
+  runPlannedProgramFileImport,
+  runStructuredPlannedSingleImport,
+} from "@/lib/training/training-planned-import-service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,9 +68,11 @@ export async function POST(req: NextRequest) {
     const athleteId = String(form.get("athleteId") ?? "").trim();
     const file = form.get("file");
     const dateOverride = String(form.get("date") ?? "").trim();
+    const plannedDate = String(form.get("plannedDate") ?? "").trim();
     const notes = String(form.get("notes") ?? "").trim();
     const device = String(form.get("device") ?? "").trim();
     const plannedWorkoutId = String(form.get("plannedWorkoutId") ?? "").trim();
+    const importIntent = normalizeTrainingImportIntent(form.get("importIntent"));
 
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
@@ -75,6 +85,48 @@ export async function POST(req: NextRequest) {
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
     const fileChecksum = createHash("sha1").update(fileBuffer).digest("hex");
+
+    const route = resolveTrainingImportRoute({
+      intent: importIntent,
+      fileName: file.name,
+      mimeType: file.type,
+      buffer: fileBuffer,
+    });
+
+    if (route.kind === "planned_program") {
+      const plannedBody = await runPlannedProgramFileImport(db, {
+        athleteId,
+        file,
+        fileChecksum,
+        fileBuffer,
+        notes,
+      });
+      return NextResponse.json(plannedBody, { headers: NO_STORE });
+    }
+
+    if (route.kind === "planned_structured") {
+      const anchorDate = plannedDate || dateOverride || inferDateFromFileName(file.name);
+      if (!anchorDate) {
+        return NextResponse.json(
+          {
+            error:
+              "Per sedute strutturate (ZWO, ERG, MRC, FIT workout) serve la data: usa il giorno nel calendario o il campo data.",
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      const structuredBody = await runStructuredPlannedSingleImport(db, {
+        athleteId,
+        file,
+        fileChecksum,
+        fileBuffer,
+        notes,
+        date: anchorDate,
+        format: route.format,
+      });
+      return NextResponse.json(structuredBody, { headers: NO_STORE });
+    }
+
     const parsed = await parseTrainingFile({
       fileName: file.name,
       mimeType: file.type,

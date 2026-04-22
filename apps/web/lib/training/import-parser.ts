@@ -881,11 +881,12 @@ async function parseFit(buffer: Buffer): Promise<ParsedTrainingFile> {
   return parseFitLegacy(buffer);
 }
 
-export async function parseTrainingFile(input: {
+/** Decompressione `.gz` condivisa tra routing import e `parseTrainingFile`. */
+export function decompressTrainingImportBuffer(input: {
   fileName: string;
   mimeType: string;
   buffer: Buffer;
-}): Promise<ParsedTrainingFile> {
+}): { effectiveName: string; payload: Buffer } {
   const lower = input.fileName.toLowerCase();
   const mime = input.mimeType.toLowerCase();
   const isGzipMagic = input.buffer.length > 2 && input.buffer[0] === 0x1f && input.buffer[1] === 0x8b;
@@ -901,6 +902,17 @@ export async function parseTrainingFile(input: {
     }
     if (inferredName.endsWith(".gz")) inferredName = inferredName.slice(0, -3);
   }
+  return { effectiveName: inferredName, payload };
+}
+
+export async function parseTrainingFile(input: {
+  fileName: string;
+  mimeType: string;
+  buffer: Buffer;
+}): Promise<ParsedTrainingFile> {
+  const { effectiveName: inferredName, payload } = decompressTrainingImportBuffer(input);
+  const lower = inferredName;
+  const mime = input.mimeType.toLowerCase();
 
   if (inferredName.endsWith(".fit") || mime.includes("fit")) return await parseFit(payload);
 

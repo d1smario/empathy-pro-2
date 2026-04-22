@@ -352,11 +352,19 @@ export default function TrainingCalendarPageView() {
           athleteId,
           file: fileImportForm.file,
           notes: fileImportForm.notes || undefined,
+          date: normalizeDateKey(fileImportForm.date) || selectedDate,
         });
-        const n = typeof json.importedCount === "number" ? json.importedCount : 0;
-        setSuccess(
-          `Programmazione importata: ${n} sedute. Compaiono come chip PLAN (tipo, durata, TSS). Il grafico a blocchi del Builder non viene creato da file TrainingPeaks: usa «Modifica» sulla seduta o il Builder per strutturare la sessione.`,
-        );
+        if (json.structured) {
+          const sf = typeof json.structuredFormat === "string" ? json.structuredFormat : "strutturato";
+          setSuccess(
+            `Seduta pianificata importata (${sf}). In notes è stato salvato il contratto Builder (BUILDER_SESSION_JSON) per il grafico a blocchi; apri la seduta su quel giorno per rivederla.`,
+          );
+        } else {
+          const n = typeof json.importedCount === "number" ? json.importedCount : 0;
+          setSuccess(
+            `Programmazione importata: ${n} sedute. Compaiono come chip PLAN (tipo, durata, TSS). Per curve ZWO/ERG/MRC o FIT workout usa un file dedicato: viene creata una seduta con struttura Builder in notes.`,
+          );
+        }
         const fd = json.firstDate;
         if (fd && /^\d{4}-\d{2}-\d{2}$/.test(fd)) {
           setSelectedDate(fd);
@@ -661,7 +669,12 @@ export default function TrainingCalendarPageView() {
             <div className="space-y-6">
               {showFileImport ? (
                 <div id="training-calendar-file-import" className="scroll-mt-24">
-                <Pro2SectionCard accent="violet" title="Import da file" subtitle="FIT · TCX · GPX · CSV · JSON (come V1)" icon={FileUp}>
+                <Pro2SectionCard
+                  accent="violet"
+                  title="Import da file"
+                  subtitle="Eseguito: FIT · TCX · GPX · CSV · JSON — Programmato: CSV/JSON calendario · ZWO · ERG · MRC · FIT workout"
+                  icon={FileUp}
+                >
                   <form onSubmit={handleFileImportSubmit} className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -674,7 +687,7 @@ export default function TrainingCalendarPageView() {
                         setFileImportForm((f) => ({
                           ...f,
                           mode,
-                          ...(mode === "executed" ? { date: normalizeDateKey(f.date) || selectedDate } : {}),
+                          date: normalizeDateKey(f.date) || selectedDate,
                         }));
                       }}
                     >
@@ -713,25 +726,27 @@ export default function TrainingCalendarPageView() {
                     type="file"
                     className="mt-1 w-full rounded-xl border border-dashed border-white/20 bg-black/40 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1"
                     accept={
-                      fileImportForm.mode === "planned" ? ".csv,.json" : ".csv,.json,.tcx,.gpx,.fit,.fit.gz,.gz"
+                      fileImportForm.mode === "planned"
+                        ? ".csv,.json,.zwo,.erg,.mrc,.fit,.fit.gz,.gz"
+                        : ".csv,.json,.tcx,.gpx,.fit,.fit.gz,.gz"
                     }
                     onChange={(e) => setFileImportForm((f) => ({ ...f, file: e.target.files?.[0] ?? null }))}
                   />
                 </label>
-                {fileImportForm.mode === "executed" ? (
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
-                    Giorno nel calendario
-                    <input
-                      type="date"
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm text-white"
-                      value={fileImportForm.date}
-                      onChange={(e) => setFileImportForm((f) => ({ ...f, date: e.target.value }))}
-                    />
-                    <span className="mt-1 block font-normal normal-case text-slate-500">
-                      Di default è il giorno selezionato sulla griglia. Cambialo solo se il file va registrato su un altro giorno.
-                    </span>
-                  </label>
-                ) : null}
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Giorno nel calendario
+                  <input
+                    type="date"
+                    className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm text-white"
+                    value={fileImportForm.date}
+                    onChange={(e) => setFileImportForm((f) => ({ ...f, date: e.target.value }))}
+                  />
+                  <span className="mt-1 block font-normal normal-case text-slate-500">
+                    {fileImportForm.mode === "executed"
+                      ? "Di default è il giorno selezionato sulla griglia. Cambialo solo se il file va registrato su un altro giorno."
+                      : "Per ZWO / ERG / MRC / FIT workout la seduta strutturata viene creata in questo giorno. Per CSV o JSON a più righe le date nel file restano quelle di riferimento."}
+                  </span>
+                </label>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
                   Note import (opzionale)
                   <input
@@ -742,7 +757,7 @@ export default function TrainingCalendarPageView() {
                 </label>
                 <p className="text-xs text-slate-500">
                   {fileImportForm.mode === "planned"
-                    ? "Programmazione: CSV/JSON (es. export calendario TrainingPeaks). Crea righe planned (data, tipo, durata, TSS); non è un file struttura Builder — per blocchi/intensità apri «Modifica» o il Builder su quella data."
+                    ? "Tabellare: CSV/JSON export calendario (più sedute). Strutturato: ZWO, ERG, MRC o FIT workout — una seduta nel giorno scelto, con `BUILDER_SESSION_JSON` in notes (stesso formato del Builder) per il grafico a blocchi."
                     : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX. Il salvataggio usa il giorno indicato sopra (cella corrente se non modifichi la data). Device: auto o manuale."}
                 </p>
                 <div className="flex flex-wrap gap-2">

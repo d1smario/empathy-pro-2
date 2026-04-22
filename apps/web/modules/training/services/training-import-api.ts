@@ -9,10 +9,13 @@ export async function importExecutedWorkoutFile(input: {
   notes?: string;
   device?: string;
   plannedWorkoutId?: string;
+  /** Default `executed` — for import tabellare / strutturato usare `importPlannedProgramFile`. */
+  importIntent?: "executed" | "auto";
 }) {
   const form = new FormData();
   form.set("athleteId", input.athleteId);
   form.set("file", input.file);
+  form.set("importIntent", input.importIntent ?? "executed");
   if (input.date) form.set("date", input.date);
   if (input.notes) form.set("notes", input.notes);
   if (input.device) form.set("device", input.device);
@@ -39,13 +42,21 @@ export async function importExecutedWorkoutFile(input: {
   };
 }
 
-export async function importPlannedProgramFile(input: { athleteId: string; file: File; notes?: string }) {
+export async function importPlannedProgramFile(input: {
+  athleteId: string;
+  file: File;
+  notes?: string;
+  /** Giorno calendario per import strutturato (ZWO/ERG/MRC/FIT workout); per CSV/JSON tabellare le date sono nel file. */
+  date?: string;
+}) {
   const form = new FormData();
   form.set("athleteId", input.athleteId);
   form.set("file", input.file);
+  form.set("importIntent", "planned");
   if (input.notes) form.set("notes", input.notes);
+  if (input.date) form.set("date", input.date);
 
-  const response = await fetch("/api/training/import-planned", {
+  const response = await fetch("/api/training/import", {
     method: "POST",
     headers: await buildSupabaseAuthHeaders(),
     body: form,
@@ -64,5 +75,7 @@ export async function importPlannedProgramFile(input: { athleteId: string; file:
     sourceFormat?: string | null;
     fileName?: string | null;
     importJobId?: string | null;
+    structured?: boolean;
+    structuredFormat?: string;
   };
 }

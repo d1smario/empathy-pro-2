@@ -159,3 +159,39 @@ export async function parsePlannedProgramFile(input: {
   throw new Error("Formato pianificazione non supportato. Usa CSV o JSON.");
 }
 
+/** Prima riga dati (header) — stessi sinonimi di `parseCsv` per non divergere. */
+export function csvHeaderLooksLikePlannedProgramExport(headerLine: string): boolean {
+  const line = headerLine.trim();
+  if (!line) return false;
+  const sep = line.includes(";") ? ";" : line.includes("\t") ? "\t" : ",";
+  const headers = line.split(sep).map((h) => h.trim().toLowerCase());
+  const idxDate = headers.findIndex((h) =>
+    ["date", "giorno", "workout day", "calendar day", "scheduled date", "plan date"].some((k) => h.includes(k)),
+  );
+  return idxDate >= 0;
+}
+
+/** True se JSON tabellare multi-giorno (export calendario / array `workouts`). */
+export function jsonTextLooksLikePlannedProgram(text: string): boolean {
+  try {
+    const raw = JSON.parse(text) as unknown;
+    const list = Array.isArray(raw)
+      ? raw
+      : raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).workouts)
+        ? ((raw as Record<string, unknown>).workouts as unknown[])
+        : [];
+    if (!list.length) return false;
+    const first = list[0];
+    if (!first || typeof first !== "object") return false;
+    const rec = first as Record<string, unknown>;
+    const dateRaw =
+      (rec.date as string | undefined) ??
+      (rec.day as string | undefined) ??
+      (rec.workout_day as string | undefined) ??
+      null;
+    return typeof dateRaw === "string" && dateRaw.trim().length >= 8;
+  } catch {
+    return false;
+  }
+}
+
