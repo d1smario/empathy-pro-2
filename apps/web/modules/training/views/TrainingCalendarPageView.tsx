@@ -213,6 +213,8 @@ export default function TrainingCalendarPageView() {
     device: "auto",
     notes: "",
     file: null as File | null,
+    /** Solo modalità planned: se l’API programmato fallisce, importa lo stesso file come eseguito (traccia → Analyzer). */
+    fallbackExecutedOnPlannedError: false,
   });
   /** Solo per confronto oggettivo con Builder (stesso endpoint): HTTP + conteggi risposta. */
   const [fetchDiag, setFetchDiag] = useState<{
@@ -443,7 +445,42 @@ export default function TrainingCalendarPageView() {
       const anchorKey = (refreshAnchor ?? "").trim().slice(0, 10);
       await loadMonth(/^\d{4}-\d{2}-\d{2}$/.test(anchorKey) ? { anchorDay: anchorKey } : undefined);
     } catch (x) {
-      setErr(x instanceof Error ? x.message : "Errore in fase di import.");
+      const msg = x instanceof Error ? x.message : "Errore in fase di import.";
+      if (
+        fileImportForm.mode === "planned" &&
+        fileImportForm.fallbackExecutedOnPlannedError &&
+        fileImportForm.file
+      ) {
+        try {
+          const effectiveExecutedDate = normalizeDateKey(fileImportForm.date) || selectedDate;
+          await importExecutedWorkoutFile({
+            athleteId,
+            file: fileImportForm.file,
+            date: effectiveExecutedDate,
+            notes: fileImportForm.notes || undefined,
+            device: fileImportForm.device !== "auto" ? fileImportForm.device : undefined,
+            importIntent: "executed",
+          });
+          setErr(null);
+          setSuccess(
+            `Import programmato non riuscito (${msg}). Stesso file salvato come workout eseguito nel giorno scelto: apri la sezione Analyzer sotto per le serie (come da import eseguito).`,
+          );
+          const key = effectiveExecutedDate.slice(0, 10);
+          if (/^\d{4}-\d{2}-\d{2}$/.test(key)) {
+            setSelectedDate(key);
+            const d = new Date(`${key}T12:00:00`);
+            setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+          }
+          await loadMonth(/^\d{4}-\d{2}-\d{2}$/.test(key) ? { anchorDay: key } : undefined);
+          setFileImportForm((f) => ({ ...f, file: null }));
+        } catch (fb) {
+          setErr(
+            `${msg} — fallback Analyzer (import eseguito): ${fb instanceof Error ? fb.message : "non riuscito"}.`,
+          );
+        }
+      } else {
+        setErr(msg);
+      }
     } finally {
       trainingImportInFlightRef.current = false;
       setSaving(false);
@@ -732,6 +769,7 @@ export default function TrainingCalendarPageView() {
                           ...f,
                           mode,
                           date: normalizeDateKey(f.date) || selectedDate,
+                          fallbackExecutedOnPlannedError: mode === "planned" ? f.fallbackExecutedOnPlannedError : false,
                         }));
                       }}
                     >
@@ -804,6 +842,23 @@ export default function TrainingCalendarPageView() {
                     ? "Tabellare: CSV/JSON export calendario (più sedute). Strutturato: ZWO, ERG, MRC o FIT workout — una seduta nel giorno scelto, con `BUILDER_SESSION_JSON` in notes (stesso formato del Builder) per il grafico a blocchi."
                     : "Eseguito: FIT/FIT.GZ, CSV, JSON, TCX, GPX. Il salvataggio usa il giorno indicato sopra (cella corrente se non modifichi la data). Device: auto o manuale."}
                 </p>
+                {fileImportForm.mode === "planned" ? (
+                  <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs text-slate-300">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5 shrink-0"
+                      checked={fileImportForm.fallbackExecutedOnPlannedError}
+                      onChange={(e) =>
+                        setFileImportForm((f) => ({ ...f, fallbackExecutedOnPlannedError: e.target.checked }))
+                      }
+                    />
+                    <span>
+                      Se l&apos;import programmato fallisce, importa lo stesso file come workout eseguito (traccia per
+                      Analyzer). Utile se il FIT non si converte bene in Builder: l&apos;Analyzer usa le serie come per
+                      gli eseguiti (i FIT solo-workout senza record possono avere grafici minimi).
+                    </span>
+                  </label>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="submit"
