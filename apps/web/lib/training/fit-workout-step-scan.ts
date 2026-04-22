@@ -21,11 +21,58 @@ export type FitWorkoutScanResult = {
   workoutSteps: Record<string, unknown>[];
   /** Ultimo messaggio `workout` nel file (sport, nome, num_valid_steps). */
   workout: Record<string, unknown> | null;
+  /**
+   * Durate «macro» (secondi) da messaggi non mappati nel profilo statico (es. `workout_session`, developer):
+   * TrainingPeaks a volte ripete step corti ma mette il totale reale qui.
+   */
+  sessionDurationHintsSec: number[];
   recordCount: number;
   fileIds: Record<string, unknown>[];
   /** True se almeno un `file_id` dichiara type workout (Garmin / TP export). */
   declaresWorkoutFileType: boolean;
 };
+
+function asFitScanNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v.replace(",", "."));
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+/**
+ * Estrae secondi plausibili (40 min – 14 h) da campi tipo sessione / export.
+ * Messaggi senza `name` nel profilo fit-file-parser finiscono in `default` con payload comunque decodificato.
+ */
+export function extractSessionDurationHintSec(m: Record<string, unknown> | null | undefined): number | null {
+  if (!m || typeof m !== "object") return null;
+  const keys = [
+    "total_timer_time",
+    "totalTimerTime",
+    "total_elapsed_time",
+    "totalElapsedTime",
+    "time_duration",
+    "timeDuration",
+    "planned_time",
+    "plannedTime",
+  ];
+  let best: number | null = null;
+  for (const k of keys) {
+    const v = asFitScanNumber(m[k]);
+    if (v == null || v <= 0) continue;
+    const candidates: number[] = [];
+    if (v >= 500_000) candidates.push(v / 1000);
+    if (v >= 40 * 60 && v <= 14 * 3600) candidates.push(v);
+    if (Number.isInteger(v) && v >= 45 && v <= 420) candidates.push(v * 60);
+    for (const sec of candidates) {
+      if (sec >= 40 * 60 && sec <= 14 * 3600) {
+        best = best == null ? sec : Math.max(best, sec);
+      }
+    }
+  }
+  return best;
+}
 
 function fitBounds(blob: Uint8Array): { headerLength: number; crcStart: number } | null {
   if (blob.length < 12) return null;
@@ -67,6 +114,7 @@ function fileIdsDeclareWorkout(fileIds: Record<string, unknown>[]): boolean {
 export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanResult {
   const workoutSteps: Record<string, unknown>[] = [];
   let lastWorkout: Record<string, unknown> | null = null;
+  const sessionDurationHintsSec: number[] = [];
   const file_ids: Record<string, unknown>[] = [];
   let recordCount = 0;
 
@@ -77,6 +125,7 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
       return {
         workoutSteps: [],
         workout: null,
+        sessionDurationHintsSec: [],
         recordCount: 0,
         fileIds: [],
         declaresWorkoutFileType: false,
@@ -135,23 +184,40 @@ export function scanFitWorkoutStepsFromBuffer(buffer: Buffer): FitWorkoutScanRes
             workoutSteps.push(message as Record<string, unknown>);
           }
           break;
-        default:
+        case "session":
+          if (message && typeof message === "object") {
+            const h = extractSessionDurationHintSec(message as Record<string, unknown>);
+            if (h != null) sessionDurationHintsSec.push(h);
+          }
           break;
+        default: {
+          /* Profilo statico senza nome (es. global 158 workout_session): qui spesso c’è il tempo totale TP. */
+          if (message && typeof message === "object" && (messageType === "" || messageType === "unknown")) {
+            const h = extractSessionDurationHintSec(message as Record<string, unknown>);
+            if (h != null) sessionDurationHintsSec.push(h);
+          }
+          break;
+        }
       }
     }
   } catch {
     return {
       workoutSteps: [],
       workout: null,
+      sessionDurationHintsSec: [],
       recordCount: 0,
       fileIds: [],
       declaresWorkoutFileType: false,
     };
   }
 
+  const wHint = extractSessionDurationHintSec(lastWorkout);
+  if (wHint != null) sessionDurationHintsSec.push(wHint);
+
   return {
     workoutSteps,
     workout: lastWorkout,
+    sessionDurationHintsSec,
     recordCount,
     fileIds: file_ids,
     declaresWorkoutFileType: fileIdsDeclareWorkout(file_ids),

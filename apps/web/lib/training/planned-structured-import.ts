@@ -9,7 +9,7 @@ import {
 } from "@/lib/training/builder/manual-plan-block";
 import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
 import type { Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
-import { scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
+import { extractSessionDurationHintSec, scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
 
 const DEFAULT_IMPORT_RENDER_PROFILE: Pro2RenderProfile = {
   intensityUnit: "watt",
@@ -380,6 +380,36 @@ function fitStepFtpRange(step: Record<string, unknown>, ftpW: number): { low: nu
   return { low: Math.min(lo, hi), high: Math.max(lo, hi) };
 }
 
+function totalManualPlanBlocksSeconds(blocks: ManualPlanBlock[]): number {
+  let s = 0;
+  for (const b of blocks) {
+    s += b.minutes * 60 + b.seconds;
+  }
+  return Math.max(1, s);
+}
+
+/** Se il FIT espone una durata macro (session / TP) molto maggiore della somma step, scala i blocchi in proporzione. */
+function scaleManualPlanBlocksByFactor(blocks: ManualPlanBlock[], factor: number): void {
+  if (!Number.isFinite(factor) || factor < 1.06) return;
+  const f = Math.min(factor, 80);
+  for (const b of blocks) {
+    const totalSec = Math.max(1, b.minutes * 60 + b.seconds);
+    const nt = Math.max(20, Math.round(totalSec * f));
+    const dm = splitDuration(nt);
+    b.minutes = dm.minutes;
+    b.seconds = dm.seconds;
+    if (b.kind === "interval2") {
+      b.workSeconds = Math.max(10, Math.round(b.workSeconds * f));
+      b.recoverSeconds = Math.max(10, Math.round(b.recoverSeconds * f));
+    }
+    if (b.kind === "interval3" || b.kind === "pyramid") {
+      b.step1Seconds = Math.max(10, Math.round(b.step1Seconds * f));
+      b.step2Seconds = Math.max(10, Math.round(b.step2Seconds * f));
+      b.step3Seconds = Math.max(10, Math.round(b.step3Seconds * f));
+    }
+  }
+}
+
 function parseFitWorkoutToManualBlocks(
   buffer: Buffer,
   ftpW: number,
@@ -425,6 +455,21 @@ function parseFitWorkoutToManualBlocks(
       "FIT: nessuno step con durata decodificabile (solo contenitori repeat/open?). Prova export ZWO/ERG o un FIT workout con step «time»/«distance».",
     );
   }
+
+  const sumSec = totalManualPlanBlocksSeconds(blocks);
+  const fromList =
+    scan.sessionDurationHintsSec.length > 0 ? Math.max(...scan.sessionDurationHintsSec) : null;
+  const fromWorkout = extractSessionDurationHintSec(scan.workout);
+  const hintSec = Math.max(fromList ?? 0, fromWorkout ?? 0);
+  if (
+    hintSec >= sumSec * 1.45 &&
+    sumSec < 52 * 60 &&
+    hintSec >= 40 * 60 &&
+    hintSec <= 14 * 3600
+  ) {
+    scaleManualPlanBlocksByFactor(blocks, hintSec / sumSec);
+  }
+
   return { blocks, wktName };
 }
 
