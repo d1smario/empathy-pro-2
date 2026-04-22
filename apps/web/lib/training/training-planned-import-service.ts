@@ -12,6 +12,10 @@ import {
   type PlannedStructuredFormat,
   parseStructuredPlannedWorkoutFromBuffer,
 } from "@/lib/training/planned-structured-import";
+import {
+  type StructuredCompanionResult,
+  upsertStructuredCompanionExecuted,
+} from "@/lib/training/structured-import-companion-executed";
 
 const STRUCTURED_NOTES_HEAD = "[STRUCTURED_PLAN_IMPORT]";
 
@@ -27,6 +31,8 @@ export type PlannedImportServiceOk = {
   importJobId: string | null;
   structured?: boolean;
   structuredFormat?: PlannedStructuredFormat;
+  /** Traccia `executed_workouts` companion per Analyzer (durata/TSS come seduta strutturata). */
+  structuredCompanion?: StructuredCompanionResult;
 };
 
 export async function runPlannedProgramFileImport(
@@ -324,6 +330,22 @@ export async function runStructuredPlannedSingleImport(
     throw new Error(ins.error.message);
   }
 
+  const plannedWorkoutId = ins.data?.id != null ? String(ins.data.id) : null;
+  let structuredCompanion: StructuredCompanionResult | undefined;
+  if (plannedWorkoutId) {
+    structuredCompanion = await upsertStructuredCompanionExecuted(db, {
+      athleteId: input.athleteId,
+      date: input.date,
+      fileName: input.file.name,
+      mimeType: input.file.type ?? "application/octet-stream",
+      fileBuffer: payload,
+      fileChecksumSha1: input.fileChecksum,
+      plannedWorkoutId,
+      contract: parsed.contract,
+      structuredFormat: input.format,
+    });
+  }
+
   if (importJobId) {
     await db
       .from("training_import_jobs")
@@ -357,5 +379,6 @@ export async function runStructuredPlannedSingleImport(
     importJobId,
     structured: true,
     structuredFormat: input.format,
+    ...(structuredCompanion ? { structuredCompanion } : {}),
   };
 }

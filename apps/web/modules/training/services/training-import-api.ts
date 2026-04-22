@@ -77,5 +77,6 @@ export async function importPlannedProgramFile(input: {
     importJobId?: string | null;
     structured?: boolean;
     structuredFormat?: string;
+    structuredCompanion?: { status: string; message?: string; mode?: string; reason?: string };
   };
 }

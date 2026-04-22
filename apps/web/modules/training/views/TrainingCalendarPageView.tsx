@@ -386,8 +386,20 @@ export default function TrainingCalendarPageView() {
         });
         if (json.structured) {
           const sf = typeof json.structuredFormat === "string" ? json.structuredFormat : "strutturato";
+          const sc = json.structuredCompanion as
+            | { status: string; message?: string; mode?: string; reason?: string }
+            | undefined;
+          let companionHint = "";
+          if (sc?.status === "ok") {
+            companionHint =
+              " È stata creata anche una traccia EXEC companion (durata/TSS coerenti con la seduta) per l’Analyzer.";
+          } else if (sc?.status === "error" && typeof sc.message === "string" && sc.message.trim()) {
+            companionHint = ` Nota traccia companion: ${sc.message.trim()}`;
+          } else if (sc?.status === "skipped" && typeof sc.reason === "string" && sc.reason.trim()) {
+            companionHint = ` Traccia companion non creata: ${sc.reason.trim()}`;
+          }
           setSuccess(
-            `Seduta pianificata importata (${sf}). In notes è stato salvato il contratto Builder (BUILDER_SESSION_JSON) per il grafico a blocchi; apri la seduta su quel giorno per rivederla.`,
+            `Seduta pianificata importata (${sf}). In notes è stato salvato il contratto Builder (BUILDER_SESSION_JSON) per il grafico a blocchi; apri la seduta su quel giorno per rivederla.${companionHint}`,
           );
         } else {
           const n = typeof json.importedCount === "number" ? json.importedCount : 0;
