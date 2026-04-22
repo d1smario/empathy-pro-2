@@ -6,16 +6,13 @@ import {
 } from "@/lib/engines/cp-work-time-linear-fit";
 import type { CpWorkTimeLinearCrossCheck } from "@/lib/engines/cp-work-time-linear-fit";
 import { defaultVo2OnsetTauSec } from "@/lib/physiology/vo2-on-kinetics";
+import type { CpInputPoint } from "@/lib/engines/cp-input-point";
+export type { CpInputPoint } from "@/lib/engines/cp-input-point";
 
 /** Bump when CP / glycolytic proxy / VO2max blend logic changes (show in UI + snapshot JSON). */
 export const METABOLIC_CP_ENGINE_REVISION = "empathy-cp-2026-03-28-canonical-worktime-truth-split";
 
 export type MetabolicCpFitModel = "canonical-work-time" | "blended-work-hybrid" | "hybrid-2p-3p";
-
-export type CpInputPoint = {
-  sec: number;
-  powerW: number;
-};
 
 export type ZoneRow = {
   name: string;
