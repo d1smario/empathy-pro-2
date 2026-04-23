@@ -2,6 +2,8 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { safeAppInternalPath } from "@/core/routing/guards";
+import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
+import { PENDING_APP_ROLE_COOKIE, parsePendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 
 export const dynamic = "force-dynamic";
@@ -56,5 +58,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/access?error=auth`);
   }
 
-  return NextResponse.redirect(`${origin}${next}`);
+  const pendingRaw = cookieStore.get(PENDING_APP_ROLE_COOKIE)?.value;
+  const pending = parsePendingAppRole(pendingRaw);
+  try {
+    cookieStore.set(PENDING_APP_ROLE_COOKIE, "", { path: "/", maxAge: 0 });
+  } catch {
+    // ignore
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user && pending) {
+    const meta = user.user_metadata as Record<string, unknown>;
+    await bootstrapAppUserProfile(supabase, {
+      userId: user.id,
+      role: pending,
+      email: user.email ?? null,
+      firstName: typeof meta?.first_name === "string" ? meta.first_name : null,
+      lastName: typeof meta?.last_name === "string" ? meta.last_name : null,
+      athleteId: null,
+    });
+  }
+
+  let dest = next;
+  if (pending === "coach" && (next === "/dashboard" || next === "/")) {
+    dest = "/athletes";
+  }
+
+  return NextResponse.redirect(`${origin}${dest}`);
 }

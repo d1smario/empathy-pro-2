@@ -30,7 +30,7 @@ export type ProductModuleNavItem = {
  */
 export const PRODUCT_MODULE_NAV: ProductModuleNavItem[] = [
   { module: "dashboard", href: "/dashboard", label: "Dashboard", icon: "chart", area: "main" },
-  { module: "athletes", href: "/athletes", label: "Athletes", icon: "users", area: "main" },
+  { module: "athletes", href: "/athletes", label: "Coach · Atleti", icon: "users", area: "main" },
   { module: "profile", href: "/profile", label: "Profile", icon: "user", area: "main" },
   { module: "health", href: "/health", label: "Health & Bio", icon: "heart", area: "main" },
   { module: "physiology", href: "/physiology", label: "Physiology", icon: "activity", area: "main" },

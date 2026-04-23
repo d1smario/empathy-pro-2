@@ -8,6 +8,7 @@ import { DashboardIntroAndPricing } from "@/components/dashboard/DashboardIntroA
 import { DashboardLoadAnalysisSummary } from "@/components/dashboard/DashboardLoadAnalysisSummary";
 import { CoachInviteLinksCard } from "@/components/coach/CoachInviteLinksCard";
 import { CoachRosterCard } from "@/components/coach/CoachRosterCard";
+import { SettingsCoachAccountCard } from "@/components/settings/SettingsCoachAccountCard";
 import { SettingsAthleteContextDiagnostics } from "@/components/settings/SettingsAthleteContextDiagnostics";
 import { SettingsAuthSessionDiagnostics } from "@/components/settings/SettingsAuthSessionDiagnostics";
 import { SettingsBillingDiagnostics } from "@/components/settings/SettingsBillingDiagnostics";
@@ -68,6 +69,21 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
       <div className="scroll-mt-28">
         {module === "dashboard" ? <DashboardModuleSubnav /> : <StandardModuleSubnav />}
       </div>
+
+      {module === "settings" ? (
+        <section
+          id="settings-coach-account"
+          className="scroll-mt-28 space-y-6"
+          aria-label="Account coach e ruolo"
+        >
+          <p className="text-center text-xs text-gray-500 sm:text-left">
+            <strong className="text-gray-300">Ruolo coach o atleta (privato):</strong> usa il pannello qui sotto. Le pill{" "}
+            <strong className="text-gray-400">Ambito</strong> · <strong className="text-gray-400">Collegamenti</strong> ·{" "}
+            <strong className="text-gray-400">Operatività</strong> servono solo a scorrere le altre sezioni.
+          </p>
+          <SettingsCoachAccountCard />
+        </section>
+      ) : null}
 
       {module === "dashboard" && dashboardCatalog && dashboardHosted ? (
         <div className="space-y-12">

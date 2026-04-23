@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { coachOrgIdForDb } from "@/lib/coach-org-id";
+import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -9,41 +9,6 @@ export const runtime = "nodejs";
  * Bootstrap profilo app + collegamento atleta (stesso contratto logico di V1).
  * Auth: cookie SSR (niente Bearer). Richiede RLS coerenti sullo stesso progetto Supabase di V1.
  */
-async function athleteIdByNormalizedEmail(
-  supabase: NonNullable<ReturnType<typeof createSupabaseCookieClient>>,
-  email: string,
-): Promise<string | null> {
-  const { data, error } = await supabase.rpc("athlete_profile_id_by_normalized_email", { p_email: email });
-  if (error) {
-    const { data: row } = await supabase
-      .from("athlete_profiles")
-      .select("id")
-      .eq("email", email)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    return row && typeof row.id === "string" ? row.id : null;
-  }
-  return typeof data === "string" ? data : null;
-}
-
-async function resolveExistingAthleteId(
-  supabase: NonNullable<ReturnType<typeof createSupabaseCookieClient>>,
-  athleteId: string | null,
-  email: string | null,
-): Promise<string | null> {
-  if (athleteId) {
-    const { data } = await supabase.from("athlete_profiles").select("id").eq("id", athleteId).maybeSingle();
-    if (data && typeof (data as { id?: string }).id === "string") {
-      return (data as { id: string }).id;
-    }
-  }
-  if (email) {
-    return athleteIdByNormalizedEmail(supabase, email);
-  }
-  return null;
-}
-
 export async function POST(req: Request) {
   const supabase = createSupabaseCookieClient();
   if (!supabase) {
@@ -72,7 +37,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const athleteId = (body.athleteId ?? "").trim() || null;
+  const explicitAthleteId = typeof body.athleteId === "string" ? body.athleteId.trim() : "";
+  const athleteIdBody = explicitAthleteId || null;
   const email = String(body.email ?? "").trim().toLowerCase() || null;
   const firstName = String(body.firstName ?? "").trim() || null;
   const lastName = String(body.lastName ?? "").trim() || null;
@@ -88,66 +54,29 @@ export async function POST(req: Request) {
 
   const current = existing as { role: "private" | "coach"; athlete_id: string | null } | null;
 
-  let resolvedAthleteId = await resolveExistingAthleteId(supabase, athleteId ?? current?.athlete_id ?? null, email);
+  const athleteIdForBootstrap =
+    role === "coach" ? athleteIdBody : athleteIdBody ?? current?.athlete_id ?? null;
 
-  if (role === "private" && !resolvedAthleteId) {
-    const { data: inserted, error: insErr } = await supabase
-      .from("athlete_profiles")
-      .insert({
-        email,
-        first_name: firstName,
-        last_name: lastName,
-        activity_level: "advanced",
-        timezone: "Europe/Rome",
-      })
-      .select("id")
-      .maybeSingle();
-    if (insErr) {
-      if (insErr.code === "23505" && email) {
-        resolvedAthleteId = await athleteIdByNormalizedEmail(supabase, email);
-      }
-      if (!resolvedAthleteId) {
-        return NextResponse.json({ error: insErr.message }, { status: 500 });
-      }
-    } else {
-      const row = inserted as { id?: string } | null;
-      resolvedAthleteId = row?.id ?? null;
-    }
+  const result = await bootstrapAppUserProfile(supabase, {
+    userId,
+    role,
+    email,
+    firstName,
+    lastName,
+    athleteId: athleteIdForBootstrap,
+  });
+
+  if (result.error) {
+    return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  const nextRole = role;
-  const nextAthleteId = nextRole === "private" ? resolvedAthleteId : null;
-  const shouldUpsertProfile =
-    !current || current.role !== nextRole || (current.athlete_id ?? null) !== (nextAthleteId ?? null);
-
-  if (shouldUpsertProfile) {
-    const { error: profileErr } = await supabase.from("app_user_profiles").upsert(
-      {
-        user_id: userId,
-        role: nextRole,
-        athlete_id: nextAthleteId,
-      },
-      { onConflict: "user_id" },
-    );
-    if (profileErr) {
-      return NextResponse.json({ error: profileErr.message }, { status: 500 });
-    }
-  }
-
-  if (nextRole === "coach" && resolvedAthleteId) {
-    const orgId = coachOrgIdForDb();
-    const { error: linkErr } = await supabase.from("coach_athletes").upsert(
-      { org_id: orgId, coach_user_id: userId, athlete_id: resolvedAthleteId },
-      { onConflict: "org_id,coach_user_id,athlete_id" },
-    );
-    if (linkErr) {
-      return NextResponse.json({ error: linkErr.message }, { status: 500 });
-    }
-  }
+  const { data: after } = await supabase.from("app_user_profiles").select("athlete_id").eq("user_id", userId).maybeSingle();
+  const rowAfter = after as { athlete_id?: string | null } | null;
+  const resolvedAthleteId = role === "private" ? (rowAfter?.athlete_id ?? null) : null;
 
   return NextResponse.json({
     status: current ? "existing" : "created",
-    role: nextRole,
+    role,
     athleteId: resolvedAthleteId,
   });
 }

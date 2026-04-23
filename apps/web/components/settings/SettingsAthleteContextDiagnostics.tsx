@@ -1,6 +1,8 @@
 "use client";
 
+import { useCallback } from "react";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { Pro2Button } from "@/components/ui/empathy";
 
 function maskId(id: string | null): string {
   if (!id) return "—";
@@ -22,6 +24,10 @@ function Row({ label, value }: { label: string; value: string }) {
  */
 export function SettingsAthleteContextDiagnostics() {
   const { loading, signedIn, userId, athleteId, role, athletes } = useActiveAthlete();
+
+  const scrollToCoachPanel = useCallback(() => {
+    document.getElementById("settings-coach-account")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   return (
     <section
@@ -54,6 +60,18 @@ export function SettingsAthleteContextDiagnostics() {
             <Row label="Ruolo" value={role} />
             <Row label="Atleta attivo (risolto)" value={maskId(athleteId)} />
             <Row label="Profili visibili (lista)" value={String(athletes.length)} />
+            {signedIn && role === "private" ? (
+              <div className="mt-5 border-t border-white/10 pt-5">
+                <p className="mb-3 text-left text-sm font-sans text-gray-400">
+                  Sei <strong className="text-gray-200">privato</strong> (atleta collegato al tuo account). Per usare Empathy
+                  come <strong className="text-gray-200">coach</strong> su altri atleti, apri il pannello in alto nella pagina
+                  Impostazioni.
+                </p>
+                <Pro2Button type="button" variant="secondary" className="font-sans" onClick={scrollToCoachPanel}>
+                  Vai a «Coach · account» (in alto)
+                </Pro2Button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

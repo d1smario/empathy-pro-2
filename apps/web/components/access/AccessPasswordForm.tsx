@@ -2,11 +2,14 @@
 
 import { useState } from "react";
 import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
+import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
+import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
   redirectAfterLogin: string;
+  appRole: PendingAppRole;
 };
 
 function formatAuthErrorMessage(message: string): string {
@@ -28,7 +31,38 @@ function formatAuthErrorMessage(message: string): string {
  * sono inclusi nella richiesta successiva: `router.replace` da solo può far vedere al middleware una sessione
  * ancora assente su Vercel.
  */
-export function AccessPasswordForm({ redirectAfterLogin }: Props) {
+function postAuthRedirectPath(redirectAfterLogin: string, appRole: PendingAppRole): string {
+  const path = redirectAfterLogin.startsWith("/") ? redirectAfterLogin : `/${redirectAfterLogin}`;
+  if (appRole === "coach" && (path === "/dashboard" || path === "/")) {
+    return "/athletes";
+  }
+  return path;
+}
+
+async function bootstrapProfileAfterSession(appRole: PendingAppRole): Promise<boolean> {
+  const supabase = createEmpathyBrowserSupabase();
+  if (!supabase) return false;
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+  const u = session?.user;
+  if (!u?.id) return false;
+  const meta = u.user_metadata as Record<string, unknown>;
+  const res = await fetch("/api/access/ensure-profile", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      userId: u.id,
+      role: appRole,
+      email: u.email ?? null,
+      firstName: typeof meta?.first_name === "string" ? meta.first_name : null,
+      lastName: typeof meta?.last_name === "string" ? meta.last_name : null,
+    }),
+  });
+  return res.ok;
+}
+
+export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -57,10 +91,10 @@ export function AccessPasswordForm({ redirectAfterLogin }: Props) {
       setMsg(formatAuthErrorMessage(error.message));
       return;
     }
-    await supabase.auth.getSession();
+    await bootstrapProfileAfterSession(appRole);
+    clearPendingAppRoleCookieClient();
     setBusy(false);
-    const path = redirectAfterLogin.startsWith("/") ? redirectAfterLogin : `/${redirectAfterLogin}`;
-    window.location.assign(path);
+    window.location.assign(postAuthRedirectPath(redirectAfterLogin, appRole));
   }
 
   async function onSignUp(e: React.FormEvent) {
@@ -81,6 +115,7 @@ export function AccessPasswordForm({ redirectAfterLogin }: Props) {
       return;
     }
     setBusy(true);
+    setPendingAppRoleCookieClient(appRole);
     const origin = accessAppOriginFromWindow();
     const { data, error } = await supabase.auth.signUp({
       email: em,
@@ -95,8 +130,9 @@ export function AccessPasswordForm({ redirectAfterLogin }: Props) {
       return;
     }
     if (data.session) {
-      const path = redirectAfterLogin.startsWith("/") ? redirectAfterLogin : `/${redirectAfterLogin}`;
-      window.location.assign(path);
+      await bootstrapProfileAfterSession(appRole);
+      clearPendingAppRoleCookieClient();
+      window.location.assign(postAuthRedirectPath(redirectAfterLogin, appRole));
       return;
     }
     setMsg("Controlla la posta per confermare l’account (se la conferma email è attiva in Supabase).");

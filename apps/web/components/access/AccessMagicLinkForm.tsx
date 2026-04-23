@@ -2,18 +2,21 @@
 
 import { useState } from "react";
 import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
+import { setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
+import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
   /** Path interno post-login (già validato lato server su `/access`). */
   redirectAfterLogin: string;
+  appRole: PendingAppRole;
 };
 
 /**
  * Magic link email (Supabase Auth). Redirect configurato in dashboard + `/auth/callback`.
  */
-export function AccessMagicLinkForm({ redirectAfterLogin }: Props) {
+export function AccessMagicLinkForm({ redirectAfterLogin, appRole }: Props) {
   const [email, setEmail] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -32,6 +35,7 @@ export function AccessMagicLinkForm({ redirectAfterLogin }: Props) {
       return;
     }
     setBusy(true);
+    setPendingAppRoleCookieClient(appRole);
     const origin = accessAppOriginFromWindow();
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmed,
