@@ -3,7 +3,7 @@
  * Se PORT (default 3020) è occupata, prova 3021, 3022, … fino a trovarne una libera.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import net from "node:net";
@@ -14,6 +14,46 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
+
+/**
+ * Carica `.env.local` senza dipendere da `dotenv` (monorepo).
+ * - `fillMissing`: imposta solo chiavi assenti o vuote in `target`.
+ * - `override`: imposta da file se il valore in file è non vuoto (vince su valori precedenti).
+ * Rimuove BOM UTF-8 in testa al file.
+ */
+function applyDotEnvLocalFile(target, filePath, mode) {
+  if (!existsSync(filePath)) return;
+  let text;
+  try {
+    text = readFileSync(filePath, "utf8");
+  } catch {
+    return;
+  }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq < 1) continue;
+    const key = line.slice(0, eq).trim();
+    if (!key) continue;
+    let val = line.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    const cur = target[key];
+    const curEmpty = cur === undefined || String(cur).trim() === "";
+    const valNonEmpty = val.trim() !== "";
+    if (mode === "fillMissing") {
+      if (curEmpty && valNonEmpty) target[key] = val;
+    } else if (mode === "override" && valNonEmpty) {
+      target[key] = val;
+    }
+  }
+}
 
 /** Workspaces di solito hoistano `next` in root; in alcuni casi resta sotto apps/web. */
 function resolveNextCli() {
@@ -75,6 +115,23 @@ if (!nextCli) {
 }
 
 const env = { ...process.env };
+const rootEnvLocal = join(root, ".env.local");
+const appWebEnvLocal = join(appDir, ".env.local");
+/* Next legge solo `apps/web/.env.local`; molti duplicano le chiavi nella root del monorepo → bundle client senza NEXT_PUBLIC_*. */
+applyDotEnvLocalFile(env, rootEnvLocal, "fillMissing");
+applyDotEnvLocalFile(env, appWebEnvLocal, "override");
+
+const supaPublicOk = Boolean(
+  String(env.NEXT_PUBLIC_SUPABASE_URL ?? "").trim() &&
+    String(env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "").trim(),
+);
+if (!supaPublicOk) {
+  console.log(
+    `\n\x1b[33m[empathy-pro-2]\x1b[0m Attenzione: mancano \x1b[1mNEXT_PUBLIC_SUPABASE_URL\x1b[0m / \x1b[1mNEXT_PUBLIC_SUPABASE_ANON_KEY\x1b[0m dopo merge env.\n` +
+      `  Controlla \x1b[1m${appWebEnvLocal}\x1b[0m (preferito) e \x1b[1m${rootEnvLocal}\x1b[0m (fallback solo chiavi mancanti).\n`,
+  );
+}
+
 if (process.platform === "win32") {
   if (env.NEXT_DIST_DIR === undefined || env.NEXT_DIST_DIR === "") {
     env.NEXT_DIST_DIR = windowsDevDistDirRelative() ?? ".next-dev";
@@ -91,7 +148,8 @@ if (process.platform === "win32") {
     env.WATCHPACK_POLLING = "true";
   }
   console.log(
-    "\n\x1b[36m[empathy-pro-2]\x1b[0m Env: \x1b[1mapps/web/.env.local\x1b[0m (NEXT_PUBLIC_SUPABASE_*). Windows: build in \x1b[1mapps/.empathy-pro2-next-dev\x1b[0m (`NEXT_DIST_DIR` relativo). Cache webpack disattiva.\n" +
+    "\n\x1b[36m[empathy-pro-2]\x1b[0m Env: merge \x1b[1m.env.local\x1b[0m root (solo chiavi mancanti) + \x1b[1mapps/web/.env.local\x1b[0m (sovrascrive). \x1b[1mNEXT_PUBLIC_SUPABASE_*\x1b[0m per client.\n" +
+      "  Windows: build in \x1b[1mapps/.empathy-pro2-next-dev\x1b[0m (`NEXT_DIST_DIR` relativo). Cache webpack disattiva.\n" +
       "  Se compaiono \x1b[33mEBUSY\x1b[0m su `webpack-runtime.js` o \x1b[33m404\x1b[0m su `/_next/static/chunks/.../physiology/page.js`: chiudi \x1b[1mtutte\x1b[0m le istanze `next dev` (anche altre finestre/IDE), \x1b[1mnpm run dev:clean\x1b[0m, riavvia `npm run dev`, poi hard refresh (Ctrl+Shift+R).\n" +
       "  Con \x1b[1mOneDrive\x1b[0m in sync sulla repo, la cartella di build può restare bloccata: pausa sync su `apps/.empathy-pro2-next-dev` o sposta il clone fuori da OneDrive.\n" +
       "  \x1b[90mNon incollare l’output del server in PowerShell (righe GET/POST/✓): non sono comandi.\x1b[0m\n" +
