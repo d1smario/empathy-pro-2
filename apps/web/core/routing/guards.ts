@@ -12,6 +12,7 @@ export function isAnonymousAllowedPath(pathname: string): boolean {
   if (pathname === "/") return true;
   if (pathname === "/access" || pathname === "/pricing") return true;
   if (pathname === "/auth/callback" || pathname.startsWith("/auth/callback")) return true;
+  if (pathname === "/auth/set-password" || pathname.startsWith("/auth/set-password/")) return true;
   if (pathname === "/invite" || pathname.startsWith("/invite/")) return true;
   return ANONYMOUS_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),

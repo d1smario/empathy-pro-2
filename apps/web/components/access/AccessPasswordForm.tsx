@@ -160,8 +160,9 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     }
     setBusy(true);
     const origin = accessAppOriginFromWindow();
+    /** Dopo il click sul link, `auth/callback` scambia il `code` e reindirizza qui per `updateUser({ password })`. */
     const { error } = await supabase.auth.resetPasswordForEmail(em, {
-      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectAfterLogin)}`,
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
     });
     setBusy(false);
     if (error) setMsg(error.message);
