@@ -20,6 +20,13 @@ function formatAuthErrorMessage(message: string): string {
   if (m.includes("email not confirmed")) {
     return "Devi ancora confermare l’email (link da Supabase). In progetto di test puoi disattivare “Confirm email” in Authentication → Providers → Email.";
   }
+  if (
+    m.includes("already registered") ||
+    m.includes("already been registered") ||
+    m.includes("user already exists")
+  ) {
+    return "Questa email ha già un account (es. da magic link). Non serve “Registrati”: torna ad Accedi oppure usa “Password dimenticata?” per impostare la password.";
+  }
   return message;
 }
 
