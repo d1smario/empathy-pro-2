@@ -9,7 +9,7 @@ export type PlatformAdminSession = {
 };
 
 /**
- * Sessione Supabase cookie + ruolo admin (DB o allowlist email).
+ * Sessione Supabase cookie + admin: allowlist deploy **e** `is_platform_admin` in DB.
  */
 export async function requirePlatformAdminSession(): Promise<PlatformAdminSession | null> {
   const supabase = createSupabaseCookieClient();
