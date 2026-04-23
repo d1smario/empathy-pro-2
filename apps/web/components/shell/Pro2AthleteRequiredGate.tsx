@@ -36,7 +36,7 @@ export function Pro2AthleteRequiredGate({
         <p className="text-base font-semibold text-amber-100">Nessun atleta attivo</p>
         <p className="mt-3 leading-relaxed text-slate-400">
           {role === "coach"
-            ? "Seleziona un atleta dal roster in Profilo oppure collegane uno al tuo account coach. Senza atleta i moduli dati restano disattivati."
+            ? "Se sei coach già abilitato, seleziona un assistito in Coach · Atleti. Se l’account è in attesa di approvazione piattaforma, i moduli dati restano disattivi fino all’abilitazione."
             : "Completa il profilo in Profilo per collegare il tuo atleta, oppure attendi il completamento del bootstrap account."}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">

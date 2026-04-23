@@ -2,11 +2,14 @@
 
 import { useCallback, useState } from "react";
 import { Pro2Button } from "@/components/ui/empathy";
+import { useActiveAthlete } from "@/lib/use-active-athlete";
 
 /**
  * Crea link invito (coach). Richiede role coach + SUPABASE_SERVICE_ROLE_KEY + tabella coach_invitations.
  */
 export function CoachInviteLinksCard() {
+  const { role, coachOperationalApproved, loading: ctxLoading } = useActiveAthlete();
+  const inviteDisabled = ctxLoading || (role === "coach" && !coachOperationalApproved);
   const [busy, setBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
@@ -78,7 +81,7 @@ export function CoachInviteLinksCard() {
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">
-          <Pro2Button type="button" disabled={busy} onClick={() => void createInvite()}>
+          <Pro2Button type="button" disabled={busy || inviteDisabled} onClick={() => void createInvite()}>
             {busy ? "Creazione…" : "Genera nuovo link"}
           </Pro2Button>
           {inviteUrl ? (

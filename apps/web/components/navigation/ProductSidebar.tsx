@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   Activity,
   Calendar,
@@ -10,6 +11,7 @@ import {
   type LucideIcon,
   Move,
   Settings,
+  Shield,
   User,
   Users,
   Utensils,
@@ -68,6 +70,56 @@ function NavLink({ item }: { item: ProductModuleNavItem }) {
   );
 }
 
+function AdminConsoleSidebarLink() {
+  const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    let c = false;
+    void fetch("/api/admin/me", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ isAdmin?: boolean }>)
+      .then((j) => {
+        if (!c) setVisible(j.isAdmin === true);
+      })
+      .catch(() => {
+        if (!c) setVisible(false);
+      });
+    return () => {
+      c = true;
+    };
+  }, []);
+  if (!visible) return null;
+  const normalized = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const isActive = normalized === "/admin" || normalized.startsWith("/admin/");
+  return (
+    <Link
+      href="/admin"
+      aria-current={isActive ? "page" : undefined}
+      className={`group relative flex items-center gap-3 overflow-hidden rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+        isActive
+          ? "border border-transparent bg-gradient-to-r from-orange-600 to-rose-600 text-white shadow-lg shadow-orange-500/25"
+          : "border border-white/10 bg-white/5 text-gray-300 backdrop-blur-sm hover:border-orange-500/40"
+      }`}
+    >
+      {isActive ? (
+        <span
+          className="absolute inset-y-0 left-0 w-1 rounded-full bg-gradient-to-b from-orange-300 via-rose-400 to-amber-400"
+          aria-hidden
+        />
+      ) : null}
+      <span
+        className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-colors ${
+          isActive
+            ? "border-white/20 bg-black/20 text-white"
+            : "border-white/10 bg-black/20 text-gray-400 group-hover:text-orange-200"
+        }`}
+      >
+        <Shield className="h-4 w-4" aria-hidden strokeWidth={2} />
+      </span>
+      <span className="relative truncate">Admin · Piattaforma</span>
+    </Link>
+  );
+}
+
 export function ProductSidebar() {
   const main = PRODUCT_MODULE_NAV.filter((i) => i.area === "main");
   const footer = PRODUCT_MODULE_NAV.filter((i) => i.area === "footer");
@@ -98,6 +150,7 @@ export function ProductSidebar() {
         {footer.map((item) => (
           <NavLink key={item.href} item={item} />
         ))}
+        <AdminConsoleSidebarLink />
         <SidebarSessionActions />
         <Link
           href="/pricing"

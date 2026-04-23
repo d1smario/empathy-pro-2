@@ -21,6 +21,7 @@ export function isAnonymousAllowedPath(pathname: string): boolean {
 /** Moduli registrati in shell: richiedono sessione se Supabase pubblico è configurato. */
 export function isProtectedProductShellPath(pathname: string): boolean {
   const n = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  if (n === "/admin" || n.startsWith("/admin/")) return true;
   return PRODUCT_MODULE_NAV.some((item) => n === item.href || n.startsWith(`${item.href}/`));
 }
 

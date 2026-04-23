@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { dedupeAthletesByEmail, type CanonicalAthleteRow } from "@/lib/athletes/canonical-profile";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
+import { coachOperationalApproved } from "@/lib/platform-coach-status";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,7 @@ export async function GET() {
 
   const { data: profileData, error: profileError } = await client
     .from("app_user_profiles")
-    .select("role, athlete_id")
+    .select("role, athlete_id, platform_coach_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -47,7 +48,7 @@ export async function GET() {
     );
   }
 
-  const prof = profileData as { role?: string; athlete_id?: string | null } | null;
+  const prof = profileData as { role?: string; athlete_id?: string | null; platform_coach_status?: string | null } | null;
   let role: "private" | "coach" = "private";
   if (prof?.role === "coach" || prof?.role === "private") {
     role = prof.role;
@@ -56,6 +57,17 @@ export async function GET() {
   let athleteIds: string[] = [];
 
   if (role === "coach") {
+    if (!coachOperationalApproved("coach", prof?.platform_coach_status)) {
+      return NextResponse.json(
+        {
+          ok: true as const,
+          role,
+          athletes: [] as CanonicalAthleteRow[],
+          coachActivation: (prof?.platform_coach_status as "pending" | "suspended" | null) ?? "pending",
+        },
+        { headers: NO_STORE },
+      );
+    }
     const { data: linkedRows, error: linkedError } = await client
       .from("coach_athletes")
       .select("athlete_id")

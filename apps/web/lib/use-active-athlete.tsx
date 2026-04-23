@@ -11,6 +11,7 @@ import {
   writeAuditUserId,
 } from "@/lib/app-session";
 import { coachOrgIdForClient } from "@/lib/coach-org-id";
+import { coachOperationalApproved } from "@/lib/platform-coach-status";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 
 type AthleteOption = Pick<
@@ -44,6 +45,7 @@ type AthleteOption = Pick<
 type UserProfileRow = {
   role: AppRole;
   athlete_id: string | null;
+  platform_coach_status?: string | null;
 };
 
 const ATHLETE_SELECT =
@@ -53,6 +55,10 @@ export type ActiveAthleteContextValue = {
   athleteId: string | null;
   activeAthleteId: string | null;
   role: AppRole;
+  /** Stato abilitazione piattaforma per ruolo coach (`null` se private). */
+  platformCoachStatus: string | null;
+  /** Inviti / roster operativi solo se coach approvato. */
+  coachOperationalApproved: boolean;
   athletes: AthleteOption[];
   loading: boolean;
   signedIn: boolean;
@@ -90,6 +96,7 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
   const lastAuthenticatedUserIdRef = useRef<string | null>(null);
   const [athleteId, setAthleteId] = useState<string | null>(null);
   const [role, setRole] = useState<AppRole>("private");
+  const [platformCoachStatus, setPlatformCoachStatus] = useState<string | null>(null);
   const [athletes, setAthletes] = useState<AthleteOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [signedIn, setSignedIn] = useState(false);
@@ -158,6 +165,7 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
           setAthleteId(null);
           setAthletes([]);
           setRole("private");
+          setPlatformCoachStatus(null);
           setSignedIn(false);
           setUserId(null);
           lastAuthenticatedUserIdRef.current = null;
@@ -179,7 +187,7 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
 
         const { data: profileData } = await supabase
           .from("app_user_profiles")
-          .select("role, athlete_id")
+          .select("role, athlete_id, platform_coach_status")
           .eq("user_id", user.id)
           .maybeSingle();
         if (!active) return;
@@ -187,8 +195,18 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
         const profile = (profileData as UserProfileRow | null) ?? null;
         const profileRole = profile?.role ?? "private";
         setRole(profileRole);
+        const coachStatusRow = profileRole === "coach" ? (profile?.platform_coach_status ?? null) : null;
+        setPlatformCoachStatus(coachStatusRow);
 
         if (profileRole === "coach") {
+          if (!coachOperationalApproved("coach", coachStatusRow)) {
+            setAthletes([]);
+            clearActiveAthleteId();
+            setAthleteId(null);
+            writeAuditUserId(user.id);
+            setLoading(false);
+            return;
+          }
           const activeId = readActiveAthleteId();
           const { data: linked } = await supabase
             .from("coach_athletes")
@@ -327,10 +345,11 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
 
     const { data: authSub } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
-      if (event === "SIGNED_OUT") {
+        if (event === "SIGNED_OUT") {
         setAthleteId(null);
         setAthletes([]);
         setRole("private");
+        setPlatformCoachStatus(null);
         setSignedIn(false);
         setUserId(null);
         lastAuthenticatedUserIdRef.current = null;
@@ -361,6 +380,8 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
     athleteId,
     activeAthleteId: athleteId,
     role,
+    platformCoachStatus,
+    coachOperationalApproved: coachOperationalApproved(role, platformCoachStatus),
     athletes,
     loading,
     signedIn,

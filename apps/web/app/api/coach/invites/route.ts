@@ -1,6 +1,7 @@
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
+import { coachOperationalApproved } from "@/lib/platform-coach-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
@@ -43,16 +44,26 @@ export async function POST() {
 
   const { data: profile, error: profErr } = await cookieClient
     .from("app_user_profiles")
-    .select("role")
+    .select("role, platform_coach_status")
     .eq("user_id", user.id)
     .maybeSingle();
 
   if (profErr) {
     return NextResponse.json({ ok: false as const, error: profErr.message }, { status: 500 });
   }
-  const role = (profile as { role?: string } | null)?.role;
+  const row = profile as { role?: string; platform_coach_status?: string | null } | null;
+  const role = row?.role;
   if (role !== "coach") {
     return NextResponse.json({ ok: false as const, error: "Solo account con ruolo coach possono creare inviti." }, { status: 403 });
+  }
+  if (!coachOperationalApproved("coach", row?.platform_coach_status)) {
+    return NextResponse.json(
+      {
+        ok: false as const,
+        error: "Il tuo account coach non è ancora abilitato dall’amministrazione. Non è possibile creare inviti.",
+      },
+      { status: 403 },
+    );
   }
 
   const token = newInviteToken();

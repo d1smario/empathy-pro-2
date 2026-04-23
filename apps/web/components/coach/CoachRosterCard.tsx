@@ -5,7 +5,12 @@ import type { CanonicalAthleteRow } from "@/lib/athletes/canonical-profile";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { Pro2Button } from "@/components/ui/empathy";
 
-type RosterOk = { ok: true; role: "private" | "coach"; athletes: CanonicalAthleteRow[] };
+type RosterOk = {
+  ok: true;
+  role: "private" | "coach";
+  athletes: CanonicalAthleteRow[];
+  coachActivation?: "pending" | "suspended" | null;
+};
 type RosterErr = { ok: false; error?: string };
 
 function formatAthleteLabel(a: CanonicalAthleteRow): string {
@@ -21,6 +26,7 @@ export function CoachRosterCard() {
   const [role, setRole] = useState<"private" | "coach">("private");
   const [athletes, setAthletes] = useState<CanonicalAthleteRow[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [coachActivation, setCoachActivation] = useState<"pending" | "suspended" | null>(null);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -28,6 +34,7 @@ export function CoachRosterCard() {
     (async () => {
       setLoading(true);
       setErr(null);
+      setCoachActivation(null);
       try {
         const res = await fetch("/api/athletes/roster", { cache: "no-store" });
         const json = (await res.json()) as RosterOk | RosterErr;
@@ -39,6 +46,7 @@ export function CoachRosterCard() {
         }
         setRole(json.role);
         setAthletes(json.athletes);
+        setCoachActivation(json.coachActivation ?? null);
       } catch {
         if (!c) setErr("Errore di rete.");
       } finally {
@@ -71,6 +79,12 @@ export function CoachRosterCard() {
         </p>
 
         {showLoader ? <div className="mt-6 h-2 w-44 animate-pulse rounded-full bg-white/10" /> : null}
+
+        {!showLoader && coachActivation === "suspended" ? (
+          <p className="mt-6 rounded-xl border border-rose-500/35 bg-rose-950/25 px-4 py-3 text-sm text-rose-100/90" role="status">
+            Account coach sospeso dall’amministrazione: il roster non è operativo fino a riabilitazione.
+          </p>
+        ) : null}
 
         {!showLoader && err ? (
           <p className="mt-6 text-sm text-amber-300/90" role="alert">

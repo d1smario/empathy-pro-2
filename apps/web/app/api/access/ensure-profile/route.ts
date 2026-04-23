@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
+import { coachOperationalApproved } from "@/lib/platform-coach-status";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -70,13 +71,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  const { data: after } = await supabase.from("app_user_profiles").select("athlete_id").eq("user_id", userId).maybeSingle();
-  const rowAfter = after as { athlete_id?: string | null } | null;
+  const { data: after } = await supabase
+    .from("app_user_profiles")
+    .select("athlete_id, platform_coach_status")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const rowAfter = after as { athlete_id?: string | null; platform_coach_status?: string | null } | null;
   const resolvedAthleteId = role === "private" ? (rowAfter?.athlete_id ?? null) : null;
+  const platformCoachStatus = rowAfter?.platform_coach_status ?? null;
 
   return NextResponse.json({
     status: current ? "existing" : "created",
     role,
     athleteId: resolvedAthleteId,
+    platformCoachStatus,
+    coachOperationalApproved: coachOperationalApproved(role, platformCoachStatus),
   });
 }

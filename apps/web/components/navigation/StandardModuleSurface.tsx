@@ -1,13 +1,12 @@
 import { EMPATHY_PLATFORM_VERSION, type ProductModuleId } from "@empathy/contracts";
-import { BookOpen, LayoutDashboard, Settings2, Users, Zap } from "lucide-react";
+import { BookOpen, LayoutDashboard, Settings2 } from "lucide-react";
 import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { DashboardAthleteHubCard } from "@/components/dashboard/DashboardAthleteHubCard";
 import { DashboardIntroAndPricing } from "@/components/dashboard/DashboardIntroAndPricing";
 import { DashboardLoadAnalysisSummary } from "@/components/dashboard/DashboardLoadAnalysisSummary";
-import { CoachInviteLinksCard } from "@/components/coach/CoachInviteLinksCard";
-import { CoachRosterCard } from "@/components/coach/CoachRosterCard";
+import { CoachAthletesModulePanel } from "@/components/coach/CoachAthletesModulePanel";
 import { SettingsCoachAccountCard } from "@/components/settings/SettingsCoachAccountCard";
 import { SettingsAthleteContextDiagnostics } from "@/components/settings/SettingsAthleteContextDiagnostics";
 import { SettingsAuthSessionDiagnostics } from "@/components/settings/SettingsAuthSessionDiagnostics";
@@ -186,14 +185,7 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
       </section>
 
       <section id="std-ops" className="scroll-mt-28 space-y-10">
-      {module === "athletes" ? (
-        <Pro2SectionCard accent="violet" title="Area coach" subtitle="Roster e inviti" icon={Users}>
-          <div className="flex flex-col gap-10">
-            <CoachRosterCard />
-            <CoachInviteLinksCard />
-          </div>
-        </Pro2SectionCard>
-      ) : null}
+      {module === "athletes" ? <CoachAthletesModulePanel /> : null}
 
       {module === "settings" ? (
         <Pro2SectionCard accent="slate" title="Impostazioni & diagnostica" subtitle="Sessione, atleta, integrazioni" icon={Settings2}>

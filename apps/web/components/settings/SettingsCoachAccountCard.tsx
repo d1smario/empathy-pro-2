@@ -9,7 +9,7 @@ import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
  * Attivazione ruolo coach e link al modulo roster/inviti (stesso schema Supabase di V1).
  */
 export function SettingsCoachAccountCard() {
-  const { role, signedIn, refresh, athletes } = useActiveAthlete();
+  const { role, signedIn, refresh, athletes, coachOperationalApproved, platformCoachStatus } = useActiveAthlete();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [confirmCoach, setConfirmCoach] = useState(false);
@@ -142,6 +142,7 @@ export function SettingsCoachAccountCard() {
         <div className="mt-4 rounded-xl border border-white/10 bg-black/25 p-4 text-xs text-gray-500">
           <p className="font-mono text-[0.6rem] uppercase tracking-wider text-gray-600">Requisiti inviti</p>
           <ul className="mt-2 list-inside list-disc space-y-1">
+            <li>Abilitazione coach da console <strong className="text-gray-400">Admin · Piattaforma</strong> (stato approved).</li>
             <li>
               Variabile server <code className="text-pink-300">SUPABASE_SERVICE_ROLE_KEY</code> (solo API invito/accept).
             </li>
@@ -173,7 +174,8 @@ export function SettingsCoachAccountCard() {
                 <p className="text-sm text-amber-100/90">
                   Confermi? Passerai a <strong>coach</strong>: il profilo non userà più un atleta &quot;personale&quot; in{" "}
                   <code className="text-gray-400">app_user_profiles</code>. Collegherai atleti da{" "}
-                  <strong>Coach · Atleti</strong> (inviti o Supabase).
+                  <strong>Coach · Atleti</strong> (inviti o Supabase). L’abilitazione operativa richiede approvazione
+                  amministratore (stato <code className="text-gray-400">pending</code> fino ad approvazione).
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <Pro2Button type="button" disabled={busy} onClick={() => void activateCoach()}>
@@ -189,6 +191,12 @@ export function SettingsCoachAccountCard() {
         ) : (
           <div className="mt-6 space-y-3">
             <p className="text-sm text-gray-400">Sei già in modalità coach. Usa il modulo Atleti per roster e link invito.</p>
+            {!coachOperationalApproved ? (
+              <p className="rounded-xl border border-amber-500/35 bg-amber-950/20 px-3 py-2 text-xs text-amber-100/90">
+                Stato piattaforma: <strong className="text-amber-50">{platformCoachStatus ?? "pending"}</strong>. Inviti e
+                contesto atleta operativi solo dopo approvazione in console Admin.
+              </p>
+            ) : null}
             {canRevertToPrivate ? (
               !confirmPrivate ? (
                 <Pro2Button type="button" variant="secondary" disabled={busy} onClick={() => setConfirmPrivate(true)}>

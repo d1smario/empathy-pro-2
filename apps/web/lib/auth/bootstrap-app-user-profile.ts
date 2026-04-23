@@ -60,14 +60,18 @@ export async function bootstrapAppUserProfile(
 
   const { data: existing, error: existingErr } = await supabase
     .from("app_user_profiles")
-    .select("role, athlete_id")
+    .select("role, athlete_id, platform_coach_status")
     .eq("user_id", input.userId)
     .maybeSingle();
   if (existingErr) {
     return { error: existingErr.message };
   }
 
-  const current = existing as { role: "private" | "coach"; athlete_id: string | null } | null;
+  const current = existing as {
+    role: "private" | "coach";
+    athlete_id: string | null;
+    platform_coach_status?: string | null;
+  } | null;
 
   let resolvedAthleteId: string | null;
   if (role === "coach") {
@@ -99,8 +103,22 @@ export async function bootstrapAppUserProfile(
 
   const nextRole = role;
   const nextAthleteId = nextRole === "private" ? resolvedAthleteId : null;
+
+  let nextPlatformCoachStatus: string | null = null;
+  if (nextRole === "coach") {
+    const prev = current?.platform_coach_status ?? null;
+    if (prev === "approved" || prev === "suspended" || prev === "pending") {
+      nextPlatformCoachStatus = prev;
+    } else {
+      nextPlatformCoachStatus = "pending";
+    }
+  }
+
   const shouldUpsertProfile =
-    !current || current.role !== nextRole || (current.athlete_id ?? null) !== (nextAthleteId ?? null);
+    !current ||
+    current.role !== nextRole ||
+    (current.athlete_id ?? null) !== (nextAthleteId ?? null) ||
+    (current.platform_coach_status ?? null) !== (nextPlatformCoachStatus ?? null);
 
   if (shouldUpsertProfile) {
     const { error: profileErr } = await supabase.from("app_user_profiles").upsert(
@@ -108,6 +126,7 @@ export async function bootstrapAppUserProfile(
         user_id: input.userId,
         role: nextRole,
         athlete_id: nextAthleteId,
+        platform_coach_status: nextPlatformCoachStatus,
       },
       { onConflict: "user_id" },
     );
