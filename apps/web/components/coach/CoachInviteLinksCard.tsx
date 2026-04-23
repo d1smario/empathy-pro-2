@@ -5,7 +5,7 @@ import { Pro2Button } from "@/components/ui/empathy";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 
 /**
- * Crea link invito (coach). Richiede role coach + SUPABASE_SERVICE_ROLE_KEY + tabella coach_invitations.
+ * Link di invito per coach abilitato.
  */
 export function CoachInviteLinksCard() {
   const { role, coachOperationalApproved, loading: ctxLoading } = useActiveAthlete();
@@ -54,36 +54,30 @@ export function CoachInviteLinksCard() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setErr("Copia negata dal browser.");
+      setErr("Copia non riuscita.");
     }
   }, [inviteUrl]);
 
+  if (!ctxLoading && role === "private") {
+    return null;
+  }
+
   return (
     <section
-      className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/5 p-6 shadow-xl backdrop-blur-xl sm:p-8"
-      aria-label="Inviti atleta"
+      className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-5 shadow-lg backdrop-blur-xl sm:p-6"
+      aria-label="Invita atleta"
     >
-      <div
-        className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-cyan-500/80 via-blue-500/80 to-indigo-500/80 opacity-70"
-        aria-hidden
-      />
       <div className="relative">
-        <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-300">
-          Coach · invito atleta
-        </p>
-        <p className="mt-2 text-sm text-gray-400">
-          Genera un link monouso (7 giorni). L’atleta apre il link, fa login come utente <strong>private</strong> con
-          profilo atleta già presente, e accetta: viene creata la riga in <code className="text-gray-500">coach_athletes</code>{" "}
-          per la tua org (<code className="text-gray-500">EMPATHY_COACH_ATHLETES_ORG_ID</code>).
-        </p>
-        <p className="mt-2 text-xs text-gray-500">
-          Richiede <code className="text-pink-300">SUPABASE_SERVICE_ROLE_KEY</code> solo server e migration{" "}
-          <code className="text-gray-500">coach_invitations</code>.
+        <h2 className="text-lg font-bold text-white">Invita atleta</h2>
+        <p className="mt-1 text-sm text-gray-500">
+          {inviteDisabled && role === "coach"
+            ? "Disponibile dopo abilitazione amministratore."
+            : "Genera un link (7 giorni) e invialo all’atleta."}
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-3">
+        <div className="mt-5 flex flex-wrap gap-3">
           <Pro2Button type="button" disabled={busy || inviteDisabled} onClick={() => void createInvite()}>
-            {busy ? "Creazione…" : "Genera nuovo link"}
+            {busy ? "Creazione…" : "Genera link"}
           </Pro2Button>
           {inviteUrl ? (
             <Pro2Button type="button" variant="secondary" onClick={() => void copy()}>
@@ -93,18 +87,15 @@ export function CoachInviteLinksCard() {
         </div>
 
         {err ? (
-          <p className="mt-4 text-sm text-amber-300/90" role="alert">
+          <p className="mt-3 text-sm text-amber-200/90" role="alert">
             {err}
           </p>
         ) : null}
 
         {inviteUrl ? (
-          <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-4 text-left">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-gray-500">Link</p>
-            <p className="mt-1 break-all font-mono text-xs text-gray-300">{inviteUrl}</p>
-            {expiresAt ? (
-              <p className="mt-2 text-xs text-gray-500">Scadenza: {new Date(expiresAt).toLocaleString()}</p>
-            ) : null}
+          <div className="mt-4 rounded-xl border border-white/10 bg-black/30 p-3 text-left">
+            <p className="break-all font-mono text-xs text-gray-300">{inviteUrl}</p>
+            {expiresAt ? <p className="mt-2 text-xs text-gray-500">Scade: {new Date(expiresAt).toLocaleString()}</p> : null}
           </div>
         ) : null}
       </div>

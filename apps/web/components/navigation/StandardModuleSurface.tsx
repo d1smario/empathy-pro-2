@@ -43,6 +43,8 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             Solo due aree: <strong className="text-gray-300">Empathy · piani</strong> e <strong className="text-gray-300">Core</strong>.
             Il resto dei moduli resta nella sidebar.
           </span>
+        ) : module === "athletes" ? (
+          <span className="text-sm text-gray-400">Stato account, atleti collegati e inviti.</span>
         ) : panel ? (
           <span className="leading-relaxed">
             Punto di ingresso modulo: dati e azioni restano su contratti <code className="text-gray-500">@empathy/contracts</code> e domain
@@ -66,7 +68,11 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
       }
     >
       <div className="scroll-mt-28">
-        {module === "dashboard" ? <DashboardModuleSubnav /> : <StandardModuleSubnav />}
+        {module === "dashboard" ? (
+          <DashboardModuleSubnav />
+        ) : module === "athletes" ? null : (
+          <StandardModuleSubnav />
+        )}
       </div>
 
       {module === "settings" ? (
@@ -104,6 +110,8 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
 
       {module !== "dashboard" ? (
         <>
+      {module !== "athletes" ? (
+        <>
       <section id="std-domain" className="scroll-mt-28 space-y-10">
         {panel ? (
           <Pro2SectionCard accent="violet" title="Dominio contrattuale" subtitle={panel.title} icon={BookOpen}>
@@ -129,31 +137,6 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             Dashboard
           </Pro2Link>
         </ActionBar>
-        {module === "athletes" ? (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Pro2Link
-              href="/dashboard"
-              variant="secondary"
-              className="justify-center border border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15"
-            >
-              Dashboard
-            </Pro2Link>
-            <Pro2Link
-              href="/training/builder"
-              variant="secondary"
-              className="justify-center border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/15"
-            >
-              Builder
-            </Pro2Link>
-            <Pro2Link
-              href="/training"
-              variant="secondary"
-              className="justify-center border border-orange-500/35 bg-orange-500/10 hover:bg-orange-500/15"
-            >
-              Training
-            </Pro2Link>
-          </div>
-        ) : null}
         {module === "settings" ? (
           <div className="mt-4 flex flex-wrap gap-2">
             <Pro2Link
@@ -184,6 +167,8 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
         </p>
         </Pro2SectionCard>
       </section>
+        </>
+      ) : null}
 
       <section id="std-ops" className="scroll-mt-28 space-y-10">
       {module === "athletes" ? <CoachAthletesModulePanel /> : null}

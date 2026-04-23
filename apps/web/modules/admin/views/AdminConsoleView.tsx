@@ -130,8 +130,7 @@ export default function AdminConsoleView() {
               Richieste coach
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Approva per consentire inviti e roster operativo. Sospendi per bloccare l’operatività. In coda prima i profili{" "}
-              <span className="text-amber-200/90">pending</span> ({pendingCount}).
+              Approva, metti in attesa o sospendi. In coda prima le richieste in attesa ({pendingCount}).
             </p>
           </div>
           <Pro2Button type="button" variant="secondary" disabled={!!busyId} onClick={() => void reloadCoaches()}>
@@ -145,17 +144,15 @@ export default function AdminConsoleView() {
           </p>
         ) : null}
 
-        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs leading-relaxed text-gray-400">
-          <strong className="text-gray-300">Chi compare qui:</strong> solo utenti con <code className="text-gray-500">role = coach</code> in{" "}
-          <code className="text-gray-500">app_user_profiles</code>. Se un indirizzo (es. <code className="text-gray-500">contact@d1s.ch</code>) è
-          ancora <strong className="text-gray-300">privato</strong>, non è in elenco: deve accedere con opzione{" "}
-          <strong className="text-gray-300">Coach</strong> su <code className="text-gray-500">/access</code>. Dopo la migration iniziale, i coach già
-          presenti risultano spesso <code className="text-emerald-300/90">approved</code> (nessuna richiesta pending).
-        </div>
+        <p className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-gray-400">
+          <strong className="text-gray-300">Nota:</strong> compaiono solo gli account registrati come <strong className="text-gray-200">coach</strong>.
+          Chi usa ancora l’account <strong className="text-gray-200">atleta</strong> non è in lista: deve uscire e rientrare da accesso scegliendo
+          «Coach».
+        </p>
 
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25">
           <table className="min-w-full text-left text-sm text-gray-300">
-            <thead className="border-b border-white/10 bg-white/5 font-mono text-[0.65rem] uppercase tracking-wider text-gray-500">
+            <thead className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
                 <th className="px-4 py-3 font-semibold">Email</th>
                 <th className="px-4 py-3 font-semibold">Stato</th>
@@ -166,18 +163,18 @@ export default function AdminConsoleView() {
               {coaches.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-sm leading-relaxed text-gray-500">
-                    Nessun account con <code className="text-gray-400">role = coach</code> nel database. Chi accede solo
-                    come atleta (privato) non compare qui — anche se apre la pagina «Coach · Atleti» vede il proprio profilo
-                    atleta, non è ancora coach in <code className="text-gray-400">app_user_profiles</code>.
+                    Nessun coach in elenco. Se ti aspettavi un nome, verifica che abbia effettivamente l’account coach (accesso
+                    con opzione Coach), non solo la pagina Atleti aperta come atleta.
                   </td>
                 </tr>
               ) : (
                 sortedCoaches.map((c) => {
                   const busy = busyId === c.userId;
                   const st = c.platformCoachStatus ?? "pending";
+                  const stLabel = st === "approved" ? "Attivo" : st === "suspended" ? "Sospeso" : "In attesa";
                   return (
                     <tr key={c.userId} className="border-b border-white/5 last:border-0">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-200">{c.email ?? c.userId}</td>
+                      <td className="px-4 py-3 text-sm text-gray-200">{c.email ?? c.userId}</td>
                       <td className="px-4 py-3">
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -188,7 +185,7 @@ export default function AdminConsoleView() {
                                 : "bg-amber-500/15 text-amber-200"
                           }`}
                         >
-                          {st}
+                          {stLabel}
                         </span>
                       </td>
                       <td className="px-4 py-3">
