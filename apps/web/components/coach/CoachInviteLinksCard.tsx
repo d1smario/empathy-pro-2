@@ -9,7 +9,8 @@ import { useActiveAthlete } from "@/lib/use-active-athlete";
  */
 export function CoachInviteLinksCard() {
   const { role, coachOperationalApproved, loading: ctxLoading } = useActiveAthlete();
-  const inviteDisabled = ctxLoading || (role === "coach" && !coachOperationalApproved);
+  const inviteDisabled =
+    ctxLoading || role !== "coach" || (role === "coach" && !coachOperationalApproved);
   const [busy, setBusy] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);

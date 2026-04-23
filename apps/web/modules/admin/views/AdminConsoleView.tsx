@@ -165,8 +165,10 @@ export default function AdminConsoleView() {
             <tbody>
               {coaches.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="px-4 py-8 text-center text-gray-500">
-                    Nessun account coach in elenco.
+                  <td colSpan={3} className="px-4 py-8 text-center text-sm leading-relaxed text-gray-500">
+                    Nessun account con <code className="text-gray-400">role = coach</code> nel database. Chi accede solo
+                    come atleta (privato) non compare qui — anche se apre la pagina «Coach · Atleti» vede il proprio profilo
+                    atleta, non è ancora coach in <code className="text-gray-400">app_user_profiles</code>.
                   </td>
                 </tr>
               ) : (
