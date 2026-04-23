@@ -91,17 +91,18 @@ if (process.platform === "win32") {
     env.WATCHPACK_POLLING = "true";
   }
   console.log(
-    "\n\x1b[36m[empathy-pro-2]\x1b[0m Windows: dev Next in \x1b[1mapps/.empathy-pro2-next-dev\x1b[0m (`NEXT_DIST_DIR` relativo; no path assoluti). Cache webpack disattiva.\n" +
+    "\n\x1b[36m[empathy-pro-2]\x1b[0m Env: \x1b[1mapps/web/.env.local\x1b[0m (NEXT_PUBLIC_SUPABASE_*). Windows: build in \x1b[1mapps/.empathy-pro2-next-dev\x1b[0m (`NEXT_DIST_DIR` relativo). Cache webpack disattiva.\n" +
       "  Se compaiono \x1b[33mEBUSY\x1b[0m su `webpack-runtime.js` o \x1b[33m404\x1b[0m su `/_next/static/chunks/.../physiology/page.js`: chiudi \x1b[1mtutte\x1b[0m le istanze `next dev` (anche altre finestre/IDE), \x1b[1mnpm run dev:clean\x1b[0m, riavvia `npm run dev`, poi hard refresh (Ctrl+Shift+R).\n" +
       "  Con \x1b[1mOneDrive\x1b[0m in sync sulla repo, la cartella di build può restare bloccata: pausa sync su `apps/.empathy-pro2-next-dev` o sposta il clone fuori da OneDrive.\n" +
       "  \x1b[90mNon incollare l’output del server in PowerShell (righe GET/POST/✓): non sono comandi.\x1b[0m\n",
   );
 }
 
+// `cwd` = `apps/web` così Next carica `.env.local` accanto a `next.config.mjs` (stesso criterio di `npm run build`).
 const child = spawn(
   process.execPath,
-  [nextCli, "dev", appDir, "-p", String(port)],
-  { stdio: "inherit", cwd: root, env },
+  [nextCli, "dev", ".", "-p", String(port)],
+  { stdio: "inherit", cwd: appDir, env },
 );
 
 child.on("exit", (code) => process.exit(code ?? 0));
