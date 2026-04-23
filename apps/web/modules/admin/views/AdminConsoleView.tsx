@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminCoachRow } from "@/lib/admin/coach-list-types";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 
@@ -65,6 +65,25 @@ export default function AdminConsoleView() {
     [reloadCoaches],
   );
 
+  const sortedCoaches = useMemo(() => {
+    const rank = (s: string | null | undefined) => {
+      const v = s ?? "pending";
+      if (v === "pending") return 0;
+      if (v === "suspended") return 1;
+      return 2;
+    };
+    return [...coaches].sort((a, b) => {
+      const d = rank(a.platformCoachStatus) - rank(b.platformCoachStatus);
+      if (d !== 0) return d;
+      return (a.email ?? a.userId).localeCompare(b.email ?? b.userId);
+    });
+  }, [coaches]);
+
+  const pendingCount = useMemo(
+    () => coaches.filter((c) => (c.platformCoachStatus ?? "pending") === "pending").length,
+    [coaches],
+  );
+
   if (me && me.isAdmin === false) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
@@ -111,7 +130,8 @@ export default function AdminConsoleView() {
               Richieste coach
             </h2>
             <p className="mt-1 text-sm text-gray-500">
-              Approva per consentire inviti e roster operativo. Sospendi per bloccare l’operatività.
+              Approva per consentire inviti e roster operativo. Sospendi per bloccare l’operatività. In coda prima i profili{" "}
+              <span className="text-amber-200/90">pending</span> ({pendingCount}).
             </p>
           </div>
           <Pro2Button type="button" variant="secondary" disabled={!!busyId} onClick={() => void reloadCoaches()}>
@@ -124,6 +144,14 @@ export default function AdminConsoleView() {
             {loadErr}
           </p>
         ) : null}
+
+        <div className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-xs leading-relaxed text-gray-400">
+          <strong className="text-gray-300">Chi compare qui:</strong> solo utenti con <code className="text-gray-500">role = coach</code> in{" "}
+          <code className="text-gray-500">app_user_profiles</code>. Se un indirizzo (es. <code className="text-gray-500">contact@d1s.ch</code>) è
+          ancora <strong className="text-gray-300">privato</strong>, non è in elenco: deve accedere con opzione{" "}
+          <strong className="text-gray-300">Coach</strong> su <code className="text-gray-500">/access</code>. Dopo la migration iniziale, i coach già
+          presenti risultano spesso <code className="text-emerald-300/90">approved</code> (nessuna richiesta pending).
+        </div>
 
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25">
           <table className="min-w-full text-left text-sm text-gray-300">
@@ -142,7 +170,7 @@ export default function AdminConsoleView() {
                   </td>
                 </tr>
               ) : (
-                coaches.map((c) => {
+                sortedCoaches.map((c) => {
                   const busy = busyId === c.userId;
                   const st = c.platformCoachStatus ?? "pending";
                   return (
