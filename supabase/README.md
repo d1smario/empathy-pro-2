@@ -1,5 +1,10 @@
 # Supabase — Empathy Pro 2.0 (solo questo monorepo)
 
+## Un solo progetto Supabase per deploy ufficiale
+
+Per **produzione** (es. app su Vercel `empathy-pro-2-web`): **tutte** le stringhe (`NEXT_PUBLIC_SUPABASE_URL`, anon key, `SUPABASE_SERVICE_ROLE_KEY`) e **tutte** le query nel SQL Editor devono riferirsi allo **stesso** progetto cloud. Controlla l’host con `GET /api/health` (`supabaseHost`) e confrontalo con Dashboard → Settings → API.  
+Se in passato esisteva un **secondo** progetto (legacy / V1), non mischiare: migration e `PASTE_*.sql` vanno eseguiti solo sul progetto che l’app usa davvero.
+
 Le migration Pro 2 stanno **solo** in **`empathy-pro-2-cursor/supabase/migrations/`**.  
 **Empathy V1** è un altro repository (`nextjs-empathy-pro`): non incrociare path o import tra i due progetti.
 

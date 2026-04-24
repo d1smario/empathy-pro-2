@@ -3,6 +3,8 @@
 > **Non incollare questo file `.md` nel Supabase SQL Editor** (il `#` dà errore 42601).  
 > Per istruzioni incollabili come SQL usa `PASTE_SUPABASE_ORDINE_E_FILE.sql` (solo commenti + `select 1`).
 
+> **Progetto unico:** prima di ogni `PASTE_*` o migration, apri in Dashboard lo **stesso** progetto la cui URL compare in `GET /api/health` (`supabaseHost` su Vercel). Se avevi due Supabase (legacy + Pro 2), non eseguire seed/migration “per abitudine” sul DB sbagliato.
+
 Le due app leggono **lo stesso database** se `NEXT_PUBLIC_SUPABASE_URL` / chiavi puntano allo **stesso progetto**. Il seed non va “importato in Pro 2” come codice: va **eseguito una volta sul progetto Supabase**; poi Pro 2 mostra i dati solo se sei loggato come utente con `app_user_profiles.athlete_id` corretto.
 
 ## File in questa cartella (`empathy-pro-2-cursor/supabase/`)
