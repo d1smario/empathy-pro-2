@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  * - **API Pull Token / API Configuration** → `GARMIN_OAUTH_CONSUMER_KEY` + `GARMIN_OAUTH_CONSUMER_SECRET`
  * - **Endpoint Configuration (push)** → POST verso `/api/integrations/garmin/push/...`
  * - **OAuth2 User Authorization** → redirect `/api/integrations/garmin/callback`
- * - **Backfill / Data Viewer** → strumenti portale; dati già in coda possono essere riallineati con nuove push
+ * - **Summary Backfill** → anche `POST /api/integrations/garmin/backfill` (range UTC + `stream`) oltre agli strumenti portale
  *
  * Chiamata esempio:
  *   curl -X POST https://<host>/api/integrations/garmin/pull/run \

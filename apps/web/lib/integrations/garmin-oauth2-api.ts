@@ -1,5 +1,6 @@
 import "server-only";
 
+import { tryParseGarminApiErrorMessage } from "@/lib/integrations/garmin-api-error-body";
 import { GARMIN_WELLNESS_USER_REST_PATHS, garminWellnessAbsoluteUrl } from "@/lib/integrations/garmin-wellness-api";
 
 const TOKEN_URL = "https://diauth.garmin.com/di-oauth2-service/oauth/token";
@@ -62,7 +63,10 @@ export async function exchangeGarminAuthorizationCode(params: {
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Garmin token exchange HTTP ${res.status}: ${text.slice(0, 800)}`);
+    const garminMsg = tryParseGarminApiErrorMessage(text);
+    throw new Error(
+      `Garmin token exchange HTTP ${res.status}: ${garminMsg ?? text.slice(0, 800)}`,
+    );
   }
   const json = JSON.parse(text) as Record<string, unknown>;
   return parseTokenJson(json);
@@ -88,7 +92,8 @@ export async function exchangeGarminRefreshToken(params: {
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Garmin refresh token HTTP ${res.status}: ${text.slice(0, 800)}`);
+    const garminMsg = tryParseGarminApiErrorMessage(text);
+    throw new Error(`Garmin refresh token HTTP ${res.status}: ${garminMsg ?? text.slice(0, 800)}`);
   }
   const json = JSON.parse(text) as Record<string, unknown>;
   return parseTokenJson(json);
@@ -118,7 +123,8 @@ export async function fetchGarminApiUserId(accessToken: string): Promise<string>
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new Error(`Garmin user id HTTP ${res.status}: ${text.slice(0, 600)}`);
+    const garminMsg = tryParseGarminApiErrorMessage(text);
+    throw new Error(`Garmin user id HTTP ${res.status}: ${garminMsg ?? text.slice(0, 600)}`);
   }
   const json = JSON.parse(text) as Record<string, unknown>;
   const id = json.userId ?? json.user_id;

@@ -13,6 +13,7 @@ import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import type { AthleteMemory, PhysiologyState, TwinState } from "@/lib/empathy/schemas";
 import { cn } from "@/lib/cn";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { GARMIN_SUMMARY_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
@@ -400,6 +401,10 @@ export default function ProfilePage() {
   const [garminReturn, setGarminReturn] = useState<string | null>(null);
   const [garminDetail, setGarminDetail] = useState<string | null>(null);
   const [garminDisconnecting, setGarminDisconnecting] = useState(false);
+  const [garminBackfillStream, setGarminBackfillStream] = useState("activityDetails");
+  const [garminBackfillDays, setGarminBackfillDays] = useState(14);
+  const [garminBackfillBusy, setGarminBackfillBusy] = useState(false);
+  const [garminBackfillNotice, setGarminBackfillNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -581,6 +586,44 @@ export default function ProfilePage() {
       window.alert("Errore di rete durante lo scollegamento.");
     } finally {
       setGarminDisconnecting(false);
+    }
+  }
+
+  async function runGarminBackfill() {
+    if (!activeAthleteId || !garminLink?.linked || garminBackfillBusy) return;
+    setGarminBackfillBusy(true);
+    setGarminBackfillNotice(null);
+    try {
+      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const end = Math.floor(Date.now() / 1000);
+      const start = end - days * 86400;
+      const r = await fetch("/api/integrations/garmin/backfill", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          athleteId: activeAthleteId,
+          stream: garminBackfillStream,
+          summaryStartTimeInSeconds: start,
+          summaryEndTimeInSeconds: end,
+        }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        errorMessage?: string | null;
+        httpStatus?: number;
+      };
+      if (j.ok) {
+        setGarminBackfillNotice(j.message ?? "Richiesta inviata a Garmin.");
+      } else {
+        setGarminBackfillNotice(j.errorMessage ?? j.error ?? `Errore HTTP ${j.httpStatus ?? r.status}`);
+      }
+    } catch {
+      setGarminBackfillNotice("Errore di rete.");
+    } finally {
+      setGarminBackfillBusy(false);
     }
   }
 
@@ -1325,8 +1368,9 @@ export default function ProfilePage() {
                 <p className="muted-copy">Qui colleghiamo le API device: Garmin, Strava, Whoop, Oura e altri provider.</p>
                 {garminReturn === "connected" ? (
                   <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
-                    Garmin Connect collegato. Le attività compaiono in Training dopo notifica Garmin e esecuzione del
-                    worker pull (cron o manuale).
+                    Garmin Connect collegato. Abbiamo richiesto in automatico uno storico iniziale (Summary Backfill{" "}
+                    <code className="text-white/80">activityDetails</code>, ultimi 14 giorni); i dati arrivano quando
+                    Garmin li elabora, poi il worker pull (cron) li scarica.
                   </p>
                 ) : null}
                 {garminReturn === "error" ? (
@@ -1397,11 +1441,62 @@ export default function ProfilePage() {
                         </Pro2Button>
                       ) : null}
                     </div>
+                    {garminLink.linked ? (
+                      <div
+                        className="rounded-lg border border-white/15 bg-black/20 px-3 py-3"
+                        style={{ marginTop: 10 }}
+                      >
+                        <p className="muted-copy text-xs" style={{ marginBottom: 8 }}>
+                          Storico Garmin (Summary Backfill): chiedi a Garmin un intervallo UTC in secondi; risposta
+                          tipica 202, poi notifiche + pull.
+                        </p>
+                        <div className="flex flex-wrap items-end gap-2">
+                          <div className="form-group" style={{ minWidth: 160 }}>
+                            <label className="form-label text-xs">Stream</label>
+                            <select
+                              className="form-select profile-dark-select text-sm"
+                              value={garminBackfillStream}
+                              onChange={(e) => setGarminBackfillStream(e.target.value)}
+                            >
+                              {GARMIN_SUMMARY_BACKFILL_STREAMS.map((s) => (
+                                <option key={s} value={s}>
+                                  {s}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ width: 100 }}>
+                            <label className="form-label text-xs">Giorni</label>
+                            <input
+                              type="number"
+                              min={1}
+                              max={90}
+                              className="form-input text-sm"
+                              value={garminBackfillDays}
+                              onChange={(e) => setGarminBackfillDays(Number(e.target.value))}
+                            />
+                          </div>
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={garminBackfillBusy}
+                            className="border border-cyan-500/35 bg-cyan-500/10 text-cyan-50 hover:bg-cyan-500/20"
+                            onClick={() => void runGarminBackfill()}
+                          >
+                            {garminBackfillBusy ? "Invio…" : "Richiedi storico"}
+                          </Pro2Button>
+                        </div>
+                        {garminBackfillNotice ? (
+                          <p className="text-xs text-white/80" style={{ marginTop: 8 }}>
+                            {garminBackfillNotice}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <p className="muted-copy text-xs">
-                      In produzione configura <code className="text-white/70">GARMIN_OAUTH2_REDIRECT_URI</code>,{" "}
-                      <code className="text-white/70">GARMIN_OAUTH_PKCE_SECRET</code>, <code className="text-white/70">CRON_SECRET</code> (Vercel) e
-                      worker pull: <code className="text-white/70">GET /api/integrations/garmin/pull/cron</code> (cron Vercel) oppure{" "}
-                      <code className="text-white/70">POST /api/integrations/garmin/pull/run</code> con{" "}
+                      Worker pull: cron Vercel su <code className="text-white/70">/api/integrations/garmin/pull/cron</code>{" "}
+                      (<code className="text-white/70">CRON_SECRET</code>) oppure{" "}
+                      <code className="text-white/70">POST …/pull/run</code> con{" "}
                       <code className="text-white/70">GARMIN_PULL_RUN_SECRET</code>.
                     </p>
                   </div>

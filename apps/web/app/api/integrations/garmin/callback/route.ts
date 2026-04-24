@@ -8,6 +8,11 @@ import {
 } from "@/lib/integrations/garmin-oauth2-api";
 import { resolveGarminAppBaseUrl } from "@/lib/integrations/garmin-app-base-url";
 import { GARMIN_PKCE_COOKIE, unsealGarminPkceCookie } from "@/lib/integrations/garmin-pkce-cookie";
+import {
+  garminLogIdPrefix,
+  logGarminCallbackEvent,
+} from "@/lib/integrations/garmin-callback-telemetry";
+import { requestGarminSummaryBackfill } from "@/lib/integrations/garmin-wellness-backfill";
 import { parseRealityCallbackState, persistRealityProviderCallback } from "@/lib/reality/provider-adapters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -32,8 +37,24 @@ export async function GET(req: NextRequest) {
   const error = (req.nextUrl.searchParams.get("error") ?? "").trim();
   const callbackState = parseRealityCallbackState(state);
   const athleteId = callbackState.athleteId?.trim() ?? "";
+  const queryParamKeys = Array.from(req.nextUrl.searchParams.keys());
 
-  const redirectErr = (reason: string) => {
+  logGarminCallbackEvent({
+    step: "request_received",
+    athleteIdPrefix: garminLogIdPrefix(athleteId),
+    hasCode: Boolean(code),
+    hasOauthVerifier: Boolean(oauthVerifier),
+    oauthError: error || undefined,
+    queryParamKeys,
+  });
+
+  const redirectErr = (reason: string, detailSnippet?: string) => {
+    logGarminCallbackEvent({
+      step: "redirect_error",
+      athleteIdPrefix: garminLogIdPrefix(athleteId),
+      reason,
+      ...(detailSnippet ? { detailSnippet } : {}),
+    });
     const res = NextResponse.redirect(
       `${appBase}/profile?garmin=error&reason=${encodeURIComponent(reason.slice(0, 400))}`,
       302,
@@ -50,7 +71,10 @@ export async function GET(req: NextRequest) {
     const cookieRaw = req.cookies.get(GARMIN_PKCE_COOKIE)?.value ?? "";
     const sealed = unsealGarminPkceCookie(cookieRaw);
     if (!sealed || sealed.athleteId !== athleteId) {
-      return redirectErr("pkce_mismatch");
+      return redirectErr(
+        "pkce_mismatch",
+        sealed ? "athleteId_cookie_state_mismatch" : "cookie_missing_or_invalid",
+      );
     }
 
     const clientId = process.env.GARMIN_OAUTH2_CLIENT_ID?.trim();
@@ -65,6 +89,11 @@ export async function GET(req: NextRequest) {
       await requireAthleteReadContext(req, athleteId);
     } catch (e) {
       if (e instanceof AthleteReadContextError && e.status === 401) {
+        logGarminCallbackEvent({
+          step: "auth_required_resume",
+          athleteIdPrefix: garminLogIdPrefix(athleteId),
+          reason: "athlete_read_401",
+        });
         const resume = `${req.nextUrl.pathname}${req.nextUrl.search}`;
         return NextResponse.redirect(
           `${appBase}/access?next=${encodeURIComponent(resume)}&garmin=callback_resume`,
@@ -72,6 +101,12 @@ export async function GET(req: NextRequest) {
         );
       }
       if (e instanceof AthleteReadContextError) {
+        logGarminCallbackEvent({
+          step: "athlete_context_denied",
+          athleteIdPrefix: garminLogIdPrefix(athleteId),
+          reason: e.message.slice(0, 200),
+          detailSnippet: String(e.status),
+        });
         return redirectErr(e.message);
       }
       throw e;
@@ -83,6 +118,10 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+      logGarminCallbackEvent({
+        step: "token_exchange_start",
+        athleteIdPrefix: garminLogIdPrefix(athleteId),
+      });
       const tokens = await exchangeGarminAuthorizationCode({
         clientId,
         clientSecret,
@@ -108,6 +147,12 @@ export async function GET(req: NextRequest) {
         .maybeSingle();
 
       if (conflict) {
+        logGarminCallbackEvent({
+          step: "garmin_user_conflict",
+          athleteIdPrefix: garminLogIdPrefix(athleteId),
+          garminUserIdPrefix: garminLogIdPrefix(garminUserId),
+          reason: "garmin_account_already_linked",
+        });
         return redirectErr("garmin_account_already_linked");
       }
 
@@ -127,6 +172,12 @@ export async function GET(req: NextRequest) {
       );
 
       if (upErr) {
+        logGarminCallbackEvent({
+          step: "upsert_garmin_link_failed",
+          athleteIdPrefix: garminLogIdPrefix(athleteId),
+          garminUserIdPrefix: garminLogIdPrefix(garminUserId),
+          detailSnippet: upErr.message.slice(0, 200),
+        });
         return redirectErr(upErr.message);
       }
 
@@ -154,11 +205,54 @@ export async function GET(req: NextRequest) {
         hasError: false,
       });
 
+      /** Summary Backfill post-collegamento (apiDocs): best-effort, non blocca il redirect. */
+      const backfillEnd = Math.floor(Date.now() / 1000);
+      const backfillStart = backfillEnd - 14 * 86400;
+      void requestGarminSummaryBackfill({
+        accessToken: tokens.access_token,
+        stream: "activityDetails",
+        summaryStartTimeInSeconds: backfillStart,
+        summaryEndTimeInSeconds: backfillEnd,
+      })
+        .then((br) => {
+          if (br.ok) {
+            logGarminCallbackEvent({
+              step: "post_connect_backfill_ok",
+              athleteIdPrefix: garminLogIdPrefix(athleteId),
+              detailSnippet: `activityDetails_http_${br.httpStatus}`,
+            });
+          } else {
+            logGarminCallbackEvent({
+              step: "post_connect_backfill_fail",
+              athleteIdPrefix: garminLogIdPrefix(athleteId),
+              detailSnippet: `${br.httpStatus}:${(br.errorMessage ?? "").slice(0, 160)}`,
+            });
+          }
+        })
+        .catch((be) => {
+          logGarminCallbackEvent({
+            step: "post_connect_backfill_exception",
+            athleteIdPrefix: garminLogIdPrefix(athleteId),
+            detailSnippet: be instanceof Error ? be.message.slice(0, 200) : "unknown",
+          });
+        });
+
+      logGarminCallbackEvent({
+        step: "connected",
+        athleteIdPrefix: garminLogIdPrefix(athleteId),
+        garminUserIdPrefix: garminLogIdPrefix(garminUserId),
+      });
       const res = NextResponse.redirect(`${appBase}/profile?garmin=connected`, 302);
       clearPkceCookie(res);
       return res;
     } catch (e) {
       const msg = e instanceof Error ? e.message : "token_exchange_failed";
+      logGarminCallbackEvent({
+        step: "token_exchange_or_profile_failed",
+        athleteIdPrefix: garminLogIdPrefix(athleteId),
+        reason: "exception",
+        detailSnippet: msg.slice(0, 400),
+      });
       return redirectErr(msg);
     }
   }
@@ -192,6 +286,15 @@ export async function GET(req: NextRequest) {
     ingestion = persisted.ingestion;
     athleteMemory = await resolveAthleteMemory(callbackState.athleteId);
   }
+
+  logGarminCallbackEvent({
+    step: "non_pkce_branch",
+    athleteIdPrefix: garminLogIdPrefix(callbackState.athleteId),
+    hasCode: Boolean(code),
+    hasOauthVerifier: Boolean(oauthVerifier),
+    oauthError: error || undefined,
+    queryParamKeys,
+  });
 
   if (error) {
     return NextResponse.json(

@@ -5,7 +5,15 @@ import "server-only";
  * Base: documentazione autenticata [Garmin API Docs / Wellness](https://apis.garmin.com/tools/apiDocs)
  * (login Client Id + Secret); endpoint summary: `https://apis.garmin.com/wellness-api`.
  *
- * I path qui sotto sono i **GET** summary + **User API** / **User Controller** come da OpenAPI incollata.
+ * I path qui sotto sono i **GET** summary + **User API** come da OpenAPI / apiDocs. Lessico utile:
+ * - **GET `/rest/user/id`** → JSON `{ "userId": "<hex>" }` (ID Health API stabile sullo stesso utente tra token).
+ * - **GET `/rest/activityDetails`** → query `token` (pull token OAuth2 / notifica), opzionale finestra
+ *   `uploadStartTimeInSeconds` + `uploadEndTimeInSeconds` (se usati, **sempre in coppia**).
+ * - **GET `/rest/activityFile`** → query `id`, `token`; **200** spesso `application/octet-stream` (FIT/TCX/GPX).
+ *   Garmin: i file **non** arrivano via Push; solo in risposta a **Ping** chiamando il `callbackURL` indicato.
+ * - Errori HTTP: corpo JSON tipico `{ "errorMessage": "..." }` (vedi `tryParseGarminApiErrorMessage`).
+ * - **Summary Backfill**: `GET /rest/backfill/<stream>` con query `summaryStartTimeInSeconds` +
+ *   `summaryEndTimeInSeconds` (obbligatorie); successo spesso **202**. Implementazione: `garmin-wellness-backfill.ts`.
  */
 export const GARMIN_WELLNESS_API_PROD_BASE_URL = "https://apis.garmin.com/wellness-api" as const;
 

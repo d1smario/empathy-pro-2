@@ -4,6 +4,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
 import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
+import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
 
@@ -89,10 +90,22 @@ export async function runGarminPullJobs(limit: number): Promise<{
         signal: AbortSignal.timeout(90_000),
       });
       const text = await res.text();
-      const body = await safeJsonBody(text);
+      const ct = (res.headers.get("content-type") ?? "").toLowerCase();
+      /** Garmin: es. GET `/rest/activityFile` → 200 `application/octet-stream` (FIT/TCX/GPX), non JSON summary. */
+      const binaryOk =
+        res.ok && (ct.includes("octet-stream") || ct.includes("application/vnd.garmin"));
+      const body: unknown = binaryOk
+        ? {
+            garminWellnessBinaryResponse: true as const,
+            contentType: res.headers.get("content-type"),
+            byteLength: text.length,
+          }
+        : await safeJsonBody(text);
       const ok = res.ok;
       if (ok) completed += 1;
       else failed += 1;
+
+      const errDetail = !ok ? tryParseGarminApiErrorMessage(text) ?? text.slice(0, 4000) : null;
 
       await supabase
         .from("garmin_pull_jobs")
@@ -101,7 +114,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
           updated_at: nowIso(),
           http_status: res.status,
           response_body: body as Record<string, unknown>,
-          error_message: ok ? null : text.slice(0, 4000),
+          error_message: errDetail,
         })
         .eq("id", job.id);
 
