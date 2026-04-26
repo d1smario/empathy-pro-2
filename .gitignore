@@ -27,3 +27,5 @@ Thumbs.db
 .next.nosync/
 .vercel
 .env*.local
+.env.local.bak*
+.env.local.backup*
