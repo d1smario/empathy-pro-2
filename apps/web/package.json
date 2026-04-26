@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node ../../node_modules/next/dist/bin/next dev . -p 3020",
+    "dev": "node ../../scripts/next-dev.mjs",
     "dev:3000": "node ../../node_modules/next/dist/bin/next dev . -p 3000",
     "build": "next build",
     "start": "next start",
