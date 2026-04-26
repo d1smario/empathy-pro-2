@@ -816,9 +816,9 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
     key: "farro_cooked",
   },
   { test: /farro|orzo/i, key: "farro_dry" },
-  { test: /pollo|chicken|tacchino|turkey|petto/i, key: "chicken_breast" },
-  { test: /pesce|salmone|merluzz|tonno|fish|tuna|salmon/i, key: "fish_white" },
-  { test: /manzo|beef|maiale|pork|agnello|lamb|carne/i, key: "beef_lean" },
+  { test: /pollo|chicken|tacchino|turkey|petto|fesa/i, key: "chicken_breast" },
+  { test: /pesce|salmone|merluzz|tonno|fish|tuna|salmon|orata|branzino|spigola|nasello|sogliola|trota|sgombro|sardina|gamber|polpo|calamar/i, key: "fish_white" },
+  { test: /manzo|beef|maiale|pork|agnello|lamb|carne|vitello|bovino|hamburger|filetto|bistecca/i, key: "beef_lean" },
   { test: /legum|lenticch|ceci|fagiol|pisell/i, key: "legumes_cooked" },
   { test: /verdur|insalat|broccoli|zucchin|peperon/i, key: "mixed_veg" },
   { test: /frutta|frutti di bosco|mela|arancia|kiwi|berry/i, key: "mixed_fruit" },
@@ -960,18 +960,22 @@ export function scaleCanonicalNutrientsToGrams(row: CanonicalFoodNutrients, gram
 
 export function nutrientsForMealPlanItem(item: { name: string; portionHint: string; approxKcal: number }): {
   compositionKey: string;
+  compositionStatus: "canonical_estimate" | "unresolved";
   nutrients: ScaledMealItemNutrients;
 } {
   const hay = `${item.name} ${item.portionHint}`;
   const compositionKey = inferCanonicalFoodKey(hay);
-  const row = CANONICAL_FOOD_TABLE[compositionKey] ?? CANONICAL_FOOD_TABLE.generic_mixed;
+  const row = CANONICAL_FOOD_TABLE[compositionKey];
+  if (!row || compositionKey === "generic_mixed") {
+    return { compositionKey: "unresolved", compositionStatus: "unresolved", nutrients: { ...ZERO_SCALED } };
+  }
   const hintForServing = `${item.portionHint} ${item.name}`.trim();
   const gramsFromHint = resolveServingGramsFromPortionHint(hintForServing, compositionKey);
   const nutrients =
     gramsFromHint != null
       ? scaleCanonicalNutrientsToGrams(row, gramsFromHint)
       : scaleCanonicalNutrientsToKcal(row, item.approxKcal);
-  return { compositionKey, nutrients };
+  return { compositionKey, compositionStatus: "canonical_estimate", nutrients };
 }
 
 function addScaled(a: ScaledMealItemNutrients, b: ScaledMealItemNutrients): ScaledMealItemNutrients {

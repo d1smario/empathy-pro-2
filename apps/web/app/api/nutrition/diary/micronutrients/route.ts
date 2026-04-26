@@ -2,12 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import {
   bucketLines,
-  extractMicroNutrientsPer100g,
   scaleAndMergeMicros,
   type FdcMicroBucket,
+  type FdcMicroPer100g,
   type MicroTotalLine,
 } from "@/lib/nutrition/fdc-micronutrient-extract";
-import { fetchFdcFoodNutrientsRaw } from "@/lib/nutrition/usda-fdc-food-detail";
+import { getOrImportFdcFood } from "@/lib/nutrition/fdc-food-cache";
 
 export const runtime = "nodejs";
 
@@ -28,6 +28,41 @@ function toOut(lines: MicroTotalLine[], max: number): OutLine[] {
   }));
 }
 
+function microRows(raw: unknown, key: "vitamins" | "minerals" | "aminoAcids" | "fattyAcids"): FdcMicroPer100g[] {
+  if (!raw || typeof raw !== "object") return [];
+  const list = (raw as Record<string, unknown>)[key];
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const r = row as Record<string, unknown>;
+      const nutrientId = Number(r.nutrientId);
+      const name = typeof r.name === "string" ? r.name : "";
+      const amountPer100g = Number(r.amountPer100g);
+      const unit = typeof r.unit === "string" ? r.unit : "—";
+      if (!Number.isFinite(nutrientId) || nutrientId <= 0 || !name || !Number.isFinite(amountPer100g)) return null;
+      return { nutrientId: Math.round(nutrientId), name, amountPer100g, unit };
+    })
+    .filter((row): row is FdcMicroPer100g => Boolean(row));
+}
+
+function mergeAlreadyScaled(rows: FdcMicroPer100g[], bucket: FdcMicroBucket, acc: Map<number, MicroTotalLine>): void {
+  for (const row of rows) {
+    const prev = acc.get(row.nutrientId);
+    if (!prev) {
+      acc.set(row.nutrientId, {
+        nutrientId: row.nutrientId,
+        name: row.name,
+        unit: row.unit,
+        total: row.amountPer100g,
+        bucket,
+      });
+    } else if (prev.unit === row.unit) {
+      prev.total += row.amountPer100g;
+    }
+  }
+}
+
 export async function GET(req: NextRequest) {
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
@@ -38,7 +73,7 @@ export async function GET(req: NextRequest) {
     const { db } = await requireAthleteReadContext(req, athleteId);
     const { data, error } = await db
       .from("food_diary_entries")
-      .select("fdc_id, quantity_g, provenance")
+      .select("fdc_id, quantity_g, provenance, micronutrients")
       .eq("athlete_id", athleteId)
       .eq("entry_date", date);
 
@@ -46,44 +81,48 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const rows = (data ?? []) as Array<{ fdc_id: number | null; quantity_g: number; provenance: string }>;
+    const rows = (data ?? []) as Array<{
+      fdc_id: number | null;
+      quantity_g: number;
+      provenance: string;
+      micronutrients: unknown;
+    }>;
     const fdcRows = rows.filter((r) => r.provenance === "usda_fdc" && r.fdc_id != null && Number(r.quantity_g) > 0);
     const nonFdcCount = rows.length - fdcRows.length;
 
-    const apiKey = process.env.USDA_API_KEY?.trim();
-    if (!apiKey) {
-      return NextResponse.json({
-        date,
-        ok: false,
-        reason: "no_usda_key",
-        messageIt:
-          "Micronutrienti da USDA non disponibili senza USDA_API_KEY sul server. I macro nel diario restano validi.",
-        vitamins: [] as OutLine[],
-        minerals: [] as OutLine[],
-        aminoAcids: [] as OutLine[],
-        fattyAcids: [] as OutLine[],
-        fdcEntryCount: fdcRows.length,
-        nonFdcEntryCount: nonFdcCount,
-      });
-    }
-
     const acc = new Map<number, MicroTotalLine>();
-    const cache = new Map<number, ReturnType<typeof extractMicroNutrientsPer100g>>();
+    const cache = new Map<number, Awaited<ReturnType<typeof getOrImportFdcFood>>>();
+    let importedFallbackCount = 0;
 
     for (const r of fdcRows) {
       const id = Math.round(Number(r.fdc_id));
       const q = Number(r.quantity_g);
       if (!Number.isFinite(id) || id < 1 || !Number.isFinite(q) || q <= 0) continue;
-      let per100 = cache.get(id);
-      if (!per100) {
-        const raw = await fetchFdcFoodNutrientsRaw(apiKey, id);
-        if ("error" in raw) {
-          continue;
-        }
-        per100 = extractMicroNutrientsPer100g(raw.foodNutrients);
-        cache.set(id, per100);
+
+      const snapshot = r.micronutrients;
+      const vitamins = microRows(snapshot, "vitamins");
+      const minerals = microRows(snapshot, "minerals");
+      const aminoAcids = microRows(snapshot, "aminoAcids");
+      const fattyAcids = microRows(snapshot, "fattyAcids");
+      if (vitamins.length || minerals.length || aminoAcids.length || fattyAcids.length) {
+        mergeAlreadyScaled(vitamins, "vitamins", acc);
+        mergeAlreadyScaled(minerals, "minerals", acc);
+        mergeAlreadyScaled(aminoAcids, "aminoAcids", acc);
+        mergeAlreadyScaled(fattyAcids, "fattyAcids", acc);
+        continue;
       }
-      scaleAndMergeMicros(per100, q, acc);
+
+      let food = cache.get(id);
+      if (!food) {
+        food = await getOrImportFdcFood(id);
+        cache.set(id, food);
+        importedFallbackCount += "error" in food ? 0 : 1;
+      }
+      if ("error" in food) continue;
+      scaleAndMergeMicros(food.vitamins, q, acc);
+      scaleAndMergeMicros(food.minerals, q, acc);
+      scaleAndMergeMicros(food.aminoAcids, q, acc);
+      scaleAndMergeMicros(food.fattyAcids, q, acc);
     }
 
     const grouped = bucketLines(acc.values());
@@ -103,10 +142,11 @@ export async function GET(req: NextRequest) {
       fattyAcids: toOut(grouped.fattyAcids, caps.fattyAcids),
       fdcEntryCount: fdcRows.length,
       nonFdcEntryCount: nonFdcCount,
+      importedFallbackCount,
       messageIt:
         nonFdcCount > 0
-          ? `Stima da ${fdcRows.length} voci USDA del giorno. Le altre ${nonFdcCount} voci (manuale/Open Food Facts) non includono micronutrienti automatici.`
-          : `Stima aggregata da ${fdcRows.length} voci USDA per la data selezionata.`,
+          ? `Stima da ${fdcRows.length} voci USDA cache del giorno. Le altre ${nonFdcCount} voci (manuale/prodotto) non includono micronutrienti automatici.`
+          : `Stima aggregata da ${fdcRows.length} voci USDA cache per la data selezionata.`,
     };
 
     return NextResponse.json(payload);

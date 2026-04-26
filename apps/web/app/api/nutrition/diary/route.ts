@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import type { FoodDiaryEntryViewModel, FoodDiaryListViewModel } from "@/api/nutrition/contracts";
-import { fetchFdcFoodPer100gMacros, scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
+import {
+  getOrImportFdcFood,
+  scaleFdcMicros,
+  scaleMacrosFromCachedFdcFood,
+} from "@/lib/nutrition/fdc-food-cache";
+import { scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
 
 export const runtime = "nodejs";
 
@@ -22,6 +27,12 @@ function rowToVm(r: Record<string, unknown>): FoodDiaryEntryViewModel {
     fatG: Number(r.fat_g),
     sodiumMg: r.sodium_mg != null ? Number(r.sodium_mg) : null,
     referenceSourceTag: r.reference_source_tag != null ? String(r.reference_source_tag) : null,
+    nutritionSource:
+      r.reference_source_tag === "usda_fdc_cache"
+        ? "usda_fdc_cache"
+        : r.provenance === "scaled_reference"
+          ? "scaled_reference"
+          : null,
     notes: r.notes != null ? String(r.notes) : null,
     supplements: r.supplements != null ? String(r.supplements) : null,
     createdAt: String(r.created_at),
@@ -137,27 +148,21 @@ export async function POST(req: NextRequest) {
 
     const { db } = await requireAthleteWriteContext(req, athleteId);
 
-    const apiKey = process.env.USDA_API_KEY?.trim();
     const mode = (body.mode ?? "usda_fdc").trim();
 
     let insert: Record<string, unknown>;
 
     if (mode === "usda_fdc") {
       const fdcId = Number(body.fdcId);
-      if (!apiKey) {
-        return NextResponse.json(
-          { error: "USDA_API_KEY non configurata: impossibile risolvere FDC lato server." },
-          { status: 503 },
-        );
-      }
       if (!Number.isFinite(fdcId) || fdcId < 1) {
         return NextResponse.json({ error: "fdcId non valido" }, { status: 400 });
       }
-      const detail = await fetchFdcFoodPer100gMacros(apiKey, Math.round(fdcId));
+      const detail = await getOrImportFdcFood(Math.round(fdcId));
       if ("error" in detail) {
         return NextResponse.json({ error: detail.error }, { status: 502 });
       }
-      const scaled = scaleMacrosFromPer100g(detail, quantityG);
+      const scaled = scaleMacrosFromCachedFdcFood(detail, quantityG);
+      const micronutrients = scaleFdcMicros(detail, quantityG);
       insert = {
         athlete_id: athleteId,
         entry_date: entryDate,
@@ -172,8 +177,8 @@ export async function POST(req: NextRequest) {
         protein_g: scaled.proteinG,
         fat_g: scaled.fatG,
         sodium_mg: scaled.sodiumMg,
-        micronutrients: {},
-        reference_source_tag: null,
+        micronutrients,
+        reference_source_tag: "usda_fdc_cache",
         notes: body.notes?.trim() || null,
         supplements: body.supplements?.trim() || null,
         user_confirmed: true,

@@ -11,8 +11,8 @@ import { dedupeLunchDinnerMainProteins } from "@/lib/nutrition/meal-plan-protein
 
 function enrichSlot(slot: IntelligentMealPlanSlotOut): IntelligentMealPlanSlotOut {
   const items = slot.items.map((it) => {
-    const { compositionKey, nutrients } = nutrientsForMealPlanItem(it);
-    return { ...it, compositionKey, nutrients };
+    const { compositionKey, compositionStatus, nutrients } = nutrientsForMealPlanItem(it);
+    return { ...it, compositionKey, compositionStatus, nutrients };
   });
   return { ...slot, items };
 }
@@ -59,7 +59,7 @@ export function finalizeIntelligentMealPlanCore(
     dayInteractionSummary,
     nutrientRollup: {
       disclaimerIt:
-        "Composizione stimata da banca dati canonica (valori educativi, non equivalente ad analisi di laboratorio). Micro e aminoacidi scalati sulle kcal dell’item.",
+        "Composizione da cache USDA FDC quando disponibile; gli item non risolti non contribuiscono nutrienti inventati. Durante la migrazione restano stime canoniche solo per alimenti mappati.",
       dayTotals,
       perSlot,
     },

@@ -151,6 +151,8 @@ export type IntelligentMealPlanItemOut = {
   macroRole: "cho_heavy" | "protein" | "fat" | "mixed" | "veg";
   /** Chiave banca dati canonica (post-finalize). */
   compositionKey?: string;
+  /** Provenienza composizione: `unresolved` non contribuisce nutrienti inventati. */
+  compositionStatus?: "canonical_estimate" | "unresolved";
   /** Stime nutrizionali scalate sulle kcal dell’item (post-finalize). */
   nutrients?: ScaledMealItemNutrients;
 };

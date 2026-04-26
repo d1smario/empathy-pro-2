@@ -180,6 +180,8 @@ export type FoodDiaryEntryViewModel = {
   fatG: number;
   sodiumMg: number | null;
   referenceSourceTag: string | null;
+  /** Present for USDA cached entries once imported from FoodData Central. */
+  nutritionSource?: "usda_fdc_cache" | "scaled_reference" | null;
   notes: string | null;
   supplements: string | null;
   createdAt: string;
