@@ -23,11 +23,11 @@ function accessNextUrl(req: NextRequest, nextPath: string): URL {
 
 /**
  * Superficie authorize effettiva lato Garmin (Connect).
- * Verificato con `curl -I "https://connect.garmin.com/oauth2Confirm?...PKCE..."`:
- * Garmin risponde **302** con `Location: https://connect.garmin.com/partner/oauth2Confirm?` + stessi query.
- * Default = partner per allinearsi a quel redirect (un hop in meno; stessa semantica del PDF che cita oauth2Confirm come ingresso).
+ * Endpoint OAuth2 PKCE documentato da Garmin.
+ * Usiamo il path canonico `/oauth2Confirm`; eventuali redirect interni restano gestiti da Connect.
+ * Evita URL copiati dal browser con query aggiunte da Garmin (`permissionsUpdated`, `selectedCapabilities`).
  */
-const GARMIN_OAUTH2_AUTHORIZE_FALLBACK = "https://connect.garmin.com/partner/oauth2Confirm";
+const GARMIN_OAUTH2_AUTHORIZE_FALLBACK = "https://connect.garmin.com/oauth2Confirm";
 
 /**
  * Base authorize Garmin: da env solo origin + pathname (mai query/hash).
