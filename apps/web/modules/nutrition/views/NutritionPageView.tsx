@@ -2189,12 +2189,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const totalFluid = fuelingSessionPackages.reduce((s, p) => s + p.steps.reduce((x, st) => x + st.fluid, 0), 0);
     const totalSteps = fuelingSessionPackages.reduce((s, p) => s + p.timelineSteps.length, 0);
     return [
-      { label: "CHO total", value: `${round(totalCho)} g` },
-      { label: "Fluid total", value: `${round(totalFluid)} ml` },
-      { label: "Sodium", value: `${round(sodiumMgPerHour)} mg/h` },
-      { label: "Gut delivery", value: `${round(fuelingPhysiology.gutDeliveryPct)}%` },
-      { label: "Glycogen end", value: `${round(fuelingPlanGlycogenDepletion.finalRemaining)} g` },
-      { label: "Steps", value: `${totalSteps}` },
+      { label: "CHO total", value: `${round(totalCho)}`, unit: "g", tone: "amber", sub: "Pre + intra + post" },
+      { label: "Fluid total", value: `${round(totalFluid)}`, unit: "ml", tone: "cyan", sub: "Totale seduta" },
+      { label: "Sodium", value: `${round(sodiumMgPerHour)}`, unit: "mg/h", tone: "violet", sub: "Target orario" },
+      { label: "Gut delivery", value: `${round(fuelingPhysiology.gutDeliveryPct)}`, unit: "%", tone: "green", sub: "Assorbimento stimato" },
+      { label: "Glycogen end", value: `${round(fuelingPlanGlycogenDepletion.finalRemaining)}`, unit: "g", tone: "rose", sub: "Fine piano" },
+      { label: "Steps", value: `${totalSteps}`, unit: "", tone: "slate", sub: "Azioni apribili" },
     ];
   }, [fuelingSessionPackages, sodiumMgPerHour, fuelingPhysiology.gutDeliveryPct, fuelingPlanGlycogenDepletion.finalRemaining]);
 
@@ -2721,14 +2721,17 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 ) : null}
               </div>
               </details>
-              <div className="kpi-grid" style={{ marginBottom: "10px" }}>
+              <div className="fueling-main-kpi-grid" style={{ marginBottom: "10px" }}>
                 {fuelingOpsCards.map((card) => (
-                  <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
-                    <div className="kpi-card-label">
-                      <span className="signal-board-dot" />
+                  <div key={card.label} className={`fueling-main-kpi-card fueling-main-kpi-card--${card.tone}`}>
+                    <div className="fueling-main-kpi-label">
                       {card.label}
                     </div>
-                    <div className="kpi-card-value">{card.value}</div>
+                    <div className="fueling-main-kpi-value">
+                      {card.value}
+                      {card.unit ? <span>{card.unit}</span> : null}
+                    </div>
+                    <div className="fueling-main-kpi-sub">{card.sub}</div>
                   </div>
                 ))}
               </div>
