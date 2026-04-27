@@ -471,6 +471,10 @@ function n(v: unknown, fallback = 0): number {
   return fallback;
 }
 
+function hasPositiveNumber(v: unknown): boolean {
+  return n(v, 0) > 0;
+}
+
 function record(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
@@ -942,9 +946,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     effectiveDayContext.mode === "none"
       ? sessionIntensityPctFtp
       : effectiveDayContext.summary.estimatedIntensityPctFtp;
-  const resolvedEstimatedAvgPowerW =
-    nutritionDayModel?.training.estimatedAvgPowerW ??
-    (physio?.ftp_watts != null ? round(physio.ftp_watts * (effectiveSessionIntensityPctFtp / 100)) : null);
   const resolvedFuelingTier = nutritionDayModel?.fueling.capabilityTier ?? "base";
   const resolvedFuelingTierBand =
     resolvedFuelingTier === "elite"
@@ -952,11 +953,34 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       : resolvedFuelingTier === "high"
         ? "90-110 g/h"
         : "60-90 g/h";
+  const fuelingReadiness = useMemo(() => {
+    const missing: string[] = [];
+    if (!profile) {
+      missing.push("profilo atleta");
+    } else {
+      if (!profile.birth_date) missing.push("data nascita");
+      if (!profile.sex) missing.push("genere");
+      if (!hasPositiveNumber(profile.height_cm)) missing.push("altezza");
+      if (!hasPositiveNumber(profile.weight_kg)) missing.push("peso");
+    }
+    if (!physio) {
+      missing.push("profilo fisiologico");
+    } else {
+      if (!hasPositiveNumber(physio.ftp_watts)) missing.push("FTP");
+      if (!hasPositiveNumber(physio.lt1_watts)) missing.push("LT1");
+      if (!hasPositiveNumber(physio.lt2_watts)) missing.push("LT2");
+      if (!hasPositiveNumber(physio.v_lamax)) missing.push("VLaMax");
+      if (!hasPositiveNumber(physio.vo2max_ml_min_kg)) missing.push("VO2max");
+    }
+    if (!selectedPlanSessions.length) missing.push("seduta pianificata del giorno");
+    return { ready: missing.length === 0, missing };
+  }, [profile, physio, selectedPlanSessions.length]);
   const predictorEffectiveTimeMin = predictorUsePlanDay ? effectiveSessionDurationMin : predictorTimeMin;
   const predictorEffectiveIntensityPctFtp = predictorUsePlanDay ? effectiveSessionIntensityPctFtp : predictorIntensityPctFtp;
   const fuelingTrainingContext = useMemo(() => {
-    const ftp = n(physio?.ftp_watts, 260);
-    const weightKg = n(profile?.weight_kg, 72);
+    if (!fuelingReadiness.ready) return [];
+    const ftp = n(physio?.ftp_watts, 0);
+    const weightKg = n(profile?.weight_kg, 0);
     const choGh = Math.max(0, resolvedFuelingChoGPerHour);
 
     const inputs = selectedPlanSessions.map((session) => {
@@ -1038,7 +1062,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         choEnergyWeight: analysis?.dayChoEnergyWeight ?? Math.max(1, m.tss),
       };
     });
-  }, [selectedPlanSessions, profile?.weight_kg, physio?.ftp_watts, physiologyState, resolvedFuelingChoGPerHour]);
+  }, [fuelingReadiness.ready, selectedPlanSessions, profile?.weight_kg, physio?.ftp_watts, physiologyState, resolvedFuelingChoGPerHour]);
 
   const fuelingEngineDaySummary = useMemo(() => {
     const subs = fuelingTrainingContext.map((s) => s.substrate).filter(Boolean);
@@ -1051,6 +1075,26 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     };
   }, [fuelingTrainingContext]);
 
+  const fuelingPlannedSummary = useMemo(() => {
+    const totalDurationMin = fuelingTrainingContext.reduce((sum, session) => sum + Math.max(0, n(session.durationMin, 0)), 0);
+    const totalTss = fuelingTrainingContext.reduce((sum, session) => sum + Math.max(0, n(session.tss, 0)), 0);
+    const weightedIntensityNum = fuelingTrainingContext.reduce((sum, session) => {
+      const duration = Math.max(1, n(session.durationMin, 0));
+      return sum + n(session.substrate?.estimatedIntensityPctFtp, 0) * duration;
+    }, 0);
+    const weightedIntensityDen = fuelingTrainingContext.reduce((sum, session) => sum + Math.max(1, n(session.durationMin, 0)), 0);
+    return {
+      totalDurationMin: totalDurationMin > 0 ? totalDurationMin : sessionDurationMin,
+      totalTss,
+      estimatedIntensityPctFtp:
+        weightedIntensityNum > 0 && weightedIntensityDen > 0
+          ? weightedIntensityNum / weightedIntensityDen
+          : sessionIntensityPctFtp,
+    };
+  }, [fuelingTrainingContext, sessionDurationMin, sessionIntensityPctFtp]);
+  const fuelingPlannedEstimatedAvgPowerW =
+    physio?.ftp_watts != null ? round(physio.ftp_watts * (fuelingPlannedSummary.estimatedIntensityPctFtp / 100)) : null;
+
   /** Con due o più sessioni pianificate, stima ripartizione g CHO intra in base al peso glicolitico (cho kcal) per sessione. */
   const fuelingIntraChoSplitBySession = useMemo(() => {
     const rows = fuelingTrainingContext.filter((s) => s.durationMin > 0);
@@ -1058,7 +1102,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const weights = rows.map((s) => Math.max(0.01, n(s.choEnergyWeight, s.tss || 1)));
     const sumW = weights.reduce((a, b) => a + b, 0);
     if (sumW <= 0) return null;
-    const h = Math.max(0.5, effectiveSessionDurationMin / 60);
+    const h = Math.max(0.5, fuelingPlannedSummary.totalDurationMin / 60);
     const intraTotal = Math.max(
       round(nutritionDayModel?.fueling.intraChoG ?? 0, 1),
       round(resolvedFuelingChoGPerHour * h, 1),
@@ -1068,7 +1112,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       label: String(s.title),
       choG: round(intraTotal * (weights[i] / sumW), 1),
     }));
-  }, [fuelingTrainingContext, effectiveSessionDurationMin, nutritionDayModel, resolvedFuelingChoGPerHour]);
+  }, [fuelingTrainingContext, fuelingPlannedSummary.totalDurationMin, nutritionDayModel, resolvedFuelingChoGPerHour]);
 
   const knowledgeFuelingHints = useMemo(() => {
     const supports = Array.from(
@@ -1809,6 +1853,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   /** Un protocollo pre/intra/post per seduta pianificata (≥2 sessioni); altrimenti un solo blocco “giornata”. */
   const fuelingSessionPackages = useMemo(() => {
+    if (!fuelingReadiness.ready) return [];
+
     type TimelineStep = FuelingSlot & {
       product: FuelingProduct | undefined;
       displayImage: string;
@@ -1865,7 +1911,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       return [...byPhase.pre, ...byPhase.intra, ...byPhase.post];
     }
 
-    const dayHours = Math.max(0.5, effectiveSessionDurationMin / 60);
+    const dayHours = Math.max(0.5, fuelingPlannedSummary.totalDurationMin / 60);
     const dayPre = Math.max(15, round(nutritionDayModel?.fueling.preChoG ?? 20));
     const dayPost = Math.max(25, round(nutritionDayModel?.fueling.postChoG ?? 30));
     const dayIntraTotal = Math.max(
@@ -1914,7 +1960,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const durationH = Math.max(0.25, args.durationMin / 60);
       const choPerHourSession = Math.min(150, args.intraTotalCho / durationH);
       const glyc = computeGlycogenDepletionForFueling({
-        weightKg: n(profile?.weight_kg, 72),
+        weightKg: n(profile?.weight_kg, 0),
         muscleMassKg: profile?.muscle_mass_kg,
         durationMin: args.durationMin,
         intensityPctFtp: args.intensityPctFtp,
@@ -1983,8 +2029,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
     if (sessions.length <= 1) {
       const s0 = sessions[0];
-      const duration = s0?.durationMin ?? effectiveSessionDurationMin;
-      const intensity = s0?.substrate?.estimatedIntensityPctFtp ?? effectiveSessionIntensityPctFtp;
+      const duration = s0?.durationMin ?? fuelingPlannedSummary.totalDurationMin;
+      const intensity = s0?.substrate?.estimatedIntensityPctFtp ?? fuelingPlannedSummary.estimatedIntensityPctFtp;
       const engineOne =
         s0?.substrate != null
           ? ` · motore: lact ~${s0.substrate.lactateProducedG} g · Cori ~${s0.substrate.glucoseFromCoriG} g · CHOexo ~${s0.substrate.exogenousOxidizedG} g`
@@ -2014,7 +2060,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const intraS =
         fuelingIntraChoSplitBySession?.find((x) => String(x.id) === String(s.id))?.choG ?? round(dayIntraTotal * wShare, 1);
       const dur = Math.max(1, s.durationMin);
-      const intens = s.substrate?.estimatedIntensityPctFtp ?? effectiveSessionIntensityPctFtp;
+      const intens = s.substrate?.estimatedIntensityPctFtp ?? fuelingPlannedSummary.estimatedIntensityPctFtp;
       const eng =
         s.substrate != null
           ? ` · motore: lact ~${s.substrate.lactateProducedG} g · Cori ~${s.substrate.glucoseFromCoriG} g · CHOexo ~${s.substrate.exogenousOxidizedG} g`
@@ -2034,7 +2080,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [
     profileSupplements,
     profile,
-    effectiveSessionDurationMin,
+    fuelingReadiness.ready,
+    fuelingPlannedSummary,
     effectiveFluidMlPerHour,
     nutritionDayModel,
     resolvedFuelingChoGPerHour,
@@ -2045,7 +2092,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     fuelingPhysiology,
     fuelingMediaByKey,
     normalizedPreferredBrands,
-    effectiveSessionIntensityPctFtp,
     sodiumMgPerHour,
   ]);
 
@@ -2118,21 +2164,39 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       fuelingPhysiology,
     ],
   );
+  const fuelingPlanGlycogenDepletion = useMemo(
+    () =>
+      computeGlycogenDepletionForFueling({
+        weightKg: n(profile?.weight_kg, 0),
+        muscleMassKg: profile?.muscle_mass_kg,
+        durationMin: fuelingPlannedSummary.totalDurationMin,
+        intensityPctFtp: fuelingPlannedSummary.estimatedIntensityPctFtp,
+        fuelingPhysiology: {
+          choSharePct: fuelingPhysiology.choSharePct,
+          vLamax: fuelingPhysiology.vLamax,
+          oxidativeCeilingKcalMin: fuelingPhysiology.oxidativeCeilingKcalMin,
+          redoxPct: fuelingPhysiology.redoxPct,
+          gutDeliveryPct: fuelingPhysiology.gutDeliveryPct,
+          coriReturnG: fuelingPhysiology.coriReturnG,
+        },
+        resolvedFuelingChoGPerHour,
+      }),
+    [profile, fuelingPlannedSummary, fuelingPhysiology, resolvedFuelingChoGPerHour],
+  );
 
   const fuelingOpsCards = useMemo(() => {
     const totalCho = fuelingSessionPackages.reduce((s, p) => s + p.steps.reduce((x, st) => x + st.cho, 0), 0);
     const totalFluid = fuelingSessionPackages.reduce((s, p) => s + p.steps.reduce((x, st) => x + st.fluid, 0), 0);
     const totalSteps = fuelingSessionPackages.reduce((s, p) => s + p.timelineSteps.length, 0);
     return [
-      { label: "Protocolli", value: `${fuelingSessionPackages.length}` },
-      { label: "CHO total (Σ)", value: `${round(totalCho)} g` },
-      { label: "Fluid total (Σ)", value: `${round(totalFluid)} ml` },
+      { label: "CHO total", value: `${round(totalCho)} g` },
+      { label: "Fluid total", value: `${round(totalFluid)} ml` },
       { label: "Sodium", value: `${round(sodiumMgPerHour)} mg/h` },
       { label: "Gut delivery", value: `${round(fuelingPhysiology.gutDeliveryPct)}%` },
-      { label: "Glycogen end (giorno)", value: `${round(glycogenDepletion.finalRemaining)} g` },
-      { label: "Steps (Σ)", value: `${totalSteps}` },
+      { label: "Glycogen end", value: `${round(fuelingPlanGlycogenDepletion.finalRemaining)} g` },
+      { label: "Steps", value: `${totalSteps}` },
     ];
-  }, [fuelingSessionPackages, sodiumMgPerHour, fuelingPhysiology.gutDeliveryPct, glycogenDepletion.finalRemaining]);
+  }, [fuelingSessionPackages, sodiumMgPerHour, fuelingPhysiology.gutDeliveryPct, fuelingPlanGlycogenDepletion.finalRemaining]);
 
   const selectedExecutedKj = useMemo(
     () => selectedExecutedSessions.reduce((sum, session) => sum + n(session.kj, 0), 0),
@@ -2168,7 +2232,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   );
 
   const garminPayload = useMemo(() => {
-    const ftp = n(physio?.ftp_watts, 260);
+    const ftp = n(physio?.ftp_watts, 0);
     const steps: GarminFuelingStep[] = fuelingSessionPackages.flatMap((pkg) =>
       pkg.steps.map((slot) => {
         const raw = slot.time.replace("'", "").trim();
@@ -2198,9 +2262,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       generated_at: new Date().toISOString(),
       athlete_id: athleteId,
       sport: predictorSport,
-      estimated_intensity_pct_ftp: effectiveSessionIntensityPctFtp,
+      estimated_intensity_pct_ftp: fuelingPlannedSummary.estimatedIntensityPctFtp,
       ftp_watts: ftp,
-      estimated_event_duration_min: effectiveSessionDurationMin,
+      estimated_event_duration_min: fuelingPlannedSummary.totalDurationMin,
       fueling_targets: {
         cho_g_h: resolvedFuelingChoGPerHour,
         fluid_ml_h: fluidMlPerHour,
@@ -2209,15 +2273,15 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       fueling_tier: resolvedFuelingTier,
       fueling_band: resolvedFuelingTierBand,
       glycogen_projection: {
-        total_g: glycogenDepletion.totalGlycogen,
-        consume_total_g: glycogenDepletion.totalConsume,
-        fueling_total_g: glycogenDepletion.totalIntake,
-        absorbed_total_g: glycogenDepletion.totalAbsorbed,
-        cori_total_g: glycogenDepletion.totalCori,
-        net_total_g: glycogenDepletion.totalNet,
-        remaining_g: glycogenDepletion.finalRemaining,
-        remaining_pct: glycogenDepletion.finalPct,
-        zone: glycogenDepletion.finalZone,
+        total_g: fuelingPlanGlycogenDepletion.totalGlycogen,
+        consume_total_g: fuelingPlanGlycogenDepletion.totalConsume,
+        fueling_total_g: fuelingPlanGlycogenDepletion.totalIntake,
+        absorbed_total_g: fuelingPlanGlycogenDepletion.totalAbsorbed,
+        cori_total_g: fuelingPlanGlycogenDepletion.totalCori,
+        net_total_g: fuelingPlanGlycogenDepletion.totalNet,
+        remaining_g: fuelingPlanGlycogenDepletion.finalRemaining,
+        remaining_pct: fuelingPlanGlycogenDepletion.finalPct,
+        zone: fuelingPlanGlycogenDepletion.finalZone,
       },
       protocol_summary: {
         sessions_count: fuelingSessionPackages.length,
@@ -2232,11 +2296,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     fluidMlPerHour,
     resolvedFuelingChoGPerHour,
     fuelingSessionPackages,
-    glycogenDepletion,
+    fuelingPlanGlycogenDepletion,
     physio,
     predictorSport,
-    effectiveSessionDurationMin,
-    effectiveSessionIntensityPctFtp,
+    fuelingPlannedSummary,
     resolvedFuelingTier,
     resolvedFuelingTierBand,
     sodiumMgPerHour,
@@ -2473,6 +2536,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   async function exportGarminFuelingPayload() {
     if (!athleteId) return;
+    if (!fuelingReadiness.ready) {
+      setGarminMessage(`Completa prima i dati fueling: ${fuelingReadiness.missing.join(", ")}.`);
+      return;
+    }
     setGarminExporting(true);
     setGarminMessage(null);
     try {
@@ -2616,26 +2683,34 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             <header className="nutrition-fueling-hero px-4 py-3">
               <h2 className="text-lg font-bold text-white drop-shadow-[0_0_12px_rgba(217,70,239,0.35)]">Fueling</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Pre, intra e post — CHO, fluidi e timeline sul contesto giorno. Produzione lattato, riconversione Cori e
-                ossidazione CHO esogena sono stime del motore lattato/gut (allineato a Fisiologia), non output generativo.
+                Piano pre, intra e post per la seduta pianificata: numeri sintetici prima, dettagli apribili quando servono.
               </p>
             </header>
             <section className="viz-card builder-panel" style={{ marginBottom: "12px" }}>
               <div className="nutrition-section-head">
                 <h3 className="viz-title">Fueling Plan · pre / intra / post</h3>
               </div>
-              <div className="nutrition-detail-rail" style={{ marginBottom: "10px" }}>
+              {!fuelingReadiness.ready ? (
+                <div className="alert-warning" style={{ marginBottom: 0 }}>
+                  Completa i dati prima di generare il fueling: {fuelingReadiness.missing.join(", ")}. Il piano fueling non usa fallback
+                  fisiologici quando profilo o fisiologia sono incompleti.
+                </div>
+              ) : (
+                <>
+              <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                <summary>Dettagli contesto e motore</summary>
+              <div className="nutrition-detail-rail" style={{ marginTop: "10px", marginBottom: 0 }}>
                 <span><strong>Giorno:</strong> {selectedPlanDateShort}</span>
-                <span><strong>Durata contesto:</strong> {round(effectiveSessionDurationMin)} min</span>
-                <span><strong>Intensita stimata:</strong> {round(effectiveSessionIntensityPctFtp)}% FTP</span>
+                <span><strong>Durata pianificata:</strong> {round(fuelingPlannedSummary.totalDurationMin)} min</span>
+                <span><strong>Intensita pianificata:</strong> {round(fuelingPlannedSummary.estimatedIntensityPctFtp)}% FTP</span>
                 <span><strong>Tier fueling:</strong> {resolvedFuelingTierBand}</span>
-                {resolvedEstimatedAvgPowerW != null && <span><strong>Potenza media stimata:</strong> {round(resolvedEstimatedAvgPowerW)} W</span>}
+                {fuelingPlannedEstimatedAvgPowerW != null && <span><strong>Potenza media stimata:</strong> {round(fuelingPlannedEstimatedAvgPowerW)} W</span>}
                 <span><strong>CHO delivery:</strong> {round(fuelingPhysiology.gutDeliveryPct)}%</span>
                 <span><strong>Cori return:</strong> {round(fuelingPhysiology.coriReturnG)} g</span>
                 <span><strong>Redox:</strong> {round(fuelingPhysiology.redoxPct)}/100</span>
-                {effectiveDayContext.summary.hasPlannedSession || effectiveDayContext.summary.hasExecutedSession ? (
+                {selectedPlanSessions.length ? (
                   <span>
-                    <strong>{effectiveDayContext.mode === "executed" ? "TSS actual" : "TSS target"}:</strong> {round(effectiveDayContext.summary.totalTss)}
+                    <strong>TSS target:</strong> {round(fuelingPlannedSummary.totalTss)}
                   </span>
                 ) : null}
                 {fuelingIntraChoSplitBySession?.length ? (
@@ -2645,6 +2720,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   </span>
                 ) : null}
               </div>
+              </details>
               <div className="kpi-grid" style={{ marginBottom: "10px" }}>
                 {fuelingOpsCards.map((card) => (
                   <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
@@ -2667,14 +2743,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 </details>
               ) : null}
               {fuelingTrainingContext.length ? (
-                <section
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-                    gap: 10,
-                    marginBottom: 12,
-                  }}
-                >
+                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                  <summary>Analisi seduta e substrati</summary>
+                  <section
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                      gap: 10,
+                      marginTop: 10,
+                    }}
+                  >
                   {fuelingTrainingContext.map((session) => {
                     const intraSplitRow = fuelingIntraChoSplitBySession?.find((x) => String(x.id) === String(session.id));
                     return (
@@ -2745,7 +2823,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                     </article>
                     );
                   })}
-                </section>
+                  </section>
+                </details>
               ) : null}
               {knowledgeFuelingHints.intents.length || knowledgeFuelingHints.supports.length || knowledgeFuelingHints.risks.length ? (
                 <details className="collapsible-card" style={{ marginBottom: "10px" }}>
@@ -2774,15 +2853,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 const gPlot = pkg.glycogenPlot;
                 const gDep = pkg.glycogenDepletion;
                 return (
-                  <section
+                  <details
                     key={`fuel-pkg-${pkg.id}`}
+                    className="collapsible-card"
                     style={{
                       marginBottom: 20,
                       paddingBottom: 16,
                       borderBottom: "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
-                    <h4 style={{ marginBottom: 10, fontSize: "1rem" }}>{pkg.title}</h4>
+                    <summary>{pkg.title}</summary>
                     <p className="nutrition-muted" style={{ fontSize: 12, marginBottom: 10 }}>
                       ~{pkg.durationMin} min · intensità stimata ~{round(pkg.intensityPctFtp)}% FTP · CHO/h seduta ~{pkg.choPerHourSession} g/h
                     </p>
@@ -3004,9 +3084,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                         </svg>
                       </div>
                     </section>
-                  </section>
+                  </details>
                 );
               })}
+                </>
+              )}
             </section>
           </section>
           ) : null}
