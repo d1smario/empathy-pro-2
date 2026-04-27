@@ -528,7 +528,7 @@ export default function ProfilePage() {
     const q = new URLSearchParams(window.location.search);
     const p = q.get("garmin");
     if (p) setGarminReturn(p);
-    const d = q.get("detail");
+    const d = q.get("detail") ?? q.get("reason");
     if (d) setGarminDetail(d);
   }, []);
 
@@ -1375,8 +1375,18 @@ export default function ProfilePage() {
                 ) : null}
                 {garminReturn === "error" ? (
                   <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
-                    Collegamento Garmin non riuscito (vedi parametro <code className="text-white/80">reason</code>{" "}
-                    nell&apos;URL). Riprova o verifica env e redirect URI nel portale Garmin.
+                    Collegamento Garmin non riuscito
+                    {garminDetail ? (
+                      <>
+                        : <code className="text-white/70">{garminDetail}</code>
+                      </>
+                    ) : (
+                      <>
+                        {" "}
+                        (vedi parametro <code className="text-white/80">reason</code> nell&apos;URL)
+                      </>
+                    )}
+                    . Riprova o verifica env e redirect URI nel portale Garmin.
                   </p>
                 ) : null}
                 {garminReturn === "forbidden" ? (

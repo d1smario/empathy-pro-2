@@ -81,11 +81,12 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const pkceMaxAgeSeconds = 1800;
     let verifier: string;
     let cookieVal: string;
     try {
       verifier = createGarminPkceVerifier();
-      cookieVal = sealGarminPkceCookie({ verifier, athleteId });
+      cookieVal = sealGarminPkceCookie({ verifier, athleteId, ttlSeconds: pkceMaxAgeSeconds });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "pkce_seal_failed";
       if (browserNav) {
@@ -108,13 +109,13 @@ export async function GET(req: NextRequest) {
     authorize.searchParams.set("state", state);
 
     const res = NextResponse.redirect(authorize.toString(), 302);
-    // Consenso Garmin può richiedere >10 min; evita `pkce_mismatch` al rientro sul callback.
+    // Consenso Garmin può richiedere >10 min; mantieni allineati cookie browser e payload firmato.
     res.cookies.set(GARMIN_PKCE_COOKIE, cookieVal, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 1800,
+      maxAge: pkceMaxAgeSeconds,
     });
     res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     /** Debug: path authorize inviato da Empathy (stesso che Garmin espone dopo 302 da oauth2Confirm). */

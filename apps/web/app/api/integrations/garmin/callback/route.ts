@@ -55,10 +55,13 @@ export async function GET(req: NextRequest) {
       reason,
       ...(detailSnippet ? { detailSnippet } : {}),
     });
-    const res = NextResponse.redirect(
-      `${appBase}/profile?garmin=error&reason=${encodeURIComponent(reason.slice(0, 400))}`,
-      302,
-    );
+    const u = new URL(`${appBase}/profile`);
+    u.searchParams.set("garmin", "error");
+    u.searchParams.set("reason", reason.slice(0, 400));
+    if (detailSnippet) {
+      u.searchParams.set("detail", detailSnippet.slice(0, 400));
+    }
+    const res = NextResponse.redirect(u.toString(), 302);
     clearPkceCookie(res);
     return res;
   };
