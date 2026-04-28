@@ -21,6 +21,7 @@ Pro 2 ha gia assorbito una parte importante della piattaforma V1:
 - knowledge/evidence: `knowledge_evidence_hits`, `knowledge_*`, `athlete_knowledge_*`, `session_knowledge_packets`, `knowledge_expansion_*`
 - ops/billing/biomech: `manual_actions`, `athlete_update_locks`, `billing_*`, `stripe_webhook_events`, `biomech_*`
 - interpretation staging (Pro 2 native): `interpretation_staging_runs`, `interpretation_staging_findings`, `interpretation_staging_commits`
+- devices parity (Pro 2 native): `connected_devices` lifecycle fields + `device_sync_exports` sync lifecycle fields
 
 Restano pero dipendenze reali del codice Pro 2 non coperte da migration Pro 2 pulite.
 
@@ -112,6 +113,11 @@ Ordine consigliato dopo `025_nutrition_fdc_food_cache.sql`:
 5. `030_interpretation_staging.sql` [implemented]
    - non e import V1: e il primo schema nuovo Pro 2 per orchestratore AI multilivello
    - tabelle: `interpretation_staging_runs`, `interpretation_staging_findings`, `interpretation_staging_commits`
+
+6. `031_device_ecosystem_parity.sql` [implemented]
+   - estensione `connected_devices` (lifecycle provider/account/status/capabilities)
+   - estensione `device_sync_exports` (sync_kind, external_event/job metadata, windows, checksum, error fields)
+   - RLS owner/coach esplicita su `connected_devices`
 
 ## Criteri Di Accettazione
 
