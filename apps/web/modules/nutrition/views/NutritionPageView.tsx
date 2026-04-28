@@ -2735,6 +2735,19 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   </div>
                 ))}
               </div>
+              {fuelingSessionPackages.length ? (
+                <section className="fueling-visible-plan-strip" aria-label="Piano di integrazione visibile">
+                  {fuelingSessionPackages.map((pkg) => (
+                    <article key={`fueling-visible-plan-${pkg.id}`} className="fueling-visible-plan-card">
+                      <span className="fueling-visible-plan-kicker">Piano integrazione</span>
+                      <strong>{pkg.title}</strong>
+                      <small>
+                        ~{pkg.durationMin} min · {round(pkg.intensityPctFtp)}% FTP · CHO/h ~{pkg.choPerHourSession} g/h
+                      </small>
+                    </article>
+                  ))}
+                </section>
+              ) : null}
               {recoverySummary?.status === "poor" || recoverySummary?.status === "moderate" ? (
                 <details className="collapsible-card" style={{ marginBottom: "10px" }}>
                   <summary>Recovery notes</summary>

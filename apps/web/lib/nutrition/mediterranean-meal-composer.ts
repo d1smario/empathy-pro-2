@@ -56,6 +56,14 @@ function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(n)));
 }
 
+function roundToStep(n: number, step = 5): number {
+  return Math.round(n / step) * step;
+}
+
+function clampStep(n: number, lo: number, hi: number, step = 5): number {
+  return Math.max(lo, Math.min(hi, roundToStep(n, step)));
+}
+
 function hashSeed(slot: MealSlotKey, kcal: number): number {
   const s = slot.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return Math.abs(Math.round(kcal * 1.73 + s * 41));
@@ -360,7 +368,7 @@ function pickProtAndFish(
 function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: number; prot: number; fat: number } {
   switch (key) {
     case "pasta": {
-      const gc = clamp(g, 45, 140);
+      const gc = clampStep(g, 45, 140);
       return {
         line: `${gc} g pasta secca (peso a crudo), condimento a parte`,
         kcal: gc * D.pastaDryKcalPerG,
@@ -370,7 +378,7 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
       };
     }
     case "riso": {
-      const gc = clamp(g, 40, 120);
+      const gc = clampStep(g, 40, 120);
       return {
         line: `${gc} g riso (peso a crudo)`,
         kcal: gc * D.riceDryKcalPerG,
@@ -380,7 +388,7 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
       };
     }
     case "patate": {
-      const gc = clamp(g, 80, 320);
+      const gc = clampStep(g, 80, 320);
       return {
         line: `${gc} g patate (cotte al forno/bollite)`,
         kcal: gc * D.potatoCookedKcalPerG,
@@ -390,7 +398,7 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
       };
     }
     case "farro": {
-      const gc = clamp(g, 45, 130);
+      const gc = clampStep(g, 45, 130);
       return {
         line: `${gc} g farro o orzo (peso a crudo/secco)`,
         kcal: gc * D.farroDryKcalPerG,
@@ -411,18 +419,20 @@ function protLine(
   fishKind: FishKind | null,
 ): { line: string; kcal: number; cho: number; prot: number; fat: number } {
   switch (key) {
-    case "pollo":
+    case "pollo": {
+      const gc = clampStep(g, 100, 240);
       return {
-        line: `${clamp(g, 100, 240)} g petto di pollo o tacchino`,
-        kcal: g * D.chickenKcalPerG,
-        cho: g * 0.01,
-        prot: g * D.chickenProtPerG,
-        fat: g * 0.04,
+        line: `${gc} g petto di pollo o tacchino`,
+        kcal: gc * D.chickenKcalPerG,
+        cho: gc * 0.01,
+        prot: gc * D.chickenProtPerG,
+        fat: gc * 0.04,
       };
+    }
     case "pesce": {
       const fk = fishKind ?? "merluzzo";
       const spec = FISH[fk];
-      const gc = clamp(g, 85, 280);
+      const gc = clampStep(g, 85, 280);
       return {
         line: `${gc} g ${spec.labelIt} (peso netto cotto)`,
         kcal: gc * spec.kcalPerG,
@@ -431,22 +441,26 @@ function protLine(
         fat: gc * spec.fatPerG,
       };
     }
-    case "legumi":
+    case "legumi": {
+      const gc = clampStep(g, 120, 220);
       return {
-        line: `${clamp(g, 120, 220)} g legumi cotti (ceci, lenticchie, fagioli)`,
-        kcal: g * D.legumeKcalPerG,
-        cho: g * D.legumeChoPerG,
-        prot: g * D.legumeProtPerG,
-        fat: g * 0.02,
+        line: `${gc} g legumi cotti (ceci, lenticchie, fagioli)`,
+        kcal: gc * D.legumeKcalPerG,
+        cho: gc * D.legumeChoPerG,
+        prot: gc * D.legumeProtPerG,
+        fat: gc * 0.02,
       };
-    case "manzo":
+    }
+    case "manzo": {
+      const gc = clampStep(g, 100, 220);
       return {
-        line: `${clamp(g, 100, 220)} g carne magra (manzo/maiale magro)`,
-        kcal: g * D.meatKcalPerG,
+        line: `${gc} g carne magra (manzo/maiale magro)`,
+        kcal: gc * D.meatKcalPerG,
         cho: 0,
-        prot: g * D.meatProtPerG,
-        fat: g * 0.08,
+        prot: gc * D.meatProtPerG,
+        fat: gc * 0.08,
       };
+    }
     case "uova": {
       const n = clamp(eggs, 2, 4);
       return {
@@ -592,10 +606,14 @@ function composeMainMeal(
 
   const carbFinal = carbLine(carbKey, carbG);
   const protFinal = protLine(protKey, protG, eggs, fishKind);
-  const vegK = vegG * D.vegKcalPerG;
-  const oilK = oilMl * D.oilKcalPerMl;
-  const paneK = paneG * D.breadKcalPerG;
-  const granaK = granaG * D.granaKcalPerG;
+  const vegFinalG = clampStep(vegG, 130, 280);
+  const oilFinalMl = clamp(oilMl, 8, 22);
+  const paneFinalG = clampStep(paneG, 20, 65);
+  const granaFinalG = granaG > 0 ? clampStep(granaG, 15, 35) : 0;
+  const vegK = vegFinalG * D.vegKcalPerG;
+  const oilK = oilFinalMl * D.oilKcalPerMl;
+  const paneK = paneFinalG * D.breadKcalPerG;
+  const granaK = granaFinalG * D.granaKcalPerG;
 
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
@@ -633,27 +651,27 @@ function composeMainMeal(
   lines.push(protFinal.line);
 
   items.push(
-    item("Contorno verdure", `${vegG} g verdure miste (crude o cotte)`, vegK, "veg", "Fibre, minerali, volume; condisci con parte degli grassi del pasto."),
+    item("Contorno verdure", `${vegFinalG} g verdure miste (crude o cotte)`, vegK, "veg", "Fibre, minerali, volume; condisci con parte degli grassi del pasto."),
   );
-  lines.push(`${vegG} g verdure miste a piacere`);
+  lines.push(`${vegFinalG} g verdure miste a piacere`);
 
   items.push(
-    item("Condimento olio EVO", `${clamp(oilMl, 8, 22)} ml olio d’oliva (a crudo)`, oilK, "fat", "Grassi insaturi; solo pranzo/cena, non in colazione."),
+    item("Condimento olio EVO", `${oilFinalMl} ml olio d’oliva (a crudo)`, oilK, "fat", "Grassi insaturi; solo pranzo/cena, non in colazione."),
   );
-  lines.push(`${clamp(oilMl, 8, 22)} ml olio d’oliva a crudo`);
+  lines.push(`${oilFinalMl} ml olio d’oliva a crudo`);
 
-  if (paneG > 0) {
+  if (paneFinalG > 0) {
     const isFocaccia = seed % 7 === 0;
-    const label = isFocaccia ? `${paneG} g focaccia (porzione piccola)` : `${paneG} g pane integrale o gallette`;
+    const label = isFocaccia ? `${paneFinalG} g focaccia (porzione piccola)` : `${paneFinalG} g pane integrale o gallette`;
     items.push(item("Pane / focaccia", label, paneK, "cho_heavy", "Accompagnamento in piccola quantità; il carboidrato principale resta quello scelto sopra."));
     lines.push(label);
   }
 
-  if (granaG > 0) {
+  if (granaFinalG > 0) {
     items.push(
-      item("Grana / formaggio", `${granaG} g grana o formaggio stagionato`, granaK, "fat", "Sapore e proteine; quota grassi del pasto."),
+      item("Grana / formaggio", `${granaFinalG} g grana o formaggio stagionato`, granaK, "fat", "Sapore e proteine; quota grassi del pasto."),
     );
-    lines.push(`${granaG} g grana o formaggio stagionato`);
+    lines.push(`${granaFinalG} g grana o formaggio stagionato`);
   }
 
   if (m.fatG > 22 && seed % 4 === 1) {
