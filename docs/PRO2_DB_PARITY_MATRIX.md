@@ -20,6 +20,7 @@ Pro 2 ha gia assorbito una parte importante della piattaforma V1:
 - nutrition nuova: `nutrition_product_catalog`, `food_diary_entries`, `nutrition_fdc_foods`
 - knowledge/evidence: `knowledge_evidence_hits`, `knowledge_*`, `athlete_knowledge_*`, `session_knowledge_packets`, `knowledge_expansion_*`
 - ops/billing/biomech: `manual_actions`, `athlete_update_locks`, `billing_*`, `stripe_webhook_events`, `biomech_*`
+- interpretation staging (Pro 2 native): `interpretation_staging_runs`, `interpretation_staging_findings`, `interpretation_staging_commits`
 
 Restano pero dipendenze reali del codice Pro 2 non coperte da migration Pro 2 pulite.
 
@@ -86,30 +87,31 @@ Queste completano audit, loop adattivo e compatibilita storica.
 
 Ordine consigliato dopo `025_nutrition_fdc_food_cache.sql`:
 
-1. `026_v1_remaining_core_state_tables.sql`
+1. `026_v1_remaining_core_state_tables.sql` [implemented]
    - `twin_states`
    - `load_series`
    - `empathy_events`
 
-2. `027_v1_nutrition_plan_compat.sql`
+2. `027_v1_nutrition_plan_compat.sql` [implemented]
    - `nutrition_constraints`
    - `nutrition_plans`
    - decisione esplicita su `meals`
 
-3. `028_media_assets_catalog_v1.sql`
+3. `028_media_assets_catalog_v1.sql` [implemented]
    - `media_assets`
    - campi quality ops da V1 `013`
    - policy read all / write authenticated o admin, da decidere
 
-4. `029_training_and_lab_rls_hardening.sql`
+4. `029_training_and_lab_rls_hardening.sql` [implemented]
    - RLS `planned_workouts`
    - RLS `executed_workouts`
    - RLS `training_import_jobs`
    - RLS `metabolic_lab_runs`
    - eventuale RLS `physiological_profiles`
 
-5. `030_interpretation_staging.sql`
+5. `030_interpretation_staging.sql` [implemented]
    - non e import V1: e il primo schema nuovo Pro 2 per orchestratore AI multilivello
+   - tabelle: `interpretation_staging_runs`, `interpretation_staging_findings`, `interpretation_staging_commits`
 
 ## Criteri Di Accettazione
 
