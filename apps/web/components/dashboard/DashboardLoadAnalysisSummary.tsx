@@ -31,6 +31,13 @@ function polyline(values: number[], width: number, height: number) {
     .join(" ");
 }
 
+function formatDurationTotal(min: number): string {
+  if (!Number.isFinite(min) || min <= 0) return "—";
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  return `${h}h ${m.toString().padStart(2, "0")}m`;
+}
+
 function radarRingPoints(values: number[], cx: number, cy: number, maxR: number): string {
   return values
     .map((v, i) => {
@@ -293,6 +300,10 @@ export function DashboardLoadAnalysisSummary() {
     () => refKpisLastNDays(rows as ExecutedAnalyticsRow[], 28, analyticsEndDate),
     [rows, analyticsEndDate],
   );
+  const ref42 = useMemo(
+    () => refKpisLastNDays(rows as ExecutedAnalyticsRow[], 42, analyticsEndDate),
+    [rows, analyticsEndDate],
+  );
 
   const biomarkers = useMemo(() => extractModulatorBiomarkers(healthPanels), [healthPanels]);
 
@@ -312,10 +323,10 @@ export function DashboardLoadAnalysisSummary() {
   const couplingTone =
     coupling7 > 1.15 ? "text-rose-300" : coupling7 < 0.85 ? "text-amber-300" : "text-emerald-300";
 
-  const last28s = series.slice(-28);
+  const last42s = series.slice(-42);
   const last42Compare = compareSeries.slice(-42);
-  const ctlLine = polyline(last28s.map((p) => p.ctl), 720, 160);
-  const iCtlLine = polyline(last28s.map((p) => p.iCtl), 720, 160);
+  const ctlLine = polyline(last42s.map((p) => p.ctl), 1100, 260);
+  const iCtlLine = polyline(last42s.map((p) => p.iCtl), 1100, 260);
   const plannedLine = polyline(last42Compare.map((p) => p.planned), 1100, 260);
   const extLine = polyline(last42Compare.map((p) => p.executed), 1100, 260);
   const intLine = polyline(last42Compare.map((p) => p.internal), 1100, 260);
@@ -370,6 +381,14 @@ export function DashboardLoadAnalysisSummary() {
   const maxBound = Math.max(...bounds, 1);
   const radarRecent = metricsRecent.map((v) => normalizeRange(v, minBound, maxBound));
   const radarBaseline = metricsBaseline.map((v) => normalizeRange(v, minBound, maxBound));
+  const ext42 = last42s.reduce((s, d) => s + d.external, 0);
+  const int42 = last42s.reduce((s, d) => s + d.internal, 0);
+  const donut7Total = Math.max(1, ext7 + int7);
+  const donut42Total = Math.max(1, ext42 + int42);
+  const rDonut = 28;
+  const donutC = 2 * Math.PI * rDonut;
+  const ext7Arc = donutC * (ext7 / donut7Total);
+  const ext42Arc = donutC * (ext42 / donut42Total);
 
   return (
     <section id="dash-core" className="scroll-mt-28">
@@ -511,50 +530,25 @@ export function DashboardLoadAnalysisSummary() {
               ) : null}
             </details>
 
-            {last28s.length > 1 ? (
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
-                  <LineChart className="h-4 w-4 text-cyan-400" aria-hidden />
-                  CTL esterno vs CTL interno (28g)
-                </h3>
-                <svg viewBox="0 0 720 160" className="h-40 w-full" role="img" aria-label="Andamento CTL">
-                  <polyline fill="none" stroke="rgba(56,189,248,0.9)" strokeWidth="2" points={ctlLine} />
-                  <polyline fill="none" stroke="rgba(167,139,250,0.95)" strokeWidth="2" points={iCtlLine} />
-                </svg>
-                <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-4 rounded bg-sky-400/80" aria-hidden />
-                    CTL (esterno)
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-4 rounded bg-violet-400/80" aria-hidden />
-                    iCTL (interno)
-                  </span>
-                </div>
-              </div>
-            ) : null}
-
             {last42Compare.length > 1 ? (
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
                   <LineChart className="h-4 w-4 text-cyan-400" aria-hidden />
-                  Trend 42g · Planned vs Real vs Internal
+                  Pannello unico 42g · load + CTL + confronto
                 </h3>
                 <svg viewBox="0 0 1100 260" width="100%" height="260" className="max-h-[40vh]">
-                  <polyline fill="none" stroke="#60a5fa" strokeWidth="2" points={plannedLine} />
-                  <polyline fill="none" stroke="#ff7a1a" strokeWidth="2.5" points={extLine} />
-                  <polyline fill="none" stroke="#d946ef" strokeWidth="2.5" points={intLine} />
+                  <polyline fill="none" stroke="#60a5fa" strokeWidth="1.8" points={plannedLine} />
+                  <polyline fill="none" stroke="#ff7a1a" strokeWidth="2.3" points={extLine} />
+                  <polyline fill="none" stroke="#d946ef" strokeWidth="2.3" points={intLine} />
+                  <polyline fill="none" stroke="rgba(56,189,248,0.85)" strokeWidth="1.8" points={ctlLine} />
+                  <polyline fill="none" stroke="rgba(167,139,250,0.9)" strokeWidth="1.8" points={iCtlLine} />
                 </svg>
                 <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#60a5fa]" /> Planned
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#ff7a1a]" /> Real
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2 w-2 rounded-full bg-[#d946ef]" /> Internal
-                  </span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#60a5fa]" /> Planned</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#ff7a1a]" /> Real</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#d946ef]" /> Internal</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-400/90" /> CTL ext</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-400/90" /> CTL int</span>
                 </div>
               </div>
             ) : null}
@@ -595,6 +589,77 @@ export function DashboardLoadAnalysisSummary() {
                     recente; viola tratteggiato = baseline.
                   </p>
                 </details>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <h3 className="mb-2 text-sm font-bold text-white">Donut 7g · external vs internal</h3>
+                <div className="flex items-center gap-4">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r={rDonut} fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="10" />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r={rDonut}
+                      fill="none"
+                      stroke="#ff7a1a"
+                      strokeWidth="10"
+                      strokeDasharray={`${ext7Arc} ${donutC - ext7Arc}`}
+                      transform="rotate(-90 48 48)"
+                    />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r={rDonut}
+                      fill="none"
+                      stroke="#d946ef"
+                      strokeWidth="10"
+                      strokeDasharray={`${donutC - ext7Arc} ${ext7Arc}`}
+                      strokeDashoffset={-ext7Arc}
+                      transform="rotate(-90 48 48)"
+                    />
+                  </svg>
+                  <div className="text-xs text-gray-400">
+                    <p>External: {ext7.toFixed(0)}</p>
+                    <p>Internal: {int7.toFixed(0)}</p>
+                    <p className="text-gray-500">Totale: {(ext7 + int7).toFixed(0)}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <h3 className="mb-2 text-sm font-bold text-white">Donut 42g · external vs internal</h3>
+                <div className="flex items-center gap-4">
+                  <svg width="96" height="96" viewBox="0 0 96 96">
+                    <circle cx="48" cy="48" r={rDonut} fill="none" stroke="rgba(148,163,184,0.2)" strokeWidth="10" />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r={rDonut}
+                      fill="none"
+                      stroke="#ff7a1a"
+                      strokeWidth="10"
+                      strokeDasharray={`${ext42Arc} ${donutC - ext42Arc}`}
+                      transform="rotate(-90 48 48)"
+                    />
+                    <circle
+                      cx="48"
+                      cy="48"
+                      r={rDonut}
+                      fill="none"
+                      stroke="#d946ef"
+                      strokeWidth="10"
+                      strokeDasharray={`${donutC - ext42Arc} ${ext42Arc}`}
+                      strokeDashoffset={-ext42Arc}
+                      transform="rotate(-90 48 48)"
+                    />
+                  </svg>
+                  <div className="text-xs text-gray-400">
+                    <p>External: {ext42.toFixed(0)}</p>
+                    <p>Internal: {int42.toFixed(0)}</p>
+                    <p className="text-gray-500">Ore 7g/42g: {formatDurationTotal(ref7.totalMinutes)} / {formatDurationTotal(ref42.totalMinutes)}</p>
+                  </div>
+                </div>
               </div>
             </div>
 
