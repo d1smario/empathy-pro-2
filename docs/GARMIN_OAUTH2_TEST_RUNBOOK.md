@@ -32,7 +32,7 @@ Do not paste secret values in chat or commits. Verify presence and exact host/pa
   - `/api/integrations/garmin/push/dailies`
 - Keep unused summary domains on hold while validating the first flow.
 - **Capability / permissions**: in the Garmin Developer portal, enable the Health API capabilities your app needs (activities, dailies, sleeps, etc.). After linking, Pro 2 Profile → Devices shows **OAuth scope** and **user permissions granted** (from Garmin `GET /rest/user/permissions`). If a stream stays empty, compare that list with the portal capability toggles — Garmin does not expose “denied” items, only what was granted.
-- **State parameter**: authorize sends `state` as JSON `{"athleteId":"<uuid>"}` only. If the user returns with `error` and no usable `state`, the callback still redirects to `/profile?garmin=error&reason=…&detail=callback_state_missing_athlete`.
+- **State parameter**: authorize now sends `state=<athlete_uuid>` (plain UUID string, spec-aligned). Callback parser remains backward compatible with old JSON/base64 JSON state. If the user returns with `error` and no usable `state`, callback redirects to `/profile?garmin=error&reason=…&detail=callback_state_missing_athlete`.
 
 ## Test sequence
 

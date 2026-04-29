@@ -96,8 +96,11 @@ export async function GET(req: NextRequest) {
     }
 
     const challenge = garminPkceChallengeS256(verifier);
-    /** Solo `athleteId`: il callback usa default `provider`/`domain`/`sourceKind` se assenti (`callback/route.ts`). */
-    const state = JSON.stringify({ athleteId });
+    /**
+     * Garmin OAuth2: `state` come stringa unica/nonce.
+     * Usiamo l'UUID atleta diretto (niente JSON) per aderenza spec e round-trip più robusto.
+     */
+    const state = athleteId;
 
     /** Parametri PKCE solo quelli documentati; path = fallback sopra salvo `GARMIN_OAUTH2_AUTHORIZE_URL`. */
     const authorize = new URL(garminOAuth2AuthorizeBaseFromEnv());

@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
   const code = (req.nextUrl.searchParams.get("code") ?? "").trim();
   const state = (req.nextUrl.searchParams.get("state") ?? "").trim();
   const error = (req.nextUrl.searchParams.get("error") ?? "").trim();
+  /** Parser compatibile con state UUID plain (corrente) e JSON/base64 JSON (legacy). */
   const callbackState = parseRealityCallbackState(state);
   const athleteId = callbackState.athleteId?.trim() ?? "";
   const queryParamKeys = Array.from(req.nextUrl.searchParams.keys());

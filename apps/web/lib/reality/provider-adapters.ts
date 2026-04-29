@@ -118,6 +118,10 @@ function parseRawStateObject(rawState: string): Record<string, unknown> | null {
   return null;
 }
 
+function looksLikeUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
 export function assertRealityProviderFlow(input: {
   provider: RealityProvider;
   domain: RealityDomain;
@@ -240,7 +244,13 @@ export function parseRealityCallbackState(rawState?: string | null): RealityCall
   if (!state) return {};
 
   const record = parseRawStateObject(state);
-  if (!record) return {};
+  if (!record) {
+    // OAuth2 `state` can be a plain nonce/string: for Garmin we accept direct athlete UUID.
+    if (looksLikeUuid(state)) {
+      return { athleteId: state };
+    }
+    return {};
+  }
 
   return {
     athleteId:
