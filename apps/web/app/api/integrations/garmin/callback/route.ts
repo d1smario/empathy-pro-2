@@ -69,6 +69,10 @@ export async function GET(req: NextRequest) {
   if (error && athleteId) {
     return redirectErr(error);
   }
+  /** Garmin può restituire `error` senza `state` parsabile: evita risposta JSON al browser. */
+  if (error && !athleteId) {
+    return redirectErr(error, "callback_state_missing_athlete");
+  }
 
   if (code && athleteId) {
     const cookieRaw = req.cookies.get(GARMIN_PKCE_COOKIE)?.value ?? "";

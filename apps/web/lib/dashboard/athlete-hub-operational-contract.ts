@@ -7,7 +7,17 @@ export type AthleteHubOperationalOk = {
   athleteId: string;
   window: { from: string; to: string };
   profile: { line: string } | null;
-  training: { plannedCount: number; executedCount: number };
+  training: {
+    plannedCount: number;
+    executedCount: number;
+    analyzerAligned: {
+      basis: "tss_rolling_windows";
+      fromDate: string;
+      toDate: string;
+      last7: { planned: number; executed: number; compliancePct: number };
+      last28: { planned: number; executed: number; compliancePct: number };
+    };
+  };
   nutrition: { constraintsLine: string | null; plansCount: number };
   physiology: { line: string } | null;
   health: { panelsCount: number; lastPanelLabel: string | null };

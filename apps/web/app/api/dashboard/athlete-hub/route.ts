@@ -25,6 +25,28 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 const PROFILE_SELECT =
   "id, first_name, last_name, email, birth_date, sex, timezone, activity_level, height_cm, weight_kg, training_days_per_week, training_max_session_minutes, updated_at";
 
+function sumLastNDaysByDate(
+  rows: Array<{ date: string | null; value: number }>,
+  endDateIso: string,
+  days: number,
+): number {
+  const end = new Date(`${endDateIso}T00:00:00`);
+  if (Number.isNaN(end.getTime())) return 0;
+  const start = new Date(end);
+  start.setDate(end.getDate() - (days - 1));
+  const startIso = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  return rows.reduce((acc, row) => {
+    if (!row.date) return acc;
+    if (row.date < startIso || row.date > endDateIso) return acc;
+    return acc + row.value;
+  }, 0);
+}
+
+function compliancePct(planned: number, executed: number): number {
+  if (planned > 0) return (executed / planned) * 100;
+  return executed > 0 ? 100 : 0;
+}
+
 function addDays(isoDate: string, delta: number): string {
   const base = new Date(`${isoDate}T12:00:00`);
   if (Number.isNaN(base.getTime())) return isoDate;
@@ -59,6 +81,8 @@ export async function GET(req: NextRequest) {
       profRes,
       plannedCnt,
       executedCnt,
+      executedLoads120,
+      plannedLoads120,
       nutCRes,
       nutPlansCnt,
       physRes,
@@ -79,6 +103,18 @@ export async function GET(req: NextRequest) {
         .eq("athlete_id", athleteId)
         .gte("date", from)
         .lte("date", to),
+      db
+        .from("executed_workouts")
+        .select("date, tss")
+        .eq("athlete_id", athleteId)
+        .gte("date", addDays(todayIso, -120))
+        .lte("date", todayIso),
+      db
+        .from("planned_workouts")
+        .select("date, tss_target")
+        .eq("athlete_id", athleteId)
+        .gte("date", addDays(todayIso, -120))
+        .lte("date", todayIso),
       db.from("nutrition_constraints").select("*").eq("athlete_id", athleteId).maybeSingle(),
       db
         .from("nutrition_plans")
@@ -111,6 +147,8 @@ export async function GET(req: NextRequest) {
       profRes.error?.message ??
       plannedCnt.error?.message ??
       executedCnt.error?.message ??
+      executedLoads120.error?.message ??
+      plannedLoads120.error?.message ??
       nutCRes.error?.message ??
       nutPlansCnt.error?.message ??
       physRes.error?.message ??
@@ -137,6 +175,18 @@ export async function GET(req: NextRequest) {
         : null;
 
     const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
+    const executedRows = ((executedLoads120.data ?? []) as Array<{ date: string | null; tss: number | null }>).map((row) => ({
+      date: row.date,
+      value: Math.max(0, Number(row.tss ?? 0)),
+    }));
+    const plannedRows = ((plannedLoads120.data ?? []) as Array<{ date: string | null; tss_target: number | null }>).map((row) => ({
+      date: row.date,
+      value: Math.max(0, Number(row.tss_target ?? 0)),
+    }));
+    const planned7 = sumLastNDaysByDate(plannedRows, todayIso, 7);
+    const executed7 = sumLastNDaysByDate(executedRows, todayIso, 7);
+    const planned28 = sumLastNDaysByDate(plannedRows, todayIso, 28);
+    const executed28 = sumLastNDaysByDate(executedRows, todayIso, 28);
 
     const includeOperationalSignals =
       (req.nextUrl.searchParams.get("includeOperationalSignals") ?? "").trim() === "1";
@@ -171,6 +221,21 @@ export async function GET(req: NextRequest) {
       training: {
         plannedCount: plannedCnt.count ?? 0,
         executedCount: executedCnt.count ?? 0,
+        analyzerAligned: {
+          basis: "tss_rolling_windows",
+          toDate: todayIso,
+          fromDate: addDays(todayIso, -120),
+          last7: {
+            planned: planned7,
+            executed: executed7,
+            compliancePct: compliancePct(planned7, executed7),
+          },
+          last28: {
+            planned: planned28,
+            executed: executed28,
+            compliancePct: compliancePct(planned28, executed28),
+          },
+        },
       },
       nutrition: {
         constraintsLine: constraints ? formatNutritionConstraintsLine(constraints) : null,

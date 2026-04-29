@@ -13,6 +13,7 @@ import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import type { AthleteMemory, PhysiologyState, TwinState } from "@/lib/empathy/schemas";
 import { cn } from "@/lib/cn";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { garminOAuthReasonGuidance } from "@/lib/integrations/garmin-oauth-reason-copy";
 import { GARMIN_SUMMARY_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
@@ -397,8 +398,13 @@ export default function ProfilePage() {
   const [garminLink, setGarminLink] = useState<{
     linked: boolean;
     garminUserIdMasked?: string;
+    oauthScope?: string | null;
+    userPermissionsGranted?: string[] | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
   } | null>(null);
   const [garminReturn, setGarminReturn] = useState<string | null>(null);
+  const [garminReason, setGarminReason] = useState<string | null>(null);
   const [garminDetail, setGarminDetail] = useState<string | null>(null);
   const [garminDisconnecting, setGarminDisconnecting] = useState(false);
   const [garminBackfillStream, setGarminBackfillStream] = useState("activityDetails");
@@ -528,8 +534,10 @@ export default function ProfilePage() {
     const q = new URLSearchParams(window.location.search);
     const p = q.get("garmin");
     if (p) setGarminReturn(p);
-    const d = q.get("detail") ?? q.get("reason");
-    if (d) setGarminDetail(d);
+    const reason = q.get("reason");
+    const detail = q.get("detail");
+    if (reason) setGarminReason(reason);
+    if (detail) setGarminDetail(detail);
   }, []);
 
   useEffect(() => {
@@ -544,12 +552,29 @@ export default function ProfilePage() {
           `/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`,
           { credentials: "include" },
         );
-        const j = (await r.json()) as { linked?: boolean; garminUserIdMasked?: string };
+        const j = (await r.json()) as {
+          linked?: boolean;
+          garminUserIdMasked?: string;
+          oauthScope?: string | null;
+          userPermissionsGranted?: string[] | null;
+          error?: string;
+          hint?: string;
+        };
         if (!cancelled) {
-          setGarminLink({
-            linked: Boolean(j.linked),
-            garminUserIdMasked: j.garminUserIdMasked,
-          });
+          if (!r.ok) {
+            setGarminLink({
+              linked: false,
+              linkStatusError: j.error ?? `HTTP ${r.status}`,
+              linkStatusHint: typeof j.hint === "string" ? j.hint : undefined,
+            });
+          } else {
+            setGarminLink({
+              linked: Boolean(j.linked),
+              garminUserIdMasked: j.garminUserIdMasked,
+              oauthScope: j.oauthScope ?? null,
+              userPermissionsGranted: Array.isArray(j.userPermissionsGranted) ? j.userPermissionsGranted : null,
+            });
+          }
         }
       } catch {
         if (!cancelled) setGarminLink({ linked: false });
@@ -1374,20 +1399,53 @@ export default function ProfilePage() {
                   </p>
                 ) : null}
                 {garminReturn === "error" ? (
-                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
-                    Collegamento Garmin non riuscito
-                    {garminDetail ? (
-                      <>
-                        : <code className="text-white/70">{garminDetail}</code>
-                      </>
-                    ) : (
-                      <>
-                        {" "}
-                        (vedi parametro <code className="text-white/80">reason</code> nell&apos;URL)
-                      </>
-                    )}
-                    . Riprova o verifica env e redirect URI nel portale Garmin.
-                  </p>
+                  <div className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    <p style={{ marginBottom: 8 }}>
+                      Collegamento Garmin non riuscito
+                      {garminReason ? (
+                        <>
+                          {" "}
+                          (<code className="text-white/70">{garminReason}</code>
+                          {garminDetail ? (
+                            <>
+                              , dettaglio: <code className="text-white/70">{garminDetail}</code>
+                            </>
+                          ) : null}
+                          )
+                        </>
+                      ) : garminDetail ? (
+                        <>
+                          : <code className="text-white/70">{garminDetail}</code>
+                        </>
+                      ) : (
+                        <>
+                          {" "}
+                          (parametri <code className="text-white/80">reason</code> /{" "}
+                          <code className="text-white/80">detail</code> nell&apos;URL)
+                        </>
+                      )}
+                      . Riprova o verifica env e redirect URI nel portale Garmin.
+                    </p>
+                    {(() => {
+                      const g = garminOAuthReasonGuidance(garminReason);
+                      if (!g) return null;
+                      return (
+                        <div
+                          className="rounded-md border border-rose-500/25 bg-rose-950/20 px-3 py-2 text-white/85"
+                          style={{ marginTop: 4 }}
+                        >
+                          <p className="font-medium text-rose-100/95" style={{ marginBottom: 6 }}>
+                            {g.title}
+                          </p>
+                          <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed">
+                            {g.bullets.map((b, i) => (
+                              <li key={i}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 ) : null}
                 {garminReturn === "forbidden" ? (
                   <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
@@ -1422,6 +1480,17 @@ export default function ProfilePage() {
                 ) : null}
                 {activeAthleteId && garminLink ? (
                   <div className="flex flex-col gap-2" style={{ marginTop: 12 }}>
+                    {garminLink.linkStatusError ? (
+                      <p className="text-sm text-amber-400/90">
+                        Stato Garmin non disponibile: {garminLink.linkStatusError}
+                        {garminLink.linkStatusHint ? (
+                          <>
+                            {" "}
+                            <span className="text-white/75">({garminLink.linkStatusHint})</span>
+                          </>
+                        ) : null}
+                      </p>
+                    ) : null}
                     {garminLink.linked ? (
                       <p className="muted-copy text-sm">
                         Garmin collegato (ID API <span className="text-white/80">{garminLink.garminUserIdMasked}</span>
@@ -1430,6 +1499,40 @@ export default function ProfilePage() {
                     ) : (
                       <p className="muted-copy text-sm">Nessun account Garmin collegato a questo profilo atleta.</p>
                     )}
+                    {garminLink.linked &&
+                    (garminLink.oauthScope || (garminLink.userPermissionsGranted && garminLink.userPermissionsGranted.length > 0)) ? (
+                      <div
+                        className="rounded-md border border-white/12 bg-black/25 px-3 py-2 text-xs text-white/80"
+                        style={{ marginTop: 4 }}
+                      >
+                        <p className="font-medium text-white/90" style={{ marginBottom: 6 }}>
+                          Permessi e scope (allineamento portale Garmin)
+                        </p>
+                        {garminLink.oauthScope ? (
+                          <p className="break-all" style={{ marginBottom: 6 }}>
+                            <span className="text-white/60">OAuth scope (token):</span>{" "}
+                            <code className="text-cyan-100/90">{garminLink.oauthScope}</code>
+                          </p>
+                        ) : null}
+                        {garminLink.userPermissionsGranted && garminLink.userPermissionsGranted.length > 0 ? (
+                          <div>
+                            <p className="text-white/60" style={{ marginBottom: 4 }}>
+                              Health API — permessi concessi (GET /rest/user/permissions):
+                            </p>
+                            <ul className="max-h-32 list-disc space-y-0.5 overflow-y-auto pl-4 font-mono text-[11px] text-white/75">
+                              {garminLink.userPermissionsGranted.map((perm) => (
+                                <li key={perm}>{perm}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        ) : (
+                          <p className="text-white/55">
+                            Elenco permessi da Garmin non ancora disponibile o vuoto; dopo il collegamento può
+                            popolarsi al prossimo refresh.
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                     <div className="flex flex-wrap items-center gap-2">
                       <a
                         href={`/api/integrations/garmin/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}

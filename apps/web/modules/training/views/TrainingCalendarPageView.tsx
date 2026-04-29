@@ -271,6 +271,8 @@ export default function TrainingCalendarPageView() {
         to = maxIsoDay(to, padTo);
       }
       const q = new URLSearchParams({ athleteId, from, to });
+      /** Calendario: solo planned/executed; evita `resolveAthleteMemory` su ogni cambio mese (vedi `docs/MODULE_FETCH_AUDIT_PRO2.md`). */
+      q.set("includeAthleteContext", "0");
       const res = await fetch(`/api/training/planned-window?${q}`, {
         cache: "no-store",
         credentials: "same-origin",

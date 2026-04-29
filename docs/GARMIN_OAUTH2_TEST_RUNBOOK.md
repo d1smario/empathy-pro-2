@@ -31,6 +31,8 @@ Do not paste secret values in chat or commits. Verify presence and exact host/pa
   - `/api/integrations/garmin/push/ping`
   - `/api/integrations/garmin/push/dailies`
 - Keep unused summary domains on hold while validating the first flow.
+- **Capability / permissions**: in the Garmin Developer portal, enable the Health API capabilities your app needs (activities, dailies, sleeps, etc.). After linking, Pro 2 Profile → Devices shows **OAuth scope** and **user permissions granted** (from Garmin `GET /rest/user/permissions`). If a stream stays empty, compare that list with the portal capability toggles — Garmin does not expose “denied” items, only what was granted.
+- **State parameter**: authorize sends `state` as JSON `{"athleteId":"<uuid>"}` only. If the user returns with `error` and no usable `state`, the callback still redirects to `/profile?garmin=error&reason=…&detail=callback_state_missing_athlete`.
 
 ## Test sequence
 
@@ -64,9 +66,11 @@ flowchart LR
 
 ## First failure codes to inspect
 
+- `access_denied`: user cancelled consent or Garmin blocked the authorization screen; retry and confirm portal capabilities.
 - `pkce_mismatch`: browser came back after PKCE expiry, cookie missing, or different browser/session.
 - `oauth2_env_missing`: missing client id, client secret, or redirect URI on Vercel.
 - `service_role_unconfigured`: missing `SUPABASE_SERVICE_ROLE_KEY`.
-- `Garmin token exchange HTTP ...`: Garmin rejected the callback code exchange; compare redirect URI and client credentials.
+- `Garmin token exchange HTTP ...` / `invalid_grant`: Garmin rejected the callback code exchange; compare redirect URI and client credentials; start a fresh authorize flow.
 - `garmin_account_already_linked`: the same Garmin account is already linked to another athlete profile.
+- `callback_state_missing_athlete` (in `detail`): OAuth `error` returned without a parseable `athleteId` in `state`; often a bookmarked callback URL or an interrupted flow — start again from Profile → Collega Garmin.
 

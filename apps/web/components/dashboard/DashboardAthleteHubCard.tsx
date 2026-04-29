@@ -162,6 +162,17 @@ export function DashboardAthleteHubCard() {
             <span>
               {hub.training.plannedCount} pianificati · {hub.training.executedCount} eseguiti
             </span>
+            <span className="mt-2 block text-xs text-gray-400">
+              Analyzer 7g (TSS) {hub.training.analyzerAligned.last7.planned.toFixed(0)} /{" "}
+              {hub.training.analyzerAligned.last7.executed.toFixed(0)} · compliance{" "}
+              {hub.training.analyzerAligned.last7.compliancePct.toFixed(0)}%
+            </span>
+            <span className="mt-1 block text-xs text-gray-500">
+              28g {hub.training.analyzerAligned.last28.planned.toFixed(0)} /{" "}
+              {hub.training.analyzerAligned.last28.executed.toFixed(0)} ·{" "}
+              {hub.training.analyzerAligned.last28.compliancePct.toFixed(0)}% (
+              {hub.training.analyzerAligned.fromDate} → {hub.training.analyzerAligned.toDate})
+            </span>
             <span className="mt-2 block">
               <Pro2Link href="/training/builder" variant="secondary" className="text-xs">
                 Apri builder (vista densa KPI + famiglie)
