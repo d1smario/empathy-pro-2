@@ -2358,6 +2358,41 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       maxSustainablePct,
     };
   }, [physio, profile, predictorEffectiveIntensityPctFtp, predictorSport, predictorEffectiveTimeMin, resolvedFuelingChoGPerHour, fuelingPhysiology, glycogenDepletion.totalHours]);
+  const predictorOpsCards = useMemo(
+    () => [
+      { label: "Power stimata", value: `${round(predictor.powerW)}`, unit: "W", sub: "Potenza evento", tone: nutritionToneForLabel("Power stimata") },
+      {
+        label: "Consumo energetico",
+        value: `${round(predictor.metabolicKcalH)}`,
+        unit: "kcal/h",
+        sub: "Costo metabolico",
+        tone: nutritionToneForLabel("Consumo energetico"),
+      },
+      { label: "CHO richiesta", value: `${round(predictor.choGH)}`, unit: "g/h", sub: "Richiesta ossidativa", tone: nutritionToneForLabel("CHO richiesta") },
+      {
+        label: "Serbatoio glicogeno",
+        value: `${round(predictor.totalGlycogen)}`,
+        unit: "g",
+        sub: "Stima totale disponibile",
+        tone: nutritionToneForLabel("Serbatoio glicogeno"),
+      },
+      {
+        label: "Esaurimento stimato",
+        value: predictor.exhaustionHours > 100 ? "No risk" : `${round(predictor.exhaustionHours, 1)}`,
+        unit: predictor.exhaustionHours > 100 ? "" : "h",
+        sub: "Orizzonte di rischio",
+        tone: nutritionToneForLabel("Esaurimento stimato"),
+      },
+      {
+        label: "% FTP sostenibile",
+        value: `${predictor.maxSustainablePct}`,
+        unit: "%",
+        sub: "Con fueling corrente",
+        tone: nutritionToneForLabel("% FTP sostenibile"),
+      },
+    ],
+    [predictor],
+  );
 
   async function handleSaveNutrition() {
     if (!athleteId) return;
@@ -3124,28 +3159,28 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   vincoli operativi. Timing espresso come classi qualitative di emivita.
                 </p>
               </details>
-              <div className="kpi-grid" style={{ marginBottom: "14px" }}>
+              <div className="fueling-main-kpi-grid" style={{ marginBottom: "14px" }}>
                 {integrationDynamicsSummary.map((card) => (
-                  <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
-                    <div className="kpi-card-label">
-                      <span className="signal-board-dot" />
+                  <div key={card.label} className={`fueling-main-kpi-card fueling-main-kpi-card--${nutritionToneForLabel(card.label)}`}>
+                    <div className="fueling-main-kpi-label">
                       {card.label}
                     </div>
-                    <div className="kpi-card-value">{card.value}</div>
+                    <div className="fueling-main-kpi-value">{card.value}</div>
+                    <div className="fueling-main-kpi-sub">Pathway + solver</div>
                   </div>
                 ))}
               </div>
               <div className="nutrition-section-band" style={{ fontSize: "0.9rem", marginBottom: "8px" }}>
                 Catalogo integratori · sintesi numerica
               </div>
-              <div className="kpi-grid" style={{ marginBottom: "10px" }}>
+              <div className="fueling-main-kpi-grid" style={{ marginBottom: "10px" }}>
                 {integrationStackSummary.map((card) => (
-                  <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
-                    <div className="kpi-card-label">
-                      <span className="signal-board-dot" />
+                  <div key={card.label} className={`fueling-main-kpi-card fueling-main-kpi-card--${nutritionToneForLabel(card.label)}`}>
+                    <div className="fueling-main-kpi-label">
                       {card.label}
                     </div>
-                    <div className="kpi-card-value">{card.value}</div>
+                    <div className="fueling-main-kpi-value">{card.value}</div>
+                    <div className="fueling-main-kpi-sub">Catalogo integrazione</div>
                   </div>
                 ))}
               </div>
@@ -3511,13 +3546,17 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   />
                 </div>
               </div>
-              <div className="kpi-grid" style={{ marginBottom: "10px" }}>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("Power stimata")}`}><div className="kpi-card-label"><span className="signal-board-dot" />Power stimata</div><div className="kpi-card-value">{round(predictor.powerW)} W</div></div>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("Consumo energetico")}`}><div className="kpi-card-label"><span className="signal-board-dot" />Consumo energetico</div><div className="kpi-card-value">{round(predictor.metabolicKcalH)} kcal/h</div></div>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("CHO richiesta")}`}><div className="kpi-card-label"><span className="signal-board-dot" />CHO richiesta</div><div className="kpi-card-value">{round(predictor.choGH)} g/h</div></div>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("Serbatoio glicogeno")}`}><div className="kpi-card-label"><span className="signal-board-dot" />Serbatoio glicogeno</div><div className="kpi-card-value">{round(predictor.totalGlycogen)} g</div></div>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("Esaurimento stimato")}`}><div className="kpi-card-label"><span className="signal-board-dot" />Esaurimento stimato</div><div className="kpi-card-value">{predictor.exhaustionHours > 100 ? "No risk" : `${round(predictor.exhaustionHours, 1)} h`}</div></div>
-                <div className={`kpi-card signal-board-card tone-${nutritionToneForLabel("% FTP sostenibile")}`}><div className="kpi-card-label"><span className="signal-board-dot" />% FTP sostenibile</div><div className="kpi-card-value">{predictor.maxSustainablePct}%</div></div>
+              <div className="fueling-main-kpi-grid" style={{ marginBottom: "10px" }}>
+                {predictorOpsCards.map((card) => (
+                  <div key={card.label} className={`fueling-main-kpi-card fueling-main-kpi-card--${card.tone}`}>
+                    <div className="fueling-main-kpi-label">{card.label}</div>
+                    <div className="fueling-main-kpi-value">
+                      {card.value}
+                      {card.unit ? <span>{card.unit}</span> : null}
+                    </div>
+                    <div className="fueling-main-kpi-sub">{card.sub}</div>
+                  </div>
+                ))}
               </div>
               <details className="collapsible-card">
                 <summary>Predictor notes</summary>
