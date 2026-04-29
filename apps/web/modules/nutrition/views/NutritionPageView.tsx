@@ -3117,14 +3117,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             </header>
             <section className="viz-card builder-panel" style={{ marginBottom: "12px" }}>
               <h3 className="viz-title">Integration Stack</h3>
-              <p className="nutrition-muted" style={{ fontSize: "0.85rem", marginBottom: "10px" }}>
-                KPI e tabella sotto sono agganciati al <strong>modello vie metaboliche</strong> e alle{" "}
-                <strong>leve operative</strong> (stessi segnali dei pannelli condivisi in alto). Timing = classi qualitative
-                di emivita, non PK individuali.
-              </p>
-              <h4 className="nutrition-section-band" style={{ fontSize: "0.9rem", marginBottom: "8px" }}>
-                Stato integrativo (pathway + solver)
-              </h4>
+              <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                <summary>Overview integrazione · modello pathway + solver</summary>
+                <p className="nutrition-muted" style={{ fontSize: "0.82rem", marginTop: "8px", marginBottom: 0 }}>
+                  I numeri sotto derivano dalle stesse leve del fueling: pathway attive, segnali del giorno, diary insight e
+                  vincoli operativi. Timing espresso come classi qualitative di emivita.
+                </p>
+              </details>
               <div className="kpi-grid" style={{ marginBottom: "14px" }}>
                 {integrationDynamicsSummary.map((card) => (
                   <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
@@ -3136,9 +3135,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   </div>
                 ))}
               </div>
-              <h4 className="nutrition-section-band" style={{ fontSize: "0.9rem", marginBottom: "8px" }}>
-                Catalogo integratori (brand / focus)
-              </h4>
+              <div className="nutrition-section-band" style={{ fontSize: "0.9rem", marginBottom: "8px" }}>
+                Catalogo integratori · sintesi numerica
+              </div>
               <div className="kpi-grid" style={{ marginBottom: "10px" }}>
                 {integrationStackSummary.map((card) => (
                   <div key={card.label} className={`kpi-card signal-board-card tone-${nutritionToneForLabel(card.label)}`}>
@@ -3151,14 +3150,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 ))}
               </div>
               {nutritionPerformanceIntegration?.rationale.length ? (
-                <section
+                <details
                   className="collapsible-card"
                   style={{ marginBottom: "10px", padding: "10px 12px", borderColor: "rgba(56,189,248,0.35)" }}
-                  aria-label="Integrazione performance — rationale solver"
                 >
-                  <h4 className="mb-2 text-[0.7rem] font-bold uppercase tracking-wider text-cyan-200/90">
-                    Integrazione performance · leve solver
-                  </h4>
+                  <summary className="text-[0.7rem] font-bold uppercase tracking-wider text-cyan-200/90">
+                    Integrazione performance · leve solver ({nutritionPerformanceIntegration.rationale.length})
+                  </summary>
                   <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.85rem", lineHeight: 1.45 }}>
                     {nutritionPerformanceIntegration.rationale.map((line) => (
                       <li key={line} style={{ marginBottom: "4px" }}>
@@ -3166,21 +3164,25 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       </li>
                     ))}
                   </ul>
-                </section>
+                </details>
               ) : null}
               {nutritionPerformanceIntegration?.diaryInsight ? (
-                <p className="muted-copy" style={{ fontSize: 12, marginBottom: 10, lineHeight: 1.45 }}>
-                  Diario reale (finestra {nutritionPerformanceIntegration.diaryInsight.windowDays} giorni,{" "}
-                  {nutritionPerformanceIntegration.diaryInsight.loggedDays} con voci): energia media ~{" "}
-                  {nutritionPerformanceIntegration.diaryInsight.avgDailyKcal ?? "—"} kcal
-                  {nutritionPerformanceIntegration.diaryInsight.estimatedMaintenanceKcal != null
-                    ? ` vs fabbisogno stimato ~${nutritionPerformanceIntegration.diaryInsight.estimatedMaintenanceKcal} kcal`
-                    : ""}
-                  {nutritionPerformanceIntegration.diaryInsight.energyAdequacyRatio != null
-                    ? ` (${Math.round(nutritionPerformanceIntegration.diaryInsight.energyAdequacyRatio * 100)}% del target)`
-                    : ""}
-                  . Usato per modulare le leve training↔nutrizione (non sostituisce i motori fisiologici).
-                </p>
+                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                  <summary>
+                    Diario reale · {nutritionPerformanceIntegration.diaryInsight.loggedDays}/
+                    {nutritionPerformanceIntegration.diaryInsight.windowDays} giorni
+                    {nutritionPerformanceIntegration.diaryInsight.energyAdequacyRatio != null
+                      ? ` · ${Math.round(nutritionPerformanceIntegration.diaryInsight.energyAdequacyRatio * 100)}% target`
+                      : ""}
+                  </summary>
+                  <p className="muted-copy" style={{ fontSize: 12, marginTop: 8, marginBottom: 0, lineHeight: 1.45 }}>
+                    Energia media ~{nutritionPerformanceIntegration.diaryInsight.avgDailyKcal ?? "—"} kcal
+                    {nutritionPerformanceIntegration.diaryInsight.estimatedMaintenanceKcal != null
+                      ? ` vs fabbisogno stimato ~${nutritionPerformanceIntegration.diaryInsight.estimatedMaintenanceKcal} kcal`
+                      : ""}
+                    . Questo segnale modula le leve training-nutrizione ma non sostituisce i motori fisiologici.
+                  </p>
+                </details>
               ) : null}
               <details className="collapsible-card" style={{ marginBottom: "10px" }}>
                 <summary>+ Vie metaboliche · substrati, cofattori, inibitori, timing</summary>
