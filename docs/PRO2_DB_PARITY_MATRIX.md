@@ -22,6 +22,7 @@ Pro 2 ha gia assorbito una parte importante della piattaforma V1:
 - ops/billing/biomech: `manual_actions`, `athlete_update_locks`, `billing_*`, `stripe_webhook_events`, `biomech_*`
 - interpretation staging (Pro 2 native): `interpretation_staging_runs`, `interpretation_staging_findings`, `interpretation_staging_commits`
 - devices parity (Pro 2 native): `connected_devices` lifecycle fields + `device_sync_exports` sync lifecycle fields
+- physiology/health multilayer bridge (Pro 2 native): `metabolic_lab_import_jobs`, `physiology_evidence_links`, `biomarker_panels.import_job_id`
 
 Restano pero dipendenze reali del codice Pro 2 non coperte da migration Pro 2 pulite.
 
@@ -80,8 +81,8 @@ Queste completano audit, loop adattivo e compatibilita storica.
 | Nutrition meal plan | `food_diary_entries`, `nutrition_fdc_foods`, `nutrition_product_catalog` | `nutrition_plans`, `nutrition_constraints`, eventuale `meals` decision | P0/P1 |
 | Fueling | planned sessions + physiology + profile | nessuna nuova tabella immediata; dipende da `media_assets` per packshot | P0 media |
 | Devices | `device_sync_exports`, `garmin_*`, `connected_devices` | provider registry esteso, RLS/event log generico | P1 |
-| Health / physiology | `biomarker_panels`, `metabolic_lab_runs` | RLS `metabolic_lab_runs`, parita panels verificata | P0 RLS |
-| Knowledge | `knowledge_*`, `knowledge_evidence_hits` | L2 staging non ancora schema | prossimo punto architetturale |
+| Health / physiology | `biomarker_panels`, `metabolic_lab_runs`, `metabolic_lab_import_jobs`, `physiology_evidence_links` | ingest lab strutturato + wiring API commit | P1 |
+| Knowledge | `knowledge_*`, `knowledge_evidence_hits`, `interpretation_staging_*` | physiology-evidence bridge + commit service orchestratore | P1 |
 | Biomechanics / aerodynamics | `biomech_*` per biomech | aerodynamics reale non schema Pro 2 | P2 |
 
 ## Migration Candidate Order
@@ -118,6 +119,11 @@ Ordine consigliato dopo `025_nutrition_fdc_food_cache.sql`:
    - estensione `connected_devices` (lifecycle provider/account/status/capabilities)
    - estensione `device_sync_exports` (sync_kind, external_event/job metadata, windows, checksum, error fields)
    - RLS owner/coach esplicita su `connected_devices`
+
+7. `032_physiology_health_multilayer_bridge.sql` [implemented]
+   - `metabolic_lab_import_jobs` (job ingest lab strutturato)
+   - `physiology_evidence_links` (collegamento esplicito lab/panels/systemic -> `knowledge_evidence_hits`)
+   - estensione `biomarker_panels` con `import_job_id` e `evidence_summary`
 
 ## Criteri Di Accettazione
 
