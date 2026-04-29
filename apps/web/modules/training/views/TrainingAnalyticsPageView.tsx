@@ -268,6 +268,7 @@ export default function TrainingAnalyticsPageView() {
         : coupling7 < 0.85
           ? "Low coupling: check underload/context"
           : "Balanced coupling";
+  const adaptabilityScore = Math.max(0, Math.min(100, Math.round(100 - divergenceScore * 1.7)));
   const operationalSuggestedLoad7d = useMemo(() => {
     if (!operationalContext) return null;
     return Math.max(0, Math.round((adaptationLoop?.expectedLoad7d ?? 0) * operationalContext.loadScale));
@@ -449,88 +450,88 @@ export default function TrainingAnalyticsPageView() {
             )}
           </div>
 
-          <div
+          <details
             className="mb-6 rounded-2xl border border-white/10 bg-black/25 p-4 text-sm"
             style={{ borderLeft: `3px solid ${couplingColor(coupling7)}` }}
           >
-            <p className={`font-semibold ${couplingToneClass}`}>{adaptationStatus}</p>
+            <summary className={`cursor-pointer font-semibold ${couplingToneClass}`}>
+              Adattabilita {adaptabilityScore}/100 · coupling {coupling7.toFixed(2)}
+            </summary>
+            <p className={`mt-2 font-semibold ${couplingToneClass}`}>{adaptationStatus}</p>
             <p className="mt-2 text-xs text-slate-500">
               Adaptation loop: planned {Math.round(adaptationLoop?.expectedLoad7d ?? 0)} · real{" "}
               {Math.round(adaptationLoop?.realLoad7d ?? 0)} · internal {Math.round(adaptationLoop?.internalLoad7d ?? 0)}{" "}
               · twin redox {(twinState?.redoxStressIndex ?? 0).toFixed(1)}
             </p>
-          </div>
+          </details>
 
           {operationalContext ? (
-            <div
+            <details
               className={`mb-6 rounded-2xl border p-4 text-sm ${
                 operationalContext.loadScalePct < 100
                   ? "border-amber-500/35 bg-amber-500/10 text-amber-50"
                   : "border-emerald-500/35 bg-emerald-500/10 text-emerald-50"
               }`}
             >
-              <strong>{operationalContext.headline}</strong> · carico operativo ~{operationalContext.loadScalePct}% del piano.
-              <br />
-              {operationalContext.guidance}
+              <summary className="cursor-pointer">
+                <strong>{operationalContext.headline}</strong> · carico operativo ~{operationalContext.loadScalePct}% del piano
+              </summary>
+              <p className="mt-2">{operationalContext.guidance}</p>
               {operationalSuggestedLoad7d != null ? (
-                <>
-                  <br />
+                <p className="mt-2">
                   Finestra 7d: piano {Math.round(adaptationLoop?.expectedLoad7d ?? 0)} → operativo ~{operationalSuggestedLoad7d}.
-                </>
+                </p>
               ) : null}
               {recoverySummary ? (
-                <>
-                  <br />
+                <p className="mt-2">
                   Recovery {recoverySummary.status}
                   {recoverySummary.sleepDurationHours != null ? ` · sonno ${recoverySummary.sleepDurationHours} h` : ""}
                   {recoverySummary.hrvMs != null ? ` · HRV ${recoverySummary.hrvMs} ms` : ""}
                   {recoverySummary.strainScore != null ? ` · strain ${recoverySummary.strainScore}` : ""}.
-                </>
+                </p>
               ) : null}
-            </div>
+            </details>
           ) : null}
 
           {bioenergeticModulation ? (
-            <div
+            <details
               className={`mb-6 rounded-2xl border p-4 text-sm ${
                 bioenergeticModulation.loadScalePct < 100
                   ? "border-amber-500/35 bg-amber-500/10"
                   : "border-emerald-500/35 bg-emerald-500/10"
               }`}
             >
-              <strong>{bioenergeticModulation.headline}</strong> · stato {bioenergeticModulation.state} · readiness{" "}
-              {bioenergeticModulation.mitochondrialReadinessScore.toFixed(0)}/100 · copertura{" "}
-              {bioenergeticModulation.signalCoveragePct.toFixed(0)}%.
-              <br />
-              {bioenergeticModulation.guidance}
+              <summary className="cursor-pointer">
+                <strong>{bioenergeticModulation.headline}</strong> · readiness{" "}
+                {bioenergeticModulation.mitochondrialReadinessScore.toFixed(0)}/100
+              </summary>
+              <p className="mt-2">
+                stato {bioenergeticModulation.state} · copertura {bioenergeticModulation.signalCoveragePct.toFixed(0)}%.
+              </p>
+              <p className="mt-2">{bioenergeticModulation.guidance}</p>
               {!!bioenergeticModulation.missingSignals.length ? (
-                <>
-                  <br />
-                  Missing: {bioenergeticModulation.missingSignals.join(" · ")}.
-                </>
+                <p className="mt-2">Missing: {bioenergeticModulation.missingSignals.join(" · ")}.</p>
               ) : null}
               {!!bioenergeticModulation.recommendedInputs.length ? (
-                <>
-                  <br />
-                  Suggested inputs: {bioenergeticModulation.recommendedInputs.join(" · ")}.
-                </>
+                <p className="mt-2">Suggested inputs: {bioenergeticModulation.recommendedInputs.join(" · ")}.</p>
               ) : null}
-            </div>
+            </details>
           ) : null}
 
           {crossModuleDynamicsLines.length ? (
-            <div className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4 text-sm text-slate-200">
-              <h2 className="text-sm font-bold text-cyan-100">Dinamica incrociata (Training → Nutrition / fueling)</h2>
-              <p className="mt-1 text-xs text-slate-500">
-                Stesso ponte deterministico della dashboard e del meal-plan: adattamento, carico operativo, loop calendario,
-                dial nutrizione.
+            <details className="mb-6 rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4 text-sm text-slate-200">
+              <summary className="cursor-pointer text-sm font-bold text-cyan-100">
+                Dinamica incrociata (Training → Nutrition / fueling) · {crossModuleDynamicsLines.length}
+              </summary>
+              <p className="mt-2 text-xs text-slate-500">
+                Ponte deterministico: adattamento, carico operativo, loop calendario, dial nutrizione.
               </p>
               <ul className="mt-2 list-inside list-disc text-xs leading-relaxed text-slate-400">
                 {crossModuleDynamicsLines.map((line, i) => (
                   <li key={i}>{line}</li>
                 ))}
               </ul>
-            </div>
+            </details>
           ) : null}
 
           <div className="mb-6 rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -566,10 +567,15 @@ export default function TrainingAnalyticsPageView() {
                 </button>
               </div>
             </div>
-            <p className="mb-3 text-xs text-slate-500">
-              Ogni serie usa il proprio min/max sui 42 giorni e viene portata su 0–100 così puoi sovrapporre FC, smO2,
-              glucosio, VO2/VCO2, temperatura e carichi nello stesso grafico (dati da sessioni + trace quando presenti).
-            </p>
+            <details className="mb-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
+              <summary className="cursor-pointer text-slate-300">
+                Note metriche overlay · {Object.values(overlayOn).filter(Boolean).length} attive
+              </summary>
+              <p className="mt-2">
+                Ogni serie usa il proprio min/max sui 42 giorni e viene portata su 0-100 per sovrapporre FC, smO2,
+                glucosio, VO2/VCO2, temperatura e carichi nello stesso grafico.
+              </p>
+            </details>
             <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2">
               {OVERLAY_METRIC_DEFS.map((d) => (
                 <label
@@ -616,10 +622,15 @@ export default function TrainingAnalyticsPageView() {
               <Hexagon className="h-4 w-4 text-violet-400" aria-hidden />
               Confronto esagonale · una metrica vs storico
             </h2>
-            <p className="mb-3 text-xs text-slate-500">
-              Seleziona una metrica: sei vertici = media settimanale (7 giorni) nell’ultima finestra di 42 giorni;
-              tratteggiato = stessa struttura sulle 6 settimane precedenti (richiede ≥84 giorni di cronologia).
-            </p>
+            <details className="mb-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
+              <summary className="cursor-pointer text-slate-300">
+                Guida esagono · metrica {hexMetric}
+              </summary>
+              <p className="mt-2">
+                Sei vertici = media settimanale (7 giorni) nell&apos;ultima finestra di 42 giorni; tratteggiato = stessa
+                struttura sulle 6 settimane precedenti (richiede almeno 84 giorni).
+              </p>
+            </details>
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <label className="text-xs text-slate-400">
                 Metrica
@@ -800,11 +811,11 @@ export default function TrainingAnalyticsPageView() {
             </table>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+          <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
+            <summary className="mb-3 flex cursor-pointer items-center gap-2 text-sm font-bold text-white">
               <LineChart className="h-4 w-4 text-violet-400" aria-hidden />
-              Adaptation loop
-            </h2>
+              Adaptation loop · adattabilita {adaptabilityScore}/100
+            </summary>
             <table className="w-full text-left text-sm text-slate-300">
               <tbody className="divide-y divide-white/5">
                 <tr>
@@ -849,7 +860,7 @@ export default function TrainingAnalyticsPageView() {
                 </tr>
               </tbody>
             </table>
-          </div>
+          </details>
         </>
       )}
     </Pro2ModulePageShell>

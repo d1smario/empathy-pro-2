@@ -31,6 +31,22 @@ function polyline(values: number[], width: number, height: number) {
     .join(" ");
 }
 
+function radarRingPoints(values: number[], cx: number, cy: number, maxR: number): string {
+  return values
+    .map((v, i) => {
+      const t = ((-90 + i * 60) * Math.PI) / 180;
+      const r = (Math.max(0, Math.min(100, v)) / 100) * maxR;
+      return `${cx + r * Math.cos(t)},${cy + r * Math.sin(t)}`;
+    })
+    .join(" ");
+}
+
+function normalizeRange(value: number, min: number, max: number): number {
+  if (!Number.isFinite(value)) return 0;
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return 50;
+  return Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
+}
+
 function couplingColor(coupling: number): string {
   if (coupling > 1.15) return "#fb7185";
   if (coupling < 0.85) return "#fbbf24";
@@ -297,8 +313,12 @@ export function DashboardLoadAnalysisSummary() {
     coupling7 > 1.15 ? "text-rose-300" : coupling7 < 0.85 ? "text-amber-300" : "text-emerald-300";
 
   const last28s = series.slice(-28);
+  const last42Compare = compareSeries.slice(-42);
   const ctlLine = polyline(last28s.map((p) => p.ctl), 720, 160);
   const iCtlLine = polyline(last28s.map((p) => p.iCtl), 720, 160);
+  const plannedLine = polyline(last42Compare.map((p) => p.planned), 1100, 260);
+  const extLine = polyline(last42Compare.map((p) => p.executed), 1100, 260);
+  const intLine = polyline(last42Compare.map((p) => p.internal), 1100, 260);
 
   const adaptationNarrative =
     coupling7 > 1.15
@@ -335,16 +355,35 @@ export function DashboardLoadAnalysisSummary() {
   const twinGa = twinState
     ? `${(twinState.glycogenStatus ?? 0).toFixed(0)} / ${(twinState.adaptationScore ?? 0).toFixed(0)}`
     : "—";
+  const adaptabilityScore = Math.max(0, Math.min(100, Math.round(100 - divergenceScore * 1.7)));
+  const metricsRecent = [ext7, int7, plan7?.planned ?? 0, compliance7, latest?.ctl ?? 0, latest?.iCtl ?? 0];
+  const metricsBaseline = [
+    windows?.last28.external ?? 0,
+    windows?.last28.internal ?? 0,
+    plan28?.planned ?? 0,
+    compliance28,
+    (latest?.ctl ?? 0) * 0.92,
+    (latest?.iCtl ?? 0) * 0.92,
+  ];
+  const bounds = metricsRecent.concat(metricsBaseline);
+  const minBound = Math.min(...bounds, 0);
+  const maxBound = Math.max(...bounds, 1);
+  const radarRecent = metricsRecent.map((v) => normalizeRange(v, minBound, maxBound));
+  const radarBaseline = metricsBaseline.map((v) => normalizeRange(v, minBound, maxBound));
 
   return (
     <section id="dash-core" className="scroll-mt-28">
       <Pro2SectionCard accent="cyan" title="Core" subtitle="Stimolo · fitness · risposta fisiologica" icon={Activity}>
-        <p className="text-sm leading-relaxed text-gray-400">
-          Vista sintetica del <strong className="text-gray-200">modello di controllo</strong>: a sinistra stimolo e stato di
-          fitness (TSS, CTL/ATL/TSB, piano vs reale); a destra modulatori della risposta (sonno/HRV, contesto operativo,
-          bioenergetica, twin, lab quando presenti). Stessi dati dell&apos;analyzer training, organizzati per decisioni
-          quotidiane.
-        </p>
+        <details className="rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-gray-300">
+          <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
+            Core overview · adattabilita {adaptabilityScore}/100
+          </summary>
+          <p className="mt-2 text-sm leading-relaxed text-gray-400">
+            Vista sintetica del <strong className="text-gray-200">modello di controllo</strong>: a sinistra stimolo e stato
+            di fitness (TSS, CTL/ATL/TSB, piano vs reale); a destra modulatori della risposta (sonno/HRV, contesto
+            operativo, bioenergetica, twin, lab quando presenti).
+          </p>
+        </details>
 
         {error ? (
           <p className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" role="alert">
@@ -414,8 +453,8 @@ export function DashboardLoadAnalysisSummary() {
             </div>
 
             {adaptationLoop ? (
-              <div className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
-                <h3 className="font-semibold text-white">Loop di adattamento</h3>
+              <details className="rounded-2xl border border-white/10 bg-black/25 p-4 text-sm">
+                <summary className="cursor-pointer font-semibold text-white">Loop di adattamento · {adaptabilityScore}/100</summary>
                 <p className="mt-2 text-gray-400">
                   Atteso 7g <span className="tabular-nums text-gray-200">{Math.round(adaptationLoop.expectedLoad7d)}</span>
                   {" · "}
@@ -433,37 +472,44 @@ export function DashboardLoadAnalysisSummary() {
                 {adaptationLoop.triggers.length ? (
                   <p className="mt-2 text-xs text-amber-200/80">Trigger: {adaptationLoop.triggers.join(" · ")}</p>
                 ) : null}
-              </div>
+              </details>
             ) : null}
 
             {bioenergeticModulation ? (
-              <div
+              <details
                 className={`rounded-2xl border p-4 text-sm ${
                   bioenergeticModulation.state === "protective"
                     ? "border-amber-500/35 bg-amber-500/10 text-amber-50"
                     : "border-emerald-500/30 bg-emerald-500/10 text-emerald-50"
                 }`}
               >
-                <strong>{bioenergeticModulation.headline}</strong> · stato {bioenergeticModulation.state} · readiness
-                mitocondriale {bioenergeticModulation.mitochondrialReadinessScore.toFixed(0)}/100 · autonomico{" "}
-                {bioenergeticModulation.autonomicRecoveryScore?.toFixed(0) ?? "—"} · infiammatorio/stress{" "}
-                {bioenergeticModulation.inflammatoryStressScore?.toFixed(0) ?? "—"} · idratazione cellulare{" "}
-                {bioenergeticModulation.cellularHydrationScore?.toFixed(0) ?? "—"} · fuel{" "}
-                {bioenergeticModulation.fuelAvailabilityScore?.toFixed(0) ?? "—"} · fase (proxy){" "}
-                {bioenergeticModulation.phaseAngleNormalized?.toFixed(2) ?? "—"}
+                <summary className="cursor-pointer">
+                  <strong>{bioenergeticModulation.headline}</strong> · readiness{" "}
+                  {bioenergeticModulation.mitochondrialReadinessScore.toFixed(0)}/100
+                </summary>
+                <p className="mt-2">
+                  stato {bioenergeticModulation.state} · autonomico {bioenergeticModulation.autonomicRecoveryScore?.toFixed(0) ?? "—"} ·
+                  infiammatorio/stress {bioenergeticModulation.inflammatoryStressScore?.toFixed(0) ?? "—"} · idratazione cellulare{" "}
+                  {bioenergeticModulation.cellularHydrationScore?.toFixed(0) ?? "—"} · fuel{" "}
+                  {bioenergeticModulation.fuelAvailabilityScore?.toFixed(0) ?? "—"} · fase (proxy){" "}
+                  {bioenergeticModulation.phaseAngleNormalized?.toFixed(2) ?? "—"}
+                </p>
                 <p className="mt-2 text-xs opacity-90">{bioenergeticModulation.guidance}</p>
-              </div>
+              </details>
             ) : null}
 
-            <div
+            <details
               className="rounded-2xl border border-white/10 bg-black/25 p-4"
               style={{ borderLeft: `3px solid ${couplingColor(coupling7)}` }}
             >
-              <p className={`text-sm font-semibold ${couplingTone}`}>{adaptationNarrative}</p>
+              <summary className={`cursor-pointer text-sm font-semibold ${couplingTone}`}>
+                Adattabilita {adaptabilityScore}/100 · coupling {coupling7.toFixed(2)}
+              </summary>
+              <p className={`mt-2 text-sm font-semibold ${couplingTone}`}>{adaptationNarrative}</p>
               {operationalContext ? (
                 <p className="mt-2 text-xs text-gray-500">{operationalContext.guidance}</p>
               ) : null}
-            </div>
+            </details>
 
             {last28s.length > 1 ? (
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
@@ -487,6 +533,70 @@ export function DashboardLoadAnalysisSummary() {
                 </div>
               </div>
             ) : null}
+
+            {last42Compare.length > 1 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
+                  <LineChart className="h-4 w-4 text-cyan-400" aria-hidden />
+                  Trend 42g · Planned vs Real vs Internal
+                </h3>
+                <svg viewBox="0 0 1100 260" width="100%" height="260" className="max-h-[40vh]">
+                  <polyline fill="none" stroke="#60a5fa" strokeWidth="2" points={plannedLine} />
+                  <polyline fill="none" stroke="#ff7a1a" strokeWidth="2.5" points={extLine} />
+                  <polyline fill="none" stroke="#d946ef" strokeWidth="2.5" points={intLine} />
+                </svg>
+                <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#60a5fa]" /> Planned
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#ff7a1a]" /> Real
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-[#d946ef]" /> Internal
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <h3 className="mb-2 text-sm font-bold text-white">Radar confronto · core loading</h3>
+              <div className="flex flex-col items-center gap-4 lg:flex-row lg:items-start lg:justify-center">
+                <svg viewBox="0 0 420 420" width="300" height="300" className="shrink-0">
+                  {Array.from({ length: 6 }, (_, i) => {
+                    const t = ((-90 + i * 60) * Math.PI) / 180;
+                    const cx = 210;
+                    const cy = 210;
+                    const r = 140;
+                    return (
+                      <line key={i} x1={cx} y1={cy} x2={cx + r * Math.cos(t)} y2={cy + r * Math.sin(t)} stroke="rgba(148,163,184,0.25)" strokeWidth={1} />
+                    );
+                  })}
+                  <polygon
+                    points={radarRingPoints(radarBaseline, 210, 210, 140)}
+                    fill="rgba(167,139,250,0.08)"
+                    stroke="rgba(167,139,250,0.55)"
+                    strokeWidth={2}
+                    strokeDasharray="7 5"
+                  />
+                  <polygon
+                    points={radarRingPoints(radarRecent, 210, 210, 140)}
+                    fill="rgba(52,211,153,0.12)"
+                    stroke="#34d399"
+                    strokeWidth={2.5}
+                  />
+                </svg>
+                <details className="max-w-md rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
+                  <summary className="cursor-pointer text-slate-300">
+                    Confronto stella · recente vs baseline ({adaptabilityScore}/100)
+                  </summary>
+                  <p className="mt-2">
+                    Assi: external 7g, internal 7g, planned 7g, compliance 7g, CTL ext, CTL int. Verde = finestra
+                    recente; viola tratteggiato = baseline.
+                  </p>
+                </details>
+              </div>
+            </div>
 
             <Pro2Link
               href="/training/analytics"
