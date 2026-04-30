@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Package } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { cn } from "@/lib/cn";
@@ -2948,19 +2947,25 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                                     <span className="fueling-vline" style={{ background: `${phaseColor}66` }} />
                                   )}
                                 </div>
-                                <div className="fueling-vcard">
-                                  <a
-                                    href={step.product?.productUrl ?? "#"}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="fueling-step-media-link flex items-center justify-center"
-                                    aria-label={step.product?.product ?? "Prodotto fueling"}
+                                <div
+                                  className="fueling-vcard"
+                                  style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "1fr 1fr",
+                                    overflow: "hidden",
+                                    borderRadius: 12,
+                                    border: "1px solid rgba(167,139,250,0.28)",
+                                    background: "linear-gradient(135deg, rgba(76,29,149,0.2), rgba(0,0,0,0.45))",
+                                  }}
+                                >
+                                  <div
+                                    className="fueling-step-body"
+                                    style={{
+                                      borderRight: "1px solid rgba(255,255,255,0.08)",
+                                      paddingRight: 10,
+                                      marginRight: 0,
+                                    }}
                                   >
-                                    <div className="fueling-step-fallback flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-xl border border-fuchsia-500/25 bg-gradient-to-br from-fuchsia-500/10 to-orange-500/5">
-                                      <Package className="h-9 w-9 text-fuchsia-300/90" strokeWidth={1.75} aria-hidden />
-                                    </div>
-                                  </a>
-                                  <div className="fueling-step-body">
                                     <span
                                       className="fueling-step-time"
                                       style={{
@@ -2979,9 +2984,19 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                                     <div className="fueling-step-chip-row">
                                       <span>CHO {step.cho}g</span>
                                       <span>Fluid {step.fluid}ml</span>
-                                      {step.product?.format ? <span>{step.product.format}</span> : null}
-                                      {step.product?.functionalFocus?.[0] ? <span>{step.product.functionalFocus[0]}</span> : null}
+                                      {step.product?.format ? <span>{FUELING_FORMAT_IT[step.product.format]}</span> : null}
+                                      {step.product?.category ? <span>{FUELING_CATEGORY_IT[step.product.category]}</span> : null}
+                                      {step.product?.functionalFocus?.[0] ? <span>{FOCUS_IT[step.product.functionalFocus[0]] ?? step.product.functionalFocus[0]}</span> : null}
+                                      {step.product?.timing?.[0] ? <span>{TIMING_IT[step.product.timing[0]] ?? step.product.timing[0]}</span> : null}
                                     </div>
+                                    <p className="muted-copy" style={{ fontSize: 11, margin: "8px 0 0", lineHeight: 1.4 }}>
+                                      {buildIntegrationQuantityHint(step.product ?? FUELING_PRODUCT_CATALOG[0], {
+                                        choGHour: pkg.choPerHourSession,
+                                        energyAdequacyRatio: nutritionPerformanceIntegration?.diaryInsight?.energyAdequacyRatio,
+                                        proteinBiasPctPoints: nutritionPerformanceIntegration?.proteinBiasPctPoints ?? 0,
+                                        fuelingChoScale: nutritionPerformanceIntegration?.fuelingChoScale ?? 1,
+                                      })}
+                                    </p>
                                     <div className="fueling-step-actions">
                                       <a
                                         href={step.product?.productUrl ?? "#"}
@@ -2989,10 +3004,44 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                                         rel="noopener noreferrer"
                                         className="fueling-step-link"
                                       >
-                                        Product link
+                                        Scheda produttore
                                       </a>
                                     </div>
                                   </div>
+                                  <a
+                                    href={step.product?.productUrl ?? "#"}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="fueling-step-media-link flex items-center justify-center"
+                                    aria-label={step.product?.product ?? "Prodotto fueling"}
+                                    title={step.isLogoFallback ? "Fallback logo marchio" : "Immagine catalogo / archivio"}
+                                    style={{ minHeight: 132, background: "rgba(0,0,0,0.28)", padding: 10, position: "relative" }}
+                                  >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={step.displayImage}
+                                      alt={step.product?.product ?? "Fuel product"}
+                                      className={`nutrition-product-image ${step.isLogoFallback ? "nutrition-product-image-logo" : ""}`}
+                                      style={{ maxHeight: 112, width: "100%", objectFit: "contain" }}
+                                      loading="lazy"
+                                    />
+                                    {step.isLogoFallback ? (
+                                      <span
+                                        style={{
+                                          position: "absolute",
+                                          bottom: 8,
+                                          right: 8,
+                                          borderRadius: 4,
+                                          background: "rgba(0,0,0,0.55)",
+                                          padding: "2px 6px",
+                                          fontSize: "0.58rem",
+                                          color: "#94a3b8",
+                                        }}
+                                      >
+                                        Logo
+                                      </span>
+                                    ) : null}
+                                  </a>
                                 </div>
                               </>
                             );
