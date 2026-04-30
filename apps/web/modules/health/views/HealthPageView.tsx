@@ -40,6 +40,8 @@ import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
   fetchHealthPanelsTimeline,
+  fetchHealthSystemMap,
+  type HealthSystemMapViewModel,
   uploadHealthDocument,
   type HealthPanelTimelineRow,
 } from "@/modules/health/services/health-module-api";
@@ -443,7 +445,14 @@ const IMPORT_CARDS = [
 export default function HealthPageView() {
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
   const [panels, setPanels] = useState<HealthPanelTimelineRow[]>([]);
+  const [systemMap, setSystemMap] = useState<HealthSystemMapViewModel>({
+    nodes: [],
+    edges: [],
+    bioenergeticsResponses: [],
+    stagingRuns: [],
+  });
   const [timelineErr, setTimelineErr] = useState<string | null>(null);
+  const [systemMapErr, setSystemMapErr] = useState<string | null>(null);
   const [loadingTimeline, setLoadingTimeline] = useState(true);
   const [uploadBusy, setUploadBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
@@ -454,13 +463,20 @@ export default function HealthPageView() {
     if (!athleteId) {
       setPanels([]);
       setTimelineErr(null);
+      setSystemMap({ nodes: [], edges: [], bioenergeticsResponses: [], stagingRuns: [] });
+      setSystemMapErr(null);
       setLoadingTimeline(false);
       return;
     }
     setLoadingTimeline(true);
-    const { panels: next, error } = await fetchHealthPanelsTimeline(athleteId);
+    const [{ panels: next, error }, { systemMap: nextMap, error: mapErr }] = await Promise.all([
+      fetchHealthPanelsTimeline(athleteId),
+      fetchHealthSystemMap(athleteId),
+    ]);
     setPanels(next);
     setTimelineErr(error);
+    setSystemMap(nextMap);
+    setSystemMapErr(mapErr);
     setLoadingTimeline(false);
   }, [athleteId]);
 
@@ -638,6 +654,106 @@ export default function HealthPageView() {
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-cyan-500/30 bg-cyan-950/10 p-6">
+        <h2 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.24em] text-cyan-300">
+          System map 360 · interazioni cross-area
+        </h2>
+        <p className="mt-2 text-xs text-zinc-400">
+          Nodi, archi causali e risposte bioenergetiche derivati dall&apos;estrazione normalizzata. Staging run incluse per il gate
+          di interpretazione.
+        </p>
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { k: "Nodi", v: systemMap.nodes.length, border: "border-cyan-500/40", bg: "bg-cyan-950/35", text: "text-cyan-200" },
+            { k: "Archi", v: systemMap.edges.length, border: "border-violet-500/40", bg: "bg-violet-950/35", text: "text-violet-200" },
+            {
+              k: "Bioenergetics",
+              v: systemMap.bioenergeticsResponses.length,
+              border: "border-amber-500/40",
+              bg: "bg-amber-950/35",
+              text: "text-amber-200",
+            },
+            {
+              k: "Staging runs",
+              v: systemMap.stagingRuns.length,
+              border: "border-rose-500/40",
+              bg: "bg-rose-950/35",
+              text: "text-rose-200",
+            },
+          ].map((c) => (
+            <div key={c.k} className={`rounded-xl border ${c.border} ${c.bg} px-4 py-4 text-center`}>
+              <div className={`text-2xl font-black ${c.text}`}>{c.v}</div>
+              <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-400">{c.k}</div>
+            </div>
+          ))}
+        </div>
+        {systemMapErr ? <p className="mt-3 text-xs text-amber-300/90">{systemMapErr}</p> : null}
+        <details className="mt-4 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-zinc-300">
+            Dettaglio nodi e archi
+          </summary>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-cyan-300/90">Nodi attivi</p>
+              <div className="space-y-2">
+                {systemMap.nodes.slice(0, 12).map((n, i) => (
+                  <div key={`node-${i}-${String(n.id ?? n.node_key ?? i)}`} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs">
+                    <div className="font-semibold text-zinc-100">{String(n.label ?? n.node_key ?? "node")}</div>
+                    <div className="text-zinc-400">{String(n.area ?? "area")} · {String(n.observed_at ?? n.created_at ?? "n/d")}</div>
+                  </div>
+                ))}
+                {!systemMap.nodes.length ? <p className="text-xs text-zinc-500">Nessun nodo disponibile.</p> : null}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-violet-300/90">Archi causali</p>
+              <div className="space-y-2">
+                {systemMap.edges.slice(0, 12).map((e, i) => (
+                  <div key={`edge-${i}-${String(e.id ?? i)}`} className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-2 text-xs">
+                    <div className="font-semibold text-zinc-100">
+                      {String(e.from_node_key ?? "?")} → {String(e.to_node_key ?? "?")}
+                    </div>
+                    <div className="text-zinc-400">
+                      {String(e.effect_sign ?? "modulate")} · conf {typeof e.confidence === "number" ? e.confidence.toFixed(2) : "n/d"} ·{" "}
+                      {String(e.rule_key ?? "rule-less")}
+                    </div>
+                  </div>
+                ))}
+                {!systemMap.edges.length ? <p className="text-xs text-zinc-500">Nessun arco disponibile.</p> : null}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-amber-300/90">Bioenergetics responses</p>
+              <div className="space-y-2">
+                {systemMap.bioenergeticsResponses.slice(0, 8).map((r, i) => (
+                  <div key={`bio-${i}-${String(r.id ?? i)}`} className="rounded-lg border border-amber-500/25 bg-amber-950/20 px-2.5 py-2 text-xs">
+                    <div className="font-semibold text-amber-100">{String(r.title ?? r.response_key ?? "response")}</div>
+                    <div className="text-amber-200/80">{String(r.category ?? "risk")} · {String(r.severity ?? "n/d")}</div>
+                  </div>
+                ))}
+                {!systemMap.bioenergeticsResponses.length ? <p className="text-xs text-zinc-500">Nessuna risposta bioenergetica.</p> : null}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-rose-300/90">Interpretation staging</p>
+              <div className="space-y-2">
+                {systemMap.stagingRuns.slice(0, 8).map((s, i) => (
+                  <div key={`staging-${i}-${String(s.id ?? i)}`} className="rounded-lg border border-rose-500/25 bg-rose-950/20 px-2.5 py-2 text-xs">
+                    <div className="font-semibold text-rose-100">{String(s.domain ?? "domain")} · {String(s.status ?? "status")}</div>
+                    <div className="text-rose-200/80">
+                      conf {typeof s.confidence === "number" ? s.confidence.toFixed(2) : "n/d"} · {String(s.created_at ?? "n/d")}
+                    </div>
+                  </div>
+                ))}
+                {!systemMap.stagingRuns.length ? <p className="text-xs text-zinc-500">Nessuna run staging recente.</p> : null}
+              </div>
+            </div>
+          </div>
+        </details>
       </section>
 
       {/* Griglia importazione */}

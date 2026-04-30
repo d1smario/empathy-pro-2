@@ -53,3 +53,30 @@ export async function uploadHealthDocument(input: {
   }
   return { ok: true, message: json.message };
 }
+
+export type HealthSystemMapViewModel = {
+  nodes: Array<Record<string, unknown>>;
+  edges: Array<Record<string, unknown>>;
+  bioenergeticsResponses: Array<Record<string, unknown>>;
+  stagingRuns: Array<Record<string, unknown>>;
+};
+
+export async function fetchHealthSystemMap(athleteId: string): Promise<{
+  systemMap: HealthSystemMapViewModel;
+  error: string | null;
+}> {
+  const res = await fetch(`/api/health/system-map?athleteId=${encodeURIComponent(athleteId)}`, {
+    cache: "no-store",
+    headers: await buildSupabaseAuthHeaders(),
+  });
+  const json = (await res.json()) as
+    | { ok: true; systemMap: HealthSystemMapViewModel }
+    | { ok: false; error?: string };
+  if (!res.ok || !json.ok) {
+    return {
+      systemMap: { nodes: [], edges: [], bioenergeticsResponses: [], stagingRuns: [] },
+      error: ("error" in json && json.error) || "System map non disponibile",
+    };
+  }
+  return { systemMap: json.systemMap, error: null };
+}

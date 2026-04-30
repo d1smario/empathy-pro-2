@@ -233,7 +233,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   const supabase = createServerSupabaseClient();
   const diaryWindowEnd = new Date().toISOString().slice(0, 10);
   const diaryWindowStart = addDaysUtcIso(diaryWindowEnd, -44);
-  const [profileRes, appUserRes, coachLinksRes, devicesRes, importJobsRes, deviceExportsRes, panelsRes, evidenceRes, systemicRes, physiology, knowledge, diaryRes] =
+  const [profileRes, appUserRes, coachLinksRes, devicesRes, importJobsRes, deviceExportsRes, panelsRes, evidenceRes, systemicRes, labObsRes, microObsRes, epiObsRes, hormoneObsRes, graphNodesRes, graphEdgesRes, bioRespRes, physiology, knowledge, diaryRes] =
     await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
     supabase.from("app_user_profiles").select("user_id, role").eq("athlete_id", athleteId).limit(1).maybeSingle(),
@@ -280,6 +280,55 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .eq("athlete_id", athleteId)
       .order("captured_at", { ascending: false })
       .limit(12),
+    supabase
+      .from("lab_observations")
+      .select("id, marker_key, value_num, value_text, unit, raw_label, observed_at, confidence, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120),
+    supabase
+      .from("microbiota_observations")
+      .select("id, taxon_key, taxon_rank, domain_kind, abundance_pct, value_num, unit, observed_at, confidence, metadata, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120),
+    supabase
+      .from("epigenetic_observations")
+      .select("id, gene_symbol, variant_label, methylation_flag, direction, value_num, confidence, observed_at, metadata, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120),
+    supabase
+      .from("hormone_observations")
+      .select("id, axis, marker_key, value_num, unit, observed_at, confidence, metadata, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120),
+    supabase
+      .from("athlete_system_nodes")
+      .select("id, node_key, area, label, state, observed_at, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(120),
+    supabase
+      .from("athlete_system_edges")
+      .select("id, from_node_key, to_node_key, effect_sign, confidence, evidence_refs, rule_key, rule_version, time_window, metadata, observed_at, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(180),
+    supabase
+      .from("bioenergetics_responses")
+      .select("id, response_key, category, title, description, trigger_refs, mitigation_refs, severity, confidence, observed_at, created_at")
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(80),
     resolveCanonicalPhysiologyState(athleteId),
     resolveAthleteKnowledgeMemory(athleteId),
     supabase
@@ -314,6 +363,25 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   } else {
     systemicRows = (systemicRes.data ?? []) as Array<Record<string, unknown>>;
   }
+
+  const optionalRead = (res: { error: { message?: string; code?: string } | null; data: unknown }) => {
+    if (res.error) {
+      const msg = res.error.message ?? "";
+      const code = String(res.error.code ?? "");
+      if (code !== "42P01" && !msg.includes("does not exist")) {
+        throw new Error(res.error.message);
+      }
+      return [] as Array<Record<string, unknown>>;
+    }
+    return (res.data ?? []) as Array<Record<string, unknown>>;
+  };
+  const labObsRows = optionalRead(labObsRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const microObsRows = optionalRead(microObsRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const epiObsRows = optionalRead(epiObsRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const hormoneObsRows = optionalRead(hormoneObsRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const systemNodeRows = optionalRead(graphNodesRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const systemEdgeRows = optionalRead(graphEdgesRes as { error: { message?: string; code?: string } | null; data: unknown });
+  const bioRespRows = optionalRead(bioRespRes as { error: { message?: string; code?: string } | null; data: unknown });
 
   let diaryRows: Array<Record<string, unknown>> = [];
   if (diaryRes.error) {
@@ -435,6 +503,17 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       microbiota: healthBuckets.microbiota,
       epigenetics: healthBuckets.epigenetics,
       panels: panelRows,
+      normalizedObservations: {
+        lab: labObsRows,
+        microbiota: microObsRows,
+        epigenetic: epiObsRows,
+        hormones: hormoneObsRows,
+      },
+      systemGraph: {
+        nodes: systemNodeRows,
+        edges: systemEdgeRows,
+        bioenergeticsResponses: bioRespRows,
+      },
     },
     evidenceItems: toEvidenceItems(evidenceRows),
     source: {

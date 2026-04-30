@@ -10,6 +10,8 @@ import {
   type HealthPanelTypeForParse,
 } from "@/lib/health/lab-text-extractors";
 import { extractTextFromPdfBuffer } from "@/lib/health/parse-health-pdf";
+import { persistNormalizedObservations } from "@/lib/health/health-observation-normalizer";
+import { buildAndPersistHealthCausalInteractions } from "@/lib/health/health-causal-interactions";
 
 export const runtime = "nodejs";
 
@@ -80,16 +82,15 @@ export async function POST(req: NextRequest) {
       : {};
 
     let importStatus: string;
-    if (pdf && pdfText && Object.keys(parsed).length > 0) {
-      importStatus = "parsed_partial";
-    } else if (pdf && pdfText) {
-      importStatus = "parse_no_match";
-    } else if (pdf && !pdfText) {
-      importStatus = "parse_no_text";
+    if (Object.keys(parsed).length > 0) {
+      const hasStructured = Object.keys(parsed).some((k) => k.endsWith("_taxa") || k.endsWith("_hits") || k.endsWith("_flags"));
+      importStatus = hasStructured ? "parsed_full" : "parsed_partial";
     } else if (mime.startsWith("image/")) {
-      importStatus = "image_queued";
+      importStatus = "needs_manual_review";
+    } else if (pdf && !pdfText) {
+      importStatus = "needs_manual_review";
     } else {
-      importStatus = "queued_parser";
+      importStatus = "failed";
     }
 
     const importBlock: Record<string, unknown> = {
@@ -101,9 +102,9 @@ export async function POST(req: NextRequest) {
       pdf_pages: pdf ? pdfPages : undefined,
       parsed_keys: Object.keys(parsed),
       note:
-        importStatus === "parsed_partial"
-          ? "Valori estratti dal PDF (euristica). Verifica in laboratorio prima di decisioni cliniche."
-          : "In attesa di estrazione manuale o parser dedicato se il PDF non è leggibile o non contiene le etichette attese.",
+        importStatus === "parsed_full" || importStatus === "parsed_partial"
+          ? "Valori estratti in modo euristico; conferma clinica obbligatoria prima di decisioni."
+          : "Richiede revisione manuale: estrazione incompleta o input non testuale.",
     };
 
     const values: Record<string, unknown> = {
@@ -128,6 +129,59 @@ export async function POST(req: NextRequest) {
     }
 
     const panelId = inserted?.id ?? null;
+    let normalizationSummary: {
+      extractionRunId: string | null;
+      observationsInserted: number;
+      nodesInserted: number;
+      edgesInserted: number;
+      responsesInserted: number;
+    } | null = null;
+
+    if (panelId) {
+      try {
+        const normalized = await persistNormalizedObservations({
+          db,
+          athleteId,
+          panelId,
+          panelType: panelType as HealthPanelTypeForParse,
+          parsed,
+          sampleDate,
+          sourceKind: pdf ? "pdf" : mime.startsWith("image/") ? "image" : "other",
+          parserVersion: "health-parser-v2",
+          sourceHash: `${filename}:${buffer.length}`,
+          qualityReport: {
+            parsed_keys: Object.keys(parsed),
+            import_status: importStatus,
+          },
+        });
+        const causal = await buildAndPersistHealthCausalInteractions({
+          db,
+          athleteId,
+          sampleDate,
+          parsed,
+          extractionRunId: normalized.extractionRunId,
+          panelId,
+        });
+        normalizationSummary = {
+          extractionRunId: normalized.extractionRunId,
+          observationsInserted: normalized.inserted,
+          nodesInserted: causal.nodesInserted,
+          edgesInserted: causal.edgesInserted,
+          responsesInserted: causal.responsesInserted,
+        };
+      } catch (normErr) {
+        const msg = normErr instanceof Error ? normErr.message : "normalization_failed";
+        const nextValues = {
+          ...values,
+          import: {
+            ...importBlock,
+            normalization_error: msg,
+          },
+        };
+        await db.from("biomarker_panels").update({ values: nextValues }).eq("id", panelId);
+      }
+    }
+
     const bucket = getHealthUploadsBucket();
     let storagePath: string | null = null;
     let storageErr: string | null = null;
@@ -164,6 +218,10 @@ export async function POST(req: NextRequest) {
 
     const parts: string[] = [];
     if (Object.keys(parsed).length > 0) parts.push(`${Object.keys(parsed).length} parametri dal PDF`);
+    if (normalizationSummary?.observationsInserted) parts.push(`${normalizationSummary.observationsInserted} osservazioni normalizzate`);
+    if ((normalizationSummary?.edgesInserted ?? 0) > 0 || (normalizationSummary?.responsesInserted ?? 0) > 0) {
+      parts.push(`grafo: ${normalizationSummary?.edgesInserted ?? 0} edge · ${normalizationSummary?.responsesInserted ?? 0} response`);
+    }
     if (storagePath) parts.push("file su Storage");
     else if (bucket && storageErr) parts.push(`Storage: ${storageErr}`);
     else if (!bucket) parts.push("Storage non configurato (HEALTH_UPLOADS_BUCKET)");
@@ -173,6 +231,7 @@ export async function POST(req: NextRequest) {
         ok: true as const,
         panelId,
         parsedKeys: Object.keys(parsed),
+        normalization: normalizationSummary,
         storagePath,
         message: parts.length ? `Registrato. ${parts.join(" · ")}.` : "Documento registrato.",
       },

@@ -1,4 +1,5 @@
 import "server-only";
+import { EPIGENETIC_GENE_BANK, HEALTH_MARKERS, MICROBIOTA_TAXA } from "@/lib/health/health-ontology";
 
 function parseEuNumber(raw: string): number | null {
   const n = Number(raw.replace(/\s/g, "").replace(",", "."));
@@ -37,6 +38,20 @@ export type HealthPanelTypeForParse =
   | "inflammation"
   | "oxidative_stress";
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function collectGeneHits(text: string): string[] {
+  const upper = text.toUpperCase();
+  const hits: string[] = [];
+  for (const gene of EPIGENETIC_GENE_BANK) {
+    const rx = new RegExp(`\\b${escapeRegExp(gene)}\\b`, "i");
+    if (rx.test(upper)) hits.push(gene);
+  }
+  return Array.from(new Set(hits));
+}
+
 /**
  * Estrae numeri da testo laboratorio (IT/EN) in chiavi compatibili con i grafici Health.
  * Euristica: nessuna garanzia clinica; serve a pre-compilare `values` per trend/radar.
@@ -44,81 +59,38 @@ export type HealthPanelTypeForParse =
 export function extractStructuredValuesFromLabText(
   rawText: string,
   panelType: HealthPanelTypeForParse,
-): Record<string, number> {
+): Record<string, unknown> {
   const text = rawText.replace(/\u00a0/g, " ");
-  const out: Record<string, number> = {};
+  const out: Record<string, unknown> = {};
 
   const set = (key: string, v: number | null) => {
     if (v == null) return;
-    if (out[key] == null) out[key] = v;
+    if (out[key] == null) out[key] = Number(v);
   };
 
-  if (panelType === "blood") {
-    set("emoglobina", numberAfterLabels(text, ["emoglobina", "emoglobin", "hb ", "hgb", "hb:"]));
-    set("ferritina", numberAfterLabels(text, ["ferritina", "ferritin", "ferritine"]));
-    set(
-      "vit_d",
-      numberAfterLabels(text, [
-        "25-oh",
-        "25 oh",
-        "vitamina d",
-        "vitamin d",
-        "25-hydroxy",
-        "calcidiolo",
-      ]),
-    );
-    set("b12", numberAfterLabels(text, ["vitamina b12", "vit b12", "cobalamin", "b12", "ciano-cobalamina"]));
-    set("glicemia", numberAfterLabels(text, ["glicemia", "glucose", "glucosio", "glycemia", "fasting glucose"]));
-    set("hba1c", numberAfterLabels(text, ["hba1c", "emoglobina glicata", "glycated hemoglobin", "a1c"]));
-    return out;
-  }
-
-  if (panelType === "inflammation") {
-    set("crp_mg_l", numberAfterLabels(text, ["pcr-us", "pcr us", "hs-crp", "hscrp", "crp", "c reactive", "proteina c reattiva"]));
-    set("il6", numberAfterLabels(text, ["il-6", "il 6", "interleukin 6", "interleuchina 6"]));
-    set("tnf_alpha", numberAfterLabels(text, ["tnf-", "tnfα", "tnf alpha", "tumor necrosis"]));
-    set("homocysteine", numberAfterLabels(text, ["omocisteina", "homocysteine", "hcy"]));
-    set("oxidized_ldl", numberAfterLabels(text, ["ldl ossidat", "oxidized ldl", "ox-ldl", "oxldl"]));
-    return out;
+  for (const marker of HEALTH_MARKERS.filter((m) => m.panelType === panelType)) {
+    set(marker.key, numberAfterLabels(text, marker.aliases));
   }
 
   if (panelType === "microbiota") {
-    set("firmicutes_pct", numberAfterLabels(text, ["firmicutes", "firmicuti"]));
-    set("bacteroidetes_pct", numberAfterLabels(text, ["bacteroidetes", "batteroideti"]));
-    set("proteobacteria_pct", numberAfterLabels(text, ["proteobacteria", "proteobatteri"]));
-    set("actinobacteria_pct", numberAfterLabels(text, ["actinobacteria", "attinobatteri"]));
+    const taxaRows = MICROBIOTA_TAXA.map((t) => {
+      const pct = numberAfterLabels(text, t.aliases);
+      if (pct == null) return null;
+      return { key: t.key, label: t.label, pct: Number(pct), rank: t.rank, kind: t.kind };
+    }).filter((row): row is NonNullable<typeof row> => Boolean(row));
+    if (taxaRows.length) out.microbiota_taxa = taxaRows;
+    if (taxaRows.some((r) => r.kind === "fungi")) out.microbiota_fungi_present = 1;
     set("diversity_shannon", numberAfterLabels(text, ["shannon", "diversità", "diversity alpha", "alpha diversity"]));
     set("scfa_total_mmol", numberAfterLabels(text, ["scfa", "acidi grassi a catena corta", "short chain fatty"]));
     return out;
   }
 
-  if (panelType === "hormones") {
-    set("cortisol_am", numberAfterLabels(text, ["cortisolo mattutino", "cortisol morning", "cortisol 8", "cortisol am"]));
-    set("cortisol_pm", numberAfterLabels(text, ["cortisolo serale", "cortisol evening", "cortisol pm"]));
-    set("testosterone", numberAfterLabels(text, ["testosterone", "testosteron", "tt ", "t totale"]));
-    set("tsh", numberAfterLabels(text, ["tsh", "tirotropina", "thyrotropin"]));
-    set("t3", numberAfterLabels(text, ["t3 libera", "free t3", "triiodotironina", "ft3"]));
-    set("t4", numberAfterLabels(text, ["t4 libera", "free t4", "ft4", "tiroxina libera"]));
-    set("dhea", numberAfterLabels(text, ["dhea", "deidroepiandrosterone", "dehydroepiandrosterone"]));
-    set("igf1", numberAfterLabels(text, ["igf-1", "igf 1", "igf1", "somatomedina c", "somatomedin"]));
-    return out;
-  }
-
-  if (panelType === "oxidative_stress") {
-    set("roms_carr", numberAfterLabels(text, ["d-rom", "d rom", "roms", "diacron"]));
-    set("bap_umol", numberAfterLabels(text, ["bap", "potenziale antiossidante"]));
-    set("glutathione", numberAfterLabels(text, ["glutatione", "glutathione", "gsh"]));
-    set("sod", numberAfterLabels(text, ["sod", "superoxide dismutase", "dismutasi"]));
-    set("catalase", numberAfterLabels(text, ["catalasi", "catalase", "cat "])); 
-    return out;
-  }
-
   if (panelType === "epigenetics") {
-    set("methylation_score", numberAfterLabels(text, ["metilazione", "methylation", "dna methylation"]));
-    set("biological_age_delta", numberAfterLabels(text, ["età biologica", "biological age", "epigenetic age"]));
-    set("epigenetic_detox", numberAfterLabels(text, ["detox", "detossificazione", "xenobiotic"]));
-    set("epigenetic_repair", numberAfterLabels(text, ["riparazione dna", "dna repair", "repair pathway"]));
-    set("epigenetic_oxidative_stress", numberAfterLabels(text, ["stress ossidativo", "oxidative stress", "ros "])); 
+    const hits = collectGeneHits(text);
+    if (hits.length) out.epigenetic_gene_hits = hits;
+    const methylationKeywords = ["ipermetil", "hypermethyl", "hypomethyl", "ipometil", "methylation"];
+    const foundKeywords = methylationKeywords.filter((k) => text.toLowerCase().includes(k));
+    if (foundKeywords.length) out.epigenetic_methylation_flags = foundKeywords;
     return out;
   }
 

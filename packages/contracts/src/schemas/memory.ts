@@ -38,6 +38,17 @@ export type AthleteHealthMemory = {
   microbiota?: Record<string, unknown> | null;
   epigenetics?: Record<string, unknown> | null;
   panels: Array<Record<string, unknown>>;
+  normalizedObservations?: {
+    lab: Array<Record<string, unknown>>;
+    microbiota: Array<Record<string, unknown>>;
+    epigenetic: Array<Record<string, unknown>>;
+    hormones: Array<Record<string, unknown>>;
+  };
+  systemGraph?: {
+    nodes: Array<Record<string, unknown>>;
+    edges: Array<Record<string, unknown>>;
+    bioenergeticsResponses: Array<Record<string, unknown>>;
+  };
   systemicModulationSnapshots: AthleteSystemicModulationSnapshot[];
 };
 

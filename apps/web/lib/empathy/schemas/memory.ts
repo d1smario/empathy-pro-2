@@ -39,6 +39,19 @@ export type AthleteHealthMemory = {
   epigenetics?: Record<string, unknown> | null;
   /** Righe grezze `biomarker_panels` (come da DB). */
   panels: Array<Record<string, unknown>>;
+  /** Osservazioni atomiche normalizzate (MVP): marker clinici, microbiota, epigenetica, ormoni. */
+  normalizedObservations?: {
+    lab: Array<Record<string, unknown>>;
+    microbiota: Array<Record<string, unknown>>;
+    epigenetic: Array<Record<string, unknown>>;
+    hormones: Array<Record<string, unknown>>;
+  };
+  /** Grafo causale operativo atleta (nodi/archi) + risposte bioenergetiche. */
+  systemGraph?: {
+    nodes: Array<Record<string, unknown>>;
+    edges: Array<Record<string, unknown>>;
+    bioenergeticsResponses: Array<Record<string, unknown>>;
+  };
   /** Ultimi snapshot L8; separato da `panels` per evitare doppioni concettuali. */
   systemicModulationSnapshots: AthleteSystemicModulationSnapshot[];
 };
