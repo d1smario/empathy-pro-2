@@ -54,6 +54,13 @@ import {
   type FuelingFunctionalFocus,
   type FuelingProduct,
 } from "@/lib/nutrition/fueling-product-catalog";
+import {
+  buildIntegrationQuantityHint,
+  FUELING_CATEGORY_IT,
+  FUELING_FORMAT_IT,
+  FOCUS_IT,
+  TIMING_IT,
+} from "@/lib/nutrition/integration-product-ui";
 import { resolveFuelingPro2MediaUrlFromCandidates } from "@/lib/nutrition/fueling-pro2-media-manifest";
 import {
   fetchNutritionMediaRows,
@@ -2131,10 +2138,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const integrationStackSummary = useMemo(() => {
     const brandCount = new Set(integrationProductCards.map((product) => product.brand)).size;
     const focusCount = new Set(integrationProductCards.flatMap((product) => product.functionalFocus)).size;
+    const directImages = integrationProductCards.filter((product) => !product.isLogoFallback).length;
     return [
       { label: "Products", value: `${integrationProductCards.length}` },
       { label: "Brands", value: `${brandCount}` },
       { label: "Focus", value: `${focusCount}` },
+      { label: "Official images", value: `${directImages}/${integrationProductCards.length}` },
     ];
   }, [integrationProductCards]);
 
@@ -3444,49 +3453,180 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   ))}
                 </ul>
               </details>
-              <div className="nutrition-detail-rail" style={{ marginTop: "10px", marginBottom: "10px" }}>
-                <span>
-                  <strong>Brand</strong> · {profileSupplements.length ? profileSupplements.join(" · ") : "default set"}
-                </span>
-              </div>
-              {integrationProductCards.length ? (
-                <div className="nutrition-product-grid">
-                  {integrationProductCards.map((product) => (
-                    <article key={`${product.brand}-${product.product}`} className="nutrition-product-card">
-                      <a
-                        href={product.productUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="nutrition-product-media-link flex min-h-[140px] items-center justify-center bg-white/5"
+              <details className="collapsible-card" style={{ marginTop: "10px", marginBottom: "10px" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 12 }}>
+                  Brand e token catalogo ({profileSupplements.length ? `${profileSupplements.length} voci` : "set predefinito"})
+                </summary>
+                <p className="nutrition-muted" style={{ fontSize: "0.75rem", marginTop: "8px", marginBottom: "8px", lineHeight: 1.45 }}>
+                  Integratori e marchi dal profilo (CSV + supplement_config). Usati per matching deterministico al catalogo fueling.
+                </p>
+                {profileSupplements.length ? (
+                  <ul
+                    className="nutrition-muted m-0 flex max-h-48 list-none flex-wrap gap-1.5 overflow-y-auto p-0"
+                    style={{ fontSize: "0.68rem", lineHeight: 1.35 }}
+                  >
+                    {profileSupplements.map((token) => (
+                      <li
+                        key={token}
+                        style={{
+                          borderRadius: 6,
+                          border: "1px solid rgba(167,139,250,0.35)",
+                          background: "rgba(76,29,149,0.2)",
+                          padding: "2px 8px",
+                          fontFamily: "var(--empathy-mono, monospace)",
+                          fontSize: "0.65rem",
+                          color: "var(--empathy-text-muted, #cbd5e1)",
+                        }}
                       >
-                        <Package className="h-12 w-12 text-violet-200/75" strokeWidth={1.6} aria-hidden />
-                      </a>
-                      <div className="nutrition-product-body">
-                        <div className="nutrition-product-brand">{product.brand}</div>
-                        <strong>{product.product}</strong>
-                        <div className="nutrition-product-meta">
-                          <span>{product.format}</span>
-                          <span>{product.category}</span>
-                          {product.functionalFocus.slice(0, 2).map((focus) => (
-                            <span key={`${product.brand}-${product.product}-${focus}`}>{focus}</span>
-                          ))}
-                        </div>
-                        <div className="nutrition-product-meta">
-                          {product.timing.map((timing) => (
-                            <span key={`${product.brand}-${product.product}-${timing}`}>{timing}</span>
-                          ))}
+                        {token}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="nutrition-muted m-0" style={{ fontSize: "0.75rem" }}>
+                    Nessun token profilo: catalogo con marchi predefiniti (Enervit, SiS, Maurten, +Watt, Powerbar).
+                  </p>
+                )}
+              </details>
+              {integrationProductCards.length ? (
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 12,
+                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                  }}
+                >
+                  {integrationProductCards.map((product) => {
+                    const qtyHint = buildIntegrationQuantityHint(product, {
+                      choGHour: resolvedFuelingChoGPerHour,
+                      energyAdequacyRatio: nutritionPerformanceIntegration?.diaryInsight?.energyAdequacyRatio,
+                      proteinBiasPctPoints: nutritionPerformanceIntegration?.proteinBiasPctPoints ?? 0,
+                      fuelingChoScale: nutritionPerformanceIntegration?.fuelingChoScale ?? 1,
+                    });
+                    const metaChips = [
+                      FUELING_FORMAT_IT[product.format],
+                      FUELING_CATEGORY_IT[product.category],
+                      ...product.functionalFocus.map((f) => FOCUS_IT[f] ?? f),
+                    ];
+                    return (
+                      <article
+                        key={`${product.brand}-${product.product}`}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "1fr 1fr",
+                          minHeight: 168,
+                          overflow: "hidden",
+                          borderRadius: 12,
+                          border: "1px solid rgba(167,139,250,0.35)",
+                          background: "linear-gradient(135deg, rgba(76,29,149,0.22), rgba(0,0,0,0.55))",
+                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            justifyContent: "space-between",
+                            padding: "12px 14px",
+                            borderRight: "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          <div>
+                            <div className="nutrition-product-brand" style={{ fontSize: "0.65rem", letterSpacing: "0.08em" }}>
+                              {product.brand}
+                            </div>
+                            <strong style={{ display: "block", marginTop: 6, fontSize: "1rem", lineHeight: 1.25 }}>{product.product}</strong>
+                            <p className="nutrition-muted" style={{ margin: "10px 0 0", fontSize: "0.72rem", lineHeight: 1.45 }}>
+                              {qtyHint}
+                            </p>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+                              {metaChips.map((chip) => (
+                                <span
+                                  key={`${product.brand}-${product.product}-m-${chip}`}
+                                  style={{
+                                    borderRadius: 999,
+                                    border: "1px solid rgba(255,255,255,0.1)",
+                                    background: "rgba(255,255,255,0.06)",
+                                    padding: "2px 8px",
+                                    fontSize: "0.62rem",
+                                    color: "var(--empathy-text-muted, #cbd5e1)",
+                                  }}
+                                >
+                                  {chip}
+                                </span>
+                              ))}
+                            </div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                              {product.timing.map((timing) => (
+                                <span
+                                  key={`${product.brand}-${product.product}-t-${timing}`}
+                                  style={{
+                                    borderRadius: 999,
+                                    border: "1px solid rgba(34,211,238,0.35)",
+                                    background: "rgba(6,78,95,0.35)",
+                                    padding: "2px 8px",
+                                    fontSize: "0.62rem",
+                                    color: "#a5f3fc",
+                                  }}
+                                >
+                                  {TIMING_IT[timing] ?? timing}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <a
+                            href={product.productUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="nutrition-product-link"
+                            style={{ marginTop: 12, fontSize: "0.68rem", fontWeight: 600 }}
+                          >
+                            Scheda produttore
+                          </a>
                         </div>
                         <a
                           href={product.productUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="nutrition-product-link"
+                          className="nutrition-product-media-link"
+                          style={{
+                            position: "relative",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            minHeight: 140,
+                            background: "rgba(0,0,0,0.35)",
+                            padding: 12,
+                          }}
+                          title={product.isLogoFallback ? "Fallback logo marchio" : "Immagine catalogo / archivio"}
                         >
-                          Open producer
+                          <img
+                            src={product.displayImage}
+                            alt={product.product}
+                            className={`nutrition-product-image ${product.isLogoFallback ? "nutrition-product-image-logo" : ""}`}
+                            style={{ maxHeight: 132, width: "100%", objectFit: "contain" }}
+                            loading="lazy"
+                          />
+                          {product.isLogoFallback ? (
+                            <span
+                              style={{
+                                position: "absolute",
+                                bottom: 8,
+                                right: 8,
+                                borderRadius: 4,
+                                background: "rgba(0,0,0,0.55)",
+                                padding: "2px 6px",
+                                fontSize: "0.58rem",
+                                color: "#94a3b8",
+                              }}
+                            >
+                              Logo
+                            </span>
+                          ) : null}
                         </a>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : null}
             </section>
