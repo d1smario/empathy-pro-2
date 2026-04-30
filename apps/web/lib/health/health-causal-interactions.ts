@@ -4,6 +4,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 type DbClient = SupabaseClient;
 
+type CausalInsertSummary = {
+  nodesInserted: number;
+  edgesInserted: number;
+  responsesInserted: number;
+  lineageInserted: number;
+  nodeIds: string[];
+  edgeIds: string[];
+  responseIds: string[];
+};
+
 function hasPositive(parsed: Record<string, unknown>, key: string): boolean {
   const v = parsed[key];
   if (typeof v === "number" && v > 0) return true;
@@ -18,7 +28,7 @@ export async function buildAndPersistHealthCausalInteractions(input: {
   parsed: Record<string, unknown>;
   extractionRunId: string | null;
   panelId: string;
-}): Promise<{ nodesInserted: number; edgesInserted: number; responsesInserted: number }> {
+}): Promise<CausalInsertSummary> {
   const observedAt = `${input.sampleDate}T00:00:00.000Z`;
   const nodes: Array<{ athlete_id: string; node_key: string; area: string; label: string; state: Record<string, unknown>; observed_at: string }> =
     [];
@@ -139,22 +149,71 @@ export async function buildAndPersistHealthCausalInteractions(input: {
     });
   }
 
+  const nodeIds: string[] = [];
+  const edgeIds: string[] = [];
+  const responseIds: string[] = [];
   if (nodes.length) {
-    const { error } = await input.db.from("athlete_system_nodes").insert(nodes);
+    const { data, error } = await input.db.from("athlete_system_nodes").insert(nodes).select("id");
     if (error) throw new Error(error.message);
+    nodeIds.push(...((data ?? []) as Array<{ id: string }>).map((row) => row.id));
   }
   if (edges.length) {
-    const { error } = await input.db.from("athlete_system_edges").insert(edges);
+    const { data, error } = await input.db.from("athlete_system_edges").insert(edges).select("id");
     if (error) throw new Error(error.message);
+    edgeIds.push(...((data ?? []) as Array<{ id: string }>).map((row) => row.id));
   }
   if (responses.length) {
-    const { error } = await input.db.from("bioenergetics_responses").insert(responses);
+    const { data, error } = await input.db.from("bioenergetics_responses").insert(responses).select("id");
     if (error) throw new Error(error.message);
+    responseIds.push(...((data ?? []) as Array<{ id: string }>).map((row) => row.id));
+  }
+
+  const lineageRows = [
+    ...nodeIds.map((id) => ({
+      athlete_id: input.athleteId,
+      extraction_run_id: input.extractionRunId,
+      source_table: "extraction_runs",
+      source_id: input.extractionRunId,
+      target_table: "athlete_system_nodes",
+      target_id: id,
+      relation: "derived_system_node",
+      metadata: { panel_id: input.panelId },
+    })),
+    ...edgeIds.map((id) => ({
+      athlete_id: input.athleteId,
+      extraction_run_id: input.extractionRunId,
+      source_table: "extraction_runs",
+      source_id: input.extractionRunId,
+      target_table: "athlete_system_edges",
+      target_id: id,
+      relation: "derived_system_edge",
+      metadata: { panel_id: input.panelId },
+    })),
+    ...responseIds.map((id) => ({
+      athlete_id: input.athleteId,
+      extraction_run_id: input.extractionRunId,
+      source_table: "extraction_runs",
+      source_id: input.extractionRunId,
+      target_table: "bioenergetics_responses",
+      target_id: id,
+      relation: "derived_bioenergetics_response",
+      metadata: { panel_id: input.panelId },
+    })),
+  ];
+  let lineageInserted = 0;
+  if (lineageRows.length) {
+    const { error } = await input.db.from("observation_lineage").insert(lineageRows);
+    if (error) throw new Error(error.message);
+    lineageInserted = lineageRows.length;
   }
 
   return {
     nodesInserted: nodes.length,
     edgesInserted: edges.length,
     responsesInserted: responses.length,
+    lineageInserted,
+    nodeIds,
+    edgeIds,
+    responseIds,
   };
 }

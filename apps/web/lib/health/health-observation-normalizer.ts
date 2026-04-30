@@ -6,6 +6,34 @@ import type { HealthPanelTypeForParse } from "@/lib/health/lab-text-extractors";
 
 type DbClient = SupabaseClient;
 
+type LineageRow = {
+  athlete_id: string;
+  extraction_run_id: string | null;
+  source_table: string;
+  source_id: string | null;
+  target_table: string;
+  target_id: string | null;
+  relation: string;
+  metadata?: Record<string, unknown>;
+};
+
+function appendObservationLineage(
+  rows: LineageRow[],
+  input: { athleteId: string; extractionRunId: string | null; tableName: string; relation: string; ids: string[] },
+) {
+  for (const id of input.ids) {
+    rows.push({
+      athlete_id: input.athleteId,
+      extraction_run_id: input.extractionRunId,
+      source_table: "extraction_runs",
+      source_id: input.extractionRunId,
+      target_table: input.tableName,
+      target_id: id,
+      relation: input.relation,
+    });
+  }
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
@@ -33,7 +61,7 @@ export async function persistNormalizedObservations(input: {
   parserVersion: string;
   sourceHash?: string | null;
   qualityReport?: Record<string, unknown>;
-}): Promise<{ extractionRunId: string | null; inserted: number }> {
+}): Promise<{ extractionRunId: string | null; inserted: number; lineageInserted: number }> {
   const status = extractionStatusFromParsed(input.parsed, input.sourceKind);
   const { data: runRow, error: runErr } = await input.db
     .from("extraction_runs")
@@ -50,6 +78,19 @@ export async function persistNormalizedObservations(input: {
     .maybeSingle();
   if (runErr) throw new Error(runErr.message);
   const extractionRunId = runRow?.id ?? null;
+  const lineageRows: LineageRow[] = [];
+  if (extractionRunId) {
+    lineageRows.push({
+      athlete_id: input.athleteId,
+      extraction_run_id: extractionRunId,
+      source_table: "biomarker_panels",
+      source_id: input.panelId,
+      target_table: "extraction_runs",
+      target_id: extractionRunId,
+      relation: "created_extraction_run",
+      metadata: { parser_version: input.parserVersion, source_kind: input.sourceKind },
+    });
+  }
 
   const markerByKey = new Map(
     HEALTH_MARKERS.filter((m) => m.panelType === input.panelType).map((m) => [m.key, m] as const),
@@ -99,13 +140,27 @@ export async function persistNormalizedObservations(input: {
     }
   }
   if (labRows.length) {
-    const { error } = await input.db.from("lab_observations").insert(labRows);
+    const { data, error } = await input.db.from("lab_observations").insert(labRows).select("id");
     if (error) throw new Error(error.message);
+    appendObservationLineage(lineageRows, {
+      athleteId: input.athleteId,
+      extractionRunId,
+      tableName: "lab_observations",
+      relation: "extracted_observation",
+      ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id),
+    });
     inserted += labRows.length;
   }
   if (hormoneRows.length) {
-    const { error } = await input.db.from("hormone_observations").insert(hormoneRows);
+    const { data, error } = await input.db.from("hormone_observations").insert(hormoneRows).select("id");
     if (error) throw new Error(error.message);
+    appendObservationLineage(lineageRows, {
+      athleteId: input.athleteId,
+      extractionRunId,
+      tableName: "hormone_observations",
+      relation: "extracted_observation",
+      ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id),
+    });
     inserted += hormoneRows.length;
   }
 
@@ -135,8 +190,15 @@ export async function persistNormalizedObservations(input: {
       })
       .filter((row): row is NonNullable<typeof row> => Boolean(row));
     if (taxaRows.length) {
-      const { error } = await input.db.from("microbiota_observations").insert(taxaRows);
+      const { data, error } = await input.db.from("microbiota_observations").insert(taxaRows).select("id");
       if (error) throw new Error(error.message);
+      appendObservationLineage(lineageRows, {
+        athleteId: input.athleteId,
+        extractionRunId,
+        tableName: "microbiota_observations",
+        relation: "extracted_observation",
+        ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id),
+      });
       inserted += taxaRows.length;
     }
   }
@@ -177,10 +239,24 @@ export async function persistNormalizedObservations(input: {
     }
   }
   if (epiRows.length) {
-    const { error } = await input.db.from("epigenetic_observations").insert(epiRows);
+    const { data, error } = await input.db.from("epigenetic_observations").insert(epiRows).select("id");
     if (error) throw new Error(error.message);
+    appendObservationLineage(lineageRows, {
+      athleteId: input.athleteId,
+      extractionRunId,
+      tableName: "epigenetic_observations",
+      relation: "extracted_observation",
+      ids: ((data ?? []) as Array<{ id: string }>).map((row) => row.id),
+    });
     inserted += epiRows.length;
   }
 
-  return { extractionRunId, inserted };
+  let lineageInserted = 0;
+  if (lineageRows.length) {
+    const { error } = await input.db.from("observation_lineage").insert(lineageRows);
+    if (error) throw new Error(error.message);
+    lineageInserted = lineageRows.length;
+  }
+
+  return { extractionRunId, inserted, lineageInserted };
 }

@@ -41,7 +41,9 @@ import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
   fetchHealthPanelsTimeline,
   fetchHealthSystemMap,
+  patchHealthStagingRun,
   type HealthSystemMapViewModel,
+  type HealthStagingRunAction,
   uploadHealthDocument,
   type HealthPanelTimelineRow,
 } from "@/modules/health/services/health-module-api";
@@ -455,6 +457,7 @@ export default function HealthPageView() {
   const [systemMapErr, setSystemMapErr] = useState<string | null>(null);
   const [loadingTimeline, setLoadingTimeline] = useState(true);
   const [uploadBusy, setUploadBusy] = useState<string | null>(null);
+  const [stagingBusy, setStagingBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sampleDate, setSampleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
@@ -565,6 +568,29 @@ export default function HealthPageView() {
       return;
     }
     setToast(res.message ?? "Caricamento registrato.");
+    void loadTimeline();
+  }
+
+  async function onPatchStagingRun(runId: string, status: HealthStagingRunAction) {
+    if (!runId) return;
+    setStagingBusy(`${runId}:${status}`);
+    setToast(null);
+    const res = await patchHealthStagingRun({
+      runId,
+      status,
+      reason:
+        status === "committed"
+          ? "Validato da Health System Map"
+          : status === "rejected"
+            ? "Scartato da Health System Map"
+            : "Archiviato da Health System Map",
+    });
+    setStagingBusy(null);
+    if (!res.ok) {
+      setToast(res.error ?? "Aggiornamento staging fallito");
+      return;
+    }
+    setToast(status === "committed" ? "Staging validato." : status === "rejected" ? "Staging scartato." : "Staging archiviato.");
     void loadTimeline();
   }
 
@@ -741,14 +767,39 @@ export default function HealthPageView() {
             <div>
               <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-rose-300/90">Interpretation staging</p>
               <div className="space-y-2">
-                {systemMap.stagingRuns.slice(0, 8).map((s, i) => (
-                  <div key={`staging-${i}-${String(s.id ?? i)}`} className="rounded-lg border border-rose-500/25 bg-rose-950/20 px-2.5 py-2 text-xs">
-                    <div className="font-semibold text-rose-100">{String(s.domain ?? "domain")} · {String(s.status ?? "status")}</div>
-                    <div className="text-rose-200/80">
-                      conf {typeof s.confidence === "number" ? s.confidence.toFixed(2) : "n/d"} · {String(s.created_at ?? "n/d")}
+                {systemMap.stagingRuns.slice(0, 8).map((s, i) => {
+                  const runId = typeof s.id === "string" ? s.id : null;
+                  return (
+                    <div key={`staging-${i}-${String(s.id ?? i)}`} className="rounded-lg border border-rose-500/25 bg-rose-950/20 px-2.5 py-2 text-xs">
+                      <div className="font-semibold text-rose-100">{String(s.domain ?? "domain")} · {String(s.status ?? "status")}</div>
+                      <div className="text-rose-200/80">
+                        conf {typeof s.confidence === "number" ? s.confidence.toFixed(2) : "n/d"} · {String(s.created_at ?? "n/d")}
+                      </div>
+                      {runId ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {[
+                            { status: "committed" as const, label: "Valida" },
+                            { status: "rejected" as const, label: "Scarta" },
+                            { status: "archived" as const, label: "Archivia" },
+                          ].map((action) => {
+                            const busy = stagingBusy === `${runId}:${action.status}`;
+                            return (
+                              <button
+                                key={action.status}
+                                type="button"
+                                disabled={Boolean(stagingBusy)}
+                                onClick={() => void onPatchStagingRun(runId, action.status)}
+                                className="rounded-md border border-white/10 bg-black/30 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-rose-100 transition hover:border-rose-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {busy ? "..." : action.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {!systemMap.stagingRuns.length ? <p className="text-xs text-zinc-500">Nessuna run staging recente.</p> : null}
               </div>
             </div>

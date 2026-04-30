@@ -61,6 +61,8 @@ export type HealthSystemMapViewModel = {
   stagingRuns: Array<Record<string, unknown>>;
 };
 
+export type HealthStagingRunAction = "committed" | "rejected" | "archived";
+
 export async function fetchHealthSystemMap(athleteId: string): Promise<{
   systemMap: HealthSystemMapViewModel;
   error: string | null;
@@ -79,4 +81,24 @@ export async function fetchHealthSystemMap(athleteId: string): Promise<{
     };
   }
   return { systemMap: json.systemMap, error: null };
+}
+
+export async function patchHealthStagingRun(input: {
+  runId: string;
+  status: HealthStagingRunAction;
+  reason?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/health/staging-runs/${encodeURIComponent(input.runId)}`, {
+    method: "PATCH",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({ status: input.status, reason: input.reason }),
+  });
+  const json = (await res.json()) as { ok: boolean; error?: string };
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: json.error || "Aggiornamento staging fallito" };
+  }
+  return { ok: true };
 }

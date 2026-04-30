@@ -29,6 +29,7 @@ import {
 import { fetchUsdaFoodsForCatalogIds } from "@/modules/nutrition/services/pathway-meal-usda-client";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
+import { buildFunctionalMealSelectorViewModel } from "@/lib/nutrition/functional-meal-selector";
 import { buildEffectiveDayTrainingContext } from "@/lib/training/day-reality-context";
 import {
   fetchNutritionModuleContext,
@@ -37,6 +38,7 @@ import {
 import type {
   FunctionalFoodRecommendationsViewModel,
   FunctionalFoodTargetViewModel,
+  FunctionalMealSelectorViewModel,
   NutritionMetabolicEfficiencyGenerativeViewModel,
   NutritionPathwayModulationViewModel,
   NutritionPerformanceIntegrationDials,
@@ -546,6 +548,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [researchTraceSummaries, setResearchTraceSummaries] = useState<KnowledgeResearchTraceSummary[]>([]);
   const [metabolicEfficiencyGenerativeModel, setMetabolicEfficiencyGenerativeModel] =
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
+  const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
   const [nutritionPerformanceIntegration, setNutritionPerformanceIntegration] =
     useState<NutritionPerformanceIntegrationDials | null>(null);
   const [executed, setExecuted] = useState<ExecutedRow[]>([]);
@@ -642,6 +645,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setBioenergeticModulation(null);
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
+        setFunctionalMealSelector(null);
         setNutritionPerformanceIntegration(null);
         setExecuted([]);
         setPlanned([]);
@@ -668,6 +672,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setError(moduleData.error || "Errore caricamento");
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
+        setFunctionalMealSelector(null);
         setNutritionPerformanceIntegration(null);
         setLoading(false);
         return;
@@ -698,6 +703,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setBioenergeticModulation(bio);
       setResearchTraceSummaries(moduleData.researchTraceSummaries ?? []);
       setMetabolicEfficiencyGenerativeModel(moduleData.metabolicEfficiencyGenerativeModel ?? null);
+      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
       setNutritionPerformanceIntegration(moduleData.nutritionPerformanceIntegration ?? null);
       setExecuted(ex);
       setPlanned(pl);
@@ -870,6 +876,29 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   const functionalFoodRecommendations = useMemo((): FunctionalFoodRecommendationsViewModel =>
     buildFunctionalFoodRecommendationsViewModel(pathwayModulation?.pathways ?? null), [pathwayModulation]);
+
+  const effectiveFunctionalMealSelector = useMemo(
+    (): FunctionalMealSelectorViewModel | null =>
+      buildFunctionalMealSelectorViewModel({
+        date: selectedPlanDate,
+        pathwayModulation,
+        foodRecommendations: functionalFoodRecommendations,
+        nutritionPerformanceIntegration,
+        adaptationLoop,
+        recoverySummary,
+        twin: twinState,
+      }) ?? functionalMealSelector,
+    [
+      selectedPlanDate,
+      pathwayModulation,
+      functionalFoodRecommendations,
+      nutritionPerformanceIntegration,
+      adaptationLoop,
+      recoverySummary,
+      twinState,
+      functionalMealSelector,
+    ],
+  );
 
   const pathwayTargetsByMealSlot = useMemo(
     () =>
@@ -3496,6 +3525,61 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                     Nessun target alimentare ancora: servono vie metaboliche attive (seduta + segnali). Le query compariranno qui.
                   </p>
                 )}
+                {effectiveFunctionalMealSelector ? (
+                  <div
+                    style={{
+                      marginTop: "14px",
+                      borderTop: "1px dashed rgba(148,163,184,0.28)",
+                      paddingTop: "12px",
+                    }}
+                  >
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center", marginBottom: "10px" }}>
+                      <strong>Selettore pasti funzionale</strong>
+                      <span className="nutrition-ui-chip">{effectiveFunctionalMealSelector.status}</span>
+                      <span className="nutrition-muted" style={{ fontSize: "0.75rem" }}>
+                        {effectiveFunctionalMealSelector.date}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {effectiveFunctionalMealSelector.slots.map((slot) => (
+                        <div
+                          key={`${slot.slot}-${slot.focus}`}
+                          style={{
+                            border: "1px solid rgba(14,165,233,0.22)",
+                            borderRadius: "10px",
+                            background: "rgba(8,47,73,0.18)",
+                            padding: "10px",
+                          }}
+                        >
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                            <strong style={{ textTransform: "capitalize" }}>{slot.slot.replace("_", " ")}</strong>
+                            <span className="nutrition-ui-chip">{slot.focus}</span>
+                            <span className="nutrition-ui-chip">{slot.metabolicPhase}</span>
+                          </div>
+                          <p className="nutrition-muted" style={{ fontSize: "0.78rem", margin: "8px 0" }}>
+                            {slot.rationale}
+                          </p>
+                          <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.78rem" }}>
+                            {slot.candidates.map((candidate) => (
+                              <li key={`${slot.slot}-${candidate.name}`} style={{ marginBottom: "6px" }}>
+                                <strong>{candidate.name}</strong> — {candidate.reason}
+                                <div className="nutrition-muted" style={{ fontSize: "0.7rem", marginTop: "2px" }}>
+                                  Elementi: {candidate.functionalElements.join(", ")} · timing {candidate.timing}
+                                  {candidate.caution ? ` · cautela: ${candidate.caution}` : ""}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                    <ul className="nutrition-muted" style={{ fontSize: "0.72rem", marginTop: "10px", marginBottom: 0 }}>
+                      {effectiveFunctionalMealSelector.notes.map((n) => (
+                        <li key={n}>{n}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
                 <ul className="nutrition-muted" style={{ fontSize: "0.72rem", marginTop: "10px", marginBottom: 0 }}>
                   {functionalFoodRecommendations.notes.map((n) => (
                     <li key={n}>{n}</li>

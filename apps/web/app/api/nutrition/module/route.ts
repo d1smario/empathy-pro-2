@@ -11,6 +11,7 @@ import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
+import { buildFunctionalMealSelectorViewModel } from "@/lib/nutrition/functional-meal-selector";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
 import {
   mergeNutritionModuleProfileWithAthleteProfileRow,
@@ -117,6 +118,7 @@ export async function GET(req: NextRequest) {
     const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
     let pathwayModulation = null;
     let functionalFoodRecommendations = null;
+    let functionalMealSelector = null;
     if (pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to) {
       const rowsForDay = plannedRaw.filter((row) => row.date.slice(0, 10) === pathwayDateParam);
       pathwayModulation = buildNutritionPathwayModulationViewModel({
@@ -133,6 +135,15 @@ export async function GET(req: NextRequest) {
         twin: twinState,
       });
       functionalFoodRecommendations = buildFunctionalFoodRecommendationsViewModel(pathwayModulation.pathways);
+      functionalMealSelector = buildFunctionalMealSelectorViewModel({
+        date: pathwayDateParam,
+        pathwayModulation,
+        foodRecommendations: functionalFoodRecommendations,
+        nutritionPerformanceIntegration,
+        adaptationLoop,
+        recoverySummary,
+        twin: twinState,
+      });
     }
 
     const res = NextResponse.json({
@@ -160,6 +171,7 @@ export async function GET(req: NextRequest) {
       metabolicEfficiencyGenerativeModel,
       pathwayModulation,
       functionalFoodRecommendations,
+      functionalMealSelector,
       athleteMemory,
       executed: execRes.data ?? [],
       planned: plannedRaw.map((row) => {

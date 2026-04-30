@@ -139,6 +139,31 @@ export type FunctionalFoodRecommendationsViewModel = {
   notes: string[];
 };
 
+export type FunctionalMealFoodCandidateViewModel = {
+  name: string;
+  reason: string;
+  functionalElements: string[];
+  timing: "pre" | "peri" | "early_recovery" | "late_recovery" | "daily";
+  caution?: string | null;
+};
+
+export type FunctionalMealSelectorSlotViewModel = {
+  slot: "breakfast" | "snack_am" | "lunch" | "snack_pm" | "dinner";
+  focus: "glycogen" | "redox" | "anabolic" | "catabolic_recovery" | "microbiota_gut" | "maintenance";
+  metabolicPhase: "pre_load" | "during_load" | "early_recovery" | "late_recovery" | "daily_support";
+  rationale: string;
+  candidates: FunctionalMealFoodCandidateViewModel[];
+};
+
+export type FunctionalMealSelectorViewModel = {
+  modelVersion: number;
+  layer: "deterministic_functional_food_selector";
+  date: string;
+  status: "baseline" | "support" | "adapt" | "recover";
+  slots: FunctionalMealSelectorSlotViewModel[];
+  notes: string[];
+};
+
 export type NutritionMetabolicEfficiencyBand = "low" | "moderate" | "high";
 
 /** Interpretation-only synthesis over deterministic engines + knowledge traces (not an LLM output). */
@@ -222,6 +247,7 @@ export type NutritionModuleViewModel = {
   /** Present when `pathwayDate` query is set and falls within `from`…`to` (stesso modello del client). */
   pathwayModulation?: NutritionPathwayModulationViewModel | null;
   functionalFoodRecommendations?: FunctionalFoodRecommendationsViewModel | null;
+  functionalMealSelector?: FunctionalMealSelectorViewModel | null;
   athleteMemory?: AthleteMemory | null;
   executed: Array<Record<string, unknown>>;
   planned: NutritionPlannedWorkoutRow[];

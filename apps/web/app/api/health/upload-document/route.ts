@@ -132,9 +132,11 @@ export async function POST(req: NextRequest) {
     let normalizationSummary: {
       extractionRunId: string | null;
       observationsInserted: number;
+      lineageInserted: number;
       nodesInserted: number;
       edgesInserted: number;
       responsesInserted: number;
+      stagingRunId: string | null;
     } | null = null;
 
     if (panelId) {
@@ -165,10 +167,43 @@ export async function POST(req: NextRequest) {
         normalizationSummary = {
           extractionRunId: normalized.extractionRunId,
           observationsInserted: normalized.inserted,
+          lineageInserted: normalized.lineageInserted + causal.lineageInserted,
           nodesInserted: causal.nodesInserted,
           edgesInserted: causal.edgesInserted,
           responsesInserted: causal.responsesInserted,
+          stagingRunId: null,
         };
+        if (normalized.inserted > 0 || causal.nodesInserted > 0 || causal.edgesInserted > 0 || causal.responsesInserted > 0) {
+          const { data: stagingRun, error: stagingErr } = await db
+            .from("interpretation_staging_runs")
+            .insert({
+              athlete_id: athleteId,
+              domain: "health",
+              status: "pending_validation",
+              trigger_source: "health_upload",
+              source_refs: [
+                { table: "biomarker_panels", id: panelId },
+                normalized.extractionRunId ? { table: "extraction_runs", id: normalized.extractionRunId } : null,
+              ].filter(Boolean),
+              candidate_bundle: {
+                panel_type: panelType,
+                sample_date: sampleDate,
+                parsed_keys: Object.keys(parsed),
+                observations_inserted: normalized.inserted,
+                system_graph: {
+                  node_ids: causal.nodeIds,
+                  edge_ids: causal.edgeIds,
+                  response_ids: causal.responseIds,
+                },
+              },
+              proposed_structured_patches: [],
+              confidence: Object.keys(parsed).length > 0 ? 0.72 : 0.35,
+            })
+            .select("id")
+            .maybeSingle();
+          if (stagingErr) throw new Error(stagingErr.message);
+          normalizationSummary.stagingRunId = stagingRun?.id ?? null;
+        }
       } catch (normErr) {
         const msg = normErr instanceof Error ? normErr.message : "normalization_failed";
         const nextValues = {
@@ -219,9 +254,11 @@ export async function POST(req: NextRequest) {
     const parts: string[] = [];
     if (Object.keys(parsed).length > 0) parts.push(`${Object.keys(parsed).length} parametri dal PDF`);
     if (normalizationSummary?.observationsInserted) parts.push(`${normalizationSummary.observationsInserted} osservazioni normalizzate`);
+    if (normalizationSummary?.lineageInserted) parts.push(`${normalizationSummary.lineageInserted} lineage`);
     if ((normalizationSummary?.edgesInserted ?? 0) > 0 || (normalizationSummary?.responsesInserted ?? 0) > 0) {
       parts.push(`grafo: ${normalizationSummary?.edgesInserted ?? 0} edge · ${normalizationSummary?.responsesInserted ?? 0} response`);
     }
+    if (normalizationSummary?.stagingRunId) parts.push("staging interpretativo aperto");
     if (storagePath) parts.push("file su Storage");
     else if (bucket && storageErr) parts.push(`Storage: ${storageErr}`);
     else if (!bucket) parts.push("Storage non configurato (HEALTH_UPLOADS_BUCKET)");
