@@ -1026,7 +1026,7 @@ export default function TrainingBuilderRichPageView() {
             <p className="mt-3 text-sm text-gray-500">Seleziona un atleta attivo per caricare tracce e contesto nutrizione.</p>
           ) : (
             <div className="mt-4 space-y-4">
-              <ResearchTraceScientificPanel athleteId={athleteId} limit={6} compact />
+              <ResearchTraceScientificPanel athleteId={athleteId} limit={16} traceSurface="latest_primary" />
               <ReplicateStatusStrip />
               <div className="rounded-xl border border-emerald-500/25 bg-emerald-950/10 p-3 sm:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">

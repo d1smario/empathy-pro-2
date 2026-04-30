@@ -7,8 +7,14 @@ import { fetchKnowledgeResearchTracesExpanded } from "@/lib/knowledge/knowledge-
 type ResearchTraceScientificPanelProps = {
   athleteId: string | null | undefined;
   limit?: number;
+  /** @deprecated riservato per layout compatto futuro; attualmente ignorato */
   compact?: boolean;
   className?: string;
+  /**
+   * `multi`: una griglia 4 settori per ogni traccia (utile dove serve confronto).
+   * `latest_primary`: una sola griglia canonica sulla traccia più recente; le altre in cronologia collassata (builder training).
+   */
+  traceSurface?: "multi" | "latest_primary";
 };
 
 const HOP_SECTOR: Record<
@@ -73,10 +79,20 @@ function sortHops(hops: ResearchHopTrace[]): ResearchHopTrace[] {
   });
 }
 
+function traceSubtitle(trace: KnowledgeExpansionTrace) {
+  return (
+    <>
+      Modulo {trace.trigger.module ?? "—"} · {trace.trigger.kind}
+      {trace.trigger.adaptationTarget ? ` · adattamento ${trace.trigger.adaptationTarget.replaceAll("_", " ")}` : ""}
+    </>
+  );
+}
+
 export function ResearchTraceScientificPanel({
   athleteId,
   limit = 8,
   className,
+  traceSurface = "multi",
 }: ResearchTraceScientificPanelProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -122,52 +138,78 @@ export function ResearchTraceScientificPanel({
         <p className="mt-3 text-xs text-gray-500">Nessuna traccia: genera da VIRYA / builder o salva un piano di ricerca.</p>
       )}
 
-      {traces.map((trace, ti) => {
-        const hops = sortHops(trace.hops);
-        return (
-          <div
-            key={trace.traceId}
-            className={ti > 0 ? "mt-4 border-t border-white/10 pt-4" : "mt-3"}
-          >
-            <p className="text-sm font-semibold text-gray-200">Focus · {traceFocus(trace)}</p>
-            <p className="mt-0.5 text-[0.65rem] text-gray-500">
-              Modulo {trace.trigger.module ?? "—"} · {trace.trigger.kind}
-              {trace.trigger.adaptationTarget ? ` · adattamento ${trace.trigger.adaptationTarget.replaceAll("_", " ")}` : ""}
-            </p>
+      {(() => {
+        const gridTraces = traceSurface === "latest_primary" && traces.length ? [traces[0]] : traces;
+        const historyTraces = traceSurface === "latest_primary" && traces.length > 1 ? traces.slice(1) : [];
 
-            <div className="builder-kpi-grid mt-3">
-              {hops.map((hop, idx) => {
-                const sector = HOP_SECTOR[hop.kind] ?? {
-                  shortTitle: hop.kind,
-                  physiologyFunction: "Espansione knowledge",
-                  amplificationFocus: hop.kind,
-                };
-                const intent = intentForHop(trace, hop);
-                const docN = hop.linkedDocumentIds?.length ?? 0;
-                const asN = hop.linkedAssertionIds?.length ?? 0;
-                const fnLabel = intent?.label ?? sector.physiologyFunction;
-                return (
-                  <div key={hop.traceHopId} className="builder-kpi-card min-h-[7rem] text-left">
-                    <div className="kpi-card-label flex items-start gap-2 text-left leading-tight">
-                      <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" aria-hidden />
-                      <span>
-                        {idx + 1}. {sector.shortTitle}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs font-semibold leading-snug text-gray-100">{fnLabel}</p>
-                    <p className="mt-2 text-[0.65rem] leading-snug text-gray-400">
-                      Amplifichiamo: {sector.amplificationFocus}
-                    </p>
-                    <p className="mt-2 text-[0.6rem] text-gray-500">
-                      Entità: {humanizeEntityTypes(hop.expectedEntityTypes)} · {docN} doc · {asN} ass · {hop.status}
-                    </p>
+        return (
+          <>
+            {gridTraces.map((trace, ti) => {
+              const hops = sortHops(trace.hops);
+              return (
+                <div
+                  key={trace.traceId}
+                  className={ti > 0 ? "mt-4 border-t border-white/10 pt-4" : "mt-3"}
+                >
+                  <p className="text-sm font-semibold text-gray-200">Focus · {traceFocus(trace)}</p>
+                  <p className="mt-0.5 text-[0.65rem] text-gray-500">{traceSubtitle(trace)}</p>
+
+                  <div className="builder-kpi-grid mt-3">
+                    {hops.map((hop, idx) => {
+                      const sector = HOP_SECTOR[hop.kind] ?? {
+                        shortTitle: hop.kind,
+                        physiologyFunction: "Espansione knowledge",
+                        amplificationFocus: hop.kind,
+                      };
+                      const intent = intentForHop(trace, hop);
+                      const docN = hop.linkedDocumentIds?.length ?? 0;
+                      const asN = hop.linkedAssertionIds?.length ?? 0;
+                      const fnLabel = intent?.label ?? sector.physiologyFunction;
+                      return (
+                        <div key={hop.traceHopId} className="builder-kpi-card min-h-[7rem] text-left">
+                          <div className="kpi-card-label flex items-start gap-2 text-left leading-tight">
+                            <span className="mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" aria-hidden />
+                            <span>
+                              {idx + 1}. {sector.shortTitle}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs font-semibold leading-snug text-gray-100">{fnLabel}</p>
+                          <p className="mt-2 text-[0.65rem] leading-snug text-gray-400">
+                            Amplifichiamo: {sector.amplificationFocus}
+                          </p>
+                          <p className="mt-2 text-[0.6rem] text-gray-500">
+                            Entità: {humanizeEntityTypes(hop.expectedEntityTypes)} · {docN} doc · {asN} ass · {hop.status}
+                          </p>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
-          </div>
+                </div>
+              );
+            })}
+
+            {historyTraces.length > 0 ? (
+              <details className="mt-4 rounded-xl border border-violet-500/20 bg-violet-950/10 px-3 py-2">
+                <summary className="cursor-pointer text-xs font-semibold text-violet-200/90">
+                  Cronologia tracce salvate ({historyTraces.length}) — stessa struttura a 4 settori, senza ripetere la griglia
+                </summary>
+                <ul className="mt-2 space-y-2 border-t border-white/10 pt-2 text-[0.65rem] leading-snug text-gray-400">
+                  {historyTraces.map((t) => (
+                    <li key={`hist-${t.traceId}`} className="rounded-lg border border-white/5 bg-black/20 px-2.5 py-2">
+                      <span className="font-mono text-[0.58rem] text-gray-500">{t.createdAt}</span>
+                      <span className="mt-0.5 block font-semibold text-gray-300">Focus · {traceFocus(t)}</span>
+                      <span className="mt-0.5 block text-gray-500">{traceSubtitle(t)}</span>
+                      <span className="mt-0.5 block text-gray-600">
+                        {t.hops.length} hop · {t.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </>
         );
-      })}
+      })()}
 
       <details className="mt-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
         <summary className="cursor-pointer text-sm font-semibold text-gray-200">Approfondimento testuale (audit)</summary>

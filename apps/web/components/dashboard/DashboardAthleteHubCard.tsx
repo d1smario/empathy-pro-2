@@ -3,6 +3,165 @@
 import type { ReactNode } from "react";
 import { useAthleteOperationalHub } from "@/lib/dashboard/use-athlete-operational-hub";
 import { Pro2Link } from "@/components/ui/empathy";
+import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
+
+function parseDynamicsBracketLine(line: string): { tag: string; body: string } | null {
+  const m = line.match(/^\[([^\]]+)\]\s*(.*)$/s);
+  if (!m) return null;
+  return { tag: m[1].trim(), body: m[2].trim() };
+}
+
+function trafficLightTone(tl: string): "green" | "amber" | "rose" | "slate" {
+  if (tl === "green") return "green";
+  if (tl === "yellow") return "amber";
+  if (tl === "red") return "rose";
+  return "slate";
+}
+
+function trafficLightTextClass(tl: string): string {
+  const tone = trafficLightTone(tl);
+  if (tone === "green") return "text-emerald-300";
+  if (tone === "amber") return "text-amber-200";
+  if (tone === "rose") return "text-rose-300";
+  return "text-gray-300";
+}
+
+function HubOpCell({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: string;
+  tone: "orange" | "cyan" | "violet" | "green" | "amber" | "rose" | "slate";
+}) {
+  const border =
+    tone === "orange"
+      ? "border-orange-400/25"
+      : tone === "cyan"
+        ? "border-cyan-400/25"
+        : tone === "violet"
+          ? "border-violet-400/25"
+          : tone === "green"
+            ? "border-emerald-500/30"
+            : tone === "amber"
+              ? "border-amber-400/25"
+              : tone === "rose"
+                ? "border-rose-400/25"
+                : "border-white/10";
+  const glow =
+    tone === "orange"
+      ? "from-orange-500/10"
+      : tone === "cyan"
+        ? "from-cyan-500/10"
+        : tone === "violet"
+          ? "from-violet-500/10"
+          : tone === "green"
+            ? "from-emerald-500/10"
+            : tone === "amber"
+              ? "from-amber-500/10"
+              : tone === "rose"
+                ? "from-rose-500/10"
+                : "from-white/5";
+  return (
+    <div
+      className={`relative overflow-hidden rounded-lg border ${border} bg-gradient-to-br ${glow} to-black/40 px-3 py-2.5`}
+    >
+      <div className="font-mono text-[0.55rem] uppercase tracking-[0.12em] text-gray-500">{label}</div>
+      <div className="mt-1 break-words font-mono text-base font-semibold leading-tight text-gray-100">{value}</div>
+      {sub ? <div className="mt-1 text-[0.65rem] leading-snug text-gray-500">{sub}</div> : null}
+    </div>
+  );
+}
+
+function HubOperationalDocs({
+  signals,
+  dynamicsLines,
+}: {
+  signals: OperationalSignalsBundle;
+  dynamicsLines: string[];
+}) {
+  const ag = signals.adaptationGuidance;
+  const loop = signals.adaptationLoop;
+  const nut = signals.nutritionPerformanceIntegration;
+  const op = signals.operationalContext;
+  const expected = ag.expectedAdaptation;
+  const observed = ag.observedAdaptation;
+  const scoreFormula =
+    expected > 0
+      ? `scorePct = clamp((osservato / atteso) × 100, 0, 100) → (${observed} / ${expected}) × 100 ≈ ${ag.scorePct}%`
+      : `atteso = 0: scorePct deriva dal solo osservato clampato (implementazione buildAdaptationGuidance).`;
+
+  return (
+    <details className="mt-3 mb-4 rounded-lg border border-white/10 bg-black/35 px-3 py-2 text-xs text-gray-400">
+      <summary className="cursor-pointer font-mono text-[0.6rem] uppercase tracking-wider text-gray-300">
+        Logica, formule e provenienza dati
+      </summary>
+      <div className="mt-3 space-y-4 border-t border-white/10 pt-3 leading-relaxed">
+        <div>
+          <p className="font-mono text-[0.58rem] uppercase tracking-wider text-orange-300/90">Adattamento (twin)</p>
+          <p className="mt-1">
+            Valori <span className="text-gray-300">atteso / osservato</span> da{" "}
+            <span className="text-gray-300">athlete_memory.twin</span> (expectedAdaptation, realAdaptation; fallback adaptationScore).
+          </p>
+          <p className="mt-1 font-mono text-[0.65rem] text-gray-500">{scoreFormula}</p>
+          <p className="mt-1">
+            Semaforo: verde se score ≥ 75%; giallo 50–75% (riduzione volume suggerita 30–50%); rosso &lt;50% (50–75%). Vedi{" "}
+            <span className="text-gray-300">lib/adaptation/adaptation-guidance.ts</span>.
+          </p>
+          {ag.guidance ? <p className="mt-1 text-gray-500">{ag.guidance}</p> : null}
+        </div>
+        <div>
+          <p className="font-mono text-[0.58rem] uppercase tracking-wider text-cyan-300/90">Loop calendario (7 giorni)</p>
+          <p className="mt-1">
+            <span className="text-gray-300">divergenceScore</span>: da twin se presente, altrimenti{" "}
+            <span className="font-mono text-gray-500">clamp(|ΔTSS 7g pianificato − eseguito| × 0.5, 0, 100)</span> con Δ da{" "}
+            <span className="text-gray-300">planned_workouts</span> vs <span className="text-gray-300">executed_workouts</span>.
+          </p>
+          <p className="mt-1">
+            Stato <span className="font-mono text-cyan-200/80">{loop.status}</span> e azione{" "}
+            <span className="font-mono text-cyan-200/80">{loop.nextAction}</span> da regole in{" "}
+            <span className="text-gray-300">adaptation-regeneration-loop.ts</span> (compliance, recovery, modalità protettiva, soglie
+            divergenza).
+          </p>
+          {loop.guidance ? <p className="mt-1 text-gray-500">{loop.guidance}</p> : null}
+        </div>
+        <div>
+          <p className="font-mono text-[0.58rem] uppercase tracking-wider text-violet-300/90">Dial nutrizione ↔ training</p>
+          <p className="mt-1">
+            Motore deterministico <span className="text-gray-300">buildNutritionPerformanceIntegration</span>:{" "}
+            <span className="font-mono text-gray-500">trainingEnergyScale = clamp(bioScale × opScale, 0.35, 1.02)</span> poi moltiplicatori
+            diario (adeguacy), loop (×0.96 regenerate, ×0.985 watch), clamp finale; CHO intra e bias proteico da semaforo, bioenergetica,
+            loop e diario. Vedi <span className="text-gray-300">lib/nutrition/performance-integration-scaler.ts</span>.
+          </p>
+          {nut.rationale.length > 0 ? (
+            <ul className="mt-2 list-inside list-disc text-gray-500">
+              {nut.rationale.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+        <div>
+          <p className="font-mono text-[0.58rem] uppercase tracking-wider text-cyan-300/90">Dinamica incrociata (righe)</p>
+          <p className="mt-1">
+            Stringhe da <span className="text-gray-300">buildOperationalDynamicsLines</span> (stesso payload API hub): adattamento,
+            contesto operativo{op ? ` (~${op.loadScalePct}% · ${op.mode})` : ""}, loop, dial nutrizione.
+          </p>
+          {dynamicsLines.length > 0 ? (
+            <ul className="mt-2 list-inside list-disc font-mono text-[0.65rem] text-gray-500">
+              {dynamicsLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      </div>
+    </details>
+  );
+}
 
 function HubRow({
   href,
@@ -63,58 +222,95 @@ export function DashboardAthleteHubCard() {
       {!showLoading && !err && hub ? (
         <div className="mt-6">
           {hub.operationalSignals ? (
-            <details
-              open
-              className="mb-4 rounded-xl border border-orange-400/25 bg-orange-950/20 px-4 py-3 text-sm text-gray-200"
-            >
-              <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-orange-300/90">
+            <div className="mb-4 rounded-xl border border-orange-400/25 bg-orange-950/20 px-4 py-3 text-sm text-gray-200">
+              <p className="font-mono text-[0.65rem] uppercase tracking-wider text-orange-300/90">
                 Segnali operativi · twin → loop adattamento → dial nutrizione
-              </summary>
-              <div className="mt-3 space-y-2 text-xs leading-relaxed">
-                <p>
-                  <span className="text-gray-500">Adattamento (twin):</span> atteso{" "}
-                  {hub.operationalSignals.adaptationGuidance.expectedAdaptation.toFixed(2)} · osservato{" "}
-                  {hub.operationalSignals.adaptationGuidance.observedAdaptation.toFixed(2)} · semaforo{" "}
-                  <span className="font-mono text-amber-200">{hub.operationalSignals.adaptationGuidance.trafficLight}</span> ·
-                  score {hub.operationalSignals.adaptationGuidance.scorePct}%
-                </p>
-                <p>
-                  <span className="text-gray-500">Loop piano:</span>{" "}
-                  <span className="font-mono text-cyan-200/90">{hub.operationalSignals.adaptationLoop.status}</span> ·
-                  prossima azione{" "}
-                  <span className="font-mono text-cyan-200/90">{hub.operationalSignals.adaptationLoop.nextAction}</span>
-                  <span className="text-gray-500">
-                    {" "}
-                    · divergenza {hub.operationalSignals.adaptationLoop.divergenceScore.toFixed(2)}
-                  </span>
-                </p>
-                <p>
-                  <span className="text-gray-500">Dial nutrizione/fueling:</span> energia training ×
-                  {hub.operationalSignals.nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)} · CHO fueling ×
-                  {hub.operationalSignals.nutritionPerformanceIntegration.fuelingChoScale.toFixed(2)} · bias proteine +
-                  {hub.operationalSignals.nutritionPerformanceIntegration.proteinBiasPctPoints.toFixed(1)} pt
-                </p>
-                {hub.operationalSignals.nutritionPerformanceIntegration.rationale.length > 0 ? (
-                  <ul className="list-inside list-disc text-gray-400">
-                    {hub.operationalSignals.nutritionPerformanceIntegration.rationale.slice(0, 4).map((line, i) => (
-                      <li key={i}>{line}</li>
-                    ))}
-                  </ul>
-                ) : null}
+              </p>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                <HubOpCell
+                  label="Twin · atteso"
+                  value={hub.operationalSignals.adaptationGuidance.expectedAdaptation.toFixed(2)}
+                  tone="orange"
+                />
+                <HubOpCell
+                  label="Twin · osservato"
+                  value={hub.operationalSignals.adaptationGuidance.observedAdaptation.toFixed(2)}
+                  tone="orange"
+                />
+                <HubOpCell
+                  label="Semaforo"
+                  value={
+                    <span className={trafficLightTextClass(hub.operationalSignals.adaptationGuidance.trafficLight)}>
+                      {hub.operationalSignals.adaptationGuidance.trafficLight}
+                    </span>
+                  }
+                  tone={trafficLightTone(hub.operationalSignals.adaptationGuidance.trafficLight)}
+                />
+                <HubOpCell label="Score %" value={`${hub.operationalSignals.adaptationGuidance.scorePct}%`} tone="slate" />
+                <HubOpCell
+                  label="Loop · stato"
+                  value={<span className="text-cyan-200">{hub.operationalSignals.adaptationLoop.status}</span>}
+                  tone="cyan"
+                />
+                <HubOpCell
+                  label="Loop · prossima azione"
+                  value={<span className="break-all text-cyan-200/90">{hub.operationalSignals.adaptationLoop.nextAction}</span>}
+                  tone="cyan"
+                />
+                <HubOpCell
+                  label="Loop · divergenza"
+                  value={hub.operationalSignals.adaptationLoop.divergenceScore.toFixed(2)}
+                  sub="Score 0–100 (twin o |ΔTSS|×0.5)"
+                  tone="cyan"
+                />
+                <HubOpCell
+                  label="Energia training"
+                  value={`×${hub.operationalSignals.nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)}`}
+                  tone="violet"
+                />
+                <HubOpCell
+                  label="CHO fueling"
+                  value={`×${hub.operationalSignals.nutritionPerformanceIntegration.fuelingChoScale.toFixed(2)}`}
+                  tone="violet"
+                />
+                <HubOpCell
+                  label="Bias proteine"
+                  value={`+${hub.operationalSignals.nutritionPerformanceIntegration.proteinBiasPctPoints.toFixed(1)} pt`}
+                  tone="violet"
+                />
+                <HubOpCell
+                  label="Quota pasti / training"
+                  value={`${Math.round(hub.operationalSignals.nutritionPerformanceIntegration.mealTrainingFraction * 100)}%`}
+                  tone="violet"
+                />
+                <HubOpCell
+                  label="Idratazione (floor)"
+                  value={`×${hub.operationalSignals.nutritionPerformanceIntegration.hydrationFloorMultiplier.toFixed(2)}`}
+                  tone="violet"
+                />
               </div>
-            </details>
+            </div>
           ) : null}
           {hub.crossModuleDynamicsLines.length > 0 ? (
             <div className="mb-4 rounded-xl border border-cyan-500/25 bg-cyan-950/15 px-4 py-3 text-sm text-gray-200">
               <p className="font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
                 Dinamica incrociata · training ↔ nutrizione
               </p>
-              <ul className="mt-2 list-inside list-disc text-xs leading-relaxed text-gray-400">
-                {hub.crossModuleDynamicsLines.slice(0, 8).map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {hub.crossModuleDynamicsLines.slice(0, 8).map((line, i) => {
+                  const parsed = parseDynamicsBracketLine(line);
+                  if (!parsed) {
+                    return (
+                      <HubOpCell key={i} label={`Riga ${i + 1}`} value={line} tone="slate" />
+                    );
+                  }
+                  return <HubOpCell key={i} label={parsed.tag} value={parsed.body} tone="cyan" />;
+                })}
+              </div>
             </div>
+          ) : null}
+          {hub.operationalSignals ? (
+            <HubOperationalDocs signals={hub.operationalSignals} dynamicsLines={hub.crossModuleDynamicsLines} />
           ) : null}
           <details className="mb-4 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-gray-300">
             <summary className="cursor-pointer font-mono text-[0.65rem] uppercase tracking-wider text-cyan-300/90">
