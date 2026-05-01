@@ -2,10 +2,153 @@
 
 import { useMemo } from "react";
 import { buildInfluenceLedgerRowsFromOperationalBundle } from "@/lib/platform/bioenergetic-transparency-ledger";
+import type { BioenergeticInfluenceLedgerRow } from "@/lib/platform/bioenergetic-transparency-ledger";
 import { useAthleteOperationalHub } from "@/lib/dashboard/use-athlete-operational-hub";
+import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2Link } from "@/components/ui/empathy";
 import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
+
+type BioTone = "amber" | "cyan" | "violet" | "green" | "rose" | "slate";
+
+type BioCellVm = {
+  id: string;
+  label: string;
+  value: string;
+  sub: string;
+  tone: BioTone;
+  detail: string;
+};
+
+function fixed(value: number | null | undefined, digits = 1): string {
+  return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
+}
+
+function rounded(value: number | null | undefined, suffix = ""): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}${suffix}` : "—";
+}
+
+function percent(value: number | null | undefined): string {
+  return typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}%` : "—";
+}
+
+function compactAction(action: string): string {
+  return action.replaceAll("_", " ");
+}
+
+function toneForLoop(status: string): BioTone {
+  if (status === "regenerate") return "rose";
+  if (status === "watch") return "amber";
+  return "green";
+}
+
+function buildBioenergetisCells(sig: OperationalSignalsBundle): BioCellVm[] {
+  const g = sig.adaptationGuidance;
+  const loop = sig.adaptationLoop;
+  const bio = sig.bioenergeticModulation;
+  const nut = sig.nutritionPerformanceIntegration;
+  const ctx = sig.operationalContext;
+
+  return [
+    {
+      id: "adaptation-score",
+      label: "Adattamento",
+      value: `${g.scorePct}%`,
+      sub: `${fixed(g.expectedAdaptation, 2)} atteso · ${fixed(g.observedAdaptation, 2)} osservato`,
+      tone: g.trafficLight === "red" ? "rose" : g.trafficLight === "yellow" ? "amber" : "green",
+      detail: `Semaforo ${g.trafficLight}. Il numero confronta adattamento atteso e osservato dal twin; non genera piano, alimenta il loop operativo.`,
+    },
+    {
+      id: "loop-divergence",
+      label: "Loop",
+      value: fixed(loop.divergenceScore, 1),
+      sub: `${loop.status} · ${compactAction(loop.nextAction)}`,
+      tone: toneForLoop(loop.status),
+      detail: `Planned ${rounded(loop.expectedLoad7d)} · real ${rounded(loop.realLoad7d)} · internal ${rounded(loop.internalLoad7d)}. Compliance ${percent(loop.executionCompliancePct)}.`,
+    },
+    {
+      id: "bio-load",
+      label: "Scala carico",
+      value: bio ? `${bio.loadScale.toFixed(2)}x` : "—",
+      sub: bio ? `${percent(bio.loadScalePct)} · ${bio.state}` : "fisiologia/twin parziali",
+      tone: bio?.state === "protective" ? "rose" : bio?.state === "watch" ? "amber" : bio ? "cyan" : "slate",
+      detail: bio
+        ? `${bio.headline} ${bio.guidance} Copertura segnali ${percent(bio.signalCoveragePct)}, incertezza ±${percent(bio.inputUncertaintyPct)}.`
+        : "Modulazione non calcolata: servono fisiologia e twin nello stesso bundle operativo.",
+    },
+    {
+      id: "readiness",
+      label: "Readiness",
+      value: rounded(loop.readinessScore, "/100"),
+      sub: `adapt ${rounded(loop.adaptationScore, "/100")} · intervention ${fixed(loop.interventionScore, 1)}`,
+      tone: loop.readinessScore < 45 || loop.interventionScore > 40 ? "amber" : "violet",
+      detail: `Readiness e intervention score guidano la cautela del giorno. Trigger attivi: ${loop.triggers.length ? loop.triggers.join(" · ") : "nessuno"}.`,
+    },
+    {
+      id: "nutrition-dials",
+      label: "Fueling dial",
+      value: `${nut.fuelingChoScale.toFixed(2)}x`,
+      sub: `E ${nut.trainingEnergyScale.toFixed(2)}x · protein +${nut.proteinBiasPctPoints.toFixed(1)} pt`,
+      tone: "cyan",
+      detail: `Idratazione floor ${nut.hydrationFloorMultiplier.toFixed(2)}x. Le leve scalano solver nutrizione/fueling a partire dagli stessi segnali compute.`,
+    },
+    {
+      id: "day-context",
+      label: "Giornata",
+      value: ctx ? percent(ctx.loadScalePct ?? ctx.loadScale * 100) : "—",
+      sub: ctx ? `${ctx.mode} · ${ctx.headline}` : "contesto assente",
+      tone: ctx ? (ctx.loadScalePct < 90 ? "amber" : "green") : "slate",
+      detail: ctx
+        ? `${ctx.guidance} Questo contesto viene consumato da VIRYA e dai dial applicativi, non dalla UI come motore parallelo.`
+        : "Nessun contesto operativo giornata disponibile.",
+    },
+  ];
+}
+
+function BioKpiGrid({ cells }: { cells: BioCellVm[] }) {
+  return (
+    <div className="fueling-main-kpi-grid" style={{ marginBottom: 12 }}>
+      {cells.map((cell) => (
+        <article key={cell.id} className={`fueling-main-kpi-card fueling-main-kpi-card--${cell.tone}`}>
+          <div className="fueling-main-kpi-label">{cell.label}</div>
+          <div className="fueling-main-kpi-value">{cell.value}</div>
+          <div className="fueling-main-kpi-sub">{cell.sub}</div>
+          <details className="collapsible-card mt-3 border-white/10 bg-black/20 px-2.5 py-2">
+            <summary className="text-[0.62rem]">Perché</summary>
+            <p className="m-0 text-[0.72rem] leading-relaxed text-slate-400">{cell.detail}</p>
+          </details>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function LedgerCellStrip({ rows }: { rows: BioenergeticInfluenceLedgerRow[] }) {
+  if (!rows.length) return null;
+  return (
+    <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+      {rows.map((row, index) => {
+        const tone: BioTone = (["green", "amber", "cyan", "violet", "rose", "slate"] as const)[index % 6];
+        return (
+          <details
+            key={row.id}
+            className={`collapsible-card min-w-[16rem] shrink-0 border-white/10 bg-black/30 fueling-main-kpi-card--${tone}`}
+          >
+            <summary className="text-[0.65rem]">{row.source}</summary>
+            <div className="space-y-2 text-xs leading-relaxed text-slate-400">
+              <p className="m-0">
+                <span className="font-semibold text-slate-200">Consumatore:</span> {row.consumer}
+              </p>
+              <p className="m-0">
+                <span className="font-semibold text-slate-200">Effetto:</span> {row.effect}
+              </p>
+            </div>
+          </details>
+        );
+      })}
+    </div>
+  );
+}
 
 export default function BioenergeticTransparencyHubPageView() {
   const { ctxLoading, loading, error: err, hub } = useAthleteOperationalHub();
@@ -16,6 +159,7 @@ export default function BioenergeticTransparencyHubPageView() {
   );
 
   const sig = hub?.operationalSignals;
+  const cells = useMemo(() => (sig ? buildBioenergetisCells(sig) : []), [sig]);
 
   return (
     <Pro2ModulePageShell
@@ -85,91 +229,35 @@ export default function BioenergeticTransparencyHubPageView() {
 
         {!showLoading && !err && hub ? (
           <>
-            <section className="rounded-2xl border border-white/10 bg-black/30 p-6">
-              <h2 className="font-mono text-[0.65rem] font-bold uppercase tracking-wider text-emerald-300/90">Pipeline canonica</h2>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm leading-relaxed text-gray-300">
-                <li>Realtà del giorno e memoria atleta alimentano il bundle operativo (Compute).</li>
-                <li>
-                  <strong className="text-white">VIRYA</strong> consuma stato loop, divergenza e contesto per ritunare carico / microciclo (Application
-                  sul piano).
-                </li>
-                <li>
-                  <strong className="text-white">Builder</strong> materializza la singola sessione; non sostituisce VIRYA sul programma macro.
-                </li>
-                <li>I dial nutrizione/fueling scalano solver e fueling a partire dagli stessi segnali.</li>
-              </ol>
-            </section>
-
-            {ledger.length > 0 ? (
-              <section className="rounded-2xl border border-cyan-500/20 bg-cyan-950/10 p-6">
-                <h2 className="font-mono text-[0.65rem] font-bold uppercase tracking-wider text-cyan-300/90">Influence ledger (audit)</h2>
-                <p className="mt-1 text-xs text-gray-500">
-                  Righe derivate deterministicamente dal bundle — nessuna scrittura DB da questa pagina.
-                </p>
-                <div className="mt-4 overflow-x-auto">
-                  <table className="w-full min-w-[640px] border-collapse text-left text-xs">
-                    <thead>
-                      <tr className="border-b border-white/10 text-[0.65rem] uppercase tracking-wider text-gray-500">
-                        <th className="py-2 pr-3 font-medium">Fonte</th>
-                        <th className="py-2 pr-3 font-medium">Consumatore</th>
-                        <th className="py-2 font-medium">Effetto</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ledger.map((row) => (
-                        <tr key={row.id} className="border-b border-white/5 align-top text-gray-300">
-                          <td className="py-2.5 pr-3 text-emerald-100/90">{row.source}</td>
-                          <td className="py-2.5 pr-3 text-slate-300">{row.consumer}</td>
-                          <td className="py-2.5 text-gray-400">{row.effect}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            ) : null}
-
             {sig ? (
-              <section className="grid gap-4 lg:grid-cols-2">
-                <div className="rounded-2xl border border-orange-400/25 bg-orange-950/15 p-5 text-sm text-gray-200">
-                  <h3 className="font-mono text-[0.65rem] uppercase tracking-wider text-orange-300/90">Twin e loop</h3>
-                  <p className="mt-2 text-xs leading-relaxed">
-                    Adattamento atteso {sig.adaptationGuidance.expectedAdaptation.toFixed(2)} · osservato{" "}
-                    {sig.adaptationGuidance.observedAdaptation.toFixed(2)} · semaforo{" "}
-                    <span className="font-mono text-amber-200">{sig.adaptationGuidance.trafficLight}</span>
+              <section className="viz-card builder-panel space-y-4" style={{ marginBottom: 12 }}>
+                <header>
+                  <h2 className="viz-title">Bioenergetis Stack</h2>
+                  <p className="mt-1 text-sm text-gray-400">
+                    Celle operative dal bundle Compute: twin, loop, scala carico e dial nutrizione. Ogni numero apre la spiegazione.
                   </p>
-                  <p className="mt-2 text-xs leading-relaxed text-gray-400">
-                    Loop: <span className="font-mono text-cyan-200/90">{sig.adaptationLoop.status}</span> · next{" "}
-                    <span className="font-mono text-cyan-200/90">{sig.adaptationLoop.nextAction}</span> · divergenza{" "}
-                    {sig.adaptationLoop.divergenceScore.toFixed(1)}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-950/10 p-5 text-sm text-gray-200">
-                  <h3 className="font-mono text-[0.65rem] uppercase tracking-wider text-fuchsia-300/90">Dial nutrizione / fueling</h3>
-                  <p className="mt-2 text-xs leading-relaxed">
-                    E_train ×{sig.nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)} · CHO ×
-                    {sig.nutritionPerformanceIntegration.fuelingChoScale.toFixed(2)} · proteine +
-                    {sig.nutritionPerformanceIntegration.proteinBiasPctPoints.toFixed(1)} pt · idratazione ×
-                    {sig.nutritionPerformanceIntegration.hydrationFloorMultiplier.toFixed(2)}
-                  </p>
-                  {sig.nutritionPerformanceIntegration.rationale.length > 0 ? (
-                    <ul className="mt-2 list-inside list-disc text-xs text-gray-500">
-                      {sig.nutritionPerformanceIntegration.rationale.slice(0, 5).map((line, i) => (
-                        <li key={i}>{line}</li>
+                </header>
+                <details className="collapsible-card" style={{ marginBottom: 10 }}>
+                  <summary>Pipeline canonica · Compute → Application</summary>
+                  <ol className="m-0 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-slate-400">
+                    <li>Realtà del giorno e memoria atleta alimentano il bundle operativo.</li>
+                    <li>VIRYA consuma loop, divergenza e contesto per ritunare il microciclo.</li>
+                    <li>Builder materializza la singola sessione; non sostituisce VIRYA sul programma macro.</li>
+                    <li>Nutrizione/fueling scalano solver e timing a partire dagli stessi segnali.</li>
+                  </ol>
+                </details>
+                <BioKpiGrid cells={cells} />
+                {sig.nutritionPerformanceIntegration.rationale.length > 0 ? (
+                  <details className="collapsible-card" style={{ marginBottom: 10, borderColor: "rgba(56,189,248,0.35)" }}>
+                    <summary className="text-[0.7rem] font-bold uppercase tracking-wider text-cyan-200/90">
+                      Leve solver nutrizione ({sig.nutritionPerformanceIntegration.rationale.length})
+                    </summary>
+                    <ul className="m-0 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-400">
+                      {sig.nutritionPerformanceIntegration.rationale.map((line) => (
+                        <li key={line}>{line}</li>
                       ))}
                     </ul>
-                  ) : null}
-                </div>
-                {sig.bioenergeticModulation ? (
-                  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-950/15 p-5 text-sm text-gray-200 lg:col-span-2">
-                    <h3 className="font-mono text-[0.65rem] uppercase tracking-wider text-emerald-300/90">Modulazione bioenergetica</h3>
-                    <p className="mt-2 text-xs leading-relaxed text-gray-300">{sig.bioenergeticModulation.headline}</p>
-                    <p className="mt-1 text-xs text-gray-500">{sig.bioenergeticModulation.guidance}</p>
-                    <p className="mt-2 font-mono text-[0.65rem] text-gray-400">
-                      load ×{sig.bioenergeticModulation.loadScale.toFixed(2)} · stato {sig.bioenergeticModulation.state} · copertura segnali{" "}
-                      {sig.bioenergeticModulation.signalCoveragePct.toFixed(0)}%
-                    </p>
-                  </div>
+                  </details>
                 ) : null}
               </section>
             ) : (
@@ -178,17 +266,27 @@ export default function BioenergeticTransparencyHubPageView() {
               </p>
             )}
 
+            {ledger.length > 0 ? (
+              <section className="viz-card builder-panel space-y-3" style={{ marginBottom: 12 }}>
+                <header>
+                  <h2 className="viz-title">Influence Ledger</h2>
+                  <p className="mt-1 text-xs text-gray-500">
+                    Celle audit derivate deterministicamente dal bundle — nessuna scrittura DB da questa pagina.
+                  </p>
+                </header>
+                <LedgerCellStrip rows={ledger} />
+              </section>
+            ) : null}
+
             {hub.crossModuleDynamicsLines.length > 0 ? (
-              <section className="rounded-2xl border border-cyan-500/20 bg-black/25 p-6">
-                <h2 className="font-mono text-[0.65rem] font-bold uppercase tracking-wider text-cyan-300/90">
-                  Dinamica incrociata · training ↔ nutrizione
-                </h2>
-                <ul className="mt-3 list-inside list-disc space-y-1 text-xs leading-relaxed text-gray-400">
-                  {hub.crossModuleDynamicsLines.slice(0, 12).map((line, i) => (
-                    <li key={i}>{line}</li>
+              <details className="collapsible-card border-cyan-500/25 bg-cyan-950/10">
+                <summary>Dinamica incrociata · training ↔ nutrizione ({hub.crossModuleDynamicsLines.length})</summary>
+                <ul className="m-0 list-disc space-y-1 pl-4 text-xs leading-relaxed text-gray-400">
+                  {hub.crossModuleDynamicsLines.slice(0, 12).map((line) => (
+                    <li key={line}>{line}</li>
                   ))}
                 </ul>
-              </section>
+              </details>
             ) : null}
 
             <section className="rounded-2xl border border-white/10 bg-black/20 p-6">
