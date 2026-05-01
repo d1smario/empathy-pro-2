@@ -195,8 +195,9 @@ body {
 .empathy-meal-plan-expo-shell {
   margin-bottom: 1rem;
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 63, 174, 0.28);
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.08), rgba(255, 138, 28, 0.055), transparent 70%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
     rgba(0, 0, 0, 0.68);
   box-shadow:
@@ -235,6 +236,16 @@ body {
   overflow: hidden;
 }
 
+.empathy-meal-expo-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, var(--nutri-expo-pink), var(--nutri-expo-pro));
+  opacity: 0.95;
+  z-index: 1;
+}
+
 .empathy-meal-expo-card--placeholder {
   border-style: dashed;
   opacity: 0.92;
@@ -262,66 +273,73 @@ body {
   gap: 12px;
   padding: 14px 14px 14px 12px;
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.18), rgba(255, 138, 28, 0.12) 46%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 63, 174, 0.2);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .empathy-meal-expo-card--slot-breakfast .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 138, 28, 0.18), rgba(255, 63, 174, 0.13) 52%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-lunch .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.18), rgba(255, 138, 28, 0.12) 52%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-dinner .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.15), rgba(255, 138, 28, 0.18) 56%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-snack_am .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.2), rgba(255, 138, 28, 0.1) 52%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-snack_pm .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 138, 28, 0.18), rgba(255, 63, 174, 0.14) 52%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-pre_sleep .empathy-meal-expo-banner {
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.12), rgba(255, 138, 28, 0.08) 52%, rgba(255, 255, 255, 0.02)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012)),
     rgba(6, 7, 12, 0.92);
 }
 
 .empathy-meal-expo-card--slot-breakfast {
-  border-color: rgba(251, 146, 60, 0.22);
+  border-color: rgba(255, 138, 28, 0.34);
 }
 
 .empathy-meal-expo-card--slot-lunch {
-  border-color: rgba(244, 114, 182, 0.18);
+  border-color: rgba(255, 63, 174, 0.32);
 }
 
 .empathy-meal-expo-card--slot-dinner {
-  border-color: rgba(249, 115, 22, 0.2);
+  border-color: rgba(255, 138, 28, 0.32);
 }
 
 .empathy-meal-expo-card--slot-snack_am {
-  border-color: rgba(244, 114, 182, 0.2);
+  border-color: rgba(255, 63, 174, 0.34);
 }
 
 .empathy-meal-expo-card--slot-snack_pm {
-  border-color: rgba(251, 146, 60, 0.2);
+  border-color: rgba(255, 138, 28, 0.34);
 }
 
 .empathy-meal-expo-card--slot-pre_sleep {
@@ -336,10 +354,10 @@ body {
   align-items: center;
   justify-content: center;
   background:
-    linear-gradient(135deg, rgba(236, 72, 153, 0.18), rgba(168, 85, 247, 0.12)),
+    linear-gradient(135deg, rgba(255, 63, 174, 0.42), rgba(255, 138, 28, 0.32)),
     rgba(0, 0, 0, 0.58);
-  border: 1px solid rgba(244, 114, 182, 0.18);
-  box-shadow: 0 0 16px rgba(236, 72, 153, 0.1);
+  border: 1px solid rgba(255, 63, 174, 0.34);
+  box-shadow: 0 0 18px rgba(255, 63, 174, 0.18), 0 0 16px rgba(255, 138, 28, 0.1);
   flex-shrink: 0;
 }
 
@@ -399,9 +417,10 @@ body {
   padding: 10px 12px;
   border-radius: 14px;
   background:
+    linear-gradient(135deg, rgba(255, 63, 174, 0.18), rgba(255, 138, 28, 0.11)),
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.01)),
     rgba(0, 0, 0, 0.58);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 63, 174, 0.3);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   text-align: center;
 }
@@ -446,7 +465,7 @@ body {
 }
 
 .empathy-meal-expo-macro--cho {
-  border-color: rgba(244, 114, 182, 0.16);
+  border-color: rgba(255, 63, 174, 0.34);
   background: var(--nutri-expo-cho-bg);
 }
 .empathy-meal-expo-macro--cho::after {
@@ -454,7 +473,7 @@ body {
 }
 
 .empathy-meal-expo-macro--pro {
-  border-color: rgba(251, 146, 60, 0.14);
+  border-color: rgba(255, 138, 28, 0.34);
   background: var(--nutri-expo-pro-bg);
 }
 .empathy-meal-expo-macro--pro::after {
@@ -511,9 +530,10 @@ body {
   padding: 12px 14px;
   border-radius: 12px;
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.08), rgba(255, 138, 28, 0.055), transparent),
     linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.006)),
     rgba(2, 6, 23, 0.46);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 63, 174, 0.2);
 }
 
 .empathy-meal-expo-igbar-left {
@@ -565,21 +585,21 @@ body {
 }
 
 .empathy-meal-expo-igpill--med {
-  background: rgba(244, 114, 182, 0.055);
+  background: rgba(255, 63, 174, 0.14);
   color: #fbcfe8;
-  border-color: rgba(244, 114, 182, 0.2);
+  border-color: rgba(255, 63, 174, 0.34);
 }
 
 .empathy-meal-expo-igpill--high {
-  background: rgba(249, 115, 22, 0.052);
+  background: rgba(255, 138, 28, 0.13);
   color: #ffedd5;
-  border-color: rgba(251, 146, 60, 0.2);
+  border-color: rgba(255, 138, 28, 0.34);
 }
 
 .empathy-meal-expo-igpill--vhigh {
-  background: rgba(236, 72, 153, 0.06);
+  background: rgba(255, 45, 146, 0.16);
   color: #ffe4e6;
-  border-color: rgba(244, 114, 182, 0.22);
+  border-color: rgba(255, 63, 174, 0.38);
 }
 
 .empathy-meal-expo-stimpill {
@@ -594,14 +614,14 @@ body {
 }
 
 .empathy-meal-expo-stimpill--high {
-  background: rgba(249, 115, 22, 0.055);
+  background: rgba(255, 138, 28, 0.14);
   color: #fed7aa;
-  border-color: rgba(251, 146, 60, 0.2);
+  border-color: rgba(255, 138, 28, 0.34);
 }
 .empathy-meal-expo-stimpill--med {
-  background: rgba(244, 114, 182, 0.055);
+  background: rgba(255, 63, 174, 0.14);
   color: #fbcfe8;
-  border-color: rgba(244, 114, 182, 0.2);
+  border-color: rgba(255, 63, 174, 0.34);
 }
 .empathy-meal-expo-stimpill--low {
   background: rgba(148, 163, 184, 0.1);
@@ -626,11 +646,11 @@ body {
 }
 
 .empathy-meal-expo-macro-seg--cho {
-  background: rgba(244, 114, 182, 0.055);
+  background: rgba(255, 63, 174, 0.16);
   color: #fbcfe8;
 }
 .empathy-meal-expo-macro-seg--pro {
-  background: rgba(249, 115, 22, 0.05);
+  background: rgba(255, 138, 28, 0.15);
   color: #ffedd5;
 }
 .empathy-meal-expo-macro-seg--fat {
@@ -653,7 +673,7 @@ body {
   width: 4px;
   height: 18px;
   border-radius: 4px;
-  background: var(--nutri-expo-pink);
+  background: linear-gradient(180deg, var(--nutri-expo-pink), var(--nutri-expo-pro));
   flex-shrink: 0;
 }
 
@@ -662,7 +682,7 @@ body {
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  color: #f9a8d4;
+  color: #ff8acb;
 }
 
 .empathy-meal-expo-food-list {
@@ -681,8 +701,9 @@ body {
 
 .empathy-meal-expo-food-card {
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 63, 174, 0.2);
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.11), rgba(255, 138, 28, 0.07), transparent 55%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.006)),
     rgba(7, 9, 14, 0.94);
   padding: 12px;
@@ -708,8 +729,8 @@ body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--nutri-expo-pink), var(--empathy-orange));
-  box-shadow: 0 0 12px rgba(244, 114, 182, 0.22);
+  background: linear-gradient(135deg, var(--nutri-expo-pink), var(--nutri-expo-pro));
+  box-shadow: 0 0 12px rgba(255, 63, 174, 0.32);
   flex-shrink: 0;
 }
 
@@ -743,9 +764,9 @@ body {
 }
 
 .empathy-meal-expo-pill--kcal {
-  background: rgba(249, 115, 22, 0.052);
+  background: rgba(255, 138, 28, 0.15);
   color: #fed7aa;
-  border: 1px solid rgba(251, 146, 60, 0.18);
+  border: 1px solid rgba(255, 138, 28, 0.34);
 }
 
 .empathy-meal-expo-food-macros {
@@ -781,7 +802,7 @@ body {
 
 .empathy-meal-expo-pod--cho {
   background: var(--nutri-expo-cho-bg);
-  border: 1px solid rgba(244, 114, 182, 0.16);
+  border: 1px solid rgba(255, 63, 174, 0.34);
   color: #fbcfe8;
 }
 .empathy-meal-expo-pod--cho .empathy-meal-expo-pod-dot {
@@ -790,7 +811,7 @@ body {
 
 .empathy-meal-expo-pod--pro {
   background: var(--nutri-expo-pro-bg);
-  border: 1px solid rgba(251, 146, 60, 0.14);
+  border: 1px solid rgba(255, 138, 28, 0.34);
   color: #fed7aa;
 }
 .empathy-meal-expo-pod--pro .empathy-meal-expo-pod-dot {
@@ -840,6 +861,7 @@ body {
   border-radius: 16px;
   border: 1px solid var(--nutri-expo-border);
   background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.08), rgba(255, 138, 28, 0.055), transparent 70%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.032), rgba(255, 255, 255, 0.008)),
     rgba(5, 6, 10, 0.96);
 }

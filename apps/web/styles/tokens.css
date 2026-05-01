@@ -40,30 +40,31 @@
     0 0 80px rgba(168, 85, 247, 0.12);
   --empathy-shadow-glow: 0 0 40px rgba(168, 85, 247, 0.35), 0 0 80px rgba(236, 72, 153, 0.15);
 
-  /* Nutrition · meal plan / fueling (clean Pro 2: black glass, pink/violet/orange accents only) */
-  --nutri-expo-pink: #f472b6;
-  --nutri-expo-magenta: #ec4899;
-  --nutri-expo-violet: #a855f7;
-  --nutri-expo-banner0: #ec4899;
-  --nutri-expo-banner1: #f97316;
-  --nutri-expo-cho: #f472b6;
-  --nutri-expo-cho-bg: rgba(244, 114, 182, 0.055);
-  --nutri-expo-pro: #fb923c;
-  --nutri-expo-pro-bg: rgba(251, 146, 60, 0.045);
+  /* Nutrition · meal plan / fueling: black base, strong hot-pink + clean orange tiles */
+  --nutri-expo-pink: #ff3fae;
+  --nutri-expo-magenta: #ff2d92;
+  --nutri-expo-violet: #ff3fae;
+  --nutri-expo-banner0: #ff2d92;
+  --nutri-expo-banner1: #ff8a1c;
+  --nutri-expo-cho: #ff3fae;
+  --nutri-expo-cho-bg: rgba(255, 63, 174, 0.16);
+  --nutri-expo-pro: #ff8a1c;
+  --nutri-expo-pro-bg: rgba(255, 138, 28, 0.15);
   --nutri-expo-fat: #cbd5e1;
-  --nutri-expo-fat-bg: rgba(148, 163, 184, 0.045);
-  --nutri-expo-kcal: #f472b6;
-  --nutri-expo-kcal-bg: rgba(236, 72, 153, 0.055);
+  --nutri-expo-fat-bg: rgba(148, 163, 184, 0.075);
+  --nutri-expo-kcal: #ff3fae;
+  --nutri-expo-kcal-bg: rgba(255, 63, 174, 0.16);
   --nutri-expo-card: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
     rgba(4, 5, 9, 0.98);
-  --nutri-expo-border: rgba(244, 114, 182, 0.16);
-  --nutri-expo-glow: 0 14px 34px rgba(0, 0, 0, 0.52), 0 0 24px rgba(168, 85, 247, 0.055);
+  --nutri-expo-border: rgba(255, 63, 174, 0.32);
+  --nutri-expo-glow: 0 14px 34px rgba(0, 0, 0, 0.52), 0 0 26px rgba(255, 63, 174, 0.14),
+    0 0 18px rgba(255, 138, 28, 0.1);
   --nutri-ig-legend-low: #94a3b8;
   --nutri-ig-legend-low-b: #64748b;
-  --nutri-ig-legend-med: #f472b6;
-  --nutri-ig-legend-med-b: #db2777;
-  --nutri-ig-legend-high: #f97316;
-  --nutri-ig-legend-high-b: #ea580c;
-  --nutri-ig-legend-vhigh: #ec4899;
-  --nutri-ig-legend-vhigh-b: #dc2626;
+  --nutri-ig-legend-med: #ff3fae;
+  --nutri-ig-legend-med-b: #ff2d92;
+  --nutri-ig-legend-high: #ff8a1c;
+  --nutri-ig-legend-high-b: #f97316;
+  --nutri-ig-legend-vhigh: #ff2d92;
+  --nutri-ig-legend-vhigh-b: #ff3fae;
 }
