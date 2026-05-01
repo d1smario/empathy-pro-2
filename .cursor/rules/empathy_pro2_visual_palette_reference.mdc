@@ -1,0 +1,26 @@
+---
+description: Pro 2 visual palette memory from approved landing screenshot
+alwaysApply: true
+---
+
+# Pro 2 Visual Palette Reference
+
+Quando lavori su UI Pro 2, usa come riferimento cromatico la schermata landing approvata:
+
+- Base: nero profondo / void, superfici pulite `zinc-950`, `black`, `white/5`, bordi `white/10`.
+- Accenti principali: **fuchsia / rosa neon**, **violet / purple**, **orange caldo**.
+- Gradiente brand: fuchsia -> violet -> orange, specialmente per titoli, CTA primarie, badge e glow.
+- Card: pulite, scure, con bordo leggero e glow controllato; evitare campiture pesanti rosso-marroni.
+- Copy e gerarchia: sfondo minimale, alto contrasto, molto respiro; non sovraccaricare la prima piega.
+- KPI/icon tiles: icone in box arrotondati con gradienti vividi rosa/arancio/viola, testo bianco e secondario grigio.
+
+Per Nutrition / Meal Plan:
+
+- Il meal plan deve ereditare questa palette Pro 2: nero pulito + accenti rosa/arancio/viola.
+- Non usare come base visuale card rosso-marroni/bruciate o superfici troppo calde che fanno sembrare la pagina "pagina 1".
+- Se servono colori macro nutrienti, tenerli come accenti piccoli dentro una superficie scura, non come tinta dominante.
+
+Riferimenti:
+
+- `docs/PRO2_UI_PAGE_CANON.md`
+- `apps/web/styles/tokens.css`
