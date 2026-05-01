@@ -43,7 +43,6 @@ import type {
   NutritionPathwayModulationViewModel,
   NutritionPerformanceIntegrationDials,
   UsdaRichFoodItemViewModel,
-  ApprovedApplicationPatch,
 } from "@/api/nutrition/contracts";
 import type {
   TrainingAdaptationLoopViewModel,
@@ -552,9 +551,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
   const [nutritionPerformanceIntegration, setNutritionPerformanceIntegration] =
     useState<NutritionPerformanceIntegrationDials | null>(null);
-  const [nutritionApprovedPatches, setNutritionApprovedPatches] = useState<ApprovedApplicationPatch[]>([]);
-  const [nutritionApplicationDirective, setNutritionApplicationDirective] =
-    useState<NonNullable<Awaited<ReturnType<typeof fetchNutritionModuleContext>>["nutritionApplicationDirective"]> | null>(null);
   const [executed, setExecuted] = useState<ExecutedRow[]>([]);
   const [planned, setPlanned] = useState<PlannedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -709,8 +705,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setMetabolicEfficiencyGenerativeModel(moduleData.metabolicEfficiencyGenerativeModel ?? null);
       setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
       setNutritionPerformanceIntegration(moduleData.nutritionPerformanceIntegration ?? null);
-      setNutritionApprovedPatches(moduleData.nutritionApprovedPatches ?? []);
-      setNutritionApplicationDirective(moduleData.nutritionApplicationDirective ?? null);
       setExecuted(ex);
       setPlanned(pl);
       /** Dopo refresh modulo (profilo/fisiologia): evita che il rollup USDA del piano precedente copra i nuovi target kcal solver. */
@@ -2251,7 +2245,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   >(
     () => [
       {
-        label: "Bioenergetis",
+        label: "Bioenergetic",
         value: `${round(bioenergeticModulation?.mitochondrialReadinessScore ?? 55)}/100`,
         tone:
           bioenergeticModulation?.state === "protective"
@@ -3292,38 +3286,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       </li>
                     ))}
                   </ul>
-                </details>
-              ) : null}
-              {nutritionApprovedPatches.length ? (
-                <details
-                  className="collapsible-card"
-                  style={{ marginBottom: "10px", padding: "10px 12px", borderColor: "rgba(34,211,238,0.35)" }}
-                >
-                  <summary className="text-[0.7rem] font-bold uppercase tracking-wider text-cyan-200/90">
-                    Decisioni approvate · nutrition/fueling ({nutritionApprovedPatches.length})
-                  </summary>
-                  <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.85rem", lineHeight: 1.45 }}>
-                    {nutritionApprovedPatches.slice(0, 6).map((patch) => (
-                      <li key={patch.id} style={{ marginBottom: "4px" }}>
-                        <strong>{patch.target}</strong>: {patch.action.replaceAll("_", " ")}
-                        {typeof patch.reason === "string" && patch.reason.trim() ? ` · ${patch.reason}` : ""}
-                        {patch.confidence != null ? ` · conf ${Math.round(patch.confidence * 100)}%` : ""}
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="nutrition-muted" style={{ fontSize: "0.75rem", marginTop: "8px", marginBottom: 0 }}>
-                    Queste decisioni modulano spiegazione e contesto applicativo; kcal, macro e nutrienti restano generati dai solver/cataloghi.
-                  </p>
-                  {nutritionApplicationDirective ? (
-                    <div className="mt-2 rounded-xl border border-cyan-500/20 bg-black/30 p-3 text-xs text-slate-300">
-                      <strong>Directive:</strong> {nutritionApplicationDirective.focus.map((item) => item.replaceAll("_", " ")).join(" · ")}
-                      <ul className="mt-2 list-disc space-y-1 pl-4 text-slate-400">
-                        {nutritionApplicationDirective.rationale.map((line) => (
-                          <li key={line}>{line}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
                 </details>
               ) : null}
               {nutritionPerformanceIntegration?.diaryInsight ? (

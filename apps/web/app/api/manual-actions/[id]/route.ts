@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import type { ManualActionStatus } from "@/api/manual-actions/contracts";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
+import {
+  appliedManualActionPersistenceLabelIt,
+  appliedManualActionPersistenceTier,
+} from "@/lib/coach-actions/manual-action-policy";
+import { insertCoachApplicationTrace } from "@/lib/memory/coach-application-traces";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -110,7 +115,47 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       if (auditErr) return NextResponse.json({ error: auditErr.message }, { status: 500 });
     }
 
-    return NextResponse.json({ actionId, status });
+    let coachApplicationTrace:
+      | { ok: true; id: string; duplicate?: false }
+      | { ok: true; duplicate: true }
+      | { ok: false; error: string }
+      | null = null;
+
+    if (status === "applied") {
+      const trace = await insertCoachApplicationTrace({
+        supabase,
+        athleteId: String(actionRow.athlete_id),
+        manualActionId: actionId,
+        actionType: String(actionRow.action_type ?? "manual_action"),
+        payloadSnapshot: payload,
+        createdByUserId: String(actionRow.created_by_user_id),
+      });
+      if (!trace.ok && !trace.duplicate) {
+        return NextResponse.json({ error: trace.error }, { status: 500 });
+      }
+      if (trace.ok) {
+        coachApplicationTrace = { ok: true, id: trace.id };
+      } else if (trace.duplicate) {
+        coachApplicationTrace = { ok: true, duplicate: true };
+      } else {
+        coachApplicationTrace = { ok: false, error: trace.error };
+      }
+    }
+
+    const actionTypeStr = String(actionRow.action_type ?? "");
+    const persistence =
+      status === "applied"
+        ? {
+            tier: appliedManualActionPersistenceTier(actionTypeStr),
+            labelIt: appliedManualActionPersistenceLabelIt({
+              actionType: actionTypeStr,
+              hasStagingRunId: Boolean(stagingRunId),
+            }),
+            coachApplicationTrace,
+          }
+        : undefined;
+
+    return NextResponse.json({ actionId, status, persistence });
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

@@ -127,12 +127,21 @@ function makeSlot(input: {
   };
 }
 
+/** Direttiva applicativa da manual_actions + memoria coach (non modifica kcal/macro). */
+export type NutritionApplicationDirectiveForMeals = {
+  focus: string[];
+  coachValidatedMemoryCount?: number;
+  coachValidatedMemoryLines?: string[];
+};
+
 export function buildFunctionalMealSelectorViewModel(input: {
   date: string;
   pathwayModulation: NutritionPathwayModulationViewModel | null;
   foodRecommendations: FunctionalFoodRecommendationsViewModel | null;
   nutritionPerformanceIntegration: NutritionPerformanceIntegrationDials | null;
   approvedNutritionPatches?: Array<{ action: string; reason: unknown; confidence: number | null }>;
+  /** Vincoli/boost da decisioni applicate + trace coach (Fase roadmap nutrition). */
+  applicationDirective?: NutritionApplicationDirectiveForMeals | null;
   adaptationLoop: AdaptationLoopLike;
   recoverySummary: RecoveryLike;
   twin: TwinLike;
@@ -148,15 +157,25 @@ export function buildFunctionalMealSelectorViewModel(input: {
   const status: FunctionalMealSelectorViewModel["status"] =
     recoveryPoor ? "recover" : loopStatus === "regenerate" ? "adapt" : loopStatus === "watch" ? "support" : "baseline";
 
+  const dir = input.applicationDirective;
+  const focus = dir?.focus ?? [];
+  const dirRedox = focus.includes("redox_support");
+  const dirIron = focus.includes("iron_absorption_support");
+  const dirGut = focus.includes("gut_absorption_tolerance");
+  const dirFuel = focus.includes("fueling_timing");
+
   const glycogenTargets = targetsMatching(targets, /leucine|leucina|magnesium|magnesio|potassium|potassio|thiamine|tiamina|b1/i);
-  const redoxTargets = targetsMatching(targets, /redox|vitamin_c|vitamina c|omega|zinc|zinco|selen|nitrate|nitrati|niacin|niacina|b3/i);
+  const redoxTargets = targetsMatching(targets, /redox|vitamin_c|vitamina c|omega|zinc|zinco|selen|nitrate|nitrati|niacin|niacina|b3|iron|ferro|ferritin/i);
   const gutTargets = targetsMatching(targets, /gut|barrier|microbiota|glutamine|glutammina|folate|folati/i);
   const anabolicTargets = targetsMatching(targets, /leucine|leucina|protein|proteina|amino/i);
 
   const slots: FunctionalMealSelectorSlotViewModel[] = [];
-  const dominantRedox = redox >= 55 || inflammation >= 55 || pathwayLabels.some((label) => label.includes("redox"));
+  const dominantRedox =
+    redox >= 55 || inflammation >= 55 || pathwayLabels.some((label) => label.includes("redox")) || dirRedox || dirIron;
   const lowGlycogen = glycogen < 48 || pathwayLabels.some((label) => label.includes("glicogeno"));
-  const gutFocus = pathwayLabels.some((label) => label.includes("intest") || label.includes("microbiota") || label.includes("gut"));
+  const snackAmPreferGlycogen = lowGlycogen || dirFuel;
+  const gutFocus =
+    pathwayLabels.some((label) => label.includes("intest") || label.includes("microbiota") || label.includes("gut")) || dirGut;
   const approvedPatchNotes =
     input.approvedNutritionPatches?.slice(0, 3).map((patch) => {
       const confidence = patch.confidence != null ? ` · confidenza ${Math.round(patch.confidence * 100)}%` : "";
@@ -225,6 +244,16 @@ export function buildFunctionalMealSelectorViewModel(input: {
     }),
   );
 
+  const directiveNotes: string[] = [];
+  if (dir && (focus.length > 0 || (dir.coachValidatedMemoryCount ?? 0) > 0)) {
+    directiveNotes.push(
+      `Direttiva applicativa (focus: ${focus.length ? focus.join(", ") : "baseline_support"}) — policy solver: non sovrascrive USDA/kcal.`,
+    );
+    for (const line of (dir.coachValidatedMemoryLines ?? []).slice(0, 2)) {
+      if (line.trim()) directiveNotes.push(`Memoria coach validate: ${line.trim().slice(0, 180)}`);
+    }
+  }
+
   return {
     modelVersion: 1,
     layer: "deterministic_functional_food_selector",
@@ -234,6 +263,7 @@ export function buildFunctionalMealSelectorViewModel(input: {
     notes: [
       "Selettore deterministico: propone alimenti/categorie funzionali, non sostituisce il solver kcal/macro o USDA FDC.",
       "I numeri nutrizionali finali restano da catalogo USDA/diario; questi candidati spiegano il perche' biologico del cibo scelto.",
+      ...directiveNotes,
       ...approvedPatchNotes,
       ...(input.nutritionPerformanceIntegration?.rationale.slice(0, 3) ?? []),
     ],

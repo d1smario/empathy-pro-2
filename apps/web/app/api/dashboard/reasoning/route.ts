@@ -3,6 +3,8 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { ReasoningCardVm, ReasoningSourceRef, ReasoningTone } from "@/lib/dashboard/reasoning-dashboard-contract";
+import type { AthleteEvidenceMemoryItem, AthleteMemory } from "@/lib/empathy/schemas";
+import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 
 export const dynamic = "force-dynamic";
@@ -173,6 +175,8 @@ function trainingExplanation(status: string, bundle: Record<string, unknown>, pa
   const delta = asRecord(bundle.delta);
   const readiness = asRecord(bundle.readiness);
   const hint = asRecord(bundle.adaptation_hint);
+  const loop = asRecord(hint.loop_closure);
+  const loopSummary = typeof loop.summary_it === "string" && loop.summary_it.trim() ? loop.summary_it.trim() : "";
   const trainingAction = actionLabel(hint.training_adjustment);
   const nutritionAction = actionLabel(hint.nutrition_adjustment);
   const readinessScore = asNum(readiness.score);
@@ -199,6 +203,7 @@ function trainingExplanation(status: string, bundle: Record<string, unknown>, pa
       `TSS delta ${fixed(delta.tss_delta, 1)}`,
       `Rapporto interno/esterno ${internalRatio != null ? internalRatio.toFixed(2) : "—"}`,
       `Readiness source days ${asText(readiness.source_days, "—")}`,
+      ...(loopSummary ? [`Chiusura loop vs giorno precedente: ${loopSummary}`] : []),
     ],
     riskLines: [
       readinessScore != null && readinessScore < 45 ? "Rischio: accumulo fatica / recupero incompleto." : "",
@@ -262,12 +267,90 @@ function cardFromStagingRun(row: StagingRunRow): ReasoningCardVm {
   };
 }
 
+function evidenceModuleToDomain(module: string | undefined): ReasoningCardVm["domain"] {
+  const u = (module ?? "").toLowerCase();
+  if (u === "nutrition") return "nutrition";
+  if (u === "physiology") return "physiology";
+  if (u.includes("health")) return "health";
+  if (u.includes("recovery")) return "recovery";
+  return "cross_module";
+}
+
+function cardsFromAthleteEvidenceMemory(memory: AthleteMemory | null): ReasoningCardVm[] {
+  const items = memory?.evidenceMemory?.items ?? [];
+  if (!items.length) return [];
+
+  const coachItems = items.filter((item) => item.source === COACH_APPLICATION_EVIDENCE_SOURCE).slice(0, 8);
+  const otherItems = items.filter((item) => item.source !== COACH_APPLICATION_EVIDENCE_SOURCE).slice(0, 6);
+
+  const coachCards: ReasoningCardVm[] = coachItems.map((item: AthleteEvidenceMemoryItem, index) => {
+    const manualId =
+      item.payload && typeof item.payload === "object" && item.payload !== null && "manualActionId" in item.payload
+        ? String((item.payload as { manualActionId?: unknown }).manualActionId ?? "")
+        : "";
+    return {
+      id: `athlete-memory-coach-${item.id ?? item.query ?? index}`,
+      domain: evidenceModuleToDomain(item.module),
+      title: "Memoria applicazione coach (validate)",
+      value: item.evidenceClass ?? "validated_coach_application",
+      subtitle: asText(item.title, "Decisione applicata"),
+      tone: "green" as const,
+      status: "coach_validated_memory",
+      confidence: typeof item.confidence === "number" && Number.isFinite(item.confidence) ? item.confidence : null,
+      explanation:
+        "Dato persistito in athlete_coach_application_traces e letto come evidenza strutturata: non sostituisce motori né staging automatici.",
+      actionLines: [asText(item.adaptationTarget, ""), asText(item.domain, "")].filter(Boolean),
+      evidenceLines: [asText(item.summary, "")].filter(Boolean),
+      riskLines: ["Confrontare con expected-vs-obtained e nuova reality prima di nuove interpretazioni cliniche forti."],
+      timingLines: item.createdAt ? [`Registrata ${item.createdAt}`] : [],
+      sourceRefs: [
+        { table: "athlete_coach_application_traces", id: item.id, kind: "coach_manual_action" },
+        ...(manualId ? [{ table: "manual_actions", id: manualId }] : []),
+      ],
+      stagingRunId: null,
+      createdAt: item.createdAt ?? null,
+    };
+  });
+
+  const hypothesisCards: ReasoningCardVm[] = otherItems.map((item: AthleteEvidenceMemoryItem, index) => {
+    const cls = (item.evidenceClass ?? "").toLowerCase();
+    const weakConf = typeof item.confidence === "number" && item.confidence < 0.45;
+    const isHypothesis = cls.includes("hypothesis") || cls.includes("proxy") || weakConf;
+    return {
+      id: `athlete-memory-evidence-${item.id ?? item.query ?? index}`,
+      domain: evidenceModuleToDomain(item.module),
+      title: isHypothesis ? "Evidenza / ipotesi (non coach-validate)" : "Evidenza strutturata",
+      value: asText(item.evidenceClass, isHypothesis ? "hypothesis" : "structured"),
+      subtitle: asText(item.title, item.source ?? "source"),
+      tone: isHypothesis ? ("amber" as const) : ("cyan" as const),
+      status: isHypothesis ? "hypothesis" : "evidence_hit",
+      confidence: typeof item.confidence === "number" && Number.isFinite(item.confidence) ? item.confidence : null,
+      explanation: isHypothesis
+        ? "Segnale da knowledge/reality senza passaggio coach: trattare come ipotesi fino a validazione o applicazione esplicita."
+        : "Hit evidenza strutturata collegata a query/trace: verificare fonte e confidenza prima di applicazioni sensibili.",
+      actionLines: [asText(item.adaptationTarget, "")].filter(Boolean),
+      evidenceLines: [asText(item.summary, ""), asText(item.url, "")].filter(Boolean),
+      riskLines: isHypothesis ? ["Non usare come override clinico senza trace e consenso atleta."] : [],
+      timingLines: [],
+      sourceRefs: [{ kind: item.source ?? "evidence", label: item.query ?? item.id }],
+      stagingRunId: null,
+      createdAt: item.createdAt ?? null,
+    };
+  });
+
+  return [...coachCards, ...hypothesisCards];
+}
+
 function cardsFromOperationalBundle(bundle: OperationalSignalsBundle | null): ReasoningCardVm[] {
   if (!bundle) return [];
   const g = bundle.adaptationGuidance;
   const loop = bundle.adaptationLoop;
   const bio = bundle.bioenergeticModulation;
   const nut = bundle.nutritionPerformanceIntegration;
+  const coachMemLine =
+    bundle.coachValidatedApplicationTraceCount > 0
+      ? `Memoria applicazioni coach (evidence): ${bundle.coachValidatedApplicationTraceCount} voci aggregate nel bundle.`
+      : null;
   const cards: ReasoningCardVm[] = [
     {
       id: "compute-adaptation-loop",
@@ -284,6 +367,7 @@ function cardsFromOperationalBundle(bundle: OperationalSignalsBundle | null): Re
       evidenceLines: [
         `Atteso ${g.expectedAdaptation.toFixed(2)} · osservato ${g.observedAdaptation.toFixed(2)}`,
         `Divergenza ${loop.divergenceScore.toFixed(1)} · intervento ${loop.interventionScore.toFixed(1)}`,
+        ...(coachMemLine ? [coachMemLine] : []),
       ],
       riskLines: loop.triggers,
       timingLines: ["Applicare prima a VIRYA/microciclo, poi materializzare singola sessione col Builder."],
@@ -466,6 +550,7 @@ export async function GET(req: NextRequest) {
 
     const cards = [
       ...cardsFromOperationalBundle(operationalSignals),
+      ...cardsFromAthleteEvidenceMemory(athleteMemory),
       ...(optionalRows(stagingRes) as StagingRunRow[]).map(cardFromStagingRun),
       ...(optionalRows(deltasRes) as ExpectedDeltaRow[]).map(cardFromDelta),
       ...(optionalRows(bioRes) as BioResponseRow[]).map(cardFromBioResponse),

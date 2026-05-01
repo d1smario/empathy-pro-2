@@ -38,6 +38,23 @@ function idFromRow(row: Record<string, unknown>): string {
 
 type PlannedWorkoutPayload = PlannedWorkoutInsertPayload;
 
+function calendarAuditSuffix(
+  audit:
+    | {
+        source?: string;
+        coachTraceIds?: string[];
+        viryaRetuneMode?: string | null;
+      }
+    | undefined,
+): string | null {
+  if (!audit) return null;
+  const ids = (audit.coachTraceIds ?? []).filter(Boolean).slice(0, 10);
+  if (!ids.length && !audit.viryaRetuneMode && !audit.source) return null;
+  const src = (audit.source ?? "unknown").replace(/\|/g, " ").slice(0, 80);
+  const mode = (audit.viryaRetuneMode ?? "").replace(/\|/g, " ").slice(0, 80);
+  return `\n[EMPATHY_CAL|src=${src}|mode=${mode}|tr=${ids.join(",")}]`;
+}
+
 function toInsertRecord(row: PlannedWorkoutInsertPayload): Record<string, unknown> {
   const r = clampPlannedWorkoutRow(row);
   const p: Record<string, unknown> = {
@@ -69,6 +86,11 @@ export async function POST(req: NextRequest) {
       rows?: PlannedWorkoutPayload[];
       replaceTag?: string;
       athleteId?: string;
+      generationAudit?: {
+        source?: string;
+        coachTraceIds?: string[];
+        viryaRetuneMode?: string | null;
+      };
     };
 
     if (Array.isArray(body.rows)) {
@@ -77,7 +99,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
       }
       const { db } = await requireAthleteWriteContext(req, athleteId);
-      const payloads = body.rows.map((row) => toInsertRecord(row));
+      const auditSuffix = calendarAuditSuffix(body.generationAudit);
+      const payloads = body.rows.map((row) => {
+        if (!auditSuffix) return toInsertRecord(row);
+        const mergedNotes = `${row.notes ?? ""}${auditSuffix}`.trim();
+        return toInsertRecord({ ...row, notes: mergedNotes || null });
+      });
       if (!payloads.length) {
         return NextResponse.json({ error: "rows is empty" }, { status: 400, headers: NO_STORE });
       }
@@ -125,7 +152,12 @@ export async function POST(req: NextRequest) {
     }
     const aid = String(body.row.athlete_id ?? "").trim();
     const { db } = await requireAthleteWriteContext(req, aid);
-    const insertPayload = toInsertRecord(body.row);
+    const auditSuffix = calendarAuditSuffix(body.generationAudit);
+    const rowForInsert =
+      auditSuffix && body.row
+        ? { ...body.row, notes: `${body.row.notes ?? ""}${auditSuffix}`.trim() || null }
+        : body.row;
+    const insertPayload = toInsertRecord(rowForInsert);
     const { error } = await db.from("planned_workouts").insert(insertPayload);
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });

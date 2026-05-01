@@ -389,9 +389,11 @@ export default function TrainingBuilderRichPageView() {
   /** Deve stare prima del fetch calendario: la finestra include queste date ± margine (non solo oggi±7/28). */
   const [plannedDate, setPlannedDate] = useState(() => localCalendarDateString());
   const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
+  const [dismissViryaEntryBanner, setDismissViryaEntryBanner] = useState(false);
 
   /** Calendario → builder: `?date=YYYY-MM-DD` (e in futuro `replace_planned_id` per punto B). */
   const dateFromQuery = searchParams.get("date");
+  const viryaEntry = searchParams.get("src") === "virya";
   useEffect(() => {
     if (!dateFromQuery || !/^\d{4}-\d{2}-\d{2}$/.test(dateFromQuery)) return;
     setPlannedDate(dateFromQuery);
@@ -999,6 +1001,28 @@ export default function TrainingBuilderRichPageView() {
         <div className="scroll-mt-28">
           <TrainingSubnav />
         </div>
+
+        {viryaEntry && !dismissViryaEntryBanner ? (
+          <div
+            className="rounded-xl border border-pink-500/35 bg-pink-950/20 px-4 py-3 text-sm text-pink-100/95 shadow-[inset_0_1px_0_rgba(244,114,182,0.12)]"
+            role="status"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <p className="max-w-3xl leading-relaxed">
+                Percorso da <strong className="text-pink-200">VIRYA</strong>: qui materializzi la{" "}
+                <strong className="text-pink-200">singola sessione</strong> col motore builder. Il calendario si aggiorna solo dopo
+                salvataggio esplicito (audit in notes).
+              </p>
+              <button
+                type="button"
+                className="shrink-0 rounded-lg border border-white/15 px-2 py-1 text-xs text-slate-300 hover:border-white/30 hover:text-white"
+                onClick={() => setDismissViryaEntryBanner(true)}
+              >
+                Chiudi
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {athleteId && readSpineCoverage ? (
           <TrainingPlannedWindowContextStrip

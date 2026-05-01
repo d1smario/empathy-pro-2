@@ -24,6 +24,7 @@ import {
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { resolveCanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
+import { coachApplicationTraceRowsToEvidenceItems } from "@/lib/memory/coach-application-traces";
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
 
@@ -233,7 +234,28 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   const supabase = createServerSupabaseClient();
   const diaryWindowEnd = new Date().toISOString().slice(0, 10);
   const diaryWindowStart = addDaysUtcIso(diaryWindowEnd, -44);
-  const [profileRes, appUserRes, coachLinksRes, devicesRes, importJobsRes, deviceExportsRes, panelsRes, evidenceRes, systemicRes, labObsRes, microObsRes, epiObsRes, hormoneObsRes, graphNodesRes, graphEdgesRes, bioRespRes, physiology, knowledge, diaryRes] =
+  const [
+    profileRes,
+    appUserRes,
+    coachLinksRes,
+    devicesRes,
+    importJobsRes,
+    deviceExportsRes,
+    panelsRes,
+    evidenceRes,
+    coachAppTracesRes,
+    systemicRes,
+    labObsRes,
+    microObsRes,
+    epiObsRes,
+    hormoneObsRes,
+    graphNodesRes,
+    graphEdgesRes,
+    bioRespRes,
+    physiology,
+    knowledge,
+    diaryRes,
+  ] =
     await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
     supabase.from("app_user_profiles").select("user_id, role").eq("athlete_id", athleteId).limit(1).maybeSingle(),
@@ -274,6 +296,12 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .eq("athlete_id", athleteId)
       .order("created_at", { ascending: false })
       .limit(80),
+    supabase
+      .from("athlete_coach_application_traces")
+      .select("id, athlete_id, manual_action_id, action_type, payload_snapshot, created_by_user_id, created_at")
+      .eq("athlete_id", athleteId)
+      .order("created_at", { ascending: false })
+      .limit(24),
     supabase
       .from("systemic_modulation_snapshots")
       .select("id, athlete_id, captured_at, algorithm_version, source, axes, payload, created_at")
@@ -352,6 +380,17 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
   if (deviceExportsRes.error) throw new Error(deviceExportsRes.error.message);
   if (panelsRes.error) throw new Error(panelsRes.error.message);
   if (evidenceRes.error) throw new Error(evidenceRes.error.message);
+
+  let coachTraceRows: Array<Record<string, unknown>> = [];
+  if (coachAppTracesRes.error) {
+    const msg = coachAppTracesRes.error.message ?? "";
+    const code = String((coachAppTracesRes.error as { code?: string }).code ?? "");
+    if (code !== "42P01" && !msg.includes("does not exist")) {
+      throw new Error(coachAppTracesRes.error.message);
+    }
+  } else {
+    coachTraceRows = (coachAppTracesRes.data ?? []) as Array<Record<string, unknown>>;
+  }
 
   let systemicRows: Array<Record<string, unknown>> = [];
   if (systemicRes.error) {
@@ -515,7 +554,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
         bioenergeticsResponses: bioRespRows,
       },
     },
-    evidenceItems: toEvidenceItems(evidenceRows),
+    evidenceItems: [...coachApplicationTraceRowsToEvidenceItems(coachTraceRows), ...toEvidenceItems(evidenceRows)],
     source: {
       domain: "health",
       source: "supabase.health_evidence",

@@ -18,6 +18,7 @@ import type { DailyLoadPoint } from "@/lib/training/analytics/load-series";
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
 import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
+import type { ViryaRetuneProposalVm } from "@/lib/training/virya-retune-proposal";
 
 /** Strip twin per contesto operativo su calendario / giornata (senza payload twin completo). */
 export type TrainingTwinContextStripViewModel = {
@@ -105,6 +106,8 @@ export type TrainingPlannerContextViewModel = {
     calendarPolicy: "coach_validated_retune_before_replace";
     rationale: string[];
   };
+  /** Proposta microciclo strutturata (server): consuma patch manual_actions + memoria coach + loop adattamento. */
+  viryaRetuneProposal?: ViryaRetuneProposalVm | null;
   crossModuleDynamicsLines?: string[];
   knowledgeModulation?: KnowledgeModulationSnapshot | null;
   researchPlans?: ResearchPlan[];
@@ -189,6 +192,12 @@ export type TrainingPlannerCalendarReplaceInput = {
   athleteId: string;
   replaceTag?: string;
   rows: TrainingPlannerCalendarRow[];
+  /** Opzionale: traccia salvataggio calendario ↔ memoria coach / retune (append in `notes`). */
+  generationAudit?: {
+    source: string;
+    coachTraceIds?: string[];
+    viryaRetuneMode?: string | null;
+  };
 };
 
 export type TrainingPlannerCalendarReplaceResult = {

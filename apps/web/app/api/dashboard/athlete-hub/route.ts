@@ -213,6 +213,41 @@ export async function GET(req: NextRequest) {
           })
         : [];
 
+    let expectedVsObtainedPreview: {
+      date: string | null;
+      status: string | null;
+      loopClosureSummary: string | null;
+      recentCoachTracesInHint: number;
+    } | null = null;
+    if (includeOperationalSignals) {
+      const evRes = await db
+        .from("training_expected_obtained_deltas")
+        .select("date, status, adaptation_hint")
+        .eq("athlete_id", athleteId)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (!evRes.error && evRes.data) {
+        const row = evRes.data as { date?: string | null; status?: string | null; adaptation_hint?: unknown };
+        const hint =
+          row.adaptation_hint && typeof row.adaptation_hint === "object" && !Array.isArray(row.adaptation_hint)
+            ? (row.adaptation_hint as Record<string, unknown>)
+            : {};
+        const loop =
+          hint.loop_closure && typeof hint.loop_closure === "object" && !Array.isArray(hint.loop_closure)
+            ? (hint.loop_closure as Record<string, unknown>)
+            : {};
+        const traces = hint.recent_coach_application_traces;
+        const ds = typeof row.date === "string" ? row.date.slice(0, 10) : null;
+        expectedVsObtainedPreview = {
+          date: ds,
+          status: typeof row.status === "string" ? row.status : null,
+          loopClosureSummary: typeof loop.summary_it === "string" && loop.summary_it.trim() ? loop.summary_it.trim() : null,
+          recentCoachTracesInHint: Array.isArray(traces) ? traces.length : 0,
+        };
+      }
+    }
+
     const payload = {
       ok: true as const,
       athleteId,
@@ -249,6 +284,7 @@ export async function GET(req: NextRequest) {
       readSpineCoverage,
       operationalSignals,
       crossModuleDynamicsLines,
+      expectedVsObtainedPreview,
     };
 
     return NextResponse.json(payload, { headers: NO_STORE });

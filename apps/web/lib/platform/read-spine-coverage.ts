@@ -1,4 +1,5 @@
 import type { AthleteMemory } from "@/lib/empathy/schemas";
+import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 
 /**
  * Operational read-spine coverage from a resolved AthleteMemory payload.
@@ -20,6 +21,8 @@ export type ReadSpineCoverageSummary = {
   hasSystemicModulationSnapshots: boolean;
   hasRealityIngestions: boolean;
   hasEvidenceItems: boolean;
+  /** Voci da `athlete_coach_application_traces` mappate in evidenceMemory (source coach_manual_action). */
+  hasCoachApplicationMemory: boolean;
   physiologySources: PhysiologySourceFlags | null;
   /** 0–100 rough score: equal weights on core blocks */
   spineScore: number;
@@ -45,6 +48,7 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
       hasSystemicModulationSnapshots: false,
       hasRealityIngestions: false,
       hasEvidenceItems: false,
+      hasCoachApplicationMemory: false,
       physiologySources: null,
       spineScore: 0,
     };
@@ -58,7 +62,9 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
   const hasHealthPanels = (memory.health?.panels?.length ?? 0) > 0;
   const hasSystemicModulationSnapshots = (memory.health?.systemicModulationSnapshots?.length ?? 0) > 0;
   const hasRealityIngestions = (memory.reality?.recentIngestions?.length ?? 0) > 0;
-  const hasEvidenceItems = (memory.evidenceMemory?.items?.length ?? 0) > 0;
+  const items = memory.evidenceMemory?.items ?? [];
+  const hasEvidenceItems = items.length > 0;
+  const hasCoachApplicationMemory = items.some((it) => it.source === COACH_APPLICATION_EVIDENCE_SOURCE);
 
   const physiologySources: PhysiologySourceFlags | null = memory.physiology
     ? { ...memory.physiology.sources }
@@ -85,6 +91,7 @@ export function summarizeReadSpineCoverage(memory: AthleteMemory | null): ReadSp
     hasSystemicModulationSnapshots,
     hasRealityIngestions,
     hasEvidenceItems,
+    hasCoachApplicationMemory,
     physiologySources,
     spineScore,
   };

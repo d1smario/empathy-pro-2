@@ -87,6 +87,7 @@ export async function replaceTrainingPlannerCalendar(
       athleteId: input.athleteId,
       replaceTag: input.replaceTag,
       rows: input.rows,
+      generationAudit: input.generationAudit,
     }),
   });
   if (!response.ok) {

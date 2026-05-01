@@ -7,6 +7,7 @@ import { toCanonicalPlannedWorkout } from "@/lib/empathy/adapters/training";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { listKnowledgeExpansionTraceSummaries } from "@/lib/knowledge/knowledge-research-trace-store";
+import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
@@ -30,26 +31,36 @@ export const dynamic = "force-dynamic";
 
 function buildNutritionApplicationDirective(
   patches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"],
+  coachNutritionEvidence: { count: number; lines: string[] },
 ) {
   const applied = patches.filter((patch) => patch.status === "applied");
   const pending = patches.filter((patch) => patch.status === "pending");
   const active = applied.length ? applied : pending;
   const text = active.map((patch) => `${patch.target} ${patch.action} ${patch.reason ?? ""}`.toLowerCase()).join(" ");
+  const coachText = coachNutritionEvidence.lines.join(" ").toLowerCase();
+  const mergedText = `${text} ${coachText}`;
   const focus = [
-    text.includes("redox") ? "redox_support" : null,
-    text.includes("iron") || text.includes("ferro") || text.includes("ferritin") ? "iron_absorption_support" : null,
-    text.includes("gut") || text.includes("microbiota") || text.includes("assorb") ? "gut_absorption_tolerance" : null,
-    text.includes("fuel") || text.includes("cho") || text.includes("glycogen") ? "fueling_timing" : null,
+    mergedText.includes("redox") ? "redox_support" : null,
+    mergedText.includes("iron") || mergedText.includes("ferro") || mergedText.includes("ferritin")
+      ? "iron_absorption_support"
+      : null,
+    mergedText.includes("gut") || mergedText.includes("microbiota") || mergedText.includes("assorb") ? "gut_absorption_tolerance" : null,
+    mergedText.includes("fuel") || mergedText.includes("cho") || mergedText.includes("glycogen") ? "fueling_timing" : null,
   ].filter((item): item is string => Boolean(item));
 
   return {
     appliedCount: applied.length,
     pendingCount: pending.length,
+    coachValidatedMemoryCount: coachNutritionEvidence.count,
+    coachValidatedMemoryLines: coachNutritionEvidence.lines,
     focus: focus.length ? focus : ["baseline_support"],
     solverPolicy: "do_not_override_kcal_macro_catalog" as const,
     timingPolicy: "coach_validated_context_for_pre_peri_post" as const,
     rationale: [
       active.length ? `${active.length} decisioni nutrition/fueling lette da manual_actions.` : "Nessuna decisione nutrition/fueling attiva.",
+      coachNutritionEvidence.count
+        ? `${coachNutritionEvidence.count} voci memoria coach validate (athlete_coach_application_traces → evidence).`
+        : "Nessuna memoria coach nutrizionale recente.",
       "Usare come contesto per timing, cofattori, esclusioni temporanee e spiegazione; non sostituisce USDA/solver.",
     ],
   };
@@ -139,7 +150,19 @@ export async function GET(req: NextRequest) {
       const target = patch.target.toLowerCase();
       return target.includes("nutrition") || target.includes("fueling") || target.includes("redox") || target.includes("gut");
     });
-    const nutritionApplicationDirective = buildNutritionApplicationDirective(nutritionApprovedPatches);
+    const coachNutritionEvidence = (athleteMemory.evidenceMemory?.items ?? [])
+      .filter(
+        (item) =>
+          item.source === COACH_APPLICATION_EVIDENCE_SOURCE &&
+          (item.module === "nutrition" || (item.domain ?? "").toLowerCase().includes("nutrition")),
+      )
+      .slice(0, 6)
+      .map((item) => item.title ?? item.summary ?? "coach_memory")
+      .filter(Boolean);
+    const nutritionApplicationDirective = buildNutritionApplicationDirective(nutritionApprovedPatches, {
+      count: coachNutritionEvidence.length,
+      lines: coachNutritionEvidence,
+    });
 
     const metabolicEfficiencyGenerativeModel = buildMetabolicEfficiencyGenerativeModel({
       adaptationGuidance,
@@ -174,6 +197,11 @@ export async function GET(req: NextRequest) {
         foodRecommendations: functionalFoodRecommendations,
         nutritionPerformanceIntegration,
         approvedNutritionPatches: nutritionApprovedPatches,
+        applicationDirective: {
+          focus: nutritionApplicationDirective.focus,
+          coachValidatedMemoryCount: nutritionApplicationDirective.coachValidatedMemoryCount,
+          coachValidatedMemoryLines: nutritionApplicationDirective.coachValidatedMemoryLines,
+        },
         adaptationLoop,
         recoverySummary,
         twin: twinState,

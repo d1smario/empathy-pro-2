@@ -39,6 +39,9 @@ export type ExpectedObtainedDelta = {
   status: ExpectedObtainedStatus;
 };
 
+export type { PriorDaySnapshot } from "@/lib/training/expected-vs-obtained-loop-closure";
+export { attachLoopClosureHints, buildLoopClosureHint } from "@/lib/training/expected-vs-obtained-loop-closure";
+
 function toDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
 }

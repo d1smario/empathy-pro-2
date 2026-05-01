@@ -24,6 +24,13 @@ export type AthleteHubOperationalOk = {
   readSpineCoverage: ReadSpineCoverageSummary;
   operationalSignals: OperationalSignalsBundle | null;
   crossModuleDynamicsLines: string[];
+  /** Ultimo delta expected-vs-obtained persistito (loop chiusura + hint trace coach se presenti). */
+  expectedVsObtainedPreview: {
+    date: string | null;
+    status: string | null;
+    loopClosureSummary: string | null;
+    recentCoachTracesInHint: number;
+  } | null;
 };
 
 export type AthleteHubOperationalErr = { ok: false; error?: string };

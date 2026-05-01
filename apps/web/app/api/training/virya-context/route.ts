@@ -9,6 +9,7 @@ import { buildViryaResearchPlans } from "@/lib/knowledge/training-research-conte
 import { persistCanonicalResearchTracePlan } from "@/lib/knowledge/knowledge-research-flow";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
+import { buildViryaRetuneProposalVm } from "@/lib/training/virya-retune-proposal";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -91,6 +92,12 @@ export async function GET(req: NextRequest) {
       return target.includes("training") || target.includes("virya") || target.includes("bioenergetics");
     });
     const viryaRetuneDirective = buildViryaRetuneDirective({ adaptationLoop, patches: viryaApprovedPatches });
+    const viryaRetuneProposal = buildViryaRetuneProposalVm({
+      directiveRecommendedMode: viryaRetuneDirective.recommendedMode,
+      adaptationLoop,
+      viryaPatches: viryaApprovedPatches,
+      coachEvidenceItems: athleteMemory.evidenceMemory?.items,
+    });
     const crossModuleDynamicsLines = buildOperationalDynamicsLines({
       adaptationGuidance,
       operationalContext,
@@ -213,6 +220,7 @@ export async function GET(req: NextRequest) {
         approvedApplicationPatches,
         viryaApprovedPatches,
         viryaRetuneDirective,
+        viryaRetuneProposal,
         crossModuleDynamicsLines,
         knowledgeModulation,
         researchPlans,

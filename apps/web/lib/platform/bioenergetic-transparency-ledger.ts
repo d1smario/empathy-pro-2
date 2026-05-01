@@ -65,6 +65,15 @@ export function buildInfluenceLedgerRowsFromOperationalBundle(
     effect: `E_train ×${nut.trainingEnergyScale.toFixed(2)} · CHO ×${nut.fuelingChoScale.toFixed(2)} · proteine +${nut.proteinBiasPctPoints.toFixed(1)} pt · idratazione ×${nut.hydrationFloorMultiplier.toFixed(2)}`,
   });
 
+  if (bundle.coachValidatedApplicationTraceCount > 0) {
+    rows.push({
+      id: "coach_memory_trace",
+      source: "athlete_coach_application_traces → evidenceMemory",
+      consumer: "VIRYA / nutrition directive / expected-vs-obtained hint",
+      effect: `${bundle.coachValidatedApplicationTraceCount} voci memoria coach validate nel bundle operativo.`,
+    });
+  }
+
   rows.push({
     id: "builder_context",
     source: "Stesso bundle + contract sessione",

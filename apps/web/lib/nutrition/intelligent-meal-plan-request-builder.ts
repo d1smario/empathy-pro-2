@@ -143,7 +143,7 @@ export function buildIntelligentMealPlanRequest(input: {
       pathwayTimingLines,
       trainingDayLines: input.trainingDayLines.slice(0, 12),
       routineDigest,
-      contextLines: input.contextLines.slice(0, 12),
+      contextLines: input.contextLines.slice(0, 18),
       slots,
     }),
   );

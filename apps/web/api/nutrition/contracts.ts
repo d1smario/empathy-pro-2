@@ -250,6 +250,8 @@ export type NutritionModuleViewModel = {
   nutritionApplicationDirective?: {
     appliedCount: number;
     pendingCount: number;
+    coachValidatedMemoryCount?: number;
+    coachValidatedMemoryLines?: string[];
     focus: string[];
     solverPolicy: "do_not_override_kcal_macro_catalog";
     timingPolicy: "coach_validated_context_for_pre_peri_post";

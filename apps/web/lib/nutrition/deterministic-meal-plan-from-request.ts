@@ -79,6 +79,7 @@ export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRe
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),
     ...req.pathwayTimingLines.slice(0, 4),
     ...req.trainingDayLines.slice(0, 3),
+    ...req.contextLines.slice(0, 8),
     req.routineDigest,
   ].filter((s): s is string => Boolean(s && String(s).trim()));
 

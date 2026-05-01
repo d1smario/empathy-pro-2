@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import {
+  attachLoopClosureHints,
   computeExpectedVsObtainedDeltas,
   persistExpectedVsObtainedDeltas,
   type ExpectedObtainedDelta,
@@ -38,13 +39,48 @@ function deltasNeedingStaging(deltas: ExpectedObtainedDelta[]) {
   return deltas.filter((delta) => delta.status === "adapt" || delta.status === "recover");
 }
 
+function mergeCoachTracesIntoHints(deltas: ExpectedObtainedDelta[], coachTraces: Array<Record<string, unknown>>): ExpectedObtainedDelta[] {
+  if (!coachTraces.length) return deltas;
+  return deltas.map((delta) => {
+    const hint = { ...(delta.adaptationHint ?? {}) };
+    (hint as Record<string, unknown>).recent_coach_application_traces = coachTraces;
+    return { ...delta, adaptationHint: hint };
+  });
+}
+
+async function fetchRecentCoachTraces(
+  db: Awaited<ReturnType<typeof requireAthleteReadContext>>["db"],
+  athleteId: string,
+): Promise<Array<Record<string, unknown>>> {
+  try {
+    const { data, error } = await db
+      .from("athlete_coach_application_traces")
+      .select("id, manual_action_id, action_type, created_at")
+      .eq("athlete_id", athleteId)
+      .order("created_at", { ascending: false })
+      .limit(8);
+    if (!error && data) return data as Array<Record<string, unknown>>;
+  } catch {
+    /* table missing or RLS */
+  }
+  return [];
+}
+
 async function openAdaptationStagingRuns(input: {
   db: Awaited<ReturnType<typeof requireAthleteWriteContext>>["db"];
   athleteId: string;
   deltas: ExpectedObtainedDelta[];
+  coachTraceRows?: Array<Record<string, unknown>>;
 }) {
   const actionable = deltasNeedingStaging(input.deltas);
   if (!actionable.length) return 0;
+  const coachTraceRefs = (input.coachTraceRows ?? [])
+    .map((row) => {
+      const id = typeof row.id === "string" ? row.id.trim() : "";
+      return id ? { table: "athlete_coach_application_traces" as const, id } : null;
+    })
+    .filter((ref): ref is { table: "athlete_coach_application_traces"; id: string } => Boolean(ref));
+
   const { error } = await input.db.from("interpretation_staging_runs").insert(
     actionable.map((delta) => ({
       athlete_id: input.athleteId,
@@ -54,6 +90,7 @@ async function openAdaptationStagingRuns(input: {
       source_refs: [
         ...delta.plannedWorkoutIds.map((id) => ({ table: "planned_workouts", id })),
         ...delta.executedWorkoutIds.map((id) => ({ table: "executed_workouts", id })),
+        ...coachTraceRefs,
         { table: "training_expected_obtained_deltas", id: `${input.athleteId}:${delta.date}` },
       ],
       candidate_bundle: {
@@ -93,7 +130,10 @@ export async function GET(req: NextRequest) {
     }
     const { from, to } = defaultWindow(req);
     const { db } = await requireAthleteReadContext(req, athleteId);
-    const deltas = await computeExpectedVsObtainedDeltas({ db, athleteId, from, to });
+    const raw = await computeExpectedVsObtainedDeltas({ db, athleteId, from, to });
+    const withLoop = await attachLoopClosureHints({ db, athleteId, deltas: raw });
+    const coachTraces = await fetchRecentCoachTraces(db, athleteId);
+    const deltas = mergeCoachTracesIntoHints(withLoop, coachTraces);
     return NextResponse.json({ ok: true as const, athleteId, from, to, deltas }, { headers: NO_STORE });
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
@@ -115,9 +155,16 @@ export async function POST(req: NextRequest) {
     const from = String(body.from ?? defaults.from).trim();
     const to = String(body.to ?? defaults.to).trim();
     const { db } = await requireAthleteWriteContext(req, athleteId);
-    const deltas = await computeExpectedVsObtainedDeltas({ db, athleteId, from, to });
+    const raw = await computeExpectedVsObtainedDeltas({ db, athleteId, from, to });
+    const withLoop = await attachLoopClosureHints({ db, athleteId, deltas: raw });
+    const coachTraces = await fetchRecentCoachTraces(db, athleteId);
+    const deltas = mergeCoachTracesIntoHints(withLoop, coachTraces);
     const persisted = await persistExpectedVsObtainedDeltas({ db, deltas });
-    const stagingOpened = body.openStaging === false && !shouldPersist(req) ? 0 : await openAdaptationStagingRuns({ db, athleteId, deltas });
+    const stagingOpened =
+      body.openStaging === false && !shouldPersist(req)
+        ? 0
+        : await openAdaptationStagingRuns({ db, athleteId, deltas, coachTraceRows: coachTraces });
+
     return NextResponse.json(
       { ok: true as const, athleteId, from, to, persisted, stagingOpened, deltas },
       { headers: NO_STORE },

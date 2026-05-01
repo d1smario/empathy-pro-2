@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:loop-closure": "npx tsx --test lib/training/expected-vs-obtained-loop-closure.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0",

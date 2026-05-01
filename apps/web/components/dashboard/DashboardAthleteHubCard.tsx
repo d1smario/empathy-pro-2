@@ -288,7 +288,35 @@ export function DashboardAthleteHubCard() {
                   value={`×${hub.operationalSignals.nutritionPerformanceIntegration.hydrationFloorMultiplier.toFixed(2)}`}
                   tone="violet"
                 />
+                <HubOpCell
+                  label="Trace coach in memoria"
+                  value={hub.operationalSignals.coachValidatedApplicationTraceCount}
+                  sub="Voci evidence `coach_manual_action` nel bundle"
+                  tone="green"
+                />
               </div>
+            </div>
+          ) : null}
+          {hub.expectedVsObtainedPreview &&
+          (hub.expectedVsObtainedPreview.loopClosureSummary ||
+            hub.expectedVsObtainedPreview.date ||
+            hub.expectedVsObtainedPreview.recentCoachTracesInHint > 0) ? (
+            <div className="mb-4 rounded-xl border border-slate-500/25 bg-slate-950/25 px-4 py-3 text-xs text-gray-300">
+              <p className="font-mono text-[0.65rem] uppercase tracking-wider text-slate-400">Plan vs reality · ultimo delta</p>
+              {hub.expectedVsObtainedPreview.date ? (
+                <p className="mt-2 font-mono text-[0.7rem] text-gray-400">
+                  {hub.expectedVsObtainedPreview.date}
+                  {hub.expectedVsObtainedPreview.status ? ` · ${hub.expectedVsObtainedPreview.status}` : ""}
+                </p>
+              ) : null}
+              {hub.expectedVsObtainedPreview.loopClosureSummary ? (
+                <p className="mt-2 leading-relaxed text-gray-200">{hub.expectedVsObtainedPreview.loopClosureSummary}</p>
+              ) : null}
+              {hub.expectedVsObtainedPreview.recentCoachTracesInHint > 0 ? (
+                <p className="mt-2 text-[0.65rem] text-slate-500">
+                  Hint delta include {hub.expectedVsObtainedPreview.recentCoachTracesInHint} trace coach recenti.
+                </p>
+              ) : null}
             </div>
           ) : null}
           {hub.crossModuleDynamicsLines.length > 0 ? (
@@ -326,6 +354,7 @@ export function DashboardAthleteHubCard() {
                   ["Health panels", hub.readSpineCoverage.hasHealthPanels],
                   ["Reality ingest", hub.readSpineCoverage.hasRealityIngestions],
                   ["Evidence items", hub.readSpineCoverage.hasEvidenceItems],
+                  ["Memoria applicazioni coach", hub.readSpineCoverage.hasCoachApplicationMemory],
                 ] as const
               ).map(([label, on]) => (
                 <span

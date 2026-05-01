@@ -16,6 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { cn } from "@/lib/cn";
+import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import type { TrainingPlannerContextViewModel } from "@/api/training/contracts";
 import {
   serializePro2BuilderSessionContract,
@@ -695,6 +696,7 @@ export function ViryaAnnualPlanOrchestrator({
   const bioenergeticModulation = viryaContext?.bioenergeticModulation ?? null;
   const viryaApprovedPatches = viryaContext?.viryaApprovedPatches ?? [];
   const viryaRetuneDirective = viryaContext?.viryaRetuneDirective ?? null;
+  const viryaRetuneProposalVm = viryaContext?.viryaRetuneProposal ?? null;
 
   const annualProjection = useMemo(() => {
     const weeks: {
@@ -1966,10 +1968,28 @@ export function ViryaAnnualPlanOrchestrator({
     }
 
     try {
+      const coachTraceIds =
+        viryaContext?.athleteMemory?.evidenceMemory?.items
+          ?.filter(
+            (item) =>
+              item.source === COACH_APPLICATION_EVIDENCE_SOURCE &&
+              (item.module === "training" || item.module === "physiology"),
+          )
+          .map((item) => item.id ?? "")
+          .filter((id): id is string => Boolean(id)) ?? [];
+      const generationAudit =
+        coachTraceIds.length || viryaRetuneProposalVm || viryaRetuneDirective
+          ? {
+              source: "virya_orchestrator_calendar_replace",
+              coachTraceIds: coachTraceIds.slice(0, 12),
+              viryaRetuneMode: viryaRetuneProposalVm?.recommendedMode ?? viryaRetuneDirective?.recommendedMode ?? null,
+            }
+          : undefined;
       await replaceTrainingPlannerCalendar({
         athleteId: selectedAthleteId,
         replaceTag: replacePrevious ? tag : undefined,
         rows,
+        generationAudit,
       });
       setSuccess(`Piano VIRYA creato: ${rows.length} sessioni inviate in Calendar.`);
     } catch (e) {
@@ -2601,6 +2621,28 @@ export function ViryaAnnualPlanOrchestrator({
                   </ul>
                 </div>
               ) : null}
+              {viryaRetuneProposalVm ? (
+                <div className="mb-3 rounded-xl border border-violet-500/25 bg-violet-950/10 p-3">
+                  <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-violet-200/80">
+                    Proposta retune server (strutturata)
+                  </div>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-3">
+                    <div>Mode {viryaRetuneProposalVm.recommendedMode.replaceAll("_", " ")}</div>
+                    <div>Load ×{viryaRetuneProposalVm.loadScaleSuggestion.toFixed(2)}</div>
+                    <div>Session Δ {viryaRetuneProposalVm.sessionDeltaSuggestion}</div>
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-400">
+                    {viryaRetuneProposalVm.rationaleLines.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                  {viryaRetuneProposalVm.linkedCoachTraceIds.length ? (
+                    <p className="mt-2 font-mono text-[0.62rem] text-slate-600">
+                      Coach traces: {viryaRetuneProposalVm.linkedCoachTraceIds.join(", ")}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
               {viryaRetuneProposal?.targetWeeks.length ? (
                 <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-950/10 p-3">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2681,6 +2723,13 @@ export function ViryaAnnualPlanOrchestrator({
             <span className="text-slate-400">
               {planWindowStart} → {planWindowEnd}
             </span>
+            <span className="text-slate-600">·</span>
+            <Link
+              href="/training/builder?src=virya"
+              className="text-xs font-semibold text-pink-300 underline-offset-2 hover:text-pink-200 hover:underline"
+            >
+              Builder sessione
+            </Link>
             <button
               type="button"
               className="ml-auto text-xs font-semibold text-cyan-300 hover:text-cyan-200"
