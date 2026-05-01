@@ -36,6 +36,18 @@ type BioCellVm = {
   detail: string;
 };
 
+type OperationalRecommendationVm = {
+  id: string;
+  domain: "training" | "nutrition" | "recovery" | "bioenergetics" | "cross_module";
+  priority: "alta" | "media" | "bassa";
+  title: string;
+  recommendation: string;
+  why: string;
+  timing: string;
+  control: string;
+  tone: BioTone;
+};
+
 function fixed(value: number | null | undefined, digits = 1): string {
   return typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—";
 }
@@ -215,6 +227,165 @@ function manualActionVm(row: ManualActionRow) {
         ? `${Math.round(values.confidence * 100)}%`
         : "n/d",
   };
+}
+
+function buildOperationalRecommendations(input: {
+  sig: OperationalSignalsBundle | null | undefined;
+  reasoning: ReasoningDashboardOk | null;
+  manualActions: ManualActionRow[];
+}): OperationalRecommendationVm[] {
+  const out: OperationalRecommendationVm[] = [];
+  const sig = input.sig;
+  if (sig) {
+    const loop = sig.adaptationLoop;
+    const ctx = sig.operationalContext;
+    const bio = sig.bioenergeticModulation;
+    const nut = sig.nutritionPerformanceIntegration;
+    const shouldAdapt = loop.status === "regenerate" || loop.status === "watch" || loop.interventionScore >= 35;
+    if (shouldAdapt) {
+      out.push({
+        id: "rec-virya-adaptation",
+        domain: "training",
+        priority: loop.status === "regenerate" ? "alta" : "media",
+        title: "Adatta microciclo VIRYA",
+        recommendation: `${compactAction(loop.nextAction)} secondo controllo coach 0/50/70/100%.`,
+        why: `Divergenza ${loop.divergenceScore.toFixed(1)}, intervento ${loop.interventionScore.toFixed(1)}, readiness ${Math.round(loop.readinessScore)}/100.`,
+        timing: "Subito sul microciclo corrente; Calendar solo quando salvi il piano.",
+        control: "Automatico dai dati, modulato dalla percentuale coach.",
+        tone: loop.status === "regenerate" ? "rose" : "amber",
+      });
+    }
+    if (ctx && ctx.loadScalePct < 100) {
+      out.push({
+        id: "rec-load-scale",
+        domain: "recovery",
+        priority: ctx.loadScalePct <= 75 ? "alta" : "media",
+        title: "Scala carico giornata",
+        recommendation: `Porta il carico a ${Math.round(ctx.loadScalePct)}% invece di mantenere il piano pieno.`,
+        why: `${ctx.headline}. ${ctx.guidance}`,
+        timing: "Prima della prossima seduta utile.",
+        control: "Automatico se coach adaptation control > 0%.",
+        tone: ctx.loadScalePct <= 75 ? "rose" : "amber",
+      });
+    }
+    if (bio && (bio.state === "protective" || bio.state === "watch")) {
+      out.push({
+        id: "rec-bioenergetis-protection",
+        domain: "bioenergetics",
+        priority: bio.state === "protective" ? "alta" : "media",
+        title: "Proteggi stress bioenergetico",
+        recommendation: bio.guidance,
+        why: `${bio.headline} Copertura ${Math.round(bio.signalCoveragePct)}%, incertezza ±${Math.round(bio.inputUncertaintyPct)}%.`,
+        timing: "Prima di prescrivere intensità o blocchi lattacidi.",
+        control: "Compute determina scala; coach può ridurre/annullare adattamento.",
+        tone: bio.state === "protective" ? "rose" : "amber",
+      });
+    }
+    if (nut.rationale.length) {
+      out.push({
+        id: "rec-nutrition-fueling",
+        domain: "nutrition",
+        priority: "media",
+        title: "Allinea fueling e recovery",
+        recommendation: `CHO ×${nut.fuelingChoScale.toFixed(2)}, energia ×${nut.trainingEnergyScale.toFixed(2)}, proteine +${nut.proteinBiasPctPoints.toFixed(1)} pt.`,
+        why: nut.rationale.slice(0, 2).join(" · "),
+        timing: "Pre/peri/post workout in base alla seduta Builder.",
+        control: "Non sostituisce solver kcal/macro o cataloghi USDA.",
+        tone: "cyan",
+      });
+    }
+    for (const patch of sig.appliedApplicationTraces.slice(0, 2)) {
+      out.push({
+        id: `rec-applied-${patch.id}`,
+        domain: patch.target.includes("nutrition") ? "nutrition" : patch.target.includes("bio") ? "bioenergetics" : "cross_module",
+        priority: "bassa",
+        title: "Decisione già applicata",
+        recommendation: compactAction(patch.action),
+        why: typeof patch.reason === "string" ? patch.reason : "Decisione derivata da staging/manual action.",
+        timing: patch.appliedAt ? `Applicata ${patch.appliedAt}` : "Applicata, timestamp non disponibile.",
+        control: "Monitorare outcome nel prossimo expected-vs-obtained.",
+        tone: "green",
+      });
+    }
+  }
+
+  for (const action of input.manualActions.slice(0, 2)) {
+    const vm = manualActionVm(action);
+    out.push({
+      id: `rec-manual-${action.id}`,
+      domain: action.action_type.includes("nutrition") ? "nutrition" : action.action_type.includes("physiology") ? "bioenergetics" : "training",
+      priority: "media",
+      title: "Azione in coda applicativa",
+      recommendation: vm.action,
+      why: vm.reason || "Generata da ragionamento validato, in attesa di applicazione o rifiuto.",
+      timing: "Da risolvere prima del prossimo retune completo.",
+      control: "Coach applica/rifiuta/supera nella Application Queue.",
+      tone: "violet",
+    });
+  }
+
+  const cards = input.reasoning?.cards ?? [];
+  for (const card of cards.filter((c) => c.actionLines.length && !c.stagingRunId).slice(0, 2)) {
+    out.push({
+      id: `rec-card-${card.id}`,
+      domain: card.domain === "health" || card.domain === "physiology" ? "bioenergetics" : card.domain,
+      priority: card.tone === "rose" ? "alta" : card.tone === "amber" ? "media" : "bassa",
+      title: card.title,
+      recommendation: card.actionLines.slice(0, 2).join(" · "),
+      why: card.explanation,
+      timing: card.timingLines[0] ?? "Quando il modulo operativo consuma il bundle.",
+      control: "Consiglio derivato dal reasoning dashboard.",
+      tone: card.tone,
+    });
+  }
+
+  const unique = new Map<string, OperationalRecommendationVm>();
+  for (const item of out) {
+    if (!unique.has(item.id)) unique.set(item.id, item);
+  }
+  return Array.from(unique.values()).slice(0, 10);
+}
+
+function OperationalRecommendationsPanel({ recommendations }: { recommendations: OperationalRecommendationVm[] }) {
+  return (
+    <section className="viz-card builder-panel space-y-4" style={{ marginBottom: 12 }}>
+      <header>
+        <h2 className="viz-title">Consigli operativi</h2>
+        <p className="mt-1 text-sm text-gray-400">
+          Cosa fare adesso, perché, quando e con quale controllo. I numeri restano dei motori; qui trovi la sintesi applicativa.
+        </p>
+      </header>
+      {recommendations.length ? (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {recommendations.map((rec) => (
+            <article key={rec.id} className={`rounded-2xl border bg-black/30 p-4 ${reasoningToneClass(rec.tone)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-mono text-[0.62rem] font-bold uppercase tracking-wider text-slate-500">
+                    {rec.domain} · priorità {rec.priority}
+                  </div>
+                  <h3 className="mt-1 text-sm font-bold text-white">{rec.title}</h3>
+                </div>
+                <span className="rounded-full border border-white/10 bg-black/30 px-2 py-0.5 text-[0.62rem] text-slate-300">
+                  {rec.control}
+                </span>
+              </div>
+              <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-100">{rec.recommendation}</p>
+              <details className="collapsible-card mt-3 border-white/10 bg-black/25">
+                <summary>Perché / timing</summary>
+                <div className="space-y-2 text-xs leading-relaxed text-slate-400">
+                  <p className="m-0"><span className="font-semibold text-slate-200">Perché:</span> {rec.why}</p>
+                  <p className="m-0"><span className="font-semibold text-cyan-100">Timing:</span> {rec.timing}</p>
+                </div>
+              </details>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">Nessun consiglio operativo disponibile: servono bundle, reasoning o manual actions.</p>
+      )}
+    </section>
+  );
 }
 
 function ManualActionsPanel({
@@ -458,6 +629,10 @@ export default function BioenergeticTransparencyHubPageView() {
 
   const sig = hub?.operationalSignals;
   const cells = useMemo(() => (sig ? buildBioenergetisCells(sig) : []), [sig]);
+  const recommendations = useMemo(
+    () => buildOperationalRecommendations({ sig, reasoning, manualActions }),
+    [manualActions, reasoning, sig],
+  );
 
   async function loadReasoning() {
     if (!athleteId) {
@@ -648,6 +823,8 @@ export default function BioenergeticTransparencyHubPageView() {
               busyRun={reasoningBusyRun}
               onPatchRun={patchReasoningRun}
             />
+
+            <OperationalRecommendationsPanel recommendations={recommendations} />
 
             <ManualActionsPanel
               actions={manualActions}
