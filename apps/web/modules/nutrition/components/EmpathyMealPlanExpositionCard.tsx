@@ -147,7 +147,7 @@ export function EmpathyMealPlanExpositionCard({
 
   if (placeholder) {
     return (
-      <article className="empathy-meal-expo-card empathy-meal-expo-card--placeholder">
+      <article className={cn("empathy-meal-expo-card empathy-meal-expo-card--placeholder", `empathy-meal-expo-card--slot-${slot}`)}>
         <header className="empathy-meal-expo-head">
           <div className="empathy-meal-expo-icon-wrap" aria-hidden>
             <Icon className="empathy-meal-expo-icon" strokeWidth={1.75} />
@@ -165,7 +165,7 @@ export function EmpathyMealPlanExpositionCard({
   }
 
   return (
-    <article className="empathy-meal-expo-card">
+    <article className={cn("empathy-meal-expo-card", `empathy-meal-expo-card--slot-${slot}`)}>
       <header className="empathy-meal-expo-banner">
         <div className="empathy-meal-expo-icon-wrap empathy-meal-expo-icon-wrap--banner" aria-hidden>
           <Icon className="empathy-meal-expo-icon" strokeWidth={1.75} />
