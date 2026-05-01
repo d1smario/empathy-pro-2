@@ -57,6 +57,26 @@ export type WeekObjectiveKey =
   | "tecnico_tattico"
   | "recupero";
 
+type ViryaRetuneProposalWeek = {
+  weekStart: string;
+  week: number;
+  phase: string;
+  currentTss: number;
+  proposedTss: number;
+  currentSessions: number;
+  proposedSessions: number;
+  objectives: WeekObjectiveKey[];
+  rationale: string[];
+};
+
+type ViryaRetuneProposal = {
+  mode: string;
+  status: "idle" | "automatic";
+  targetWeeks: ViryaRetuneProposalWeek[];
+  adaptationControlPct: 0 | 50 | 70 | 100;
+  approvalPolicy: "automatic_by_data_with_coach_policy";
+};
+
 const WEEK_FOCUS_OPTIONS: { id: WeekObjectiveKey; label: string }[] = [
   { id: "forza", label: "Forza" },
   { id: "aerobico", label: "Aerobico" },
@@ -648,6 +668,7 @@ export function ViryaAnnualPlanOrchestrator({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [viryaStep, setViryaStep] = useState<1 | 2 | 3 | 4 | 5>(1);
+  const [adaptationControlPct, setAdaptationControlPct] = useState<0 | 50 | 70 | 100>(100);
   const [planWindowStart, setPlanWindowStart] = useState(start);
   const [planWindowEnd, setPlanWindowEnd] = useState(() => {
     const d = defaultPhases(start);
@@ -668,6 +689,12 @@ export function ViryaAnnualPlanOrchestrator({
   const familySports = sportFamilies.find((f) => f.id === sportFamily)?.sports ?? [];
   const defaultTechnicalDrill = useMemo(() => getTechnicalDrillsForDiscipline(discipline)[0] ?? null, [discipline]);
   const defaultLifestyleProtocol = useMemo(() => getLifestyleProtocolsForDiscipline(discipline)[0] ?? null, [discipline]);
+  const operationalContext = viryaContext?.operationalContext ?? null;
+  const recoverySummary = viryaContext?.recoverySummary ?? null;
+  const adaptationLoop = viryaContext?.adaptationLoop ?? null;
+  const bioenergeticModulation = viryaContext?.bioenergeticModulation ?? null;
+  const viryaApprovedPatches = viryaContext?.viryaApprovedPatches ?? [];
+  const viryaRetuneDirective = viryaContext?.viryaRetuneDirective ?? null;
 
   const annualProjection = useMemo(() => {
     const weeks: {
@@ -710,7 +737,7 @@ export function ViryaAnnualPlanOrchestrator({
     return weeks;
   }, [phases, sportFamily, gymWeekCustomizations, technicalWeekCustomizations, lifestyleWeekCustomizations]);
 
-  const programWeekRows = useMemo(
+  const baseProgramWeekRows = useMemo(
     () =>
       annualProjection.map((row) => {
         const o = weeklyProgramOverrides[row.weekStart];
@@ -725,12 +752,6 @@ export function ViryaAnnualPlanOrchestrator({
     [annualProjection, weeklyProgramOverrides],
   );
 
-  const annualLoad = programWeekRows.slice(0, 52).map((w) => w.displayTss);
-  while (annualLoad.length < 52) annualLoad.push(0);
-  const maxAnnual = Math.max(...annualLoad, 1);
-
-  const totalSessions = programWeekRows.reduce((sum, w) => sum + w.displaySessions, 0);
-  const totalTss = programWeekRows.reduce((sum, w) => sum + w.displayTss, 0);
   const goalTargets = useMemo(() => aggregateGoalTargets(sportTargets), [sportTargets]);
   const physiologyDrive = useMemo(() => {
     const physiology = viryaContext?.physiologyState;
@@ -745,12 +766,80 @@ export function ViryaAnnualPlanOrchestrator({
       readiness: twin?.readiness ?? null,
     };
   }, [viryaContext]);
-  const operationalContext = viryaContext?.operationalContext ?? null;
-  const recoverySummary = viryaContext?.recoverySummary ?? null;
-  const adaptationLoop = viryaContext?.adaptationLoop ?? null;
-  const bioenergeticModulation = viryaContext?.bioenergeticModulation ?? null;
-  const viryaApprovedPatches = viryaContext?.viryaApprovedPatches ?? [];
-  const viryaRetuneDirective = viryaContext?.viryaRetuneDirective ?? null;
+  const viryaRetuneProposal = useMemo<ViryaRetuneProposal | null>(() => {
+    if (!viryaRetuneDirective || !baseProgramWeekRows.length) return null;
+    const today = isoToday();
+    const currentIndex = baseProgramWeekRows.findIndex((row) => today >= row.weekStart && today <= addDays(row.weekStart, 6));
+    const startIndex = currentIndex >= 0 ? currentIndex : Math.max(0, baseProgramWeekRows.findIndex((row) => row.weekStart >= today));
+    if (startIndex < 0) return null;
+    const mode = viryaRetuneDirective.recommendedMode;
+    const weekCount = mode === "regeneration_microcycle" || mode === "load_reduction_retune" ? 2 : 1;
+    const fullLoadFactor =
+      mode === "regeneration_microcycle" ? 0.62 : mode === "load_reduction_retune" ? 0.78 : mode === "fueling_supported_retune" ? 0.94 : 1;
+    const control = adaptationControlPct / 100;
+    const loadFactor = 1 - (1 - fullLoadFactor) * control;
+    const fullSessionDelta = mode === "regeneration_microcycle" ? -2 : mode === "load_reduction_retune" ? -1 : 0;
+    const sessionDelta = Math.round(fullSessionDelta * control);
+    const objectives: WeekObjectiveKey[] =
+      mode === "regeneration_microcycle"
+        ? ["recupero", "aerobico"]
+        : mode === "load_reduction_retune"
+          ? ["recupero"]
+          : mode === "fueling_supported_retune"
+            ? ["aerobico"]
+            : [];
+    const targetWeeks = baseProgramWeekRows.slice(startIndex, startIndex + weekCount).map((row): ViryaRetuneProposalWeek => {
+      const proposedTss = Math.round(clamp(row.displayTss * loadFactor, 80, Math.max(120, row.displayTss)));
+      const proposedSessions = Math.round(clamp(row.displaySessions + sessionDelta, 1, Math.max(1, row.displaySessions)));
+      const nextObjectives = Array.from(new Set([...(row.objectives ?? []), ...objectives]));
+      return {
+        weekStart: row.weekStart,
+        week: row.week,
+        phase: row.phase,
+        currentTss: row.displayTss,
+        proposedTss,
+        currentSessions: row.displaySessions,
+        proposedSessions,
+        objectives: nextObjectives,
+        rationale: [
+          `Directive ${mode.replaceAll("_", " ")}.`,
+          `Coach adaptation control ${adaptationControlPct}%.`,
+          `TSS ${row.displayTss} -> ${proposedTss}; sedute ${row.displaySessions} -> ${proposedSessions}.`,
+          "Adattamento automatico nel programma VIRYA; Calendar viene scritto solo dal comando Salva.",
+        ],
+      };
+    });
+    return {
+      mode,
+      status: targetWeeks.length ? "automatic" : "idle",
+      targetWeeks,
+      adaptationControlPct,
+      approvalPolicy: "automatic_by_data_with_coach_policy",
+    };
+  }, [adaptationControlPct, baseProgramWeekRows, viryaRetuneDirective]);
+
+  const programWeekRows = useMemo(
+    () =>
+      baseProgramWeekRows.map((row) => {
+        const autoRetune = adaptationControlPct > 0 ? viryaRetuneProposal?.targetWeeks.find((week) => week.weekStart === row.weekStart) : null;
+        return autoRetune
+          ? {
+              ...row,
+              displayTss: autoRetune.proposedTss,
+              displaySessions: autoRetune.proposedSessions,
+              objectives: autoRetune.objectives,
+            }
+          : row;
+      }),
+    [adaptationControlPct, baseProgramWeekRows, viryaRetuneProposal],
+  );
+
+  const annualLoad = programWeekRows.slice(0, 52).map((w) => w.displayTss);
+  while (annualLoad.length < 52) annualLoad.push(0);
+  const maxAnnual = Math.max(...annualLoad, 1);
+
+  const totalSessions = programWeekRows.reduce((sum, w) => sum + w.displaySessions, 0);
+  const totalTss = programWeekRows.reduce((sum, w) => sum + w.displayTss, 0);
   const objectiveDemand = useMemo(() => {
     if (sportFamily === "strength") {
       const daysFactor = clamp(gymTrainingDaysPerWeek / 5, 0.7, 1.35);
@@ -2029,11 +2118,12 @@ export function ViryaAnnualPlanOrchestrator({
     const sessionsFromCustom = custom?.sessionsPerWeek;
     const computedSessions = Math.max(1, Math.min(7, sessionsFromCustom ?? defaultSessions));
     const ov = weeklyProgramOverrides[weekStart];
+    const autoRetune = adaptationControlPct > 0 ? viryaRetuneProposal?.targetWeeks.find((week) => week.weekStart === weekStart) : null;
     return {
-      weeklyTss: ov?.weeklyTss ?? computedTss,
-      sessions: ov?.sessionsPerWeek != null ? clamp(ov.sessionsPerWeek, 1, 7) : computedSessions,
+      weeklyTss: autoRetune?.proposedTss ?? ov?.weeklyTss ?? computedTss,
+      sessions: autoRetune?.proposedSessions ?? (ov?.sessionsPerWeek != null ? clamp(ov.sessionsPerWeek, 1, 7) : computedSessions),
       hoursPerWeek: ov?.hoursPerWeek,
-      objectives: ov?.objectives ?? [],
+      objectives: autoRetune?.objectives ?? ov?.objectives ?? [],
     };
   }
 
@@ -2509,6 +2599,56 @@ export function ViryaAnnualPlanOrchestrator({
                       <li key={line}>{line}</li>
                     ))}
                   </ul>
+                </div>
+              ) : null}
+              {viryaRetuneProposal?.targetWeeks.length ? (
+                <div className="mb-3 rounded-xl border border-amber-500/25 bg-amber-950/10 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-amber-200/80">
+                        Adattamento automatico microciclo · {viryaRetuneProposal.mode.replaceAll("_", " ")}
+                      </div>
+                      <p className="mt-1 text-xs leading-relaxed text-slate-400">
+                        Se il recupero e' inefficiente, VIRYA adatta automaticamente il programma secondo la percentuale coach. Calendar viene scritto solo quando salvi.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-black/30 p-2">
+                      <div className="mb-2 text-[0.62rem] font-bold uppercase tracking-wider text-slate-500">
+                        Coach adaptation control
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {([0, 50, 70, 100] as const).map((pct) => (
+                          <button
+                            key={pct}
+                            type="button"
+                            onClick={() => setAdaptationControlPct(pct)}
+                            className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+                              adaptationControlPct === pct
+                                ? "border-amber-300 bg-amber-400/25 text-amber-50"
+                                : "border-white/10 bg-black/35 text-slate-300 hover:border-amber-300/45"
+                            }`}
+                          >
+                            {pct === 0 ? "Mantieni piano" : `${pct}%`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {viryaRetuneProposal.targetWeeks.map((week) => (
+                      <div key={week.weekStart} className="rounded-lg border border-white/10 bg-black/30 p-2">
+                        <div className="font-mono text-[0.62rem] text-slate-500">
+                          Week {week.week} · {week.weekStart} · {week.phase}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-white">
+                          TSS {week.currentTss} → {week.proposedTss} · sedute {week.currentSessions} → {week.proposedSessions}
+                        </div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Focus: {week.objectives.length ? week.objectives.join(" · ") : "invariato"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : null}
               <div className="grid gap-3 md:grid-cols-2">
