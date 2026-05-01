@@ -18,6 +18,19 @@ import {
   resolveAdaptationRegenerationLoop,
   type AdaptationRegenerationLoop,
 } from "@/lib/training/adaptation-regeneration-loop";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
+
+export type ApprovedApplicationPatch = {
+  id: string;
+  target: string;
+  action: string;
+  reason: unknown;
+  confidence: number | null;
+  sourceRefs: unknown[];
+  stagingRunId: string | null;
+  status: "pending" | "applied" | "rejected" | "superseded";
+  createdAt: string | null;
+};
 
 export type OperationalSignalsBundle = {
   adaptationGuidance: AdaptationGuidance;
@@ -25,7 +38,63 @@ export type OperationalSignalsBundle = {
   adaptationLoop: AdaptationRegenerationLoop;
   bioenergeticModulation: BioenergeticModulation | null;
   nutritionPerformanceIntegration: NutritionPerformanceIntegrationDials;
+  approvedApplicationPatches: ApprovedApplicationPatch[];
 };
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+async function resolveApprovedApplicationPatches(athleteId: string): Promise<ApprovedApplicationPatch[]> {
+  const supabase = createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("manual_actions")
+    .select("id, action_type, payload, status, created_at")
+    .eq("athlete_id", athleteId)
+    .eq("status", "pending")
+    .in("action_type", ["training_staging_patch", "nutrition_staging_patch", "physiology_staging_patch"])
+    .order("created_at", { ascending: false })
+    .limit(30);
+
+  if (error) {
+    const msg = error.message ?? "";
+    if (error.code === "42P01" || msg.includes("does not exist")) return [];
+    throw new Error(error.message);
+  }
+
+  return ((data ?? []) as Array<Record<string, unknown>>).map((row) => {
+    const payload = asRecord(row.payload);
+    const values = asRecord(payload.values);
+    return {
+      id: String(row.id ?? ""),
+      target: asString(values.target) ?? "training",
+      action: asString(values.action) ?? "review_staging_patch",
+      reason: values.reason ?? payload.reason ?? null,
+      confidence: asNumber(values.confidence),
+      sourceRefs: asArray(values.sourceRefs),
+      stagingRunId: asString(values.stagingRunId),
+      status: row.status === "applied" || row.status === "rejected" || row.status === "superseded" ? row.status : "pending",
+      createdAt: asString(row.created_at),
+    };
+  });
+}
 
 export async function resolveOperationalSignalsBundle(input: {
   athleteId: string;
@@ -87,11 +156,14 @@ export async function resolveOperationalSignalsBundle(input: {
     diarySignals,
   });
 
+  const approvedApplicationPatches = await resolveApprovedApplicationPatches(athleteId).catch(() => []);
+
   return {
     adaptationGuidance,
     operationalContext,
     adaptationLoop,
     bioenergeticModulation,
     nutritionPerformanceIntegration,
+    approvedApplicationPatches,
   };
 }

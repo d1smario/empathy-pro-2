@@ -102,10 +102,15 @@ export async function GET(req: NextRequest) {
       adaptationLoop,
       bioenergeticModulation,
       nutritionPerformanceIntegration,
+      approvedApplicationPatches,
     } = await resolveOperationalSignalsBundle({
       athleteId,
       athleteMemory,
       recoverySummary,
+    });
+    const nutritionApprovedPatches = approvedApplicationPatches.filter((patch) => {
+      const target = patch.target.toLowerCase();
+      return target.includes("nutrition") || target.includes("fueling") || target.includes("redox") || target.includes("gut");
     });
 
     const metabolicEfficiencyGenerativeModel = buildMetabolicEfficiencyGenerativeModel({
@@ -140,6 +145,7 @@ export async function GET(req: NextRequest) {
         pathwayModulation,
         foodRecommendations: functionalFoodRecommendations,
         nutritionPerformanceIntegration,
+        approvedNutritionPatches: nutritionApprovedPatches,
         adaptationLoop,
         recoverySummary,
         twin: twinState,
@@ -168,6 +174,8 @@ export async function GET(req: NextRequest) {
       adaptationLoop,
       bioenergeticModulation,
       nutritionPerformanceIntegration,
+      approvedApplicationPatches,
+      nutritionApprovedPatches,
       metabolicEfficiencyGenerativeModel,
       pathwayModulation,
       functionalFoodRecommendations,

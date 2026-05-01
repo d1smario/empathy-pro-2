@@ -1,4 +1,5 @@
 import type { PlannedWorkout } from "@empathy/domain-training";
+import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
 export type { NutritionPerformanceIntegrationDials };
 import type { AthleteMemory, PhysiologyState } from "@/lib/empathy/schemas";
@@ -243,6 +244,8 @@ export type NutritionModuleViewModel = {
   adaptationLoop?: TrainingAdaptationLoopViewModel | null;
   bioenergeticModulation?: TrainingBioenergeticModulationViewModel | null;
   nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
+  approvedApplicationPatches?: ApprovedApplicationPatch[];
+  nutritionApprovedPatches?: ApprovedApplicationPatch[];
   metabolicEfficiencyGenerativeModel?: NutritionMetabolicEfficiencyGenerativeViewModel | null;
   /** Present when `pathwayDate` query is set and falls within `from`…`to` (stesso modello del client). */
   pathwayModulation?: NutritionPathwayModulationViewModel | null;

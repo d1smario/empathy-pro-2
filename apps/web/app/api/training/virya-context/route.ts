@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
@@ -8,11 +8,6 @@ import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolv
 import { buildViryaResearchPlans } from "@/lib/knowledge/training-research-context";
 import { persistCanonicalResearchTracePlan } from "@/lib/knowledge/knowledge-research-flow";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
-import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
-import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
-import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
-import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
-import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 
 export const dynamic = "force-dynamic";
@@ -50,43 +45,18 @@ export async function GET(req: NextRequest) {
       recoverySummary = null;
     }
 
-    const adaptationGuidance = buildAdaptationGuidance({
-      expectedAdaptation: twinState?.expectedAdaptation ?? twinState?.adaptationScore ?? 0,
-      observedAdaptation: twinState?.realAdaptation ?? twinState?.adaptationScore ?? 0,
-      likelyDrivers: twinState?.likelyDrivers ?? [],
-    });
-    const operationalContext = buildTrainingDayOperationalContext({
-      recoveryStatus: recoverySummary?.status ?? "unknown",
-      trafficLight: adaptationGuidance.trafficLight,
-      keepProgramUnchanged: adaptationGuidance.keepProgramUnchanged,
-      reductionMinPct: adaptationGuidance.reductionMinPct,
-      reductionMaxPct: adaptationGuidance.reductionMaxPct,
-    });
-    const adaptationLoop = await resolveAdaptationRegenerationLoop({
-      athleteId,
-      twinState,
-      recoverySummary,
-      operationalContext,
-    });
-    const bioenergeticModulation =
-      twinState != null
-        ? buildBioenergeticModulation({
-            physiologyState: canonicalState,
-            twinState,
-            recoverySummary,
-          })
-        : null;
-
-    const diarySignals = extractDiaryAdaptiveSignals({
-      profile: athleteMemory.profile,
-      diaryEntries: athleteMemory.nutrition.diary ?? [],
-    });
-    const nutritionPerformanceIntegration = buildNutritionPerformanceIntegration({
-      bioenergeticModulation,
+    const operationalSignals = await resolveOperationalSignalsBundle({ athleteId, athleteMemory, recoverySummary });
+    const {
       adaptationGuidance,
-      adaptationLoop: adaptationLoop ? { status: adaptationLoop.status, nextAction: adaptationLoop.nextAction } : null,
       operationalContext,
-      diarySignals,
+      adaptationLoop,
+      bioenergeticModulation,
+      nutritionPerformanceIntegration,
+      approvedApplicationPatches,
+    } = operationalSignals;
+    const viryaApprovedPatches = approvedApplicationPatches.filter((patch) => {
+      const target = patch.target.toLowerCase();
+      return target.includes("training") || target.includes("virya") || target.includes("bioenergetics");
     });
     const crossModuleDynamicsLines = buildOperationalDynamicsLines({
       adaptationGuidance,
@@ -207,6 +177,8 @@ export async function GET(req: NextRequest) {
         bioenergeticModulation,
         adaptationGuidance,
         nutritionPerformanceIntegration,
+        approvedApplicationPatches,
+        viryaApprovedPatches,
         crossModuleDynamicsLines,
         knowledgeModulation,
         researchPlans,

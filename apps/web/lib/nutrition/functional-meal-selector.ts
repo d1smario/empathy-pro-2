@@ -132,6 +132,7 @@ export function buildFunctionalMealSelectorViewModel(input: {
   pathwayModulation: NutritionPathwayModulationViewModel | null;
   foodRecommendations: FunctionalFoodRecommendationsViewModel | null;
   nutritionPerformanceIntegration: NutritionPerformanceIntegrationDials | null;
+  approvedNutritionPatches?: Array<{ action: string; reason: unknown; confidence: number | null }>;
   adaptationLoop: AdaptationLoopLike;
   recoverySummary: RecoveryLike;
   twin: TwinLike;
@@ -156,6 +157,17 @@ export function buildFunctionalMealSelectorViewModel(input: {
   const dominantRedox = redox >= 55 || inflammation >= 55 || pathwayLabels.some((label) => label.includes("redox"));
   const lowGlycogen = glycogen < 48 || pathwayLabels.some((label) => label.includes("glicogeno"));
   const gutFocus = pathwayLabels.some((label) => label.includes("intest") || label.includes("microbiota") || label.includes("gut"));
+  const approvedPatchNotes =
+    input.approvedNutritionPatches?.slice(0, 3).map((patch) => {
+      const confidence = patch.confidence != null ? ` · confidenza ${Math.round(patch.confidence * 100)}%` : "";
+      const reason =
+        typeof patch.reason === "string"
+          ? ` · ${patch.reason}`
+          : Array.isArray(patch.reason)
+            ? ` · ${patch.reason.filter((item): item is string => typeof item === "string").slice(0, 2).join(", ")}`
+            : "";
+      return `Decisione coach approvata: ${patch.action}${reason}${confidence}`;
+    }) ?? [];
 
   slots.push(
     makeSlot({
@@ -222,6 +234,7 @@ export function buildFunctionalMealSelectorViewModel(input: {
     notes: [
       "Selettore deterministico: propone alimenti/categorie funzionali, non sostituisce il solver kcal/macro o USDA FDC.",
       "I numeri nutrizionali finali restano da catalogo USDA/diario; questi candidati spiegano il perche' biologico del cibo scelto.",
+      ...approvedPatchNotes,
       ...(input.nutritionPerformanceIntegration?.rationale.slice(0, 3) ?? []),
     ],
   };
