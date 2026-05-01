@@ -40,27 +40,24 @@
     0 0 80px rgba(168, 85, 247, 0.12);
   --empathy-shadow-glow: 0 0 40px rgba(168, 85, 247, 0.35), 0 0 80px rgba(236, 72, 153, 0.15);
 
-  /* Nutrition · meal plan / fueling (clean Pro 2: black glass, pink/violet/orange accents) */
+  /* Nutrition · meal plan / fueling (clean Pro 2: black glass, pink/violet/orange accents only) */
   --nutri-expo-pink: #f472b6;
   --nutri-expo-magenta: #ec4899;
   --nutri-expo-violet: #a855f7;
   --nutri-expo-banner0: #ec4899;
   --nutri-expo-banner1: #f97316;
   --nutri-expo-cho: #f472b6;
-  --nutri-expo-cho-bg: rgba(244, 114, 182, 0.075);
+  --nutri-expo-cho-bg: rgba(244, 114, 182, 0.055);
   --nutri-expo-pro: #fb923c;
-  --nutri-expo-pro-bg: rgba(251, 146, 60, 0.07);
+  --nutri-expo-pro-bg: rgba(251, 146, 60, 0.045);
   --nutri-expo-fat: #cbd5e1;
-  --nutri-expo-fat-bg: rgba(148, 163, 184, 0.065);
+  --nutri-expo-fat-bg: rgba(148, 163, 184, 0.045);
   --nutri-expo-kcal: #f472b6;
-  --nutri-expo-kcal-bg: rgba(236, 72, 153, 0.11);
-  --nutri-expo-card: radial-gradient(circle at 12% 0%, rgba(236, 72, 153, 0.1), transparent 34%),
-    radial-gradient(circle at 88% 2%, rgba(249, 115, 22, 0.075), transparent 28%),
-    linear-gradient(160deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01) 40%, transparent),
-    rgba(5, 6, 10, 0.96);
-  --nutri-expo-border: rgba(244, 114, 182, 0.22);
-  --nutri-expo-glow: 0 14px 34px rgba(0, 0, 0, 0.5), 0 0 44px rgba(168, 85, 247, 0.08),
-    0 0 26px rgba(236, 72, 153, 0.08);
+  --nutri-expo-kcal-bg: rgba(236, 72, 153, 0.055);
+  --nutri-expo-card: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01)),
+    rgba(4, 5, 9, 0.98);
+  --nutri-expo-border: rgba(244, 114, 182, 0.16);
+  --nutri-expo-glow: 0 14px 34px rgba(0, 0, 0, 0.52), 0 0 24px rgba(168, 85, 247, 0.055);
   --nutri-ig-legend-low: #94a3b8;
   --nutri-ig-legend-low-b: #64748b;
   --nutri-ig-legend-med: #f472b6;
