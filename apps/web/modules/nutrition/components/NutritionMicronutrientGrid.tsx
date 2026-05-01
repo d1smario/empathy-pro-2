@@ -74,6 +74,181 @@ function formatMicroValue(value: number, unit: string): string {
   return `${rounded} ${unit}`;
 }
 
+type MicroTargetKind = "min" | "max";
+
+type MicroTarget = {
+  target: number;
+  unit: string;
+  kind?: MicroTargetKind;
+};
+
+type MicroChartDatum = NutritionMicroLine & {
+  target: number;
+  pct: number;
+  kind: MicroTargetKind;
+};
+
+const MICRO_TARGETS: Record<string, MicroTarget> = {
+  "vitamina a (rae)": { target: 900, unit: "µg" },
+  "vitamina c": { target: 90, unit: "mg" },
+  "vitamina d": { target: 15, unit: "µg" },
+  "vitamina e": { target: 15, unit: "mg" },
+  "vitamina k": { target: 120, unit: "µg" },
+  "tiamina (b1)": { target: 1.2, unit: "mg" },
+  "riboflavina (b2)": { target: 1.3, unit: "mg" },
+  "niacina (b3)": { target: 16, unit: "mg" },
+  "vitamina b6": { target: 1.7, unit: "mg" },
+  "folati": { target: 400, unit: "µg" },
+  "folati (equivalenti)": { target: 400, unit: "µg" },
+  "vitamina b12": { target: 2.4, unit: "µg" },
+  calcio: { target: 1000, unit: "mg" },
+  ferro: { target: 8, unit: "mg" },
+  magnesio: { target: 420, unit: "mg" },
+  fosforo: { target: 700, unit: "mg" },
+  potassio: { target: 3500, unit: "mg" },
+  sodio: { target: 2000, unit: "mg", kind: "max" },
+  zinco: { target: 11, unit: "mg" },
+  selenio: { target: 55, unit: "µg" },
+  leucina: { target: 2.73, unit: "g" },
+  lisina: { target: 2.1, unit: "g" },
+  metionina: { target: 1.05, unit: "g" },
+  fenilalanina: { target: 1.75, unit: "g" },
+  treonina: { target: 1.05, unit: "g" },
+  triptofano: { target: 0.28, unit: "g" },
+  isoleucina: { target: 1.4, unit: "g" },
+  valina: { target: 1.82, unit: "g" },
+  istidina: { target: 0.7, unit: "g" },
+  "fibra alimentare": { target: 30, unit: "g" },
+  "acidi grassi saturi": { target: 20, unit: "g", kind: "max" },
+  saturi: { target: 20, unit: "g", kind: "max" },
+  "omega-3 (epa+dha appross.)": { target: 1.6, unit: "g" },
+  "omega-3": { target: 1.6, unit: "g" },
+};
+
+function normalizeMicroName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function targetForLine(line: NutritionMicroLine): MicroTarget | null {
+  return MICRO_TARGETS[normalizeMicroName(line.name)] ?? null;
+}
+
+function toChartData(lines: NutritionMicroLine[]): MicroChartDatum[] {
+  return lines
+    .map((line) => {
+      const target = targetForLine(line);
+      if (!target || target.target <= 0 || !Number.isFinite(line.value)) return null;
+      const pct = Math.round((line.value / target.target) * 100);
+      return {
+        ...line,
+        target: target.target,
+        kind: target.kind ?? "min",
+        pct,
+      };
+    })
+    .filter((line): line is MicroChartDatum => Boolean(line))
+    .slice(0, 12);
+}
+
+function polarPoint(index: number, total: number, radius: number): { x: number; y: number } {
+  const angle = -Math.PI / 2 + (index / total) * Math.PI * 2;
+  return {
+    x: 50 + Math.cos(angle) * radius,
+    y: 50 + Math.sin(angle) * radius,
+  };
+}
+
+function polygonPoints(rows: MicroChartDatum[]): string {
+  const total = Math.max(3, rows.length);
+  return rows
+    .map((row, index) => {
+      const cappedPct = Math.max(0, Math.min(row.pct, 140));
+      const p = polarPoint(index, total, 12 + (cappedPct / 140) * 34);
+      return `${p.x},${p.y}`;
+    })
+    .join(" ");
+}
+
+function MicroPercentRadar({
+  title,
+  subtitle,
+  lines,
+  tone,
+}: {
+  title: string;
+  subtitle: string;
+  lines: NutritionMicroLine[];
+  tone: "vitamins" | "minerals" | "amino" | "lipids";
+}) {
+  const rows = toChartData(lines);
+  const axisCount = Math.max(3, rows.length);
+  return (
+    <article className={`empathy-micro-radar-card empathy-micro-radar-card--${tone}`}>
+      <div className="empathy-micro-radar-copy">
+        <h5>{title}</h5>
+        <p>{subtitle}</p>
+      </div>
+      {rows.length ? (
+        <div className="empathy-micro-radar-layout">
+          <svg className="empathy-micro-radar-svg" viewBox="0 0 100 100" role="img" aria-label={`${title}: percentuali su target`}>
+            <polygon className="empathy-micro-radar-grid" points={Array.from({ length: axisCount }, (_, i) => {
+              const p = polarPoint(i, axisCount, 46);
+              return `${p.x},${p.y}`;
+            }).join(" ")} />
+            <polygon className="empathy-micro-radar-grid empathy-micro-radar-grid--mid" points={Array.from({ length: axisCount }, (_, i) => {
+              const p = polarPoint(i, axisCount, 29);
+              return `${p.x},${p.y}`;
+            }).join(" ")} />
+            {Array.from({ length: axisCount }, (_, i) => {
+              const p = polarPoint(i, axisCount, 46);
+              return <line key={i} className="empathy-micro-radar-axis" x1="50" y1="50" x2={p.x} y2={p.y} />;
+            })}
+            <polygon className="empathy-micro-radar-fill" points={polygonPoints(rows)} />
+          </svg>
+          <ul className="empathy-micro-radar-list">
+            {rows.map((row) => (
+              <li key={row.name}>
+                <span>{row.name}</span>
+                <strong>
+                  {Math.min(row.pct, 999)}% <small>{row.kind === "max" ? "limite" : "target"}</small>
+                </strong>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p className="muted-copy text-xs">Target non disponibile per questo bucket.</p>
+      )}
+    </article>
+  );
+}
+
+export function NutritionMicronutrientDailyBoard({ vitamins, minerals, aminoAcids, fattyAcids, className }: NutritionMicronutrientGridProps) {
+  return (
+    <div className={className ?? "empathy-micro-daily-board"}>
+      <div className="empathy-micro-daily-head">
+        <div>
+          <p className="empathy-micro-daily-eyebrow">Totali giornalieri · micronutrienti</p>
+          <h4>Assunzione stimata e copertura rispetto ai valori consigliati</h4>
+        </div>
+        <span>Valori dal piano alimentare assemblato; target adulti indicativi.</span>
+      </div>
+      <div className="empathy-micro-radar-grid-wrap">
+        <MicroPercentRadar title="Vitamine" subtitle="11 segmenti sul fabbisogno giornaliero" lines={vitamins} tone="vitamins" />
+        <MicroPercentRadar title="Minerali" subtitle="8 segmenti, sodio come limite" lines={minerals} tone="minerals" />
+        <MicroPercentRadar title="Aminoacidi" subtitle="EAA stimati dal piano" lines={aminoAcids} tone="amino" />
+        <MicroPercentRadar title="Grassi e fibra" subtitle="Frazioni lipidiche e fibra" lines={fattyAcids} tone="lipids" />
+      </div>
+      <NutritionMicronutrientTable vitamins={vitamins} minerals={minerals} aminoAcids={aminoAcids} fattyAcids={fattyAcids} />
+    </div>
+  );
+}
+
 type MicroTableSectionTone = "vitamins" | "minerals" | "amino" | "lipids";
 
 function MicronutrientTableSection({

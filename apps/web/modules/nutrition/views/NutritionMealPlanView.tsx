@@ -10,7 +10,11 @@ import type {
   NutritionPathwayModulationViewModel,
 } from "@/api/nutrition/contracts";
 import type { AdaptationSectorBoxVm } from "@/lib/adaptation/adaptation-sector-box";
-import { NutritionMicronutrientGrid, type NutritionMicronutrientGridProps } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
+import {
+  NutritionMicronutrientDailyBoard,
+  mealPlanDayTotalsToMicroLinesComplete,
+  type NutritionMicronutrientGridProps,
+} from "@/modules/nutrition/components/NutritionMicronutrientGrid";
 import { buildFunctionalFoodOptionGroupsForSlot } from "@/lib/nutrition/functional-food-option-groups";
 import { buildDryMealPlanLinesForSlot } from "@/lib/nutrition/dry-meal-plan-lines";
 import { filterFunctionalFoodGroupsForMealSlot } from "@/lib/nutrition/meal-slot-food-rules";
@@ -274,6 +278,9 @@ export function NutritionMealPlanWorkspace({
   onSaveNutrition,
 }: NutritionMealPlanWorkspaceProps) {
   const router = useRouter();
+  const mealPlanMicroBoardProps = intelligentMealPlan?.nutrientRollup?.dayTotals
+    ? mealPlanDayTotalsToMicroLinesComplete(intelligentMealPlan.nutrientRollup.dayTotals)
+    : mealTabMicronutrientProps;
 
   return (
     <>
@@ -643,13 +650,8 @@ export function NutritionMealPlanWorkspace({
             </div>
           ) : null}
           <section className="nutrition-report-shell">
-            <div className="nutrition-report-head">
-              <div>
-                <h4>Micro · stima giorno</h4>
-              </div>
-            </div>
             <div className="nutrition-meal-plan-micro">
-              <NutritionMicronutrientGrid className="nutrition-diary-micro-board" {...mealTabMicronutrientProps} />
+              <NutritionMicronutrientDailyBoard {...mealPlanMicroBoardProps} />
             </div>
           </section>
           <div className="kpi-grid nutrition-score-grid">

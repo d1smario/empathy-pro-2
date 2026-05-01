@@ -866,6 +866,277 @@ body {
     rgba(5, 6, 10, 0.96);
 }
 
+.nutrition-report-shell {
+  margin-top: 1rem;
+}
+
+.nutrition-meal-plan-micro {
+  margin-top: 0.75rem;
+}
+
+.empathy-micro-daily-board {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 63, 174, 0.28);
+  background:
+    linear-gradient(90deg, rgba(255, 63, 174, 0.09), rgba(255, 138, 28, 0.06), transparent 72%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+    rgba(3, 4, 8, 0.96);
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.5),
+    0 0 26px rgba(255, 63, 174, 0.12);
+  padding: 16px;
+}
+
+.empathy-micro-daily-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 14px;
+}
+
+.empathy-micro-daily-eyebrow {
+  margin: 0 0 4px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--nutri-expo-pink);
+}
+
+.empathy-micro-daily-head h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 850;
+  color: #fff;
+}
+
+.empathy-micro-daily-head > span {
+  max-width: 24rem;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: rgba(203, 213, 225, 0.72);
+  text-align: right;
+}
+
+.empathy-micro-radar-grid-wrap {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 1180px) {
+  .empathy-micro-radar-grid-wrap {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .empathy-micro-daily-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .empathy-micro-daily-head > span {
+    text-align: left;
+  }
+
+  .empathy-micro-radar-grid-wrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+.empathy-micro-radar-card {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.008)),
+    rgba(6, 7, 12, 0.94);
+  padding: 12px;
+  overflow: hidden;
+}
+
+.empathy-micro-radar-card--vitamins,
+.empathy-micro-radar-card--amino {
+  border-color: rgba(255, 63, 174, 0.3);
+}
+
+.empathy-micro-radar-card--minerals,
+.empathy-micro-radar-card--lipids {
+  border-color: rgba(255, 138, 28, 0.28);
+}
+
+.empathy-micro-radar-copy h5 {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 850;
+  color: #fff;
+}
+
+.empathy-micro-radar-copy p {
+  margin: 3px 0 10px;
+  font-size: 0.68rem;
+  color: rgba(203, 213, 225, 0.7);
+}
+
+.empathy-micro-radar-layout {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.empathy-micro-radar-svg {
+  width: 112px;
+  height: 112px;
+  overflow: visible;
+}
+
+.empathy-micro-radar-grid {
+  fill: rgba(255, 255, 255, 0.025);
+  stroke: rgba(255, 255, 255, 0.16);
+  stroke-width: 0.8;
+}
+
+.empathy-micro-radar-grid--mid {
+  fill: transparent;
+  stroke: rgba(255, 255, 255, 0.1);
+}
+
+.empathy-micro-radar-axis {
+  stroke: rgba(255, 255, 255, 0.09);
+  stroke-width: 0.65;
+}
+
+.empathy-micro-radar-fill {
+  fill: rgba(255, 63, 174, 0.26);
+  stroke: var(--nutri-expo-pink);
+  stroke-width: 1.6;
+  filter: drop-shadow(0 0 5px rgba(255, 63, 174, 0.32));
+}
+
+.empathy-micro-radar-card--minerals .empathy-micro-radar-fill,
+.empathy-micro-radar-card--lipids .empathy-micro-radar-fill {
+  fill: rgba(255, 138, 28, 0.24);
+  stroke: var(--nutri-expo-pro);
+  filter: drop-shadow(0 0 5px rgba(255, 138, 28, 0.28));
+}
+
+.empathy-micro-radar-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.empathy-micro-radar-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.34);
+  padding: 4px 7px;
+  font-size: 0.68rem;
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.empathy-micro-radar-list span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empathy-micro-radar-list strong {
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.empathy-micro-radar-list small {
+  font-size: 0.56rem;
+  font-weight: 700;
+  color: rgba(203, 213, 225, 0.62);
+}
+
+.empathy-micro-table-outer {
+  margin-top: 10px;
+}
+
+.empathy-micro-table-stack {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 1180px) {
+  .empathy-micro-table-stack {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .empathy-micro-table-stack {
+    grid-template-columns: 1fr;
+  }
+}
+
+.empathy-micro-table-section {
+  overflow: hidden;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(2, 4, 9, 0.88);
+}
+
+.empathy-micro-table-section--vitamins,
+.empathy-micro-table-section--amino {
+  border-color: rgba(255, 63, 174, 0.24);
+}
+
+.empathy-micro-table-section--minerals,
+.empathy-micro-table-section--lipids {
+  border-color: rgba(255, 138, 28, 0.22);
+}
+
+.empathy-micro-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.72rem;
+}
+
+.empathy-micro-table th {
+  padding: 8px 10px;
+  text-align: left;
+  color: #fff;
+  background: linear-gradient(90deg, rgba(255, 63, 174, 0.18), rgba(255, 138, 28, 0.1));
+}
+
+.empathy-micro-table-subhead th {
+  font-size: 0.6rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(203, 213, 225, 0.72);
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.empathy-micro-table td {
+  padding: 7px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(226, 232, 240, 0.86);
+}
+
+.empathy-micro-table-val {
+  text-align: right;
+  font-weight: 800;
+  color: #fff !important;
+  white-space: nowrap;
+}
+
 .empathy-meal-expo-legend-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
