@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:loop-closure": "npx tsx --test lib/training/expected-vs-obtained-loop-closure.test.ts"
+    "test:loop-closure": "npx tsx --test lib/training/expected-vs-obtained-loop-closure.test.ts",
+    "test:functional-selector": "npx tsx --test lib/nutrition/functional-meal-selector.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0",

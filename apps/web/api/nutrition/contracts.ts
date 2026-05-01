@@ -231,6 +231,24 @@ export type FoodDiaryListViewModel = {
   dayTotals: FoodDiaryDayTotalsViewModel[];
 };
 
+/**
+ * Direttiva applicativa nutrition/fueling da `manual_actions` + memoria coach (GET `/api/nutrition/module`).
+ * Non modifica kcal/macro USDA; arricchisce timing, note selettore e `contextLines` del piano intelligente.
+ */
+export type NutritionApplicationDirectiveViewModel = {
+  appliedCount: number;
+  pendingCount: number;
+  coachValidatedMemoryCount?: number;
+  coachValidatedMemoryLines?: string[];
+  focus: string[];
+  solverPolicy: "do_not_override_kcal_macro_catalog";
+  timingPolicy: "coach_validated_context_for_pre_peri_post";
+  rationale: string[];
+};
+
+/**
+ * Payload aggregato `GET /api/nutrition/module` (success). Campi opzionali dipendono da `pathwayDate` in query.
+ */
 export type NutritionModuleViewModel = {
   athleteId: string;
   from: string;
@@ -247,16 +265,7 @@ export type NutritionModuleViewModel = {
   nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
   approvedApplicationPatches?: ApprovedApplicationPatch[];
   nutritionApprovedPatches?: ApprovedApplicationPatch[];
-  nutritionApplicationDirective?: {
-    appliedCount: number;
-    pendingCount: number;
-    coachValidatedMemoryCount?: number;
-    coachValidatedMemoryLines?: string[];
-    focus: string[];
-    solverPolicy: "do_not_override_kcal_macro_catalog";
-    timingPolicy: "coach_validated_context_for_pre_peri_post";
-    rationale: string[];
-  };
+  nutritionApplicationDirective?: NutritionApplicationDirectiveViewModel;
   metabolicEfficiencyGenerativeModel?: NutritionMetabolicEfficiencyGenerativeViewModel | null;
   /** Present when `pathwayDate` query is set and falls within `from`…`to` (stesso modello del client). */
   pathwayModulation?: NutritionPathwayModulationViewModel | null;

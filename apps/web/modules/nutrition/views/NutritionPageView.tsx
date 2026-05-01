@@ -40,8 +40,8 @@ import type {
   FunctionalFoodRecommendationsViewModel,
   FunctionalFoodTargetViewModel,
   FunctionalMealSelectorViewModel,
+  NutritionApplicationDirectiveViewModel,
   NutritionMetabolicEfficiencyGenerativeViewModel,
-  NutritionModuleViewModel,
   NutritionPathwayModulationViewModel,
   NutritionPerformanceIntegrationDials,
   UsdaRichFoodItemViewModel,
@@ -551,9 +551,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [metabolicEfficiencyGenerativeModel, setMetabolicEfficiencyGenerativeModel] =
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
-  const [nutritionApplicationDirective, setNutritionApplicationDirective] = useState<
-    NutritionModuleViewModel["nutritionApplicationDirective"] | null
-  >(null);
+  const [nutritionApplicationDirective, setNutritionApplicationDirective] = useState<NutritionApplicationDirectiveViewModel | null>(
+    null,
+  );
   const [nutritionApprovedPatches, setNutritionApprovedPatches] = useState<ApprovedApplicationPatch[]>([]);
   const [nutritionPerformanceIntegration, setNutritionPerformanceIntegration] =
     useState<NutritionPerformanceIntegrationDials | null>(null);

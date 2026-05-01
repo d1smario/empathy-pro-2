@@ -7,7 +7,7 @@ import { NutritionDayKpiStrip } from "@/components/nutrition/NutritionDayKpiStri
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
 import type {
   FunctionalFoodRecommendationsViewModel,
-  NutritionModuleViewModel,
+  NutritionApplicationDirectiveViewModel,
   NutritionPathwayModulationViewModel,
 } from "@/api/nutrition/contracts";
 import type { AdaptationSectorBoxVm } from "@/lib/adaptation/adaptation-sector-box";
@@ -233,7 +233,7 @@ export type NutritionMealPlanWorkspaceProps = {
   mealPathwayBySlot: Partial<Record<string, MealPathwaySlotBundle>>;
   pathwayModulation: NutritionPathwayModulationViewModel | null;
   /** Da `GET /api/nutrition/module` — allineato al selettore funzionale e alle contextLines del piano. */
-  nutritionApplicationDirective: NutritionModuleViewModel["nutritionApplicationDirective"] | null;
+  nutritionApplicationDirective: NutritionApplicationDirectiveViewModel | null;
   /** Note complete del selettore (incl. direttiva / patch / integrazione). */
   functionalMealSelectorNotes: string[] | null;
   intelligentMealPlan: IntelligentMealPlanResponseBody | null;
