@@ -426,7 +426,7 @@ export default function TrainingSessionPageView() {
         <>
           <Pro2SectionCard
             accent="orange"
-            title="Segnali sessione"
+            title="Bioenergetis sessione"
             subtitle="Celle operative: piano, realtà, twin e adattamento"
             icon={Activity}
           >

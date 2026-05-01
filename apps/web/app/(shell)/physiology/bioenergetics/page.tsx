@@ -4,7 +4,7 @@ import BioenergeticTransparencyHubPageView from "@/modules/physiology/views/Bioe
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Bioenergetic hub",
+  title: "Bioenergetis",
   description: "Read-only operational transparency: twin, VIRYA inputs, nutrition dials, builder context.",
 };
 

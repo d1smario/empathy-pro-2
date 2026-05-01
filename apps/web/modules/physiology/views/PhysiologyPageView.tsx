@@ -1628,7 +1628,7 @@ export default function MetabolicLabPage() {
             variant="secondary"
             className="justify-center border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15"
           >
-            Hub bioenergetico
+            Bioenergetis
           </Pro2Link>
         </>
       }

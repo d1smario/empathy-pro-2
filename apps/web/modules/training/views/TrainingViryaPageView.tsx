@@ -236,7 +236,7 @@ export default function TrainingViryaPageView() {
           ) : null}
 
           {ctx.bioenergeticModulation ? (
-            <Pro2SectionCard accent="fuchsia" title="Bioenergetica" subtitle="Modulazione carico" icon={CalendarRange}>
+            <Pro2SectionCard accent="fuchsia" title="Bioenergetis" subtitle="Modulazione carico" icon={CalendarRange}>
               <p className="text-sm text-slate-300">{ctx.bioenergeticModulation.headline}</p>
               <p className="mt-2 text-xs text-slate-500">{ctx.bioenergeticModulation.guidance}</p>
               <p className="mt-2 font-mono text-[0.65rem] text-slate-500">

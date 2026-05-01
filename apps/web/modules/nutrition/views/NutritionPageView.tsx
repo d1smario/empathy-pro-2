@@ -2245,7 +2245,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   >(
     () => [
       {
-        label: "Bioenergetic",
+        label: "Bioenergetis",
         value: `${round(bioenergeticModulation?.mitochondrialReadinessScore ?? 55)}/100`,
         tone:
           bioenergeticModulation?.state === "protective"

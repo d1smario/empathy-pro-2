@@ -1036,7 +1036,7 @@ export default function ProfilePage() {
         ],
       },
       {
-        title: "Bioenergetics",
+        title: "Bioenergetis",
         cards: [
           {
             label: "Phase angle",

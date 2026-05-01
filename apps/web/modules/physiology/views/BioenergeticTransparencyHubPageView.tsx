@@ -21,7 +21,7 @@ export default function BioenergeticTransparencyHubPageView() {
     <Pro2ModulePageShell
       eyebrow="Physiology · Trasparenza operativa"
       eyebrowClassName={moduleEyebrowClass("physiology")}
-      title="Hub bioenergetico"
+      title="Bioenergetis"
       description={
         <>
           Vista <strong className="text-emerald-200/90">solo lettura</strong> sullo stesso bundle di Compute usato da dashboard e nutrizione
@@ -174,7 +174,7 @@ export default function BioenergeticTransparencyHubPageView() {
               </section>
             ) : (
               <p className="text-sm text-gray-500">
-                Segnali operativi non disponibili (memoria atleta assente o errore nel bundle). Verifica dati twin/fisiologia e riprova.
+                Bioenergetis non disponibile (memoria atleta assente o errore nel bundle). Verifica dati twin/fisiologia e riprova.
               </p>
             )}
 

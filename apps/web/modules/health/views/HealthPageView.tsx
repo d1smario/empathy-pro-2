@@ -695,7 +695,7 @@ export default function HealthPageView() {
             { k: "Nodi", v: systemMap.nodes.length, border: "border-cyan-500/40", bg: "bg-cyan-950/35", text: "text-cyan-200" },
             { k: "Archi", v: systemMap.edges.length, border: "border-violet-500/40", bg: "bg-violet-950/35", text: "text-violet-200" },
             {
-              k: "Bioenergetics",
+              k: "Bioenergetis",
               v: systemMap.bioenergeticsResponses.length,
               border: "border-amber-500/40",
               bg: "bg-amber-950/35",
@@ -753,7 +753,7 @@ export default function HealthPageView() {
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <div>
-              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-amber-300/90">Bioenergetics responses</p>
+              <p className="mb-2 text-[0.65rem] font-bold uppercase tracking-wider text-amber-300/90">Bioenergetis responses</p>
               <div className="space-y-2">
                 {systemMap.bioenergeticsResponses.slice(0, 8).map((r, i) => (
                   <div key={`bio-${i}-${String(r.id ?? i)}`} className="rounded-lg border border-amber-500/25 bg-amber-950/20 px-2.5 py-2 text-xs">
