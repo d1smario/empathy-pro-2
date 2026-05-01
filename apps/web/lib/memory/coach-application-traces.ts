@@ -3,6 +3,21 @@ import type { AthleteEvidenceMemoryItem } from "@/lib/empathy/schemas";
 
 export const COACH_APPLICATION_EVIDENCE_SOURCE = "coach_manual_action";
 
+/**
+ * Tabella assente o non ancora nel cache schema PostgREST (es. migrazione 035 non applicata).
+ * Diversamente da `42P01` / "does not exist", Supabase può rispondere con "schema cache".
+ */
+export function isMissingRelationError(error: { message?: string; code?: string } | null | undefined): boolean {
+  if (!error) return false;
+  const msg = (error.message ?? "").toLowerCase();
+  const code = String((error as { code?: string }).code ?? "");
+  if (code === "42P01") return true;
+  if (msg.includes("does not exist")) return true;
+  if (msg.includes("schema cache") && msg.includes("could not find")) return true;
+  if (msg.includes("could not find the table")) return true;
+  return false;
+}
+
 export type CoachApplicationTraceRow = {
   id: string;
   athlete_id: string;
@@ -70,9 +85,7 @@ export async function fetchCoachApplicationTraces(
     .limit(limit);
 
   if (error) {
-    const msg = error.message ?? "";
-    const code = String((error as { code?: string }).code ?? "");
-    if (code === "42P01" || msg.includes("does not exist")) return [];
+    if (isMissingRelationError(error)) return [];
     throw new Error(error.message);
   }
   return (data ?? []) as Array<Record<string, unknown>>;
@@ -103,8 +116,7 @@ export async function insertCoachApplicationTrace(input: {
     if (code === "23505") {
       return { ok: false, error: error.message, duplicate: true };
     }
-    const msg = error.message ?? "";
-    if (code === "42P01" || msg.includes("does not exist")) {
+    if (isMissingRelationError(error)) {
       return { ok: false, error: "athlete_coach_application_traces table missing; apply migration 035." };
     }
     return { ok: false, error: error.message };

@@ -24,7 +24,10 @@ import {
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { resolveCanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
-import { coachApplicationTraceRowsToEvidenceItems } from "@/lib/memory/coach-application-traces";
+import {
+  coachApplicationTraceRowsToEvidenceItems,
+  isMissingRelationError,
+} from "@/lib/memory/coach-application-traces";
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
 
@@ -383,9 +386,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
 
   let coachTraceRows: Array<Record<string, unknown>> = [];
   if (coachAppTracesRes.error) {
-    const msg = coachAppTracesRes.error.message ?? "";
-    const code = String((coachAppTracesRes.error as { code?: string }).code ?? "");
-    if (code !== "42P01" && !msg.includes("does not exist")) {
+    if (!isMissingRelationError(coachAppTracesRes.error)) {
       throw new Error(coachAppTracesRes.error.message);
     }
   } else {
