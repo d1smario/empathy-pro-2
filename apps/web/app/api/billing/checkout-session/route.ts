@@ -6,6 +6,7 @@ import { stripeCheckoutCancelUrl, stripeCheckoutSuccessUrl } from "@/lib/billing
 import { isAnonymousStripeCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { readStripeSecretKey } from "@/lib/billing/stripe-secret";
+import { createSupabaseCookieClient } from "@/lib/supabase/server";
 import {
   formatMissingStripePriceMessage,
   listMissingCheckoutPriceEnvVars,
@@ -18,6 +19,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+async function readOptionalCheckoutUser(): Promise<{ userId: string; email: string | null } | null> {
+  const supabase = createSupabaseCookieClient();
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) return null;
+  return { userId: data.user.id, email: data.user.email ?? null };
+}
 
 /**
  * Checkout subscription Silver/Gold (+ coach add-on opzionale), allineato agli env V1.
@@ -69,11 +78,14 @@ export async function POST(req: NextRequest) {
   const basePriceId = stripePriceIdForBasePlan(body.basePlanId)!;
   const addonPriceId = coachAddOnId ? stripePriceIdForCoachAddOn(coachAddOnId)! : null;
 
+  const authUser = await readOptionalCheckoutUser();
+
   let customerEmail: string | undefined;
   if (typeof body.email === "string") {
     const e = body.email.trim();
     if (e && EMAIL_RE.test(e)) customerEmail = e;
   }
+  customerEmail ??= authUser?.email ?? undefined;
 
   const lineItems: Stripe.Checkout.SessionCreateParams.LineItem[] = [
     { price: basePriceId, quantity: 1 },
@@ -101,6 +113,7 @@ export async function POST(req: NextRequest) {
     empathy_pro2: "anon_checkout",
     base_plan_id: body.basePlanId,
     coach_addon_id: coachAddOnId ?? "",
+    user_id: authUser?.userId ?? "",
   };
 
   const stripe = createStripeServerClient(key);
