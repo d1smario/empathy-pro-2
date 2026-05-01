@@ -98,6 +98,7 @@ const MICRO_TARGETS: Record<string, MicroTarget> = {
   "riboflavina (b2)": { target: 1.3, unit: "mg" },
   "niacina (b3)": { target: 16, unit: "mg" },
   "vitamina b6": { target: 1.7, unit: "mg" },
+  "acido pantotenico (b5) stim.": { target: 5, unit: "mg" },
   "folati": { target: 400, unit: "µg" },
   "folati (equivalenti)": { target: 400, unit: "µg" },
   "vitamina b12": { target: 2.4, unit: "µg" },
@@ -109,6 +110,10 @@ const MICRO_TARGETS: Record<string, MicroTarget> = {
   sodio: { target: 2000, unit: "mg", kind: "max" },
   zinco: { target: 11, unit: "mg" },
   selenio: { target: 55, unit: "µg" },
+  "cloruro stim. da sodio": { target: 2300, unit: "mg" },
+  "rame stim.": { target: 0.9, unit: "mg" },
+  "manganese stim.": { target: 2.3, unit: "mg" },
+  "iodio stim.": { target: 150, unit: "µg" },
   leucina: { target: 2.73, unit: "g" },
   lisina: { target: 2.1, unit: "g" },
   metionina: { target: 1.05, unit: "g" },
@@ -118,11 +123,33 @@ const MICRO_TARGETS: Record<string, MicroTarget> = {
   isoleucina: { target: 1.4, unit: "g" },
   valina: { target: 1.82, unit: "g" },
   istidina: { target: 0.7, unit: "g" },
+  alanina: { target: 2.5, unit: "g" },
+  arginina: { target: 3.5, unit: "g" },
+  "acido aspartico": { target: 5, unit: "g" },
+  cisteina: { target: 0.7, unit: "g" },
+  "acido glutammico": { target: 8, unit: "g" },
+  glicina: { target: 2.5, unit: "g" },
+  prolina: { target: 3, unit: "g" },
+  serina: { target: 2.8, unit: "g" },
+  tirosina: { target: 1.7, unit: "g" },
+  glutammina: { target: 5, unit: "g" },
+  asparagina: { target: 2, unit: "g" },
   "fibra alimentare": { target: 30, unit: "g" },
   "acidi grassi saturi": { target: 20, unit: "g", kind: "max" },
   saturi: { target: 20, unit: "g", kind: "max" },
+  "acidi grassi monoinsaturi": { target: 35, unit: "g" },
+  "monoinsaturi": { target: 35, unit: "g" },
+  "acidi grassi polinsaturi": { target: 18, unit: "g" },
+  "polinsaturi": { target: 18, unit: "g" },
+  "omega-6 stim.": { target: 14, unit: "g" },
   "omega-3 (epa+dha appross.)": { target: 1.6, unit: "g" },
   "omega-3": { target: 1.6, unit: "g" },
+  "rapporto omega-6/omega-3": { target: 4, unit: "ratio", kind: "max" },
+  "grassi insaturi": { target: 45, unit: "g" },
+  "quota saturi su grassi": { target: 10, unit: "%", kind: "max" },
+  "trans stimati": { target: 2, unit: "g", kind: "max" },
+  "colesterolo stim.": { target: 300, unit: "mg", kind: "max" },
+  "lipidi totali": { target: 80, unit: "g" },
 };
 
 function normalizeMicroName(name: string): string {
@@ -152,7 +179,7 @@ function toChartData(lines: NutritionMicroLine[]): MicroChartDatum[] {
       };
     })
     .filter((line): line is MicroChartDatum => Boolean(line))
-    .slice(0, 12);
+    .slice(0, 20);
 }
 
 function polarPoint(index: number, total: number, radius: number): { x: number; y: number } {
@@ -239,10 +266,10 @@ export function NutritionMicronutrientDailyBoard({ vitamins, minerals, aminoAcid
         <span>Valori dal piano alimentare assemblato; target adulti indicativi.</span>
       </div>
       <div className="empathy-micro-radar-grid-wrap">
-        <MicroPercentRadar title="Vitamine" subtitle="11 segmenti sul fabbisogno giornaliero" lines={vitamins} tone="vitamins" />
-        <MicroPercentRadar title="Minerali" subtitle="8 segmenti, sodio come limite" lines={minerals} tone="minerals" />
-        <MicroPercentRadar title="Aminoacidi" subtitle="EAA stimati dal piano" lines={aminoAcids} tone="amino" />
-        <MicroPercentRadar title="Grassi e fibra" subtitle="Frazioni lipidiche e fibra" lines={fattyAcids} tone="lipids" />
+        <MicroPercentRadar title="Vitamine" subtitle="12 indicatori vitaminici giornalieri" lines={vitamins} tone="vitamins" />
+        <MicroPercentRadar title="Minerali" subtitle="Minerali principali, sodio come limite" lines={minerals} tone="minerals" />
+        <MicroPercentRadar title="Aminoacidi" subtitle="20 aminoacidi: EAA diretti + profilo stimato" lines={aminoAcids} tone="amino" />
+        <MicroPercentRadar title="Grassi e fibra" subtitle="10 indicatori: catene, omega e limiti" lines={fattyAcids} tone="lipids" />
       </div>
       <NutritionMicronutrientTable vitamins={vitamins} minerals={minerals} aminoAcids={aminoAcids} fattyAcids={fattyAcids} />
     </div>
@@ -294,8 +321,8 @@ export function NutritionMicronutrientTable({ vitamins, minerals, aminoAcids, fa
       <div className="empathy-micro-table-stack">
         <MicronutrientTableSection tone="vitamins" title="Vitamine" lines={vitamins} />
         <MicronutrientTableSection tone="minerals" title="Minerali" lines={minerals} />
-        <MicronutrientTableSection tone="amino" title="Aminoacidi essenziali" lines={aminoAcids} />
-        <MicronutrientTableSection tone="lipids" title="Grassi · fibra · idratazione target" lines={fattyAcids} />
+        <MicronutrientTableSection tone="amino" title="Aminoacidi · profilo completo" lines={aminoAcids} />
+        <MicronutrientTableSection tone="lipids" title="Grassi · catene · fibra" lines={fattyAcids} />
       </div>
     </div>
   );
@@ -307,6 +334,18 @@ function n1(x: number): number {
 
 function n2(x: number): number {
   return Math.round(x * 100) / 100;
+}
+
+function clampMicro(x: number, min = 0): number {
+  return Number.isFinite(x) ? Math.max(min, x) : min;
+}
+
+function aminoFromProtein(proteinG: number, fraction: number): number {
+  return n2(clampMicro(proteinG) * fraction);
+}
+
+function fattyPct(part: number, total: number): number {
+  return total > 0 ? n1((part / total) * 100) : 0;
 }
 
 /** Da totali giornali stimati del piano (banca canonica) → stesso layout del diario. */
@@ -360,6 +399,12 @@ export function mealPlanDayTotalsToMicroLines(d: ScaledMealItemNutrients): Omit<
 
 /** Tutti i micronutrienti del modello canonico (stima giorno da `dayTotals`), inclusi valori nulli → tabella completa. */
 export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients): Omit<NutritionMicronutrientGridProps, "className"> {
+  const omega6G = n2(Math.max(0, d.polyFatG - d.omega3G));
+  const unsaturatedFatG = n2(d.monoFatG + d.polyFatG);
+  const omegaRatio = d.omega3G > 0 ? n2(omega6G / d.omega3G) : 0;
+  const transFatEstimateG = n2(Math.min(2, d.saturatedFatG * 0.025));
+  const cholesterolEstimateMg = Math.round(Math.max(0, d.saturatedFatG * 18 + d.proteinG * 2.5));
+
   const vitamins: NutritionMicroLine[] = [
     { name: "Vitamina A (RAE)", value: n2(d.vitA_mcg_RAE), unit: "µg" },
     { name: "Vitamina C", value: n1(d.vitC_mg), unit: "mg" },
@@ -370,6 +415,7 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Riboflavina (B2)", value: n2(d.riboflavinB2_mg), unit: "mg" },
     { name: "Niacina (B3)", value: n2(d.niacinB3_mg), unit: "mg" },
     { name: "Vitamina B6", value: n2(d.vitB6_mg), unit: "mg" },
+    { name: "Acido pantotenico (B5) stim.", value: n2(Math.max(0, d.niacinB3_mg * 0.28 + d.riboflavinB2_mg * 0.8)), unit: "mg" },
     { name: "Folati (equivalenti)", value: Math.round(d.folate_mcg), unit: "µg" },
     { name: "Vitamina B12", value: n2(d.vitB12_mcg), unit: "µg" },
   ];
@@ -383,6 +429,10 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Sodio", value: Math.round(d.na_mg), unit: "mg" },
     { name: "Zinco", value: n2(d.zn_mg), unit: "mg" },
     { name: "Selenio", value: n2(d.se_mcg), unit: "µg" },
+    { name: "Cloruro stim. da sodio", value: Math.round(d.na_mg * 1.54), unit: "mg" },
+    { name: "Rame stim.", value: n2(Math.max(0, d.zn_mg * 0.09)), unit: "mg" },
+    { name: "Manganese stim.", value: n2(Math.max(0, d.mg_mg * 0.006)), unit: "mg" },
+    { name: "Iodio stim.", value: Math.round(Math.max(0, d.se_mcg * 1.8)), unit: "µg" },
   ];
 
   const aminoAcids: NutritionMicroLine[] = [
@@ -395,6 +445,17 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Isoleucina", value: n2(d.eaa_ile), unit: "g" },
     { name: "Valina", value: n2(d.eaa_val), unit: "g" },
     { name: "Istidina", value: n2(d.eaa_his), unit: "g" },
+    { name: "Alanina", value: aminoFromProtein(d.proteinG, 0.052), unit: "g" },
+    { name: "Arginina", value: aminoFromProtein(d.proteinG, 0.062), unit: "g" },
+    { name: "Acido aspartico", value: aminoFromProtein(d.proteinG, 0.094), unit: "g" },
+    { name: "Cisteina", value: aminoFromProtein(d.proteinG, 0.018), unit: "g" },
+    { name: "Acido glutammico", value: aminoFromProtein(d.proteinG, 0.16), unit: "g" },
+    { name: "Glicina", value: aminoFromProtein(d.proteinG, 0.045), unit: "g" },
+    { name: "Prolina", value: aminoFromProtein(d.proteinG, 0.055), unit: "g" },
+    { name: "Serina", value: aminoFromProtein(d.proteinG, 0.049), unit: "g" },
+    { name: "Tirosina", value: aminoFromProtein(d.proteinG, 0.034), unit: "g" },
+    { name: "Glutammina", value: aminoFromProtein(d.proteinG, 0.055), unit: "g" },
+    { name: "Asparagina", value: aminoFromProtein(d.proteinG, 0.035), unit: "g" },
   ];
 
   const fattyAcids: NutritionMicroLine[] = [
@@ -403,6 +464,13 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Acidi grassi monoinsaturi", value: n2(d.monoFatG), unit: "g" },
     { name: "Acidi grassi polinsaturi", value: n2(d.polyFatG), unit: "g" },
     { name: "Omega-3 (EPA+DHA appross.)", value: n2(d.omega3G), unit: "g" },
+    { name: "Omega-6 stim.", value: omega6G, unit: "g" },
+    { name: "Rapporto omega-6/omega-3", value: omegaRatio, unit: ":1" },
+    { name: "Grassi insaturi", value: unsaturatedFatG, unit: "g" },
+    { name: "Quota saturi su grassi", value: fattyPct(d.saturatedFatG, d.fatG), unit: "%" },
+    { name: "Trans stimati", value: transFatEstimateG, unit: "g" },
+    { name: "Colesterolo stim.", value: cholesterolEstimateMg, unit: "mg" },
+    { name: "Lipidi totali", value: n2(d.fatG), unit: "g" },
   ];
 
   return { vitamins, minerals, aminoAcids, fattyAcids };
