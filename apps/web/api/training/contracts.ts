@@ -16,6 +16,7 @@ import type { TrainingDayOperationalContext } from "@/lib/training/day-operation
 import type { CanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import type { DailyLoadPoint } from "@/lib/training/analytics/load-series";
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
+import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 
 /** Strip twin per contesto operativo su calendario / giornata (senza payload twin completo). */
@@ -94,6 +95,16 @@ export type TrainingPlannerContextViewModel = {
   bioenergeticModulation?: TrainingBioenergeticModulationViewModel | null;
   adaptationGuidance?: AdaptationGuidance | null;
   nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
+  approvedApplicationPatches?: ApprovedApplicationPatch[];
+  viryaApprovedPatches?: ApprovedApplicationPatch[];
+  viryaRetuneDirective?: {
+    recommendedMode: string;
+    appliedCount: number;
+    pendingCount: number;
+    builderPolicy: "single_session_materialization_only";
+    calendarPolicy: "coach_validated_retune_before_replace";
+    rationale: string[];
+  };
   crossModuleDynamicsLines?: string[];
   knowledgeModulation?: KnowledgeModulationSnapshot | null;
   researchPlans?: ResearchPlan[];

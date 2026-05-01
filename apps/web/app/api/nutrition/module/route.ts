@@ -28,6 +28,33 @@ export const dynamic = "force-dynamic";
 // (`requireAthleteReadContext` → service role se configurato).
 // Optional query: pathwayDate=YYYY-MM-DD (must be within from…to) → pathwayModulation + functionalFoodRecommendations (stessi builder del client).
 
+function buildNutritionApplicationDirective(
+  patches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"],
+) {
+  const applied = patches.filter((patch) => patch.status === "applied");
+  const pending = patches.filter((patch) => patch.status === "pending");
+  const active = applied.length ? applied : pending;
+  const text = active.map((patch) => `${patch.target} ${patch.action} ${patch.reason ?? ""}`.toLowerCase()).join(" ");
+  const focus = [
+    text.includes("redox") ? "redox_support" : null,
+    text.includes("iron") || text.includes("ferro") || text.includes("ferritin") ? "iron_absorption_support" : null,
+    text.includes("gut") || text.includes("microbiota") || text.includes("assorb") ? "gut_absorption_tolerance" : null,
+    text.includes("fuel") || text.includes("cho") || text.includes("glycogen") ? "fueling_timing" : null,
+  ].filter((item): item is string => Boolean(item));
+
+  return {
+    appliedCount: applied.length,
+    pendingCount: pending.length,
+    focus: focus.length ? focus : ["baseline_support"],
+    solverPolicy: "do_not_override_kcal_macro_catalog" as const,
+    timingPolicy: "coach_validated_context_for_pre_peri_post" as const,
+    rationale: [
+      active.length ? `${active.length} decisioni nutrition/fueling lette da manual_actions.` : "Nessuna decisione nutrition/fueling attiva.",
+      "Usare come contesto per timing, cofattori, esclusioni temporanee e spiegazione; non sostituisce USDA/solver.",
+    ],
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
@@ -112,6 +139,7 @@ export async function GET(req: NextRequest) {
       const target = patch.target.toLowerCase();
       return target.includes("nutrition") || target.includes("fueling") || target.includes("redox") || target.includes("gut");
     });
+    const nutritionApplicationDirective = buildNutritionApplicationDirective(nutritionApprovedPatches);
 
     const metabolicEfficiencyGenerativeModel = buildMetabolicEfficiencyGenerativeModel({
       adaptationGuidance,
@@ -176,6 +204,7 @@ export async function GET(req: NextRequest) {
       nutritionPerformanceIntegration,
       approvedApplicationPatches,
       nutritionApprovedPatches,
+      nutritionApplicationDirective,
       metabolicEfficiencyGenerativeModel,
       pathwayModulation,
       functionalFoodRecommendations,

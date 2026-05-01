@@ -10,6 +10,20 @@ function isValidStatus(status: string): status is ManualActionStatus {
   return ["pending", "applied", "rejected", "superseded"].includes(status);
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function canTransitionManualAction(from: ManualActionStatus, to: ManualActionStatus): boolean {
+  if (from === to) return true;
+  if (from === "applied" || from === "rejected" || from === "superseded") return false;
+  return to !== "pending";
+}
+
 function lockScopeFromActionType(actionType: string): string {
   if (actionType.includes("nutrition")) return "nutrition";
   if (actionType.includes("biomechanics")) return "biomechanics";
@@ -30,13 +44,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const supabase = createServerSupabaseClient();
     const { data: actionRow, error: actionErr } = await supabase
       .from("manual_actions")
-      .select("id, athlete_id, created_by_user_id, action_type")
+      .select("id, athlete_id, created_by_user_id, action_type, payload, status, reason")
       .eq("id", actionId)
       .maybeSingle();
     if (actionErr) return NextResponse.json({ error: actionErr.message }, { status: 500 });
     if (!actionRow) return NextResponse.json({ error: "Manual action not found" }, { status: 404 });
 
     await requireAthleteWriteContext(req, String(actionRow.athlete_id));
+    const priorStatus = isValidStatus(String(actionRow.status ?? "")) ? (actionRow.status as ManualActionStatus) : null;
+    if (!priorStatus) {
+      return NextResponse.json({ error: "Invalid prior status" }, { status: 409 });
+    }
+    if (priorStatus === status) {
+      return NextResponse.json({ actionId, status, unchanged: true });
+    }
+    if (!canTransitionManualAction(priorStatus, status)) {
+      return NextResponse.json({ error: "Invalid status transition", from: priorStatus, to: status }, { status: 409 });
+    }
 
     const updatePayload: { status: ManualActionStatus; reason?: string; applied_at?: string } = {
       status,
@@ -63,6 +87,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const { error } = await supabase.from("manual_actions").update(updatePayload).eq("id", actionId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    const payload = asRecord(actionRow.payload);
+    const values = asRecord(payload.values);
+    const stagingRunId = asString(values.stagingRunId);
+    if (stagingRunId && (status === "applied" || status === "rejected")) {
+      const { error: auditErr } = await supabase.from("interpretation_staging_commits").insert({
+        run_id: stagingRunId,
+        athlete_id: actionRow.athlete_id,
+        target: status === "applied" ? "athlete_memory_trace" : "evidence",
+        target_ids: [actionId],
+        status: status === "applied" ? "committed" : "rejected",
+        reason: updatePayload.reason ?? actionRow.reason ?? `manual_action:${status}`,
+        payload: {
+          manual_action_id: actionId,
+          prior_status: priorStatus,
+          action_type: actionRow.action_type,
+          payload,
+        },
+        committed_by: actionRow.created_by_user_id,
+      });
+      if (auditErr) return NextResponse.json({ error: auditErr.message }, { status: 500 });
+    }
 
     return NextResponse.json({ actionId, status });
   } catch (err) {

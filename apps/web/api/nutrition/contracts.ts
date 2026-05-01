@@ -1,5 +1,6 @@
 import type { PlannedWorkout } from "@empathy/domain-training";
 import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operational-signals-bundle";
+export type { ApprovedApplicationPatch };
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
 export type { NutritionPerformanceIntegrationDials };
 import type { AthleteMemory, PhysiologyState } from "@/lib/empathy/schemas";
@@ -246,6 +247,14 @@ export type NutritionModuleViewModel = {
   nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
   approvedApplicationPatches?: ApprovedApplicationPatch[];
   nutritionApprovedPatches?: ApprovedApplicationPatch[];
+  nutritionApplicationDirective?: {
+    appliedCount: number;
+    pendingCount: number;
+    focus: string[];
+    solverPolicy: "do_not_override_kcal_macro_catalog";
+    timingPolicy: "coach_validated_context_for_pre_peri_post";
+    rationale: string[];
+  };
   metabolicEfficiencyGenerativeModel?: NutritionMetabolicEfficiencyGenerativeViewModel | null;
   /** Present when `pathwayDate` query is set and falls within `from`…`to` (stesso modello del client). */
   pathwayModulation?: NutritionPathwayModulationViewModel | null;

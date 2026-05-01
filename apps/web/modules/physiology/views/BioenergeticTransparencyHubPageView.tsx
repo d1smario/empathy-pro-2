@@ -13,6 +13,19 @@ import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 
 type BioTone = ReasoningTone;
+type ManualActionStatus = "pending" | "applied" | "rejected" | "superseded";
+type ManualActionRow = {
+  id: string;
+  athlete_id: string;
+  created_by_user_id: string;
+  scope: "coach" | "private";
+  action_type: string;
+  payload: Record<string, unknown>;
+  status: ManualActionStatus;
+  reason: string | null;
+  created_at: string;
+  applied_at: string | null;
+};
 
 type BioCellVm = {
   id: string;
@@ -170,6 +183,123 @@ function reasoningToneClass(tone: ReasoningTone): string {
   }
 }
 
+function statusLabel(status: string): string {
+  return status.startsWith("hypothesis:") ? `${status.replace("hypothesis:", "")} · ipotesi` : status;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asText(value: unknown, fallback = "—"): string {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function compactReason(value: unknown): string {
+  if (Array.isArray(value)) return value.map((item) => asText(item, "")).filter(Boolean).slice(0, 3).join(" · ");
+  return asText(value, "");
+}
+
+function manualActionVm(row: ManualActionRow) {
+  const payload = asRecord(row.payload);
+  const values = asRecord(payload.values);
+  return {
+    target: asText(values.target, row.action_type.replaceAll("_", " ")),
+    action: asText(values.action, row.action_type.replaceAll("_", " ")).replaceAll("_", " "),
+    reason: compactReason(values.reason ?? payload.reason ?? row.reason),
+    stagingRunId: asText(values.stagingRunId, ""),
+    confidence:
+      typeof values.confidence === "number" && Number.isFinite(values.confidence)
+        ? `${Math.round(values.confidence * 100)}%`
+        : "n/d",
+  };
+}
+
+function ManualActionsPanel({
+  actions,
+  loading,
+  error,
+  busyAction,
+  onPatchAction,
+}: {
+  actions: ManualActionRow[];
+  loading: boolean;
+  error: string | null;
+  busyAction: string | null;
+  onPatchAction: (actionId: string, status: "applied" | "rejected" | "superseded") => void;
+}) {
+  return (
+    <section className="viz-card builder-panel space-y-4" style={{ marginBottom: 12 }}>
+      <header>
+        <h2 className="viz-title">Application Queue</h2>
+        <p className="mt-1 text-sm text-gray-400">
+          Azioni applicative generate da ragionamenti validati. Qui il coach decide se applicarle: il piano e il twin non vengono mutati
+          automaticamente.
+        </p>
+      </header>
+      {loading ? <div className="h-2 w-44 animate-pulse rounded-full bg-white/10" aria-hidden /> : null}
+      {error ? <p className="text-sm text-amber-300/90">{error}</p> : null}
+      <div className="fueling-main-kpi-grid" style={{ marginBottom: 10 }}>
+        {[
+          { label: "Pending", value: actions.filter((a) => a.status === "pending").length, tone: "amber" as const },
+          { label: "Training", value: actions.filter((a) => a.action_type.includes("training")).length, tone: "green" as const },
+          { label: "Nutrition", value: actions.filter((a) => a.action_type.includes("nutrition")).length, tone: "cyan" as const },
+          { label: "Physiology", value: actions.filter((a) => a.action_type.includes("physiology")).length, tone: "violet" as const },
+        ].map((item) => (
+          <div key={item.label} className={`fueling-main-kpi-card fueling-main-kpi-card--${item.tone}`}>
+            <div className="fueling-main-kpi-label">{item.label}</div>
+            <div className="fueling-main-kpi-value">{item.value}</div>
+            <div className="fueling-main-kpi-sub">Manual actions</div>
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {actions.slice(0, 12).map((action) => {
+          const vm = manualActionVm(action);
+          return (
+            <article key={action.id} className="rounded-2xl border border-white/10 bg-black/30 p-4">
+              <div className="font-mono text-[0.62rem] font-bold uppercase tracking-wider text-slate-500">
+                {action.action_type} · {action.status} · conf {vm.confidence}
+              </div>
+              <h3 className="mt-1 text-sm font-bold text-white">{vm.target}</h3>
+              <p className="mt-1 text-xs leading-relaxed text-slate-400">{vm.action}</p>
+              {vm.reason ? <p className="mt-2 text-xs leading-relaxed text-slate-500">{vm.reason}</p> : null}
+              {vm.stagingRunId ? (
+                <p className="mt-2 font-mono text-[0.62rem] text-slate-600">staging: {vm.stagingRunId}</p>
+              ) : null}
+              {action.status === "pending" ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {[
+                    { status: "applied" as const, label: "Applica" },
+                    { status: "rejected" as const, label: "Rifiuta" },
+                    { status: "superseded" as const, label: "Superata" },
+                  ].map((item) => {
+                    const busy = busyAction === `${action.id}:${item.status}`;
+                    return (
+                      <button
+                        key={item.status}
+                        type="button"
+                        disabled={Boolean(busyAction)}
+                        onClick={() => onPatchAction(action.id, item.status)}
+                        className="rounded-md border border-white/10 bg-black/35 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-100 transition hover:border-cyan-300/50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {busy ? "..." : item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </div>
+      {!loading && !error && !actions.length ? <p className="text-xs text-slate-500">Nessuna manual action pending.</p> : null}
+    </section>
+  );
+}
+
 function ReasoningDashboardPanel({
   data,
   loading,
@@ -217,7 +347,7 @@ function ReasoningDashboardPanel({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="font-mono text-[0.62rem] font-bold uppercase tracking-wider text-slate-500">
-                  {card.domain} · {card.status}
+                  {card.domain} · {statusLabel(card.status)}
                 </div>
                 <h3 className="mt-1 text-sm font-bold text-white">{card.title}</h3>
                 <p className="mt-1 text-xs text-slate-500">{card.subtitle}</p>
@@ -245,7 +375,7 @@ function ReasoningDashboardPanel({
                 ) : null}
                 {card.evidenceLines.length ? (
                   <div>
-                    <div className="font-semibold text-slate-200">Evidenza / trace</div>
+                    <div className="font-semibold text-slate-200">Evidenza / trace / gate</div>
                     <ul className="m-0 list-disc pl-4">
                       {card.evidenceLines.map((line) => (
                         <li key={line}>{line}</li>
@@ -316,6 +446,10 @@ export default function BioenergeticTransparencyHubPageView() {
   const [reasoningLoading, setReasoningLoading] = useState(false);
   const [reasoningErr, setReasoningErr] = useState<string | null>(null);
   const [reasoningBusyRun, setReasoningBusyRun] = useState<string | null>(null);
+  const [manualActions, setManualActions] = useState<ManualActionRow[]>([]);
+  const [manualActionsLoading, setManualActionsLoading] = useState(false);
+  const [manualActionsErr, setManualActionsErr] = useState<string | null>(null);
+  const [manualActionBusy, setManualActionBusy] = useState<string | null>(null);
   const showLoading = ctxLoading || loading;
   const ledger = useMemo(
     () => buildInfluenceLedgerRowsFromOperationalBundle(hub?.operationalSignals ?? null),
@@ -354,6 +488,36 @@ export default function BioenergeticTransparencyHubPageView() {
     }
   }
 
+  async function loadManualActions() {
+    if (!athleteId) {
+      setManualActions([]);
+      setManualActionsErr("Nessun atleta attivo.");
+      setManualActionsLoading(false);
+      return;
+    }
+    setManualActionsLoading(true);
+    setManualActionsErr(null);
+    try {
+      const params = new URLSearchParams({ athleteId });
+      const res = await fetch(`/api/manual-actions?${params.toString()}`, {
+        cache: "no-store",
+        headers: await buildSupabaseAuthHeaders(),
+      });
+      const json = (await res.json()) as { items?: ManualActionRow[]; error?: string };
+      if (!res.ok) {
+        setManualActions([]);
+        setManualActionsErr(json.error || "Manual actions non disponibili.");
+        return;
+      }
+      setManualActions((json.items ?? []).filter((item) => item.status === "pending"));
+    } catch {
+      setManualActions([]);
+      setManualActionsErr("Errore rete manual actions.");
+    } finally {
+      setManualActionsLoading(false);
+    }
+  }
+
   async function patchReasoningRun(runId: string, status: "committed" | "rejected" | "archived") {
     setReasoningBusyRun(`${runId}:${status}`);
     setReasoningErr(null);
@@ -370,7 +534,7 @@ export default function BioenergeticTransparencyHubPageView() {
         setReasoningErr(json.error || "Aggiornamento staging fallito.");
         return;
       }
-      await Promise.all([loadReasoning(), refetch()]);
+      await Promise.all([loadReasoning(), loadManualActions(), refetch()]);
     } catch {
       setReasoningErr("Errore rete aggiornamento staging.");
     } finally {
@@ -378,9 +542,34 @@ export default function BioenergeticTransparencyHubPageView() {
     }
   }
 
+  async function patchManualAction(actionId: string, status: "applied" | "rejected" | "superseded") {
+    setManualActionBusy(`${actionId}:${status}`);
+    setManualActionsErr(null);
+    try {
+      const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch(`/api/manual-actions/${encodeURIComponent(actionId)}`, {
+        method: "PATCH",
+        cache: "no-store",
+        headers,
+        body: JSON.stringify({ status, reason: `Bioenergetis Application Queue · ${status}` }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setManualActionsErr(json.error || "Aggiornamento manual action fallito.");
+        return;
+      }
+      await Promise.all([loadManualActions(), loadReasoning(), refetch()]);
+    } catch {
+      setManualActionsErr("Errore rete aggiornamento manual action.");
+    } finally {
+      setManualActionBusy(null);
+    }
+  }
+
   useEffect(() => {
     if (ctxLoading || !athleteId) return;
     void loadReasoning();
+    void loadManualActions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [athleteId, ctxLoading]);
 
@@ -458,6 +647,14 @@ export default function BioenergeticTransparencyHubPageView() {
               error={reasoningErr}
               busyRun={reasoningBusyRun}
               onPatchRun={patchReasoningRun}
+            />
+
+            <ManualActionsPanel
+              actions={manualActions}
+              loading={manualActionsLoading}
+              error={manualActionsErr}
+              busyAction={manualActionBusy}
+              onPatchAction={patchManualAction}
             />
 
             {sig ? (

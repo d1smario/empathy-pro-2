@@ -25,6 +25,38 @@ function asNumber(v: unknown): number | null {
   return null;
 }
 
+function buildViryaRetuneDirective(input: {
+  adaptationLoop: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["adaptationLoop"];
+  patches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"];
+}) {
+  const applied = input.patches.filter((patch) => patch.status === "applied");
+  const pending = input.patches.filter((patch) => patch.status === "pending");
+  const active = applied.length ? applied : pending;
+  const hasRecovery = active.some((patch) => `${patch.action} ${patch.reason ?? ""}`.toLowerCase().includes("recover"));
+  const hasReduction = active.some((patch) => `${patch.action} ${patch.reason ?? ""}`.toLowerCase().includes("reduc"));
+  const hasFueling = active.some((patch) => patch.target.toLowerCase().includes("nutrition") || patch.action.toLowerCase().includes("fuel"));
+  const recommendedMode =
+    hasRecovery || input.adaptationLoop.status === "regenerate"
+      ? "regeneration_microcycle"
+      : hasReduction || input.adaptationLoop.status === "watch"
+        ? "load_reduction_retune"
+        : hasFueling
+          ? "fueling_supported_retune"
+          : "maintain_plan";
+  return {
+    recommendedMode,
+    appliedCount: applied.length,
+    pendingCount: pending.length,
+    builderPolicy: "single_session_materialization_only" as const,
+    calendarPolicy: "coach_validated_retune_before_replace" as const,
+    rationale: [
+      active.length ? `${active.length} decisioni applicative lette da manual_actions.` : "Nessuna decisione applicativa attiva.",
+      `Loop corrente: ${input.adaptationLoop.status} · ${input.adaptationLoop.nextAction}.`,
+      "VIRYA puo' ritunare il microciclo; il Builder resta responsabile della singola sessione.",
+    ],
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
@@ -58,6 +90,7 @@ export async function GET(req: NextRequest) {
       const target = patch.target.toLowerCase();
       return target.includes("training") || target.includes("virya") || target.includes("bioenergetics");
     });
+    const viryaRetuneDirective = buildViryaRetuneDirective({ adaptationLoop, patches: viryaApprovedPatches });
     const crossModuleDynamicsLines = buildOperationalDynamicsLines({
       adaptationGuidance,
       operationalContext,
@@ -179,6 +212,7 @@ export async function GET(req: NextRequest) {
         nutritionPerformanceIntegration,
         approvedApplicationPatches,
         viryaApprovedPatches,
+        viryaRetuneDirective,
         crossModuleDynamicsLines,
         knowledgeModulation,
         researchPlans,

@@ -749,6 +749,8 @@ export function ViryaAnnualPlanOrchestrator({
   const recoverySummary = viryaContext?.recoverySummary ?? null;
   const adaptationLoop = viryaContext?.adaptationLoop ?? null;
   const bioenergeticModulation = viryaContext?.bioenergeticModulation ?? null;
+  const viryaApprovedPatches = viryaContext?.viryaApprovedPatches ?? [];
+  const viryaRetuneDirective = viryaContext?.viryaRetuneDirective ?? null;
   const objectiveDemand = useMemo(() => {
     if (sportFamily === "strength") {
       const daysFactor = clamp(gymTrainingDaysPerWeek / 5, 0.7, 1.35);
@@ -2481,6 +2483,49 @@ export function ViryaAnnualPlanOrchestrator({
                     </div>
                   </div>
                 ) : null}
+              </div>
+            </Pro2SectionCard>
+          ) : null}
+
+          {viryaApprovedPatches.length > 0 ? (
+            <Pro2SectionCard
+              accent="cyan"
+              title="Decisioni approvate · input VIRYA"
+              subtitle="Patch validate dalla Reasoning Dashboard: influenzano il retune, ma la sessione resta materializzata dal Builder."
+              icon={LineChart}
+            >
+              {viryaRetuneDirective ? (
+                <div className="mb-3 rounded-xl border border-cyan-500/25 bg-cyan-950/10 p-3">
+                  <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-cyan-200/80">
+                    Retune directive · {viryaRetuneDirective.recommendedMode.replaceAll("_", " ")}
+                  </div>
+                  <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-3">
+                    <div>Applied {viryaRetuneDirective.appliedCount}</div>
+                    <div>Pending {viryaRetuneDirective.pendingCount}</div>
+                    <div>Builder: single-session only</div>
+                  </div>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-xs leading-relaxed text-slate-400">
+                    {viryaRetuneDirective.rationale.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              <div className="grid gap-3 md:grid-cols-2">
+                {viryaApprovedPatches.slice(0, 6).map((patch) => (
+                  <div key={patch.id} className="rounded-xl border border-cyan-500/20 bg-black/30 p-3">
+                    <div className="text-[0.65rem] font-semibold uppercase tracking-wide text-cyan-200/80">
+                      {patch.target} · {patch.confidence != null ? `${Math.round(patch.confidence * 100)}%` : "n/d"}
+                    </div>
+                    <div className="mt-1 text-sm font-semibold text-white">{patch.action.replaceAll("_", " ")}</div>
+                    {typeof patch.reason === "string" && patch.reason.trim() ? (
+                      <p className="mt-2 text-xs leading-relaxed text-slate-400">{patch.reason}</p>
+                    ) : null}
+                    {patch.stagingRunId ? (
+                      <p className="mt-2 font-mono text-[0.62rem] text-slate-600">staging: {patch.stagingRunId}</p>
+                    ) : null}
+                  </div>
+                ))}
               </div>
             </Pro2SectionCard>
           ) : null}

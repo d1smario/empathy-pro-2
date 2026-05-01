@@ -93,6 +93,64 @@ function actionLabel(action: unknown): string {
   return asText(action, "no_change").replaceAll("_", " ");
 }
 
+function hasTraceableEvidence(refs: unknown, bundle: Record<string, unknown>): boolean {
+  if (asArray(refs).length > 0) return true;
+  if (asArray(bundle.evidence_refs).length > 0) return true;
+  if (asArray(bundle.sources).length > 0) return true;
+  if (asArray(bundle.source_refs).length > 0) return true;
+  return false;
+}
+
+function containsHighRiskClaim(lines: string[]): boolean {
+  const text = lines.join(" ").toLowerCase();
+  return [
+    "batter",
+    "microbiota",
+    "cytotoxic",
+    "citotoss",
+    "gene",
+    "epigen",
+    "mthfr",
+    "nrf2",
+    "ferro",
+    "iron",
+    "ferritin",
+    "tossic",
+    "tox",
+    "assorb",
+    "active form",
+    "forma biologicamente",
+  ].some((needle) => text.includes(needle));
+}
+
+function evidenceGateLines(input: {
+  sourceRefs: ReasoningSourceRef[];
+  bundle: Record<string, unknown>;
+  lines: string[];
+}): { evidenceLines: string[]; riskLines: string[]; statusPrefix: string | null } {
+  const traceable = input.sourceRefs.length > 0 || hasTraceableEvidence(input.sourceRefs, input.bundle);
+  const risky = containsHighRiskClaim(input.lines);
+  if (!risky) {
+    return {
+      evidenceLines: traceable ? ["Evidence gate: trace collegato."] : ["Evidence gate: segnali computazionali, senza claim biologico esteso."],
+      riskLines: [],
+      statusPrefix: null,
+    };
+  }
+  if (traceable) {
+    return {
+      evidenceLines: ["Evidence gate: claim biologico collegato a source refs/traces."],
+      riskLines: ["Usare come supporto decisionale, non diagnosi clinica."],
+      statusPrefix: null,
+    };
+  }
+  return {
+    evidenceLines: ["Evidence gate: nessun trace sufficiente per claim biologico forte."],
+    riskLines: ["Ipotesi da validare: non applicare claim su batteri/geni/tossicita'/ferro senza evidenza strutturata."],
+    statusPrefix: "hypothesis",
+  };
+}
+
 function toneForStatus(status: string | null | undefined): ReasoningTone {
   if (status === "recover" || status === "regenerate" || status === "red") return "rose";
   if (status === "adapt" || status === "watch" || status === "yellow" || status === "pending_validation") return "amber";
@@ -184,13 +242,21 @@ function cardFromStagingRun(row: StagingRunRow): ReasoningCardVm {
           createdAt: null,
         };
 
+  const sourceRefs = asSourceRefs(row.source_refs);
+  const gate = evidenceGateLines({
+    sourceRefs,
+    bundle,
+    lines: [base.explanation, ...base.actionLines, ...base.evidenceLines, ...base.riskLines, ...base.timingLines],
+  });
   return {
     ...base,
     id: `staging-${row.id}`,
     domain: row.domain,
-    status: row.status ?? base.status,
+    status: gate.statusPrefix ? `${gate.statusPrefix}:${row.status ?? base.status}` : row.status ?? base.status,
     confidence: row.confidence,
-    sourceRefs: asSourceRefs(row.source_refs),
+    evidenceLines: [...gate.evidenceLines, ...base.evidenceLines],
+    riskLines: [...gate.riskLines, ...base.riskLines],
+    sourceRefs,
     stagingRunId: row.id,
     createdAt: row.created_at,
   };
@@ -267,6 +333,32 @@ function cardsFromOperationalBundle(bundle: OperationalSignalsBundle | null): Re
       createdAt: null,
     });
   }
+  for (const patch of bundle.appliedApplicationTraces.slice(0, 8)) {
+    cards.push({
+      id: `applied-action-${patch.id}`,
+      domain: patch.target.includes("nutrition") ? "nutrition" : patch.target.includes("physiology") ? "physiology" : "training",
+      title: "Decisione applicata",
+      value: patch.status,
+      subtitle: `${patch.target} · ${patch.appliedAt ?? patch.createdAt ?? "timing n/d"}`,
+      tone: "green",
+      status: "applied",
+      confidence: patch.confidence,
+      explanation:
+        "Questa decisione ha superato staging e manual action: ora e' memoria applicativa recente letta dal bundle, senza mutare direttamente motori o piano.",
+      actionLines: [actionLabel(patch.action)],
+      evidenceLines: [
+        patch.stagingRunId ? `Staging run ${patch.stagingRunId}` : "Staging run n/d",
+        `Manual action ${patch.id}`,
+      ],
+      riskLines: ["Verificare outcome nella prossima comparazione expected-vs-obtained."],
+      timingLines: [patch.appliedAt ? `Applicata ${patch.appliedAt}` : "Applicazione senza timestamp disponibile."],
+      sourceRefs: patch.stagingRunId
+        ? [{ table: "interpretation_staging_runs", id: patch.stagingRunId }, { table: "manual_actions", id: patch.id }]
+        : [{ table: "manual_actions", id: patch.id }],
+      stagingRunId: null,
+      createdAt: patch.appliedAt ?? patch.createdAt,
+    });
+  }
   return cards;
 }
 
@@ -274,6 +366,14 @@ function cardFromBioResponse(row: BioResponseRow): ReasoningCardVm {
   const mitigation = asArray(row.mitigation_refs).map((item) => {
     const rec = asRecord(item);
     return asText(rec.label ?? rec.action ?? rec.kind, JSON.stringify(item));
+  });
+  const sourceRefs = [{ table: "bioenergetics_responses", id: row.id }];
+  const actionLines = mitigation;
+  const explanation = row.description ?? "Risposta derivata dal system map biologico: richiede validazione prima di diventare applicazione.";
+  const gate = evidenceGateLines({
+    sourceRefs,
+    bundle: {},
+    lines: [explanation, ...actionLines, row.category ?? "", row.response_key ?? ""],
   });
   return {
     id: `bio-response-${row.id}`,
@@ -284,12 +384,12 @@ function cardFromBioResponse(row: BioResponseRow): ReasoningCardVm {
     tone: row.severity === "high" ? "rose" : row.severity === "medium" ? "amber" : "violet",
     status: "candidate",
     confidence: row.confidence,
-    explanation: row.description ?? "Risposta derivata dal system map biologico: richiede validazione prima di diventare applicazione.",
-    actionLines: mitigation,
-    evidenceLines: [row.response_key ?? ""].filter(Boolean),
-    riskLines: row.category ? [`Categoria: ${row.category}`] : [],
+    explanation,
+    actionLines,
+    evidenceLines: [...gate.evidenceLines, ...[row.response_key ?? ""].filter(Boolean)],
+    riskLines: [...gate.riskLines, ...(row.category ? [`Categoria: ${row.category}`] : [])],
     timingLines: [],
-    sourceRefs: [{ table: "bioenergetics_responses", id: row.id }],
+    sourceRefs,
     stagingRunId: null,
     createdAt: row.observed_at ?? row.created_at,
   };
