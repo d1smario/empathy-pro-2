@@ -7,6 +7,7 @@ import { NutritionDayKpiStrip } from "@/components/nutrition/NutritionDayKpiStri
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
 import type {
   FunctionalFoodRecommendationsViewModel,
+  NutritionModuleViewModel,
   NutritionPathwayModulationViewModel,
 } from "@/api/nutrition/contracts";
 import type { AdaptationSectorBoxVm } from "@/lib/adaptation/adaptation-sector-box";
@@ -231,6 +232,10 @@ export type NutritionMealPlanWorkspaceProps = {
   mealDisplayByKey: Map<MealSlotKey, MealPlanDisplayRow>;
   mealPathwayBySlot: Partial<Record<string, MealPathwaySlotBundle>>;
   pathwayModulation: NutritionPathwayModulationViewModel | null;
+  /** Da `GET /api/nutrition/module` — allineato al selettore funzionale e alle contextLines del piano. */
+  nutritionApplicationDirective: NutritionModuleViewModel["nutritionApplicationDirective"] | null;
+  /** Note complete del selettore (incl. direttiva / patch / integrazione). */
+  functionalMealSelectorNotes: string[] | null;
   intelligentMealPlan: IntelligentMealPlanResponseBody | null;
   intelligentMealLoading: boolean;
   intelligentMealError: string | null;
@@ -258,6 +263,8 @@ export function NutritionMealPlanWorkspace({
   mealDisplayByKey,
   mealPathwayBySlot,
   pathwayModulation,
+  nutritionApplicationDirective,
+  functionalMealSelectorNotes,
   intelligentMealPlan,
   intelligentMealLoading,
   intelligentMealError,
@@ -278,6 +285,7 @@ export function NutritionMealPlanWorkspace({
   onSaveNutrition,
 }: NutritionMealPlanWorkspaceProps) {
   const router = useRouter();
+  const hasApplicativeContext = Boolean(nutritionApplicationDirective) || Boolean(functionalMealSelectorNotes?.length);
   const mealPlanMicroBoardProps = intelligentMealPlan?.nutrientRollup?.dayTotals
     ? mealPlanDayTotalsToMicroLinesComplete(intelligentMealPlan.nutrientRollup.dayTotals)
     : mealTabMicronutrientProps;
@@ -307,6 +315,43 @@ export function NutritionMealPlanWorkspace({
           </div>
           {mealPathwayCatalogPending ? (
             <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per i cinque slot pasto… poi potrai generare il piano.</p>
+          ) : null}
+          {hasApplicativeContext ? (
+            <div
+              className="mb-3 rounded-lg border border-emerald-600/25 bg-emerald-950/20 px-3 py-2.5 text-[12px] leading-relaxed text-slate-300"
+              role="region"
+              aria-label="Contesto applicativo"
+            >
+              <p className="mb-2 font-mono text-[0.6rem] font-bold uppercase tracking-wider text-emerald-400/90">Contesto applicativo</p>
+              {nutritionApplicationDirective ? (
+                <ul className="m-0 mb-2 list-none space-y-1 p-0 text-slate-300">
+                  {nutritionApplicationDirective.rationale.map((line, i) => (
+                    <li key={`dir-r-${i}`} className="pl-0">
+                      {line}
+                    </li>
+                  ))}
+                  <li className="font-mono text-[0.65rem] text-slate-400">
+                    Focus: {nutritionApplicationDirective.focus.join(", ") || "—"} · applicate{" "}
+                    {nutritionApplicationDirective.appliedCount} · in attesa {nutritionApplicationDirective.pendingCount}
+                    {typeof nutritionApplicationDirective.coachValidatedMemoryCount === "number"
+                      ? ` · memoria coach validate ${nutritionApplicationDirective.coachValidatedMemoryCount}`
+                      : null}
+                  </li>
+                </ul>
+              ) : null}
+              {functionalMealSelectorNotes?.length ? (
+                <details className="rounded border border-slate-600/35 bg-slate-950/40 px-2 py-1.5 text-slate-400">
+                  <summary className="cursor-pointer select-none text-[11px] font-semibold text-slate-300">
+                    Note selettore pasti funzionale (allineate a patch + direttiva)
+                  </summary>
+                  <ul className="mt-2 mb-0 list-disc space-y-1 pl-4 text-[11px]">
+                    {functionalMealSelectorNotes.map((n, i) => (
+                      <li key={`fms-${i}`}>{n}</li>
+                    ))}
+                  </ul>
+                </details>
+              ) : null}
+            </div>
           ) : null}
           {intelligentMealError ? (
             <div className="alert-error" style={{ marginBottom: 10, fontSize: 13 }}>

@@ -36,10 +36,12 @@ import {
   type NutritionPlannedWorkoutRow,
 } from "@/modules/nutrition/services/nutrition-module-api";
 import type {
+  ApprovedApplicationPatch,
   FunctionalFoodRecommendationsViewModel,
   FunctionalFoodTargetViewModel,
   FunctionalMealSelectorViewModel,
   NutritionMetabolicEfficiencyGenerativeViewModel,
+  NutritionModuleViewModel,
   NutritionPathwayModulationViewModel,
   NutritionPerformanceIntegrationDials,
   UsdaRichFoodItemViewModel,
@@ -549,6 +551,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [metabolicEfficiencyGenerativeModel, setMetabolicEfficiencyGenerativeModel] =
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
+  const [nutritionApplicationDirective, setNutritionApplicationDirective] = useState<
+    NutritionModuleViewModel["nutritionApplicationDirective"] | null
+  >(null);
+  const [nutritionApprovedPatches, setNutritionApprovedPatches] = useState<ApprovedApplicationPatch[]>([]);
   const [nutritionPerformanceIntegration, setNutritionPerformanceIntegration] =
     useState<NutritionPerformanceIntegrationDials | null>(null);
   const [executed, setExecuted] = useState<ExecutedRow[]>([]);
@@ -646,6 +652,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
+        setNutritionApplicationDirective(null);
+        setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
         setExecuted([]);
         setPlanned([]);
@@ -673,6 +681,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
+        setNutritionApplicationDirective(null);
+        setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
         setLoading(false);
         return;
@@ -704,6 +714,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setResearchTraceSummaries(moduleData.researchTraceSummaries ?? []);
       setMetabolicEfficiencyGenerativeModel(moduleData.metabolicEfficiencyGenerativeModel ?? null);
       setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
+      setNutritionApplicationDirective(moduleData.nutritionApplicationDirective ?? null);
+      setNutritionApprovedPatches(moduleData.nutritionApprovedPatches ?? []);
       setNutritionPerformanceIntegration(moduleData.nutritionPerformanceIntegration ?? null);
       setExecuted(ex);
       setPlanned(pl);
@@ -884,6 +896,14 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         pathwayModulation,
         foodRecommendations: functionalFoodRecommendations,
         nutritionPerformanceIntegration,
+        approvedNutritionPatches: nutritionApprovedPatches,
+        applicationDirective: nutritionApplicationDirective
+          ? {
+              focus: nutritionApplicationDirective.focus,
+              coachValidatedMemoryCount: nutritionApplicationDirective.coachValidatedMemoryCount,
+              coachValidatedMemoryLines: nutritionApplicationDirective.coachValidatedMemoryLines,
+            }
+          : null,
         adaptationLoop,
         recoverySummary,
         twin: twinState,
@@ -893,6 +913,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       pathwayModulation,
       functionalFoodRecommendations,
       nutritionPerformanceIntegration,
+      nutritionApprovedPatches,
+      nutritionApplicationDirective,
       adaptationLoop,
       recoverySummary,
       twinState,
@@ -1575,6 +1597,14 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         ...(pathwayModulation?.notes ?? []).slice(0, 5),
         ...(nutritionPerformanceIntegration?.rationale ?? []).slice(0, 6),
         metabolicEfficiencyGenerativeModel?.headline,
+        ...(nutritionApplicationDirective?.rationale ?? []).slice(0, 4),
+        ...(nutritionApplicationDirective?.coachValidatedMemoryLines ?? [])
+          .slice(0, 3)
+          .map((line) => (line.trim() ? `Memoria coach validate: ${line.trim().slice(0, 200)}` : ""))
+          .filter(Boolean),
+        ...(nutritionApplicationDirective?.focus?.length
+          ? [`Directive focus: ${nutritionApplicationDirective.focus.join(", ")}`]
+          : []),
       ].filter((s): s is string => Boolean(s && String(s).trim())),
       pathwayModulation,
       trainingDayLines: trainingDayLinesForMealPlan,
@@ -1601,6 +1631,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     mealPlanIntegrationSolverLines,
     coachSessionFoodExclusions,
     selectedPlanSessions,
+    nutritionApplicationDirective,
   ]);
 
   const removeCoachMealPlanItem = useCallback((slot: MealSlotKey, index: number, foodLabel: string) => {
@@ -2725,6 +2756,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               mealDisplayByKey={mealDisplayByKey}
               mealPathwayBySlot={mealPathwayBySlot}
               pathwayModulation={pathwayModulation}
+              nutritionApplicationDirective={nutritionApplicationDirective}
+              functionalMealSelectorNotes={effectiveFunctionalMealSelector?.notes ?? null}
               intelligentMealPlan={intelligentMealPlan}
               intelligentMealLoading={intelligentMealLoading}
               intelligentMealError={intelligentMealError}
