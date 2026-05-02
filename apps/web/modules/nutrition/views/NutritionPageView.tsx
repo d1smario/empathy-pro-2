@@ -564,6 +564,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [saving, setSaving] = useState(false);
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const lastNutritionHydrationKey = useRef<string>("");
+  /** Finestra `from`…`to` dell’ultimo `fetchNutritionModuleContext` completo (per pathwayDate incrementale). */
+  const nutritionModuleWindowRef = useRef<{ from: string; to: string } | null>(null);
+  /** Ultima data per cui `functionalMealSelector` è stato allineato al server (evita fetch doppi). */
+  const serverSelectorPathwayDateRef = useRef<string | null>(null);
   /** Incrementato al ritorno sul tab: ricarica profilo/fisiologia se aggiornati altrove (altra scheda / profilo). */
   const [nutritionContextVersion, setNutritionContextVersion] = useState(0);
 
@@ -625,6 +629,35 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setCoachSessionFoodExclusions([]);
   }, [selectedPlanDate]);
 
+  /** Allinea `functionalMealSelector` server al giorno scelto (senza ricaricare tutto il modulo). */
+  useEffect(() => {
+    if (!athleteId || loading) return;
+    const w = nutritionModuleWindowRef.current;
+    if (!w) return;
+    if (selectedPlanDate < w.from || selectedPlanDate > w.to) return;
+    if (serverSelectorPathwayDateRef.current === selectedPlanDate) return;
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const snap = await fetchNutritionModuleContext({
+          athleteId,
+          from: w.from,
+          to: w.to,
+          pathwayDate: selectedPlanDate,
+        });
+        if (cancelled || snap.error) return;
+        serverSelectorPathwayDateRef.current = selectedPlanDate;
+        setFunctionalMealSelector(snap.functionalMealSelector ?? null);
+      } catch {
+        /* rete: mantieni selettore client-side */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlanDate, athleteId, loading]);
+
   const onDiaryComplianceRows = useCallback((rows: FoodDiaryComplianceRow[]) => {
     setDiaryMacroRows(rows);
   }, []);
@@ -657,6 +690,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setNutritionPerformanceIntegration(null);
         setExecuted([]);
         setPlanned([]);
+        nutritionModuleWindowRef.current = null;
+        serverSelectorPathwayDateRef.current = null;
         setLoading(false);
         return;
       }
@@ -696,6 +731,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setNutritionApplicationDirective(null);
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
+        nutritionModuleWindowRef.current = null;
+        serverSelectorPathwayDateRef.current = null;
         setLoading(false);
         return;
       }
@@ -725,7 +762,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setBioenergeticModulation(bio);
       setResearchTraceSummaries(moduleData.researchTraceSummaries ?? []);
       setMetabolicEfficiencyGenerativeModel(moduleData.metabolicEfficiencyGenerativeModel ?? null);
-      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
       setNutritionApplicationDirective(moduleData.nutritionApplicationDirective ?? null);
       setNutritionApprovedPatches(moduleData.nutritionApprovedPatches ?? []);
       setNutritionPerformanceIntegration(moduleData.nutritionPerformanceIntegration ?? null);
@@ -761,6 +797,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
           };
         }
       }
+      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
+      nutritionModuleWindowRef.current = { from: startKey, to: endKey };
+      serverSelectorPathwayDateRef.current = finalPlanDate;
       setSelectedPlanDate(finalPlanDate);
       setLoading(false);
     }

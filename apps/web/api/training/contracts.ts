@@ -29,7 +29,10 @@ export type TrainingTwinContextStripViewModel = {
   adaptationScore: number | null;
 };
 
-/** `ok: true` da `GET /api/training/planned-window` (esteso roadmap: spina + twin). */
+/**
+ * `ok: true` da `GET /api/training/planned-window` (`apps/web/app/api/training/planned-window/route.ts`).
+ * Campi `readSpineCoverage` / `twinContextStrip` sono sempre presenti; valore `null` se `includeAthleteContext=0|skip|…`.
+ */
 export type TrainingPlannedWindowOkViewModel = {
   ok: true;
   from: string;
@@ -39,7 +42,6 @@ export type TrainingPlannedWindowOkViewModel = {
   executed: ExecutedWorkout[];
   /** Conteggi per `planned[].provenance` (demo SQL / builder / …). */
   plannedProvenanceSummary?: Partial<Record<string, number>>;
-  /** `null` se `includeAthleteContext=0` (solo planned/executed, meno latenza). */
   readSpineCoverage: ReadSpineCoverageSummary | null;
   twinContextStrip: TrainingTwinContextStripViewModel | null;
 };

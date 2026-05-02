@@ -10,7 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:loop-closure": "npx tsx --test lib/training/expected-vs-obtained-loop-closure.test.ts",
-    "test:functional-selector": "npx tsx --test lib/nutrition/functional-meal-selector.test.ts"
+    "test:functional-selector": "npx tsx --test lib/nutrition/functional-meal-selector.test.ts",
+    "test:supabase-guards": "npx tsx --test lib/supabase/missing-relation-error.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0",
