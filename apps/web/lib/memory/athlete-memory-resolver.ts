@@ -24,10 +24,8 @@ import {
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { resolveCanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
-import {
-  coachApplicationTraceRowsToEvidenceItems,
-  isMissingRelationError,
-} from "@/lib/memory/coach-application-traces";
+import { coachApplicationTraceRowsToEvidenceItems } from "@/lib/memory/coach-application-traces";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
 
@@ -395,9 +393,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
 
   let systemicRows: Array<Record<string, unknown>> = [];
   if (systemicRes.error) {
-    const msg = systemicRes.error.message ?? "";
-    const code = String((systemicRes.error as { code?: string }).code ?? "");
-    if (code !== "42P01" && !msg.includes("does not exist")) {
+    if (!isMissingRelationError(systemicRes.error)) {
       throw new Error(systemicRes.error.message);
     }
   } else {
@@ -406,9 +402,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
 
   const optionalRead = (res: { error: { message?: string; code?: string } | null; data: unknown }) => {
     if (res.error) {
-      const msg = res.error.message ?? "";
-      const code = String(res.error.code ?? "");
-      if (code !== "42P01" && !msg.includes("does not exist")) {
+      if (!isMissingRelationError(res.error)) {
         throw new Error(res.error.message);
       }
       return [] as Array<Record<string, unknown>>;
@@ -425,9 +419,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
 
   let diaryRows: Array<Record<string, unknown>> = [];
   if (diaryRes.error) {
-    const msg = diaryRes.error.message ?? "";
-    const code = String((diaryRes.error as { code?: string }).code ?? "");
-    if (code !== "42P01" && !msg.includes("does not exist")) {
+    if (!isMissingRelationError(diaryRes.error)) {
       throw new Error(diaryRes.error.message);
     }
   } else {

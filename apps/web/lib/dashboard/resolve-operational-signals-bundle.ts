@@ -20,6 +20,7 @@ import {
 } from "@/lib/training/adaptation-regeneration-loop";
 import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export type ApprovedApplicationPatch = {
   id: string;
@@ -80,8 +81,7 @@ async function resolveApprovedApplicationPatches(athleteId: string): Promise<App
     .limit(50);
 
   if (error) {
-    const msg = error.message ?? "";
-    if (error.code === "42P01" || msg.includes("does not exist")) return [];
+    if (isMissingRelationError(error)) return [];
     throw new Error(error.message);
   }
 

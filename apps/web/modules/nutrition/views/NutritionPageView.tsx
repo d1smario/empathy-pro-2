@@ -671,10 +671,22 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       end.setDate(end.getDate() + 120);
       const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
       const endKey = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
-      const moduleData = await fetchNutritionModuleContext({
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const clampIsoDay = (d: string) => {
+        if (d < startKey) return startKey;
+        if (d > endKey) return endKey;
+        return d;
+      };
+      const persistedGuess = readPersistedNutritionPlanDate(athleteId);
+      const pathwayDateGuess = clampIsoDay(
+        persistedGuess && isIsoDateKey(persistedGuess) ? persistedGuess : todayKey,
+      );
+
+      let moduleData = await fetchNutritionModuleContext({
         athleteId,
         from: startKey,
         to: endKey,
+        pathwayDate: pathwayDateGuess,
       });
       if (moduleData.error) {
         setError(moduleData.error || "Errore caricamento");
@@ -724,11 +736,32 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setIntelligentMealError(null);
       setCoachMealRemovalKeys(new Set());
       setCoachSessionFoodExclusions([]);
-      const todayKey = new Date().toISOString().slice(0, 10);
       const availableDates = Array.from(new Set(pl.map((row) => row.date))).sort();
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
       const persisted = readPersistedNutritionPlanDate(athleteId);
-      setSelectedPlanDate(persisted ?? nextDate);
+      const finalPlanDate = persisted ?? nextDate;
+      if (
+        finalPlanDate !== pathwayDateGuess &&
+        finalPlanDate >= startKey &&
+        finalPlanDate <= endKey &&
+        !moduleData.error
+      ) {
+        const pathSnap = await fetchNutritionModuleContext({
+          athleteId,
+          from: startKey,
+          to: endKey,
+          pathwayDate: finalPlanDate,
+        });
+        if (!pathSnap.error) {
+          moduleData = {
+            ...moduleData,
+            pathwayModulation: pathSnap.pathwayModulation ?? moduleData.pathwayModulation,
+            functionalFoodRecommendations: pathSnap.functionalFoodRecommendations ?? moduleData.functionalFoodRecommendations,
+            functionalMealSelector: pathSnap.functionalMealSelector ?? moduleData.functionalMealSelector,
+          };
+        }
+      }
+      setSelectedPlanDate(finalPlanDate);
       setLoading(false);
     }
     loadData();
