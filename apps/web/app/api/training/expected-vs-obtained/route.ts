@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
+import { fetchCoachApplicationTraces } from "@/lib/memory/coach-application-traces";
 import {
   attachLoopClosureHints,
   computeExpectedVsObtainedDeltas,
@@ -53,17 +54,11 @@ async function fetchRecentCoachTraces(
   athleteId: string,
 ): Promise<Array<Record<string, unknown>>> {
   try {
-    const { data, error } = await db
-      .from("athlete_coach_application_traces")
-      .select("id, manual_action_id, action_type, created_at")
-      .eq("athlete_id", athleteId)
-      .order("created_at", { ascending: false })
-      .limit(8);
-    if (!error && data) return data as Array<Record<string, unknown>>;
+    return await fetchCoachApplicationTraces(db, athleteId, 8);
   } catch {
-    /* table missing or RLS */
+    /* tabella assente / schema cache / errore lettura: hint coach opzionale */
+    return [];
   }
-  return [];
 }
 
 async function openAdaptationStagingRuns(input: {
