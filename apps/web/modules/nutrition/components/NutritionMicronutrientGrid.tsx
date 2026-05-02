@@ -88,6 +88,8 @@ type MicroChartDatum = NutritionMicroLine & {
   kind: MicroTargetKind;
 };
 
+type MicroBoardLines = Omit<NutritionMicronutrientGridProps, "className">;
+
 const MICRO_TARGETS: Record<string, MicroTarget> = {
   "vitamina a (rae)": { target: 900, unit: "µg" },
   "vitamina c": { target: 90, unit: "mg" },
@@ -163,6 +165,104 @@ function normalizeMicroName(name: string): string {
 
 function targetForLine(line: NutritionMicroLine): MicroTarget | null {
   return MICRO_TARGETS[normalizeMicroName(line.name)] ?? null;
+}
+
+const MICRO_BOARD_TEMPLATES: MicroBoardLines = {
+  vitamins: [
+    { name: "Vitamina A (RAE)", value: 0, unit: "µg" },
+    { name: "Vitamina C", value: 0, unit: "mg" },
+    { name: "Vitamina D", value: 0, unit: "µg" },
+    { name: "Vitamina E", value: 0, unit: "mg" },
+    { name: "Vitamina K", value: 0, unit: "µg" },
+    { name: "Tiamina (B1)", value: 0, unit: "mg" },
+    { name: "Riboflavina (B2)", value: 0, unit: "mg" },
+    { name: "Niacina (B3)", value: 0, unit: "mg" },
+    { name: "Vitamina B6", value: 0, unit: "mg" },
+    { name: "Acido pantotenico (B5) stim.", value: 0, unit: "mg" },
+    { name: "Folati (equivalenti)", value: 0, unit: "µg" },
+    { name: "Vitamina B12", value: 0, unit: "µg" },
+  ],
+  minerals: [
+    { name: "Calcio", value: 0, unit: "mg" },
+    { name: "Ferro", value: 0, unit: "mg" },
+    { name: "Magnesio", value: 0, unit: "mg" },
+    { name: "Fosforo", value: 0, unit: "mg" },
+    { name: "Potassio", value: 0, unit: "mg" },
+    { name: "Sodio", value: 0, unit: "mg" },
+    { name: "Zinco", value: 0, unit: "mg" },
+    { name: "Selenio", value: 0, unit: "µg" },
+    { name: "Cloruro stim. da sodio", value: 0, unit: "mg" },
+    { name: "Rame stim.", value: 0, unit: "mg" },
+    { name: "Manganese stim.", value: 0, unit: "mg" },
+    { name: "Iodio stim.", value: 0, unit: "µg" },
+  ],
+  aminoAcids: [
+    { name: "Leucina", value: 0, unit: "g" },
+    { name: "Lisina", value: 0, unit: "g" },
+    { name: "Metionina", value: 0, unit: "g" },
+    { name: "Fenilalanina", value: 0, unit: "g" },
+    { name: "Treonina", value: 0, unit: "g" },
+    { name: "Triptofano", value: 0, unit: "g" },
+    { name: "Isoleucina", value: 0, unit: "g" },
+    { name: "Valina", value: 0, unit: "g" },
+    { name: "Istidina", value: 0, unit: "g" },
+    { name: "Alanina", value: 0, unit: "g" },
+    { name: "Arginina", value: 0, unit: "g" },
+    { name: "Acido aspartico", value: 0, unit: "g" },
+    { name: "Cisteina", value: 0, unit: "g" },
+    { name: "Acido glutammico", value: 0, unit: "g" },
+    { name: "Glicina", value: 0, unit: "g" },
+    { name: "Prolina", value: 0, unit: "g" },
+    { name: "Serina", value: 0, unit: "g" },
+    { name: "Tirosina", value: 0, unit: "g" },
+    { name: "Glutammina", value: 0, unit: "g" },
+    { name: "Asparagina", value: 0, unit: "g" },
+  ],
+  fattyAcids: [
+    { name: "Fibra alimentare", value: 0, unit: "g" },
+    { name: "Acidi grassi saturi", value: 0, unit: "g" },
+    { name: "Acidi grassi monoinsaturi", value: 0, unit: "g" },
+    { name: "Acidi grassi polinsaturi", value: 0, unit: "g" },
+    { name: "Omega-3 (EPA+DHA appross.)", value: 0, unit: "g" },
+    { name: "Omega-6 stim.", value: 0, unit: "g" },
+    { name: "Rapporto omega-6/omega-3", value: 0, unit: ":1" },
+    { name: "Grassi insaturi", value: 0, unit: "g" },
+    { name: "Quota saturi su grassi", value: 0, unit: "%" },
+    { name: "Trans stimati", value: 0, unit: "g" },
+    { name: "Colesterolo stim.", value: 0, unit: "mg" },
+    { name: "Lipidi totali", value: 0, unit: "g" },
+  ],
+};
+
+function matchIncomingLine(template: NutritionMicroLine, incoming: NutritionMicroLine[]): NutritionMicroLine | null {
+  const key = normalizeMicroName(template.name);
+  const exact = incoming.find((line) => normalizeMicroName(line.name) === key);
+  if (exact) return exact;
+  if (key.startsWith("folati")) return incoming.find((line) => normalizeMicroName(line.name).startsWith("folati")) ?? null;
+  if (key.startsWith("omega-3")) return incoming.find((line) => normalizeMicroName(line.name).startsWith("omega-3")) ?? null;
+  if (key === "acidi grassi saturi") return incoming.find((line) => normalizeMicroName(line.name) === "saturi") ?? null;
+  if (key === "acidi grassi monoinsaturi") return incoming.find((line) => normalizeMicroName(line.name) === "monoinsaturi") ?? null;
+  if (key === "acidi grassi polinsaturi") return incoming.find((line) => normalizeMicroName(line.name) === "polinsaturi") ?? null;
+  return null;
+}
+
+function expandMicroLines(template: NutritionMicroLine[], incoming: NutritionMicroLine[]): NutritionMicroLine[] {
+  const templateKeys = new Set(template.map((line) => normalizeMicroName(line.name)));
+  const merged = template.map((line) => {
+    const match = matchIncomingLine(line, incoming);
+    return match ? { ...line, value: match.value, unit: line.unit || match.unit } : line;
+  });
+  const extras = incoming.filter((line) => !templateKeys.has(normalizeMicroName(line.name)));
+  return [...merged, ...extras];
+}
+
+function expandMicroBoardLines(lines: MicroBoardLines): MicroBoardLines {
+  return {
+    vitamins: expandMicroLines(MICRO_BOARD_TEMPLATES.vitamins, lines.vitamins),
+    minerals: expandMicroLines(MICRO_BOARD_TEMPLATES.minerals, lines.minerals),
+    aminoAcids: expandMicroLines(MICRO_BOARD_TEMPLATES.aminoAcids, lines.aminoAcids),
+    fattyAcids: expandMicroLines(MICRO_BOARD_TEMPLATES.fattyAcids, lines.fattyAcids),
+  };
 }
 
 function toChartData(lines: NutritionMicroLine[]): MicroChartDatum[] {
@@ -256,6 +356,8 @@ function MicroPercentRadar({
 }
 
 export function NutritionMicronutrientDailyBoard({ vitamins, minerals, aminoAcids, fattyAcids, className }: NutritionMicronutrientGridProps) {
+  const boardLines = expandMicroBoardLines({ vitamins, minerals, aminoAcids, fattyAcids });
+
   return (
     <div className={className ?? "empathy-micro-daily-board"}>
       <div className="empathy-micro-daily-head">
@@ -266,12 +368,12 @@ export function NutritionMicronutrientDailyBoard({ vitamins, minerals, aminoAcid
         <span>Valori dal piano alimentare assemblato; target adulti indicativi.</span>
       </div>
       <div className="empathy-micro-radar-grid-wrap">
-        <MicroPercentRadar title="Vitamine" subtitle="12 indicatori vitaminici giornalieri" lines={vitamins} tone="vitamins" />
-        <MicroPercentRadar title="Minerali" subtitle="Minerali principali, sodio come limite" lines={minerals} tone="minerals" />
-        <MicroPercentRadar title="Aminoacidi" subtitle="20 aminoacidi: EAA diretti + profilo stimato" lines={aminoAcids} tone="amino" />
-        <MicroPercentRadar title="Grassi e fibra" subtitle="10 indicatori: catene, omega e limiti" lines={fattyAcids} tone="lipids" />
+        <MicroPercentRadar title="Vitamine" subtitle="12 indicatori vitaminici giornalieri" lines={boardLines.vitamins} tone="vitamins" />
+        <MicroPercentRadar title="Minerali" subtitle="12 minerali e proxy elettrolitici" lines={boardLines.minerals} tone="minerals" />
+        <MicroPercentRadar title="Aminoacidi" subtitle="20 aminoacidi: EAA diretti + profilo stimato" lines={boardLines.aminoAcids} tone="amino" />
+        <MicroPercentRadar title="Grassi e fibra" subtitle="12 indicatori: catene, omega e limiti" lines={boardLines.fattyAcids} tone="lipids" />
       </div>
-      <NutritionMicronutrientTable vitamins={vitamins} minerals={minerals} aminoAcids={aminoAcids} fattyAcids={fattyAcids} />
+      <NutritionMicronutrientTable {...boardLines} />
     </div>
   );
 }
