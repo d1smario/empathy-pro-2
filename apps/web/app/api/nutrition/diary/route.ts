@@ -3,6 +3,7 @@ import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWrite
 import type { FoodDiaryEntryViewModel, FoodDiaryListViewModel } from "@/api/nutrition/contracts";
 import {
   getOrImportFdcFood,
+  scaleFdcMetabolicIndices,
   scaleFdcMicros,
   scaleMacrosFromCachedFdcFood,
 } from "@/lib/nutrition/fdc-food-cache";
@@ -163,6 +164,7 @@ export async function POST(req: NextRequest) {
       }
       const scaled = scaleMacrosFromCachedFdcFood(detail, quantityG);
       const micronutrients = scaleFdcMicros(detail, quantityG);
+      const metabolic = scaleFdcMetabolicIndices(detail, quantityG);
       insert = {
         athlete_id: athleteId,
         entry_date: entryDate,
@@ -178,6 +180,11 @@ export async function POST(req: NextRequest) {
         fat_g: scaled.fatG,
         sodium_mg: scaled.sodiumMg,
         micronutrients,
+        glycemic_index_estimate: metabolic.glycemicIndexEstimate,
+        insulin_index_estimate: metabolic.insulinIndexEstimate,
+        glycemic_load: metabolic.glycemicLoad,
+        insulin_load: metabolic.insulinLoad,
+        metabolic_indices: metabolic.metabolicIndices,
         reference_source_tag: "usda_fdc_cache",
         notes: body.notes?.trim() || null,
         supplements: body.supplements?.trim() || null,

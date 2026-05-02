@@ -18,6 +18,11 @@ export type FdcCachedFood = FdcPer100gMacros & {
   foodCategory: string | null;
   fiberPer100g: number | null;
   sugarsPer100g: number | null;
+  glycemicIndexEstimate: number | null;
+  insulinIndexEstimate: number | null;
+  glycemicLoadPer100g: number | null;
+  insulinLoadPer100g: number | null;
+  metabolicIndices: Record<string, unknown>;
   vitamins: FdcMicroPer100g[];
   minerals: FdcMicroPer100g[];
   aminoAcids: FdcMicroPer100g[];
@@ -74,6 +79,54 @@ function pickNutrientByName(nutrients: Array<Record<string, unknown>>, names: st
     }
   }
   return null;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+function estimateMetabolicIndices(input: {
+  carbsPer100g: number | null;
+  proteinPer100g: number | null;
+  fatPer100g: number | null;
+  fiberPer100g: number | null;
+  sugarsPer100g: number | null;
+}) {
+  const carbs = Math.max(0, input.carbsPer100g ?? 0);
+  const protein = Math.max(0, input.proteinPer100g ?? 0);
+  const fat = Math.max(0, input.fatPer100g ?? 0);
+  const fiber = Math.max(0, input.fiberPer100g ?? 0);
+  const sugars = Math.max(0, input.sugarsPer100g ?? 0);
+  const availableCarbs = Math.max(0, carbs - fiber);
+  const carbEnergy = availableCarbs * 4;
+  const proteinEnergy = protein * 4;
+  const fatEnergy = fat * 9;
+  const energy = Math.max(1, carbEnergy + proteinEnergy + fatEnergy);
+  const carbEnergyPct = carbEnergy / energy;
+  const sugarShare = availableCarbs > 0 ? sugars / availableCarbs : 0;
+  const fiberDampening = Math.min(18, fiber * 1.2);
+
+  const glycemicIndex = Math.min(92, Math.max(18, 28 + carbEnergyPct * 58 + sugarShare * 18 - fiberDampening - Math.min(10, fat * 0.45)));
+  const insulinIndex = Math.min(
+    115,
+    Math.max(18, glycemicIndex * 0.72 + Math.min(28, protein * 1.25) + Math.min(12, fat * 0.35)),
+  );
+  const glycemicLoad = (glycemicIndex * availableCarbs) / 100;
+  const insulinLoad = (insulinIndex * (availableCarbs + protein * 0.45)) / 100;
+
+  return {
+    glycemicIndexEstimate: round2(glycemicIndex),
+    insulinIndexEstimate: round2(insulinIndex),
+    glycemicLoadPer100g: round2(glycemicLoad),
+    insulinLoadPer100g: round2(insulinLoad),
+    metabolicIndices: {
+      method: "macro_profile_estimate_v1",
+      source: "derived_from_usda_fdc_cache",
+      caveat: "Estimated from USDA macro profile; not a measured glycemic or insulin index.",
+      availableCarbsPer100g: round2(availableCarbs),
+      sugarShare: round2(sugarShare),
+    },
+  };
 }
 
 function compactRawNutrients(nutrients: Array<Record<string, unknown>>): FdcMicroPer100g[] {
@@ -150,6 +203,11 @@ function rowToCachedFood(row: Record<string, unknown>): FdcCachedFood {
     fiberPer100g: row.fiber_100g != null ? Number(row.fiber_100g) : null,
     sugarsPer100g: row.sugars_100g != null ? Number(row.sugars_100g) : null,
     sodiumMgPer100g: row.sodium_mg_100g != null ? Number(row.sodium_mg_100g) : null,
+    glycemicIndexEstimate: row.glycemic_index_estimate != null ? Number(row.glycemic_index_estimate) : null,
+    insulinIndexEstimate: row.insulin_index_estimate != null ? Number(row.insulin_index_estimate) : null,
+    glycemicLoadPer100g: row.glycemic_load_100g != null ? Number(row.glycemic_load_100g) : null,
+    insulinLoadPer100g: row.insulin_load_100g != null ? Number(row.insulin_load_100g) : null,
+    metabolicIndices: row.metabolic_indices && typeof row.metabolic_indices === "object" ? (row.metabolic_indices as Record<string, unknown>) : {},
     vitamins: asMicroArray(row.vitamins),
     minerals: asMicroArray(row.minerals),
     aminoAcids: asMicroArray(row.amino_acids),
@@ -180,6 +238,27 @@ export function scaleFdcMicros(food: FdcCachedFood, quantityG: number): ScaledMi
     minerals: scale(food.minerals),
     aminoAcids: scale(food.aminoAcids),
     fattyAcids: scale(food.fattyAcids),
+  };
+}
+
+export function scaleFdcMetabolicIndices(food: FdcCachedFood, quantityG: number) {
+  const factor = quantityG / 100;
+  const glycemicLoad =
+    food.glycemicLoadPer100g != null && Number.isFinite(factor) && factor > 0 ? round2(food.glycemicLoadPer100g * factor) : null;
+  const insulinLoad =
+    food.insulinLoadPer100g != null && Number.isFinite(factor) && factor > 0 ? round2(food.insulinLoadPer100g * factor) : null;
+
+  return {
+    glycemicIndexEstimate: food.glycemicIndexEstimate,
+    insulinIndexEstimate: food.insulinIndexEstimate,
+    glycemicLoad,
+    insulinLoad,
+    metabolicIndices: {
+      ...food.metabolicIndices,
+      quantityG,
+      glycemicLoad,
+      insulinLoad,
+    },
   };
 }
 
@@ -216,6 +295,15 @@ export async function getOrImportFdcFood(fdcId: number): Promise<FdcCachedFood |
     const micros = extractMicroNutrientsPer100g(nutrients);
     const buckets = bucketMicros(micros);
     const rawCompact = compactRawNutrients(nutrients);
+    const fiberPer100g = pickNutrientByName(nutrients, ["fiber, total dietary", "fiber"]);
+    const sugarsPer100g = pickNutrientByName(nutrients, ["sugars, total including", "sugars, total"]);
+    const metabolic = estimateMetabolicIndices({
+      carbsPer100g: macros.carbsPer100g,
+      proteinPer100g: macros.proteinPer100g,
+      fatPer100g: macros.fatPer100g,
+      fiberPer100g,
+      sugarsPer100g,
+    });
     const payload = {
       fdc_id: id,
       description: String(raw.description ?? "Alimento FDC"),
@@ -226,9 +314,14 @@ export async function getOrImportFdcFood(fdcId: number): Promise<FdcCachedFood |
       carbs_100g: Math.max(0, macros.carbsPer100g ?? 0),
       protein_100g: Math.max(0, macros.proteinPer100g ?? 0),
       fat_100g: Math.max(0, macros.fatPer100g ?? 0),
-      fiber_100g: pickNutrientByName(nutrients, ["fiber, total dietary", "fiber"]),
-      sugars_100g: pickNutrientByName(nutrients, ["sugars, total including", "sugars, total"]),
+      fiber_100g: fiberPer100g,
+      sugars_100g: sugarsPer100g,
       sodium_mg_100g: macros.sodiumMgPer100g,
+      glycemic_index_estimate: metabolic.glycemicIndexEstimate,
+      insulin_index_estimate: metabolic.insulinIndexEstimate,
+      glycemic_load_100g: metabolic.glycemicLoadPer100g,
+      insulin_load_100g: metabolic.insulinLoadPer100g,
+      metabolic_indices: metabolic.metabolicIndices,
       vitamins: buckets.vitamins,
       minerals: buckets.minerals,
       amino_acids: buckets.aminoAcids,
