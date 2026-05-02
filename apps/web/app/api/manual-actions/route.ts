@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { ManualActionCommand } from "@/api/manual-actions/contracts";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import { validateManualActionCommand } from "@/lib/coach-actions/manual-action-policy";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(100);
     if (error) {
-      if (error.message?.includes("does not exist") || error.code === "42P01") {
+      if (isMissingRelationError(error)) {
         return NextResponse.json(
           { items: [], error: "Tabella manual_actions non presente: applica migrazione Pro 2 017 o equivalente V1 014." },
           { status: 503 },

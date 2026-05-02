@@ -8,6 +8,7 @@ import {
   scaleMacrosFromCachedFdcFood,
 } from "@/lib/nutrition/fdc-food-cache";
 import { scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 
@@ -59,7 +60,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      if (error.message?.includes("does not exist") || error.code === "42P01") {
+      if (isMissingRelationError(error)) {
         return NextResponse.json(
           {
             error:
@@ -240,7 +241,7 @@ export async function POST(req: NextRequest) {
     const { data, error } = await db.from("food_diary_entries").insert(insert).select("*").single();
 
     if (error) {
-      if (error.message?.includes("does not exist") || error.code === "42P01") {
+      if (isMissingRelationError(error)) {
         return NextResponse.json(
           { error: "Tabella food_diary_entries assente — applica migrazione 021." },
           { status: 503 },

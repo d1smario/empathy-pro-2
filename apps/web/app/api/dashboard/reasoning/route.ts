@@ -6,6 +6,7 @@ import type { ReasoningCardVm, ReasoningSourceRef, ReasoningTone } from "@/lib/d
 import type { AthleteEvidenceMemoryItem, AthleteMemory } from "@/lib/empathy/schemas";
 import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -507,9 +508,7 @@ function summary(cards: ReasoningCardVm[]) {
 
 function optionalRows(res: { data: unknown[] | null; error: { message?: string; code?: string } | null }) {
   if (!res.error) return res.data ?? [];
-  const msg = res.error.message ?? "";
-  const code = String(res.error.code ?? "");
-  if (code === "42P01" || msg.includes("does not exist")) return [];
+  if (isMissingRelationError(res.error)) return [];
   throw new Error(res.error.message);
 }
 

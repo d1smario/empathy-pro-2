@@ -22,7 +22,7 @@
     "build:clean": "node ./scripts/clean-next-artifacts.mjs && npm run build",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "lint": "node ./node_modules/next/dist/bin/next lint ./apps/web",
-    "verify": "npm run typecheck && npm run lint && node ./scripts/clean-next-artifacts.mjs && npm run build"
+    "verify": "npm run typecheck && npm run test:operational-loop -w @empathy/web && npm run lint && node ./scripts/clean-next-artifacts.mjs && npm run build"
   },
   "devDependencies": {
     "patch-package": "^8.0.1"

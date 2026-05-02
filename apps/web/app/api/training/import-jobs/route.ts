@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { mapRealityImportJobs } from "@/lib/reality/import-job-mapper";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export async function GET(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) {
-      if (error.message?.includes("does not exist") || error.code === "42P01") {
+      if (isMissingRelationError(error)) {
         return NextResponse.json(
           {
             error: "Tabella training_import_jobs non presente: applica migrazioni training (Pro 2 014 o V1 016).",

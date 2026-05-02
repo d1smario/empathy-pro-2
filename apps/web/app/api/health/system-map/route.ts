@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,9 +49,7 @@ export async function GET(req: NextRequest) {
 
     const handleOptional = (res: { data: unknown; error: { message?: string; code?: string } | null }) => {
       if (!res.error) return (res.data ?? []) as Array<Record<string, unknown>>;
-      const msg = res.error.message ?? "";
-      const code = String(res.error.code ?? "");
-      if (code === "42P01" || msg.includes("does not exist")) return [];
+      if (isMissingRelationError(res.error)) return [];
       throw new Error(res.error.message);
     };
 

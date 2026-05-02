@@ -6,6 +6,7 @@ import {
   requireAthleteWriteContext,
   supabaseForAthleteTableRead,
 } from "@/lib/auth/athlete-read-context";
+import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -118,8 +119,7 @@ async function queueManualActionsFromCommittedStaging(input: {
 
   const { error } = await input.db.from("manual_actions").insert(rows);
   if (error) {
-    const msg = error.message ?? "";
-    if (error.code === "42P01" || msg.includes("does not exist")) return 0;
+    if (isMissingRelationError(error)) return 0;
     throw new Error(error.message);
   }
   return rows.length;
