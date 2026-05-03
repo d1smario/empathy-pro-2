@@ -2,6 +2,8 @@
 
 Verifica manuale del ciclo: **reality → expected vs obtained → staging → manual action → memoria atleta → VIRYA/nutrition → calendar trace**.
 
+**Gate ingest (multi-device):** prima che sleep/recovery/workout cloud entrino in tabelle consumate dal twin e dal loop, i pull WHOOP/Wahoo rispettano `athlete_device_ingest_policy` (vedi `docs/DEVICE_VENDORS_DECODE_READ_EXPOSE_PLAN.md`, sezione *Policy ingest multi-device*). In smoke, se disattivi `whoop_workout` e lanci il pull WHOOP, i workout non devono incrementare `inserted`.
+
 ## Prerequisiti
 
 - Migrazione `035_athlete_coach_application_traces.sql` applicata su Supabase Pro 2 (tabella + RLS). Dopo l’apply, `PATCH /api/manual-actions/:id` con `applied` deve rispondere con `persistence.coachApplicationTrace` senza 500.

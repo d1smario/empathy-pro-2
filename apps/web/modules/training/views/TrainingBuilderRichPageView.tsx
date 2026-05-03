@@ -81,6 +81,8 @@ import {
 import { sessionBlocksToChartSegments } from "@/lib/training/engine/block-chart-segments";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
 import { insertPlannedWorkoutFromEngineSession } from "@/modules/training/services/training-planned-api";
+import { pushBuilderSessionToWahoo } from "@/modules/training/services/wahoo-push-api";
+import { sessionSupportsWahooStructuredPlan } from "@/lib/integrations/wahoo-plan-from-generated-session";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
@@ -503,6 +505,9 @@ export default function TrainingBuilderRichPageView() {
   const [saveBusy, setSaveBusy] = useState(false);
   const [saveErr, setSaveErr] = useState<string | null>(null);
   const [saveOkId, setSaveOkId] = useState<string | null>(null);
+  const [wahooPushBusy, setWahooPushBusy] = useState(false);
+  const [wahooPushErr, setWahooPushErr] = useState<string | null>(null);
+  const [wahooPushOk, setWahooPushOk] = useState<string | null>(null);
 
   const [intensityUnit, setIntensityUnit] = useState<"watt" | "hr">("watt");
   const [ftpW, setFtpW] = useState(250);
@@ -608,6 +613,31 @@ export default function TrainingBuilderRichPageView() {
   }, [genResult]);
 
   const genTssPreview = useMemo(() => estimateTssFromSegments(genChartSegments), [genChartSegments]);
+
+  const wahooPushSessionCandidate = useMemo(() => {
+    if (!genResult || !("ok" in genResult) || !genResult.ok) return null;
+    if (activeMacroId === "strength") {
+      return gymManualRowsToGeneratedSession({
+        sport,
+        rows: gymManualRows,
+        adaptationTarget: adaptation,
+      });
+    }
+    return genResult.session;
+  }, [genResult, activeMacroId, sport, gymManualRows, adaptation]);
+
+  const wahooPushEligible = Boolean(
+    athleteId &&
+      wahooPushSessionCandidate &&
+      sessionSupportsWahooStructuredPlan(wahooPushSessionCandidate) &&
+      hrMax > 0 &&
+      (intensityUnit === "hr" || ftpW > 0),
+  );
+
+  useEffect(() => {
+    setWahooPushErr(null);
+    setWahooPushOk(null);
+  }, [genResult]);
 
   useEffect(() => {
     setManualActiveIndex((i) => Math.min(i, Math.max(0, manualPlanBlocks.length - 1)));
@@ -825,6 +855,41 @@ export default function TrainingBuilderRichPageView() {
     hrMax,
     lengthMode,
     speedRefKmh,
+  ]);
+
+  const pushSessionToWahooCloud = useCallback(async () => {
+    if (!athleteId || !wahooPushSessionCandidate || !sessionSupportsWahooStructuredPlan(wahooPushSessionCandidate)) return;
+    setWahooPushBusy(true);
+    setWahooPushErr(null);
+    setWahooPushOk(null);
+    const r = await pushBuilderSessionToWahoo({
+      athleteId,
+      session: wahooPushSessionCandidate,
+      plannedDate,
+      planName: manualSessionName.trim() || wahooPushSessionCandidate.goalLabel?.trim(),
+      intensityChannel: intensityUnit,
+      workoutTypeLocation: lengthMode === "distance" ? 1 : 0,
+      ftpW: Math.max(1, ftpW),
+      hrMax: Math.max(1, hrMax),
+      scheduleWorkout: true,
+    });
+    setWahooPushBusy(false);
+    if (!r.ok) {
+      setWahooPushErr([r.error, r.phase ? `fase: ${r.phase}` : null].filter(Boolean).join(" · "));
+      return;
+    }
+    setWahooPushOk(
+      r.plan_id != null ? `Piano Wahoo #${r.plan_id} e workout pianificato creati.` : "Piano inviato a Wahoo Cloud.",
+    );
+  }, [
+    athleteId,
+    wahooPushSessionCandidate,
+    plannedDate,
+    manualSessionName,
+    intensityUnit,
+    lengthMode,
+    ftpW,
+    hrMax,
   ]);
 
   const saveManualToCalendar = useCallback(async () => {
@@ -1806,10 +1871,24 @@ export default function TrainingBuilderRichPageView() {
                   type="button"
                   variant="secondary"
                   className="!border-orange-400/40 !bg-orange-500/15 !text-orange-100"
-                  disabled={saveBusy}
+                  disabled={saveBusy || wahooPushBusy}
                   onClick={() => void saveToCalendar()}
                 >
                   {saveBusy ? "Salvataggio…" : "Salva nel calendario"}
+                </Pro2Button>
+                <Pro2Button
+                  type="button"
+                  variant="secondary"
+                  className="!border-cyan-500/35 !bg-cyan-500/10 !text-cyan-100"
+                  disabled={!wahooPushEligible || saveBusy || wahooPushBusy}
+                  title={
+                    !wahooPushEligible
+                      ? "Serve sessione endurance con blocchi, FTP/FC valide e account Wahoo collegato (Profilo)."
+                      : undefined
+                  }
+                  onClick={() => void pushSessionToWahooCloud()}
+                >
+                  {wahooPushBusy ? "Wahoo…" : "Invia a Wahoo"}
                 </Pro2Button>
               </div>
               {saveErr ? (
@@ -1817,6 +1896,12 @@ export default function TrainingBuilderRichPageView() {
                   {saveErr}
                 </p>
               ) : null}
+              {wahooPushErr ? (
+                <p className="text-sm text-amber-300" role="alert">
+                  Wahoo: {wahooPushErr}
+                </p>
+              ) : null}
+              {wahooPushOk ? <p className="text-sm text-cyan-200/90">{wahooPushOk}</p> : null}
               {saveOkId ? (
                 <p className="text-sm text-emerald-300/90">
                   Salvato su planned_workouts per il{" "}

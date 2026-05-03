@@ -1,4 +1,5 @@
 import type { IsoDate, IsoDateTime } from "./common";
+import type { ObservationDomain, ObservationIngestTags } from "./observation-taxonomy";
 
 export type RealityDomain =
   | "training"
@@ -19,6 +20,10 @@ export type RealityProvider =
   | "polar"
   | "wahoo"
   | "coros"
+  | "suunto"
+  | "apple_watch"
+  | "zwift"
+  | "hammerhead"
   | "whoop"
   | "oura"
   | "cgm"
@@ -56,6 +61,8 @@ export type RealityIngestionEnvelope = {
   } | null;
   canonicalPreview?: Record<string, unknown> | null;
   rawRefs?: Record<string, unknown> | null;
+  /** Tag fenomenologici (multi-label); opzionale; non sostituisce `domain`. */
+  observation?: ObservationIngestTags | null;
 };
 
 export type RealityImportJob = {
@@ -97,5 +104,7 @@ export type RealityProviderDescriptor = {
   label: string;
   supportedDomains: RealityDomain[];
   supportedSourceKinds: RealitySourceKind[];
+  /** Hint per `RealityIngestionEnvelope.observation.domains` (non esaustivo; adapter possono affinare). */
+  typicalObservationDomains?: ObservationDomain[];
   notes?: string;
 };

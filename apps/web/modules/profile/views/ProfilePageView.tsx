@@ -411,6 +411,40 @@ export default function ProfilePage() {
   const [garminBackfillDays, setGarminBackfillDays] = useState(14);
   const [garminBackfillBusy, setGarminBackfillBusy] = useState(false);
   const [garminBackfillNotice, setGarminBackfillNotice] = useState<string | null>(null);
+  const [whoopLink, setWhoopLink] = useState<{
+    linked: boolean;
+    whoopUserIdMasked?: string;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [whoopReturn, setWhoopReturn] = useState<string | null>(null);
+  const [whoopReason, setWhoopReason] = useState<string | null>(null);
+  const [whoopDetail, setWhoopDetail] = useState<string | null>(null);
+  const [whoopPullBusy, setWhoopPullBusy] = useState(false);
+  const [whoopPullNotice, setWhoopPullNotice] = useState<string | null>(null);
+  const [wahooLink, setWahooLink] = useState<{
+    linked: boolean;
+    wahooUserIdMasked?: string;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [wahooReturn, setWahooReturn] = useState<string | null>(null);
+  const [wahooReason, setWahooReason] = useState<string | null>(null);
+  const [wahooDetail, setWahooDetail] = useState<string | null>(null);
+  const [wahooPullBusy, setWahooPullBusy] = useState(false);
+  const [wahooPullNotice, setWahooPullNotice] = useState<string | null>(null);
+  const [stravaLink, setStravaLink] = useState<{
+    linked: boolean;
+    stravaAthleteIdMasked?: string;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [stravaReturn, setStravaReturn] = useState<string | null>(null);
+  const [stravaReason, setStravaReason] = useState<string | null>(null);
+  const [stravaDetail, setStravaDetail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -532,27 +566,57 @@ export default function ProfilePage() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const q = new URLSearchParams(window.location.search);
-    const p = q.get("garmin");
-    if (p) setGarminReturn(p);
     const reason = q.get("reason");
     const detail = q.get("detail");
-    if (reason) setGarminReason(reason);
-    if (detail) setGarminDetail(detail);
+    const wahoo = q.get("wahoo");
+    const whoop = q.get("whoop");
+    const strava = q.get("strava");
+    if (wahoo) {
+      setWahooReturn(wahoo);
+      if (reason) setWahooReason(reason);
+      if (detail) setWahooDetail(detail);
+    } else if (whoop) {
+      setWhoopReturn(whoop);
+      if (reason) setWhoopReason(reason);
+      if (detail) setWhoopDetail(detail);
+    } else if (strava) {
+      setStravaReturn(strava);
+      if (reason) setStravaReason(reason);
+      if (detail) setStravaDetail(detail);
+    } else {
+      const p = q.get("garmin");
+      if (p) setGarminReturn(p);
+      if (reason) setGarminReason(reason);
+      if (detail) setGarminDetail(detail);
+    }
   }, []);
 
   useEffect(() => {
     if (!activeAthleteId) {
       setGarminLink(null);
+      setWhoopLink(null);
+      setWahooLink(null);
+      setStravaLink(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(
-          `/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`,
-          { credentials: "include" },
-        );
-        const j = (await r.json()) as {
+        const [rG, rWhoop, rWahoo, rStrava] = await Promise.all([
+          fetch(`/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/whoop/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/wahoo/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/strava/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+        ]);
+        const jG = (await rG.json()) as {
           linked?: boolean;
           garminUserIdMasked?: string;
           oauthScope?: string | null;
@@ -560,24 +624,88 @@ export default function ProfilePage() {
           error?: string;
           hint?: string;
         };
-        if (!cancelled) {
-          if (!r.ok) {
-            setGarminLink({
-              linked: false,
-              linkStatusError: j.error ?? `HTTP ${r.status}`,
-              linkStatusHint: typeof j.hint === "string" ? j.hint : undefined,
-            });
-          } else {
-            setGarminLink({
-              linked: Boolean(j.linked),
-              garminUserIdMasked: j.garminUserIdMasked,
-              oauthScope: j.oauthScope ?? null,
-              userPermissionsGranted: Array.isArray(j.userPermissionsGranted) ? j.userPermissionsGranted : null,
-            });
-          }
+        const jWhoop = (await rWhoop.json()) as {
+          linked?: boolean;
+          whoopUserIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        const jWahoo = (await rWahoo.json()) as {
+          linked?: boolean;
+          wahooUserIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        const jStrava = (await rStrava.json()) as {
+          linked?: boolean;
+          stravaAthleteIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        if (cancelled) return;
+        if (!rG.ok) {
+          setGarminLink({
+            linked: false,
+            linkStatusError: jG.error ?? `HTTP ${rG.status}`,
+            linkStatusHint: typeof jG.hint === "string" ? jG.hint : undefined,
+          });
+        } else {
+          setGarminLink({
+            linked: Boolean(jG.linked),
+            garminUserIdMasked: jG.garminUserIdMasked,
+            oauthScope: jG.oauthScope ?? null,
+            userPermissionsGranted: Array.isArray(jG.userPermissionsGranted) ? jG.userPermissionsGranted : null,
+          });
+        }
+        if (!rWhoop.ok) {
+          setWhoopLink({
+            linked: false,
+            linkStatusError: jWhoop.error ?? `HTTP ${rWhoop.status}`,
+            linkStatusHint: typeof jWhoop.hint === "string" ? jWhoop.hint : undefined,
+          });
+        } else {
+          setWhoopLink({
+            linked: Boolean(jWhoop.linked),
+            whoopUserIdMasked: jWhoop.whoopUserIdMasked,
+            oauthScope: jWhoop.oauthScope ?? null,
+          });
+        }
+        if (!rWahoo.ok) {
+          setWahooLink({
+            linked: false,
+            linkStatusError: jWahoo.error ?? `HTTP ${rWahoo.status}`,
+            linkStatusHint: typeof jWahoo.hint === "string" ? jWahoo.hint : undefined,
+          });
+        } else {
+          setWahooLink({
+            linked: Boolean(jWahoo.linked),
+            wahooUserIdMasked: jWahoo.wahooUserIdMasked,
+            oauthScope: jWahoo.oauthScope ?? null,
+          });
+        }
+        if (!rStrava.ok) {
+          setStravaLink({
+            linked: false,
+            linkStatusError: jStrava.error ?? `HTTP ${rStrava.status}`,
+            linkStatusHint: typeof jStrava.hint === "string" ? jStrava.hint : undefined,
+          });
+        } else {
+          setStravaLink({
+            linked: Boolean(jStrava.linked),
+            stravaAthleteIdMasked: jStrava.stravaAthleteIdMasked,
+            oauthScope: jStrava.oauthScope ?? null,
+          });
         }
       } catch {
-        if (!cancelled) setGarminLink({ linked: false });
+        if (!cancelled) {
+          setGarminLink({ linked: false });
+          setWhoopLink({ linked: false });
+          setWahooLink({ linked: false });
+          setStravaLink({ linked: false });
+        }
       }
     })();
     return () => {
@@ -611,6 +739,72 @@ export default function ProfilePage() {
       window.alert("Errore di rete durante lo scollegamento.");
     } finally {
       setGarminDisconnecting(false);
+    }
+  }
+
+  async function runWahooPullNow() {
+    if (!activeAthleteId || !wahooLink?.linked || wahooPullBusy) return;
+    setWahooPullBusy(true);
+    setWahooPullNotice(null);
+    try {
+      const r = await fetch("/api/integrations/wahoo/pull/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        inserted?: number;
+        skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      if (j.ok) {
+        setWahooPullNotice(
+          `Pull workout completato: inseriti ${j.inserted ?? 0}, saltati ${j.skipped ?? 0}.` +
+            (Array.isArray(j.errors) && j.errors.length > 0 ? ` Avvisi: ${j.errors.slice(0, 3).join(" · ")}` : ""),
+        );
+      } else {
+        setWahooPullNotice(j.error ?? `Errore HTTP ${r.status}`);
+      }
+    } catch {
+      setWahooPullNotice("Errore di rete.");
+    } finally {
+      setWahooPullBusy(false);
+    }
+  }
+
+  async function runWhoopPullNow() {
+    if (!activeAthleteId || !whoopLink?.linked || whoopPullBusy) return;
+    setWhoopPullBusy(true);
+    setWhoopPullNotice(null);
+    try {
+      const r = await fetch("/api/integrations/whoop/pull/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        inserted?: number;
+        skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      if (j.ok) {
+        setWhoopPullNotice(
+          `Pull completato: inseriti ${j.inserted ?? 0}, saltati ${j.skipped ?? 0}.` +
+            (Array.isArray(j.errors) && j.errors.length > 0 ? ` Avvisi: ${j.errors.slice(0, 3).join(" · ")}` : ""),
+        );
+      } else {
+        setWhoopPullNotice(j.error ?? `Errore HTTP ${r.status}`);
+      }
+    } catch {
+      setWhoopPullNotice("Errore di rete.");
+    } finally {
+      setWhoopPullBusy(false);
     }
   }
 
@@ -1478,7 +1672,130 @@ export default function ProfilePage() {
                     ) : null}
                   </p>
                 ) : null}
-                {activeAthleteId && garminLink ? (
+                {whoopReturn === "ok" ? (
+                  <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
+                    WHOOP collegato. Puoi usare &quot;Aggiorna dati WHOOP&quot; qui sotto per scaricare sonno, recovery e
+                    workout (ultimi ~14 giorni). Quali stream vengono salvati dipende dalla policy in{" "}
+                    <strong className="text-white/90">Impostazioni</strong> → ingest dispositivi.
+                  </p>
+                ) : null}
+                {whoopReturn === "error" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Collegamento WHOOP non riuscito
+                    {whoopReason ? (
+                      <>
+                        {" "}
+                        (<code className="text-white/70">{whoopReason}</code>
+                        {whoopDetail ? (
+                          <>
+                            , dettaglio: <code className="text-white/70">{whoopDetail}</code>
+                          </>
+                        ) : null}
+                        )
+                      </>
+                    ) : whoopDetail ? (
+                      <>
+                        : <code className="text-white/70">{whoopDetail}</code>
+                      </>
+                    ) : null}
+                    . Verifica env WHOOP e redirect URI nel developer dashboard WHOOP.
+                  </p>
+                ) : null}
+                {whoopReturn === "server_config" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    OAuth WHOOP non configurato sul server:{" "}
+                    <code className="text-white/80">WHOOP_OAUTH2_CLIENT_ID</code>,{" "}
+                    <code className="text-white/80">WHOOP_OAUTH2_REDIRECT_URI</code>, segreti.
+                  </p>
+                ) : null}
+                {whoopReturn === "denied" || whoopReturn === "missing_athlete" ? (
+                  <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
+                    {whoopReturn === "missing_athlete"
+                      ? "Atleta non indicato nel flusso OAuth WHOOP: apri il profilo con atleta attivo e riprova «Collega WHOOP»."
+                      : "Accesso negato per WHOOP (sessione o atleta). Riprova da account autorizzato."}
+                  </p>
+                ) : null}
+                {wahooReturn === "ok" ? (
+                  <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
+                    Wahoo Cloud collegato. API piani e workout:{" "}
+                    <code className="text-white/80">/api/integrations/wahoo/plans</code>,{" "}
+                    <code className="text-white/80">/api/integrations/wahoo/workouts</code> (sessione). Ricollega se
+                    servono scope <code className="text-white/80">plans_*</code> / <code className="text-white/80">workouts_write</code>.
+                  </p>
+                ) : null}
+                {wahooReturn === "error" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Collegamento Wahoo non riuscito
+                    {wahooReason ? (
+                      <>
+                        {" "}
+                        (<code className="text-white/70">{wahooReason}</code>
+                        {wahooDetail ? (
+                          <>
+                            , dettaglio: <code className="text-white/70">{wahooDetail}</code>
+                          </>
+                        ) : null}
+                        )
+                      </>
+                    ) : wahooDetail ? (
+                      <>
+                        : <code className="text-white/70">{wahooDetail}</code>
+                      </>
+                    ) : null}
+                    .
+                  </p>
+                ) : null}
+                {wahooReturn === "server_config" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    OAuth Wahoo non configurato sul server:{" "}
+                    <code className="text-white/80">WAHOO_OAUTH2_CLIENT_ID</code>,{" "}
+                    <code className="text-white/80">WAHOO_OAUTH2_REDIRECT_URI</code>.
+                  </p>
+                ) : null}
+                {stravaReturn === "ok" ? (
+                  <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
+                    Strava collegato. Token salvati lato server; il pull attività da Strava va configurato separatamente
+                    quando sarà disponibile.
+                  </p>
+                ) : null}
+                {stravaReturn === "error" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Collegamento Strava non riuscito
+                    {stravaReason ? (
+                      <>
+                        {" "}
+                        (<code className="text-white/70">{stravaReason}</code>
+                        {stravaDetail ? (
+                          <>
+                            , dettaglio: <code className="text-white/70">{stravaDetail}</code>
+                          </>
+                        ) : null}
+                        )
+                      </>
+                    ) : stravaDetail ? (
+                      <>
+                        : <code className="text-white/70">{stravaDetail}</code>
+                      </>
+                    ) : null}
+                    . Verifica env Strava e redirect URI nel portale sviluppatori Strava.
+                  </p>
+                ) : null}
+                {stravaReturn === "server_config" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    OAuth Strava non configurato sul server:{" "}
+                    <code className="text-white/80">STRAVA_OAUTH2_CLIENT_ID</code>,{" "}
+                    <code className="text-white/80">STRAVA_OAUTH2_CLIENT_SECRET</code>,{" "}
+                    <code className="text-white/80">STRAVA_OAUTH2_REDIRECT_URI</code>.
+                  </p>
+                ) : null}
+                {stravaReturn === "denied" || stravaReturn === "missing_athlete" ? (
+                  <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
+                    {stravaReturn === "missing_athlete"
+                      ? "Atleta non indicato nel flusso OAuth Strava: apri il profilo con atleta attivo e riprova «Collega Strava»."
+                      : "Accesso negato per Strava (sessione o atleta). Riprova da account autorizzato."}
+                  </p>
+                ) : null}
+                {activeAthleteId && garminLink && whoopLink && wahooLink && stravaLink ? (
                   <div className="flex flex-col gap-2" style={{ marginTop: 12 }}>
                     {garminLink.linkStatusError ? (
                       <p className="text-sm text-amber-400/90">
@@ -1612,6 +1929,212 @@ export default function ProfilePage() {
                       <code className="text-white/70">POST …/pull/run</code> con{" "}
                       <code className="text-white/70">GARMIN_PULL_RUN_SECRET</code>.
                     </p>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        WHOOP
+                      </h4>
+                      {whoopLink.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato WHOOP non disponibile: {whoopLink.linkStatusError}
+                          {whoopLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({whoopLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {whoopLink.linked ? (
+                        <p className="muted-copy text-sm">
+                          Account WHOOP collegato (ID{" "}
+                          <span className="text-white/80">{whoopLink.whoopUserIdMasked ?? "—"}</span>).
+                        </p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account WHOOP collegato: autorizza l&apos;app per leggere sleep, recovery e workout
+                          (scope configurati sul server).
+                        </p>
+                      )}
+                      {whoopLink.linked && whoopLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{whoopLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/whoop/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                        >
+                          {whoopLink.linked ? "Ricollega WHOOP" : "Collega WHOOP"}
+                        </a>
+                        {whoopLink.linked ? (
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={whoopPullBusy}
+                            className="border border-violet-500/35 bg-violet-500/10 text-violet-50 hover:bg-violet-500/20"
+                            onClick={() => void runWhoopPullNow()}
+                          >
+                            {whoopPullBusy ? "Pull…" : "Aggiorna dati WHOOP"}
+                          </Pro2Button>
+                        ) : null}
+                      </div>
+                      {whoopPullNotice ? (
+                        <p className="muted-copy mt-2 text-xs text-white/80">{whoopPullNotice}</p>
+                      ) : null}
+                      <p className="muted-copy mt-2 text-xs">
+                        Pull manuale: <code className="text-white/70">POST /api/integrations/whoop/pull/run</code> con
+                        sessione; oppure Bearer <code className="text-white/70">WHOOP_PULL_RUN_SECRET</code> da cron.
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Wahoo Cloud
+                      </h4>
+                      {wahooLink.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato Wahoo non disponibile: {wahooLink.linkStatusError}
+                          {wahooLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({wahooLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {wahooLink.linked ? (
+                        <p className="muted-copy text-sm">
+                          Account Wahoo collegato (ID{" "}
+                          <span className="text-white/80">{wahooLink.wahooUserIdMasked ?? "—"}</span>). Piani e
+                          trasmissione workout usano le route sotto <code className="text-white/70">/api/integrations/wahoo/*</code>.
+                        </p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account Wahoo collegato. Scope consigliati: lettura/scrittura piani e workout (vedi env{" "}
+                          <code className="text-white/70">WAHOO_OAUTH2_SCOPES</code>).
+                        </p>
+                      )}
+                      {wahooLink.linked && wahooLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{wahooLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/wahoo/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                        >
+                          {wahooLink.linked ? "Ricollega Wahoo" : "Collega Wahoo"}
+                        </a>
+                        {wahooLink.linked ? (
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={wahooPullBusy}
+                            className="border border-sky-500/35 bg-sky-500/10 text-sky-50 hover:bg-sky-500/20"
+                            onClick={() => void runWahooPullNow()}
+                          >
+                            {wahooPullBusy ? "Pull…" : "Aggiorna workout Wahoo"}
+                          </Pro2Button>
+                        ) : null}
+                      </div>
+                      {wahooPullNotice ? (
+                        <p className="muted-copy mt-2 text-xs text-white/80">{wahooPullNotice}</p>
+                      ) : null}
+                      <p className="muted-copy mt-2 text-xs">
+                        Cloud API:{" "}
+                        <code className="text-white/70">GET/POST /api/integrations/wahoo/plans</code>,{" "}
+                        <code className="text-white/70">GET/PUT/DELETE …/plans/[id]</code>,{" "}
+                        <code className="text-white/70">GET …/plans/[id]/file?athleteId=…</code>,{" "}
+                        <code className="text-white/70">GET/POST …/workouts</code>,{" "}
+                        <code className="text-white/70">GET …/workouts/[id]/plans</code>. Riferimento:{" "}
+                        <a
+                          href="https://cloud-api.wahooligan.com/"
+                          className="text-sky-300 underline"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          cloud-api.wahooligan.com
+                        </a>
+                        .
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Strava
+                      </h4>
+                      {stravaLink.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato Strava non disponibile: {stravaLink.linkStatusError}
+                          {stravaLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({stravaLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {stravaLink.linked ? (
+                        <p className="muted-copy text-sm">
+                          Account Strava collegato (atleta id{" "}
+                          <span className="text-white/80">{stravaLink.stravaAthleteIdMasked ?? "—"}</span>).
+                        </p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account Strava collegato. OAuth:{" "}
+                          <code className="text-white/70">STRAVA_OAUTH2_CLIENT_ID</code>,{" "}
+                          <code className="text-white/70">STRAVA_OAUTH2_CLIENT_SECRET</code>,{" "}
+                          <code className="text-white/70">STRAVA_OAUTH2_REDIRECT_URI</code> (stesso URL registrato su{" "}
+                          <a
+                            href="https://www.strava.com/settings/api"
+                            className="text-orange-300 underline"
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            strava.com/settings/api
+                          </a>
+                          ); scope opzionale <code className="text-white/70">STRAVA_OAUTH2_SCOPES</code> (default{" "}
+                          <code className="text-white/70">read,activity:read</code>).
+                        </p>
+                      )}
+                      {stravaLink.linked && stravaLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{stravaLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/strava/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-orange-500/35 bg-orange-500/10 px-4 py-2 text-sm font-medium text-orange-50 hover:bg-orange-500/20"
+                        >
+                          {stravaLink.linked ? "Ricollega Strava" : "Collega Strava"}
+                        </a>
+                      </div>
+                    </div>
                   </div>
                 ) : null}
               </div>

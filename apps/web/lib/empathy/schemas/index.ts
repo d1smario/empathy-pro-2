@@ -14,6 +14,18 @@ export * from "./biomarkers";
 export * from "./twin";
 export * from "./memory";
 export * from "./reality";
+export type {
+  ObservationContextRef,
+  ObservationDomain,
+  ObservationIngestTags,
+  ObservationModality,
+} from "@empathy/contracts";
+export {
+  OBSERVATION_DOMAINS,
+  OBSERVATION_MODALITIES,
+  isObservationDomain,
+  isObservationModality,
+} from "@empathy/contracts";
 export * from "./knowledge";
 export * from "./research";
 export * from "./common";

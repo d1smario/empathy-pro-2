@@ -1,10 +1,12 @@
 import type {
+  ObservationIngestTags,
   RealityDomain,
   RealityImportQualityStatus,
   RealityIngestionEnvelope,
   RealitySourceKind,
 } from "@/lib/empathy/schemas";
 import { summarizeCoverageMap } from "@/lib/data-sufficiency/coverage";
+import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
 import { normalizeRealityProvider } from "@/lib/reality/provider-utils";
 
 type BuildRealityIngestionEnvelopeInput = {
@@ -28,6 +30,8 @@ type BuildRealityIngestionEnvelopeInput = {
   recommendedInputs?: string[] | null;
   canonicalPreview?: Record<string, unknown> | null;
   rawRefs?: Record<string, unknown> | null;
+  /** Se valorizzato (anche `null`), sostituisce i default da provider/domain. Omesso = default automatico. */
+  observation?: ObservationIngestTags | null;
 };
 
 function toQualityStatus(status?: string | null): RealityImportQualityStatus {
@@ -42,11 +46,21 @@ export function buildRealityIngestionEnvelope(
   input: BuildRealityIngestionEnvelopeInput,
 ): RealityIngestionEnvelope {
   const summarizedCoverage = summarizeCoverageMap(input.channelCoverage ?? null);
+  const provider = normalizeRealityProvider(input.provider);
+  const observation: ObservationIngestTags | null | undefined =
+    input.observation !== undefined
+      ? input.observation
+      : defaultObservationIngestTags({
+          provider,
+          domain: input.domain,
+          sourceKind: input.sourceKind,
+          channelCoverage: input.channelCoverage ?? null,
+        });
   return {
     schemaVersion: "v1",
     domain: input.domain,
     sourceKind: input.sourceKind,
-    provider: normalizeRealityProvider(input.provider),
+    provider,
     athleteId: input.athleteId,
     sessionDate: input.sessionDate ?? null,
     importedAt: input.importedAt ?? new Date().toISOString(),
@@ -69,5 +83,6 @@ export function buildRealityIngestionEnvelope(
     },
     canonicalPreview: input.canonicalPreview ?? null,
     rawRefs: input.rawRefs ?? null,
+    ...(observation ? { observation } : {}),
   };
 }

@@ -65,7 +65,8 @@ export function intensityToRelativeLoad(intensity: string): number {
   return map[intensity] ?? 0.8;
 }
 
-function zoneRelativeRange(intensity: string): { min: number; max: number } {
+/** Fascia FTP/HR normalizzata (0–1) per etichetta zona Pro2 — usata anche da export Wahoo plan.json. */
+export function zoneRelativeRange(intensity: string): { min: number; max: number } {
   const map: Record<string, { min: number; max: number }> = {
     Z1: { min: 0.5, max: 0.62 },
     Z2: { min: 0.63, max: 0.74 },

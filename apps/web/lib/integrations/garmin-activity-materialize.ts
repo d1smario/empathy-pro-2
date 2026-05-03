@@ -1,7 +1,11 @@
 import "server-only";
 
+import type { ObservationIngestTags } from "@/lib/empathy/schemas";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { shouldMaterializeGarminActivities } from "@/lib/integrations/garmin-health-api-notification-schema";
+import { observationDomainsFromGarminActivitySummary } from "@/lib/integrations/garmin-observation-from-summary";
+import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
+import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -73,6 +77,36 @@ function inferTss(r: Record<string, unknown>): number {
   return 0;
 }
 
+function buildGarminObservationForRow(
+  r: Record<string, unknown>,
+  date: string,
+  executedWorkoutId: string | null,
+): ObservationIngestTags {
+  const base =
+    defaultObservationIngestTags({
+      provider: "garmin",
+      domain: "training",
+      sourceKind: "api_sync",
+      channelCoverage: null,
+    }) ?? {
+      domains: ["exertion_mechanical_output", "exertion_physiological_load", "positioning_navigation"],
+      modalities: ["daily_aggregate"],
+      contextRefs: null,
+    };
+
+  const fromKeys = observationDomainsFromGarminActivitySummary(r);
+  let merged = mergeObservationIngestTags(base, { domains: fromKeys });
+  merged = mergeObservationIngestTags(merged, {
+    contextRefs: [{ kind: "calendar_day", date }],
+  });
+  if (executedWorkoutId) {
+    merged = mergeObservationIngestTags(merged, {
+      contextRefs: [{ kind: "executed_workout", executedWorkoutId }],
+    });
+  }
+  return merged;
+}
+
 /**
  * Dopo pull HTTP 200 su stream activities (o JSON compatibile), inserisce/aggiorna `executed_workouts`.
  */
@@ -113,6 +147,8 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
     const externalId = pickExternalId(r);
     const activityType = String(r.activityType ?? r.activityName ?? r.moveIQActivityType ?? "garmin");
 
+    const observation = buildGarminObservationForRow(r, date, null);
+
     const traceSummary = {
       parser_engine: "garmin_wellness_api_summary",
       parser_version: "1",
@@ -121,6 +157,7 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       activity_id: r.activityId ?? null,
       source: "api_sync:garmin:activities",
       garmin_keys: Object.keys(r).slice(0, 40),
+      observation,
     };
 
     const payload = {
@@ -147,11 +184,23 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
     if (existing.error) continue;
 
     if (existing.data?.id) {
-      const up = await supabase.from("executed_workouts").update(payload).eq("id", existing.data.id);
+      const obsWithId = buildGarminObservationForRow(r, date, existing.data.id);
+      const up = await supabase
+        .from("executed_workouts")
+        .update({
+          ...payload,
+          trace_summary: { ...traceSummary, observation: obsWithId },
+        })
+        .eq("id", existing.data.id);
       if (!up.error) upserted += 1;
     } else {
-      const ins = await supabase.from("executed_workouts").insert(payload);
-      if (!ins.error) upserted += 1;
+      const ins = await supabase.from("executed_workouts").insert(payload).select("id").maybeSingle();
+      if (!ins.error && ins.data?.id) {
+        const obsWithId = buildGarminObservationForRow(r, date, ins.data.id);
+        const traceFinal = { ...traceSummary, observation: obsWithId };
+        const patch = await supabase.from("executed_workouts").update({ trace_summary: traceFinal }).eq("id", ins.data.id);
+        if (!patch.error) upserted += 1;
+      }
     }
   }
 

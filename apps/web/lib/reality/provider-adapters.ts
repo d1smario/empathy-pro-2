@@ -1,4 +1,9 @@
-import type { RealityDomain, RealityProvider, RealitySourceKind } from "@/lib/empathy/schemas";
+import type {
+  ObservationIngestTags,
+  RealityDomain,
+  RealityProvider,
+  RealitySourceKind,
+} from "@/lib/empathy/schemas";
 import { buildRealityIngestionEnvelope } from "@/lib/reality/build-ingestion-envelope";
 import { supportsRealityProviderFlow } from "@/lib/reality/provider-registry";
 import { normalizeRealityProvider } from "@/lib/reality/provider-utils";
@@ -24,6 +29,7 @@ type PersistRealityDeviceExportInput = {
   channelCoverage?: Record<string, number> | null;
   missingChannels?: string[] | null;
   recommendedInputs?: string[] | null;
+  observation?: ObservationIngestTags | null;
 };
 
 type RealityCallbackState = {
@@ -160,22 +166,27 @@ export async function persistRealityDeviceExport(input: PersistRealityDeviceExpo
     recommendedInputs: input.recommendedInputs ?? null,
     canonicalPreview: input.canonicalPreview ?? null,
     rawRefs: input.rawRefs ?? null,
+    observation: input.observation,
   });
 
   const supabase = createServerSupabaseClient();
+  const insertRow = {
+    athlete_id: input.athleteId,
+    provider: toStoredDeviceSyncProvider(canonicalProvider),
+    external_ref: input.externalRef ?? null,
+    status: input.status ?? "created",
+    sync_kind: "pull" as const,
+    external_event_id: input.externalRef ?? null,
+    payload: {
+      adapterKey: `${canonicalProvider}:${input.domain}:${input.sourceKind}`,
+      realityIngestion: ingestion,
+      sourcePayload: input.payload ?? null,
+    },
+  };
+
   const { data, error } = await supabase
     .from("device_sync_exports")
-    .insert({
-      athlete_id: input.athleteId,
-      provider: toStoredDeviceSyncProvider(canonicalProvider),
-      external_ref: input.externalRef ?? null,
-      status: input.status ?? "created",
-      payload: {
-        adapterKey: `${canonicalProvider}:${input.domain}:${input.sourceKind}`,
-        realityIngestion: ingestion,
-        sourcePayload: input.payload ?? null,
-      },
-    })
+    .insert(insertRow)
     .select("id, athlete_id, provider, status, external_ref, created_at, updated_at, payload")
     .single();
 
