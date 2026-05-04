@@ -244,6 +244,7 @@ const MICRO_BOARD_TEMPLATES: MicroBoardLines = {
     { name: "Colesterolo stim.", value: 0, unit: "mg" },
     { name: "Lipidi totali", value: 0, unit: "g" },
   ],
+  otherNutrients: [],
 };
 
 function matchIncomingLine(template: NutritionMicroLine, incoming: NutritionMicroLine[]): NutritionMicroLine | null {

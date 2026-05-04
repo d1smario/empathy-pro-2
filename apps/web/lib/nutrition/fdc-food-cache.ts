@@ -277,9 +277,8 @@ export async function getOrImportFdcFood(fdcId: number): Promise<FdcCachedFood |
       return { error: "Nessun nutriente per 100 g riconosciuto nella risposta FDC" };
     }
 
-    const micros = extractMicroNutrientsPer100g(nutrients);
-    const buckets = bucketMicros(micros);
     const rawCompact = compactRawNutrients(nutrients);
+    const parts = partitionFdcNutrientsFromCompact(rawCompact);
     const fiberPer100g = pickNutrientByName(nutrients, ["fiber, total dietary", "fiber"]);
     const sugarsPer100g = pickNutrientByName(nutrients, ["sugars, total including", "sugars, total"]);
     const metabolic = estimateMetabolicIndices({
