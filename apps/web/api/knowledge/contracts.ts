@@ -41,19 +41,25 @@ export type KnowledgeBindingViewModel = {
   error?: string | null;
 };
 
-export type KnowledgeCorpusImportInput = {
-  source: "pubmed";
-  q: string;
-  maxItems?: number;
-};
+export type KnowledgeCorpusImportInput =
+  | { source: "pubmed"; q: string; maxItems?: number }
+  | { source: "europe_pmc"; q: string; maxItems?: number };
 
-export type KnowledgeCorpusImportResult = {
-  source: "pubmed";
-  query: string;
-  importedCount: number;
-  documents: KnowledgeDocumentRef[];
-  error?: string | null;
-};
+export type KnowledgeCorpusImportResult =
+  | {
+      source: "pubmed";
+      query: string;
+      importedCount: number;
+      documents: KnowledgeDocumentRef[];
+      error?: string | null;
+    }
+  | {
+      source: "europe_pmc";
+      query: string;
+      importedCount: number;
+      documents: KnowledgeDocumentRef[];
+      error?: string | null;
+    };
 
 export type KnowledgeMechanismUpsertInput = {
   subject: KnowledgeEntityRef;

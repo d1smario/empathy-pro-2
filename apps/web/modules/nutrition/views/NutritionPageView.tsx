@@ -95,7 +95,10 @@ import {
   type IntelligentMealPlanResponseBody,
   type MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { buildNutritionAdaptationSectorBoxes } from "@/lib/nutrition/nutrition-adaptation-sector-strip";
+import {
+  buildNutritionAdaptationSectorBoxes,
+  type NutritionAdaptationSectorPillContext,
+} from "@/lib/nutrition/nutrition-adaptation-sector-strip";
 import {
   NutritionMealPlanDailyTargets,
   type NutritionMealPlanEnergyLedger,
@@ -915,9 +918,29 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       .join(" + ");
   }, [selectedPlanSessions]);
 
+  const nutritionSectorPillContext = useMemo((): NutritionAdaptationSectorPillContext | null => {
+    if (!athleteId) return null;
+    return {
+      physiology: physiologyState,
+      twin: twinState,
+      recoverySummary,
+      intolerances: profile?.intolerances ?? null,
+      allergies: profile?.allergies ?? null,
+      researchTraceSummaries,
+    };
+  }, [
+    athleteId,
+    physiologyState,
+    twinState,
+    recoverySummary,
+    profile?.intolerances,
+    profile?.allergies,
+    researchTraceSummaries,
+  ]);
+
   const nutritionSectorBoxes = useMemo(
-    () => buildNutritionAdaptationSectorBoxes(pathwayModulation, nutritionStimulusLine),
-    [pathwayModulation, nutritionStimulusLine],
+    () => buildNutritionAdaptationSectorBoxes(pathwayModulation, nutritionStimulusLine, nutritionSectorPillContext),
+    [pathwayModulation, nutritionStimulusLine, nutritionSectorPillContext],
   );
 
   /** Tab Integrazione: KPI da pathway + leve operative (allineati ai blocchi condivisi). */

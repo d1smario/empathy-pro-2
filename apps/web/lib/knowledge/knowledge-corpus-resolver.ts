@@ -6,6 +6,10 @@ import {
   searchKnowledgeCorpusDocumentLinks,
   searchKnowledgeCorpusDocuments,
 } from "@/lib/knowledge/knowledge-library-store";
+import {
+  backfillKnowledgeCorpusIfSparse,
+  enrichTraceHopDocumentsFromLiveLiterature,
+} from "@/lib/knowledge/knowledge-trace-live-literature";
 
 const GENERIC_TRACE_TAGS = new Set([
   "literature",
@@ -88,6 +92,13 @@ export async function resolveKnowledgeTraceHopLinks(input: {
     }
   }
 
+  const liveAdded = await enrichTraceHopDocumentsFromLiveLiterature({
+    hop: input.hop,
+    queries,
+    documentsById,
+    documentLimit,
+  });
+
   const documentIds = Array.from(documentsById.keys());
   const assertionIds = await listKnowledgeAssertionIdsForLinks({
     documentIds,
@@ -99,9 +110,16 @@ export async function resolveKnowledgeTraceHopLinks(input: {
     input.trace.trigger.entityLabel ??
     input.trace.trigger.adaptationTarget?.replaceAll("_", " ") ??
     "stimolo canonico";
+  const liveSuffix =
+    liveAdded > 0
+      ? ` Ingest live letteratura: +${liveAdded} documento${liveAdded === 1 ? "" : "i"} (PubMed / Europe PMC).`
+      : "";
+
   const resultSummary = documentIds.length || assertionIds.length
-    ? `Linked ${documentIds.length} corpus document${documentIds.length === 1 ? "" : "s"} and ${assertionIds.length} mechanism assertion${assertionIds.length === 1 ? "" : "s"} for ${traceLabel}.`
-    : `No persisted corpus or mechanism links matched ${traceLabel} yet.`;
+    ? `Linked ${documentIds.length} corpus document${documentIds.length === 1 ? "" : "s"} and ${assertionIds.length} mechanism assertion${assertionIds.length === 1 ? "" : "s"} for ${traceLabel}.${liveSuffix}`
+    : liveAdded > 0
+      ? `Ingest live letteratura: +${liveAdded} documento${liveAdded === 1 ? "" : "i"} (PubMed / Europe PMC) per ${traceLabel}.`
+      : `No persisted corpus or mechanism links matched ${traceLabel} yet.`;
 
   return {
     status: "complete",
@@ -113,6 +131,7 @@ export async function resolveKnowledgeTraceHopLinks(input: {
 
 export async function resolveKnowledgeCorpusQuery(input: KnowledgeQueryInput): Promise<KnowledgeQueryViewModel> {
   try {
+    await backfillKnowledgeCorpusIfSparse(input.q);
     const documents = await searchKnowledgeCorpusDocuments(input.q, 12);
     return {
       query: input,

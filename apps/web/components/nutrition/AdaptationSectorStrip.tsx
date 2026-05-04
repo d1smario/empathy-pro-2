@@ -35,6 +35,28 @@ export function AdaptationSectorStrip({
             >
               <div className="text-[0.65rem] font-semibold uppercase tracking-wider text-slate-500">{b.shortLabel}</div>
               <div className="mt-1 text-sm font-bold tabular-nums text-white">{b.valueLine}</div>
+              {b.pills?.length ? (
+                <div className="mt-1.5 flex flex-col gap-1" aria-label="Sintesi effetto e contesto">
+                  {b.pills.map((p) => (
+                    <span
+                      key={p.id}
+                      title={
+                        p.direction === "forward"
+                          ? "Effetto dello stimolo / della seduta sulla via (modello deterministico)."
+                          : "Contesto atleta (recovery, lab, dieta) che modula la via o le scelte alimentari."
+                      }
+                      className={`rounded-md px-1.5 py-0.5 font-mono text-[0.58rem] leading-tight ${
+                        p.direction === "forward"
+                          ? "border border-cyan-500/35 bg-cyan-500/10 text-cyan-100/95"
+                          : "border border-amber-500/35 bg-amber-500/10 text-amber-100/95"
+                      }`}
+                    >
+                      <span className="opacity-70">{p.direction === "forward" ? "→ " : "← "}</span>
+                      {p.text}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
               <details className="mt-1">
                 <summary className="cursor-pointer text-[0.6rem] text-slate-500">dettaglio</summary>
                 <p className="mt-1 text-[0.65rem] leading-snug text-slate-400">{b.detailLine}</p>

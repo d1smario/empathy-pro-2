@@ -8,12 +8,14 @@ export type KnowledgeSourceDatabase =
   | "kegg"
   | "hmdb"
   | "chebi"
+  | "chembl"
   | "mgnify"
   | "encode"
   | "ensembl"
   | "ncbi_gene"
   | "gene_ontology"
   | "metacyc"
+  | "rhea"
   | "manual_curation";
 
 export type KnowledgeEntityType =

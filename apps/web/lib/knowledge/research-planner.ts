@@ -25,7 +25,7 @@ function sourcePriorityForIntent(kind: ResearchIntent["kind"]): ResearchIntent["
   if (kind === "stimulus_interpretation") return ["pubmed", "europe_pmc"];
   if (kind === "mechanism_expansion") return ["reactome", "gene_ontology", "uniprot", "ncbi_gene"];
   if (kind === "pathway_expansion") return ["reactome", "kegg", "metacyc", "gene_ontology"];
-  if (kind === "reaction_expansion") return ["hmdb", "chebi", "metacyc", "uniprot"];
+  if (kind === "reaction_expansion") return ["hmdb", "chebi", "chembl", "rhea", "metacyc", "uniprot"];
   return ["pubmed", "reactome", "hmdb", "mgnify"];
 }
 
@@ -136,7 +136,7 @@ function hopsForTrigger(trigger: ResearchPlannerTrigger): ResearchHop[] {
       "intent-reactions",
       "reaction_lookup",
       reactionQuestion,
-      ["hmdb", "chebi", "metacyc", "kegg"],
+      ["hmdb", "chebi", "chembl", "rhea", "metacyc", "kegg"],
       ["metabolite", "nutrient", "process", "biomarker"],
       ["reaction_expansion", trigger.kind, trigger.adaptationTarget ?? slug(label)],
     ),

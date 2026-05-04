@@ -14,7 +14,14 @@ import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
-import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
+import {
+  effectiveDurationMinutesFromPro2Contract,
+  effectiveTssDisplayFromPro2Contract,
+  parsePro2BuilderSessionFromNotes,
+} from "@/lib/training/builder/pro2-session-notes";
+import { buildSessionMultilevelAnalysisStrip } from "@/lib/training/session-multilevel-analysis-strip";
+import { buildTrainingUnifiedAdaptationSectorBoxes } from "@/lib/training/training-unified-adaptation-sector-strip";
+import { AdaptationSectorStrip } from "@/components/nutrition/AdaptationSectorStrip";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
@@ -352,6 +359,32 @@ export default function TrainingSessionPageView() {
     }
   }, [date, dateValid]);
 
+  /** Stessi sei settori della nutrizione: facet seduta (→) + twin giornata (←). */
+  const trainingDaySectorBoxes = useMemo(() => {
+    const first = planned[0];
+    const contract = first ? parsePro2BuilderSessionFromNotes(first.notes ?? null) : null;
+    const durationMin = first ? effectiveDurationMinutesFromPro2Contract(contract, first.durationMinutes ?? 0) : null;
+    const tssFallback = typeof first?.tssTarget === "number" && Number.isFinite(first.tssTarget) ? first.tssTarget : 0;
+    const tss = first ? effectiveTssDisplayFromPro2Contract(contract, tssFallback) : null;
+    const vm = buildSessionMultilevelAnalysisStrip({
+      contract,
+      fallbackTss: tss,
+      fallbackDurationMin: durationMin,
+    });
+    const stim =
+      planned.length > 0
+        ? planned
+            .map((w) => {
+              const c = parsePro2BuilderSessionFromNotes(w.notes ?? null);
+              const name = (c?.sessionName ?? w.type ?? "Sessione").trim();
+              const tgt = c?.adaptationTarget ? ` · ${c.adaptationTarget}` : "";
+              return `${name}${tgt}`;
+            })
+            .join(" + ")
+        : null;
+    return buildTrainingUnifiedAdaptationSectorBoxes(vm, twinContextStrip, stim);
+  }, [planned, twinContextStrip]);
+
   return (
     <Pro2ModulePageShell
       eyebrow="Training · Giornata"
@@ -437,12 +470,20 @@ export default function TrainingSessionPageView() {
                 {err}
               </p>
             ) : (
-              <TrainingSessionSignalPanel
-                planned={planned}
-                executed={executed}
-                readSpineCoverage={readSpineCoverage}
-                twinContextStrip={twinContextStrip}
-              />
+              <div className="space-y-5">
+                <TrainingSessionSignalPanel
+                  planned={planned}
+                  executed={executed}
+                  readSpineCoverage={readSpineCoverage}
+                  twinContextStrip={twinContextStrip}
+                />
+                <AdaptationSectorStrip
+                  className="rounded-xl border border-orange-500/20 bg-black/20 p-3"
+                  title="Settori · adattamento (stimolo → vie · contesto twin)"
+                  boxes={trainingDaySectorBoxes}
+                  emptyHint="Nessun dato giornata."
+                />
+              </div>
             )}
           </Pro2SectionCard>
 
