@@ -11,9 +11,12 @@ export type HostedCheckoutAvailability = Record<EmpathyBasePlanId, boolean> & {
 /**
  * Checkout hosted senza utente Supabase (solo Pro 2 demo / staging).
  * Produzione: preferire flusso V1 autenticato + `billing_customers`.
+ *
+ * Valori considerati attivi: `1`, `true`, `yes` (case-insensitive, trim).
  */
 export function isAnonymousStripeCheckoutEnabled(): boolean {
-  return process.env.STRIPE_CHECKOUT_ANON_ENABLED === "1";
+  const v = process.env.STRIPE_CHECKOUT_ANON_ENABLED?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
 }
 
 function disabledHosted(): HostedCheckoutAvailability {

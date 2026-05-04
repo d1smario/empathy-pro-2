@@ -174,6 +174,7 @@ export async function resolveCanonicalPhysiologyState(athleteId: string): Promis
     asNum(profileRow.ftp_watts) ??
     pickNumberFromRecords(performanceRunRecords, ["ftp_w", "ftp", "ftpWatts"]) ??
     pickNumberFromRecords(lactateRunRecords, ["ftp_w", "ftp", "ftpWatts"]) ??
+    pickNumberFromRecords(metabolicRunRecords, ["mechanical_equivalent_cycling_w", "multisport_p_final_w"]) ??
     undefined;
   const lt1Watts =
     pickNumberFromRecords(metabolicRunRecords, ["lt1_watts", "lt1_w", "lt1", "lt1Watts"]) ??

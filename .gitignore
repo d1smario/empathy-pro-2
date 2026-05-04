@@ -13,6 +13,7 @@ dist/
 .env
 .env.local
 .env.*.local
+.env.local.production
 .env.vercel
 .env.vercel.*
 

@@ -30,12 +30,15 @@ async function readOptionalCheckoutUser(): Promise<{ userId: string; email: stri
 
 /**
  * Checkout subscription Silver/Gold (+ coach add-on opzionale), allineato agli env V1.
- * Solo con `STRIPE_CHECKOUT_ANON_ENABLED=1` (demo/staging).
+ * Solo con `STRIPE_CHECKOUT_ANON_ENABLED` attivo (`1`, `true` o `yes`) — demo/staging.
  */
 export async function POST(req: NextRequest) {
   if (!isAnonymousStripeCheckoutEnabled()) {
     return NextResponse.json(
-      { error: "Checkout anonimo disabilitato. Imposta STRIPE_CHECKOUT_ANON_ENABLED=1 solo per demo/staging." },
+      {
+        error:
+          "Checkout anonimo disabilitato. Imposta STRIPE_CHECKOUT_ANON_ENABLED=1 (o true) solo per demo/staging.",
+      },
       { status: 403 },
     );
   }
