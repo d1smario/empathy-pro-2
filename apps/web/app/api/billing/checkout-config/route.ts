@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hostedCheckoutAvailability, isAnonymousStripeCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
-import { readStripeWebhookSecret } from "@/lib/billing/stripe-secret";
+import { readStripeSecretKey, readStripeSecretKeyKind, readStripeWebhookSecret } from "@/lib/billing/stripe-secret";
 import { getStripePaymentLink } from "@/lib/stripe-payment-link";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +10,7 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 
 /**
  * Solo flag pubblici per UI / diagnostica (nessun segreto, nessun price ID).
+ * `stripeKeyKind` = prefisso chiave segreta (live/test), utile se Stripe risponde No such price.
  */
 export async function GET() {
   const hosted = hostedCheckoutAvailability();
@@ -19,6 +20,8 @@ export async function GET() {
       ok: true as const,
       webhookPath: "/api/webhooks/stripe" as const,
       anonCheckoutEnabled: isAnonymousStripeCheckoutEnabled(),
+      stripeSecretConfigured: readStripeSecretKey() != null,
+      stripeKeyKind: readStripeSecretKeyKind(),
       paymentLinkConfigured: getStripePaymentLink() != null,
       webhookSecretConfigured: readStripeWebhookSecret() != null,
       trialConfigured: trialDays != null,

@@ -21,3 +21,15 @@ export function readStripeWebhookSecret(): string | null {
   const v = normalizeStripeEnvValue(raw);
   return v.length > 0 ? v : null;
 }
+
+/** Solo per diagnostica (nessun segreto esposto). */
+export type StripeSecretKeyKind = "live" | "test" | "restricted" | "unknown";
+
+export function readStripeSecretKeyKind(): StripeSecretKeyKind {
+  const k = readStripeSecretKey();
+  if (!k) return "unknown";
+  if (k.startsWith("sk_live_")) return "live";
+  if (k.startsWith("sk_test_")) return "test";
+  if (k.startsWith("rk_live_") || k.startsWith("rk_test_")) return "restricted";
+  return "unknown";
+}

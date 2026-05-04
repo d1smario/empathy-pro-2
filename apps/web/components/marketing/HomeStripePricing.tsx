@@ -82,9 +82,17 @@ export function HomeStripePricing({
           withTrial,
         }),
       });
-      const data = (await res.json()) as { url?: string; error?: string };
+      const data = (await res.json()) as {
+        url?: string;
+        error?: string;
+        hint?: string;
+        stripeKeyKind?: string;
+      };
       if (!res.ok) {
-        setErr(data.error ?? `Errore ${res.status}`);
+        const parts = [data.error ?? `Errore ${res.status}`];
+        if (data.stripeKeyKind) parts.push(`Chiave Stripe: ${data.stripeKeyKind}`);
+        if (data.hint) parts.push(data.hint);
+        setErr(parts.join(" — "));
         return;
       }
       if (data.url) {

@@ -5,7 +5,7 @@ import { createStripeServerClient } from "@empathy/integrations-stripe";
 import { stripeCheckoutCancelUrl, stripeCheckoutSuccessUrl } from "@/lib/billing/stripe-app-url";
 import { isAnonymousStripeCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
-import { readStripeSecretKey } from "@/lib/billing/stripe-secret";
+import { readStripeSecretKey, readStripeSecretKeyKind } from "@/lib/billing/stripe-secret";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 import {
   formatMissingStripePriceMessage,
@@ -146,6 +146,22 @@ export async function POST(req: NextRequest) {
     const message =
       err instanceof Error ? err.message : typeof err === "string" ? err : "Errore Stripe sconosciuto.";
     console.error("[billing/checkout-session]", message);
-    return NextResponse.json({ error: message }, { status: 502 });
+    const keyKind = readStripeSecretKeyKind();
+    const noSuchPrice = /no such price/i.test(message);
+    return NextResponse.json(
+      {
+        error: message,
+        stripeKeyKind: keyKind,
+        ...(noSuchPrice
+          ? {
+              hint:
+                "Gli STRIPE_PRICE_* devono esistere nello stesso account e modalità Stripe della STRIPE_SECRET_KEY (sk_live_ con prezzi creati in Live; sk_test_ con prezzi in Test). Su Vercel controlla che i valori non abbiano virgolette extra.",
+              attemptedBasePriceId: basePriceId,
+              ...(addonPriceId ? { attemptedCoachPriceId: addonPriceId } : {}),
+            }
+          : {}),
+      },
+      { status: 502 },
+    );
   }
 }

@@ -3,10 +3,14 @@
 import { useEffect, useState } from "react";
 import { Pro2Link } from "@/components/ui/empathy";
 
+type StripeKeyKind = "live" | "test" | "restricted" | "unknown";
+
 type CheckoutConfigPayload = {
   ok: true;
   webhookPath: string;
   anonCheckoutEnabled: boolean;
+  stripeSecretConfigured?: boolean;
+  stripeKeyKind?: StripeKeyKind;
   paymentLinkConfigured: boolean;
   webhookSecretConfigured: boolean;
   trialConfigured: boolean;
@@ -108,6 +112,12 @@ export function SettingsBillingDiagnostics() {
           <div className="mt-6 font-mono text-xs">
             <Row label="Checkout anonimo abilitato (STRIPE_CHECKOUT_ANON_ENABLED)">
               <BoolPill value={data.anonCheckoutEnabled} />
+            </Row>
+            <Row label="STRIPE_SECRET_KEY presente">
+              <BoolPill value={data.stripeSecretConfigured ?? false} />
+            </Row>
+            <Row label="Modalità chiave Stripe (prefisso)">
+              <span className="text-gray-300">{data.stripeKeyKind ?? "—"}</span>
             </Row>
             <Row label="Payment link pubblico">
               <BoolPill value={data.paymentLinkConfigured} />
