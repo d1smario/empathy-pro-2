@@ -30,6 +30,7 @@ import { MaxOxPro2NumericEngineParams } from "@/components/physiology/MaxOxPro2N
 import { PhysiologyPro2LactateLab } from "@/components/physiology/PhysiologyPro2LactateLab";
 import { PhysiologyPro2MaxOxLab } from "@/components/physiology/PhysiologyPro2MaxOxLab";
 import { MetabolicPowerComponentsStackChart } from "@/components/physiology/MetabolicPowerComponentsStackChart";
+import { MultisportCpCurveSuggestionPanel } from "@/components/physiology/MultisportCpCurveSuggestionPanel";
 import { PhysiologyPro2MetabolicDashboard } from "@/components/physiology/PhysiologyPro2MetabolicDashboard";
 import { MultiscaleBottleneckPanelPro2 } from "@/components/knowledge/MultiscaleBottleneckPanelPro2";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
@@ -1610,6 +1611,16 @@ export default function MetabolicLabPage() {
       headerActions={
         <>
           <Pro2Link
+            href={`/physiology/daily/${(() => {
+              const d = new Date();
+              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+            })()}`}
+            variant="secondary"
+            className="justify-center border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15"
+          >
+            Giornata
+          </Pro2Link>
+          <Pro2Link
             href="/profile"
             variant="secondary"
             className="justify-center border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/15"
@@ -2212,6 +2223,21 @@ export default function MetabolicLabPage() {
               </div>
             </details>
           ) : null}
+
+          <MultisportCpCurveSuggestionPanel
+            athleteId={athleteId}
+            bodyMassKg={labBodyMassKg}
+            onApplyToCpInputs={(curve) => {
+              setCpInputs((prev) => {
+                const next = { ...prev };
+                for (const [label, w] of Object.entries(curve)) {
+                  if (typeof w === "number" && w > 0) next[label] = String(Math.round(w));
+                }
+                return next;
+              });
+            }}
+            onAfterApply={runProfileRecalc}
+          />
 
           <PhysiologyPro2MetabolicDashboard
             cpPointDefs={CP_POINTS}

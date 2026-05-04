@@ -3,8 +3,8 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import {
   bucketLines,
   scaleAndMergeMicros,
-  type FdcMicroBucket,
   type FdcMicroPer100g,
+  type MicroRollupBucket,
   type MicroTotalLine,
 } from "@/lib/nutrition/fdc-micronutrient-extract";
 import { getOrImportFdcFood } from "@/lib/nutrition/fdc-food-cache";
@@ -28,7 +28,10 @@ function toOut(lines: MicroTotalLine[], max: number): OutLine[] {
   }));
 }
 
-function microRows(raw: unknown, key: "vitamins" | "minerals" | "aminoAcids" | "fattyAcids"): FdcMicroPer100g[] {
+function microRows(
+  raw: unknown,
+  key: "vitamins" | "minerals" | "aminoAcids" | "fattyAcids" | "otherNutrients",
+): FdcMicroPer100g[] {
   if (!raw || typeof raw !== "object") return [];
   const list = (raw as Record<string, unknown>)[key];
   if (!Array.isArray(list)) return [];
@@ -46,7 +49,7 @@ function microRows(raw: unknown, key: "vitamins" | "minerals" | "aminoAcids" | "
     .filter((row): row is FdcMicroPer100g => Boolean(row));
 }
 
-function mergeAlreadyScaled(rows: FdcMicroPer100g[], bucket: FdcMicroBucket, acc: Map<number, MicroTotalLine>): void {
+function mergeAlreadyScaled(rows: FdcMicroPer100g[], bucket: MicroRollupBucket, acc: Map<number, MicroTotalLine>): void {
   for (const row of rows) {
     const prev = acc.get(row.nutrientId);
     if (!prev) {
@@ -123,14 +126,16 @@ export async function GET(req: NextRequest) {
       scaleAndMergeMicros(food.minerals, q, acc);
       scaleAndMergeMicros(food.aminoAcids, q, acc);
       scaleAndMergeMicros(food.fattyAcids, q, acc);
+      scaleAndMergeMicros(food.otherNutrients, q, acc, "other");
     }
 
     const grouped = bucketLines(acc.values());
-    const caps: Record<FdcMicroBucket, number> = {
+    const caps: Record<MicroRollupBucket, number> = {
       vitamins: 14,
       minerals: 12,
       aminoAcids: 22,
       fattyAcids: 10,
+      other: 28,
     };
 
     const payload = {
@@ -140,6 +145,7 @@ export async function GET(req: NextRequest) {
       minerals: toOut(grouped.minerals, caps.minerals),
       aminoAcids: toOut(grouped.aminoAcids, caps.aminoAcids),
       fattyAcids: toOut(grouped.fattyAcids, caps.fattyAcids),
+      otherNutrients: toOut(grouped.other, caps.other),
       fdcEntryCount: fdcRows.length,
       nonFdcEntryCount: nonFdcCount,
       importedFallbackCount,

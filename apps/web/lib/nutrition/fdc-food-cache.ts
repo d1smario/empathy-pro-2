@@ -6,12 +6,7 @@ import {
   summarizePer100gFromFdcNutrientRows,
   type FdcPer100gMacros,
 } from "@/lib/nutrition/usda-fdc-food-detail";
-import {
-  bucketForFdcNutrientName,
-  extractMicroNutrientsPer100g,
-  type FdcMicroBucket,
-  type FdcMicroPer100g,
-} from "@/lib/nutrition/fdc-micronutrient-extract";
+import { partitionFdcNutrientsFromCompact, type FdcMicroPer100g } from "@/lib/nutrition/fdc-micronutrient-extract";
 
 export type FdcCachedFood = FdcPer100gMacros & {
   publicationDate: string | null;
@@ -35,6 +30,7 @@ export type ScaledMicronutrientSnapshot = {
   minerals: FdcMicroPer100g[];
   aminoAcids: FdcMicroPer100g[];
   fattyAcids: FdcMicroPer100g[];
+  otherNutrients: FdcMicroPer100g[];
 };
 
 function toNumber(v: unknown): number | null {
@@ -146,33 +142,6 @@ function compactRawNutrients(nutrients: Array<Record<string, unknown>>): FdcMicr
     .filter((row): row is FdcMicroPer100g => Boolean(row));
 }
 
-function bucketMicros(micros: FdcMicroPer100g[]): Record<FdcMicroBucket, FdcMicroPer100g[]> {
-  const out: Record<FdcMicroBucket, FdcMicroPer100g[]> = {
-    vitamins: [],
-    minerals: [],
-    aminoAcids: [],
-    fattyAcids: [],
-  };
-  for (const row of micros) {
-    const bucket = bucketForFdcNutrientName(row.name);
-    if (bucket) out[bucket].push(row);
-  }
-  return out;
-}
-
-function otherNutrients(raw: Array<Record<string, unknown>>, micros: FdcMicroPer100g[]): FdcMicroPer100g[] {
-  const known = new Set(micros.map((m) => m.nutrientId));
-  return raw
-    .map((row) => {
-      const id = nutrientId(row);
-      const name = nutrientName(row);
-      const amount = nutrientAmount(row);
-      if (!id || !name || amount == null || known.has(id)) return null;
-      return { nutrientId: id, name, amountPer100g: amount, unit: nutrientUnit(row) };
-    })
-    .filter((row): row is FdcMicroPer100g => Boolean(row));
-}
-
 function asMicroArray(v: unknown): FdcMicroPer100g[] {
   if (!Array.isArray(v)) return [];
   return v
@@ -190,7 +159,7 @@ function asMicroArray(v: unknown): FdcMicroPer100g[] {
 }
 
 function rowToCachedFood(row: Record<string, unknown>): FdcCachedFood {
-  return {
+  const base = {
     fdcId: Number(row.fdc_id),
     description: String(row.description ?? "Alimento FDC"),
     dataType: row.data_type != null ? String(row.data_type) : null,
@@ -208,6 +177,21 @@ function rowToCachedFood(row: Record<string, unknown>): FdcCachedFood {
     glycemicLoadPer100g: row.glycemic_load_100g != null ? Number(row.glycemic_load_100g) : null,
     insulinLoadPer100g: row.insulin_load_100g != null ? Number(row.insulin_load_100g) : null,
     metabolicIndices: row.metabolic_indices && typeof row.metabolic_indices === "object" ? (row.metabolic_indices as Record<string, unknown>) : {},
+  };
+  const rawLines = asMicroArray(row.nutrients_raw);
+  if (rawLines.length > 0) {
+    const p = partitionFdcNutrientsFromCompact(rawLines);
+    return {
+      ...base,
+      vitamins: p.vitamins,
+      minerals: p.minerals,
+      aminoAcids: p.aminoAcids,
+      fattyAcids: p.fattyAcids,
+      otherNutrients: p.other,
+    };
+  }
+  return {
+    ...base,
     vitamins: asMicroArray(row.vitamins),
     minerals: asMicroArray(row.minerals),
     aminoAcids: asMicroArray(row.amino_acids),
@@ -238,6 +222,7 @@ export function scaleFdcMicros(food: FdcCachedFood, quantityG: number): ScaledMi
     minerals: scale(food.minerals),
     aminoAcids: scale(food.aminoAcids),
     fattyAcids: scale(food.fattyAcids),
+    otherNutrients: scale(food.otherNutrients),
   };
 }
 
@@ -322,11 +307,11 @@ export async function getOrImportFdcFood(fdcId: number): Promise<FdcCachedFood |
       glycemic_load_100g: metabolic.glycemicLoadPer100g,
       insulin_load_100g: metabolic.insulinLoadPer100g,
       metabolic_indices: metabolic.metabolicIndices,
-      vitamins: buckets.vitamins,
-      minerals: buckets.minerals,
-      amino_acids: buckets.aminoAcids,
-      fatty_acids: buckets.fattyAcids,
-      other_nutrients: otherNutrients(nutrients, micros),
+      vitamins: parts.vitamins,
+      minerals: parts.minerals,
+      amino_acids: parts.aminoAcids,
+      fatty_acids: parts.fattyAcids,
+      other_nutrients: parts.other,
       nutrients_raw: rawCompact,
       source_payload: {
         fdcId: raw.fdcId ?? id,

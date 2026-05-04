@@ -57,6 +57,11 @@ function shouldSkipName(lower: string): boolean {
   return SKIP_NAME_FRAGMENTS.some((f) => lower.includes(f));
 }
 
+/** Esclude macro/energia/acqua già coperti dalle colonne kcal/carbo/proteine/grassi in `nutrition_fdc_foods`. */
+export function shouldSkipFdcNutrientNameForMicroProfile(name: string): boolean {
+  return shouldSkipName(name.toLowerCase());
+}
+
 /** Classifica per bucket (ordine: grassi → amino → vitamine → minerali). */
 export function bucketForFdcNutrientName(name: string): FdcMicroBucket | null {
   const L = name.toLowerCase();
@@ -154,17 +159,70 @@ export function extractMicroNutrientsPer100g(foodNutrients: unknown): FdcMicroPe
   return out;
 }
 
-export type MicroTotalLine = { nutrientId: number; name: string; unit: string; total: number; bucket: FdcMicroBucket };
+export type MicroRollupBucket = FdcMicroBucket | "other";
+
+export type MicroTotalLine = { nutrientId: number; name: string; unit: string; total: number; bucket: MicroRollupBucket };
+
+/**
+ * Partiziona righe per-100g già compatte (es. da `nutrients_raw`): tutto ciò che non è macro duplicato
+ * va in un bucket noto (vitamine, minerali, …) oppure in `other` senza scartare il nutriente.
+ */
+export function partitionFdcNutrientsFromCompact(compact: FdcMicroPer100g[]): {
+  vitamins: FdcMicroPer100g[];
+  minerals: FdcMicroPer100g[];
+  aminoAcids: FdcMicroPer100g[];
+  fattyAcids: FdcMicroPer100g[];
+  other: FdcMicroPer100g[];
+} {
+  const byId = new Map<number, FdcMicroPer100g>();
+  for (const row of compact) {
+    if (!Number.isFinite(row.nutrientId) || row.nutrientId <= 0) continue;
+    if (!row.name?.trim()) continue;
+    if (shouldSkipFdcNutrientNameForMicroProfile(row.name)) continue;
+    if (!byId.has(row.nutrientId)) byId.set(row.nutrientId, row);
+  }
+
+  const vitamins: FdcMicroPer100g[] = [];
+  const minerals: FdcMicroPer100g[] = [];
+  const aminoAcids: FdcMicroPer100g[] = [];
+  const fattyAcids: FdcMicroPer100g[] = [];
+  const bucketedIds = new Set<number>();
+
+  for (const row of byId.values()) {
+    const b = bucketForFdcNutrientName(row.name);
+    if (b === "vitamins") {
+      vitamins.push(row);
+      bucketedIds.add(row.nutrientId);
+    } else if (b === "minerals") {
+      minerals.push(row);
+      bucketedIds.add(row.nutrientId);
+    } else if (b === "aminoAcids") {
+      aminoAcids.push(row);
+      bucketedIds.add(row.nutrientId);
+    } else if (b === "fattyAcids") {
+      fattyAcids.push(row);
+      bucketedIds.add(row.nutrientId);
+    }
+  }
+
+  const other: FdcMicroPer100g[] = [];
+  for (const row of byId.values()) {
+    if (!bucketedIds.has(row.nutrientId)) other.push(row);
+  }
+
+  return { vitamins, minerals, aminoAcids, fattyAcids, other };
+}
 
 export function scaleAndMergeMicros(
   per100: FdcMicroPer100g[],
   quantityG: number,
   acc: Map<number, MicroTotalLine>,
+  bucketOverride?: MicroRollupBucket,
 ): void {
   const f = quantityG / 100;
   if (!Number.isFinite(f) || f <= 0) return;
   for (const row of per100) {
-    const b = bucketForFdcNutrientName(row.name);
+    const b = bucketOverride ?? bucketForFdcNutrientName(row.name);
     if (!b) continue;
     const add = row.amountPer100g * f;
     const prev = acc.get(row.nutrientId);
@@ -176,13 +234,14 @@ export function scaleAndMergeMicros(
   }
 }
 
-export function bucketLines(lines: Iterable<MicroTotalLine>): Record<FdcMicroBucket, MicroTotalLine[]> {
+export function bucketLines(lines: Iterable<MicroTotalLine>): Record<MicroRollupBucket, MicroTotalLine[]> {
   const empty = (): MicroTotalLine[] => [];
-  const res: Record<FdcMicroBucket, MicroTotalLine[]> = {
+  const res: Record<MicroRollupBucket, MicroTotalLine[]> = {
     vitamins: empty(),
     minerals: empty(),
     aminoAcids: empty(),
     fattyAcids: empty(),
+    other: empty(),
   };
   for (const L of lines) {
     res[L.bucket].push(L);
@@ -192,5 +251,6 @@ export function bucketLines(lines: Iterable<MicroTotalLine>): Record<FdcMicroBuc
   res.minerals.sort(sortFn);
   res.aminoAcids.sort(sortFn);
   res.fattyAcids.sort(sortFn);
+  res.other.sort(sortFn);
   return res;
 }

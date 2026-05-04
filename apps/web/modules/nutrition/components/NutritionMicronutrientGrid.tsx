@@ -9,6 +9,8 @@ export type NutritionMicronutrientGridProps = {
   minerals: NutritionMicroLine[];
   aminoAcids: NutritionMicroLine[];
   fattyAcids: NutritionMicroLine[];
+  /** Nutrienti FDC non mappati sui quattro bucket (es. sodio, alcol, composti minori). */
+  otherNutrients: NutritionMicroLine[];
   /** Classe extra sul contenitore (es. nutrition-diary-micro-board senza titoli). */
   className?: string;
 };
@@ -19,6 +21,7 @@ export type DiaryMicroRollupPayload = {
   minerals: Array<{ name: string; total: number; unit: string }>;
   aminoAcids: Array<{ name: string; total: number; unit: string }>;
   fattyAcids: Array<{ name: string; total: number; unit: string }>;
+  otherNutrients?: Array<{ name: string; total: number; unit: string }>;
 };
 
 export function diaryMicroRollupToGridProps(m: DiaryMicroRollupPayload): NutritionMicronutrientGridProps {
@@ -29,6 +32,7 @@ export function diaryMicroRollupToGridProps(m: DiaryMicroRollupPayload): Nutriti
     minerals: map(m.minerals),
     aminoAcids: map(m.aminoAcids),
     fattyAcids: map(m.fattyAcids),
+    otherNutrients: map(m.otherNutrients ?? []),
   };
 }
 
@@ -54,14 +58,22 @@ function MicroCol({ title, lines }: { title: string; lines: NutritionMicroLine[]
   );
 }
 
-export function NutritionMicronutrientGrid({ vitamins, minerals, aminoAcids, fattyAcids, className }: NutritionMicronutrientGridProps) {
+export function NutritionMicronutrientGrid({
+  vitamins,
+  minerals,
+  aminoAcids,
+  fattyAcids,
+  otherNutrients,
+  className,
+}: NutritionMicronutrientGridProps) {
   return (
     <div className={className ?? "nutrition-micro-grid-wrap"}>
-      <div className="nutrition-diary-micro-grid">
+      <div className="nutrition-diary-micro-grid grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MicroCol title="Vitamine" lines={vitamins} />
         <MicroCol title="Minerali" lines={minerals} />
         <MicroCol title="Aminoacidi" lines={aminoAcids} />
         <MicroCol title="Grassi (frazioni)" lines={fattyAcids} />
+        <MicroCol title="Altri (FDC)" lines={otherNutrients} />
       </div>
     </div>
   );
@@ -262,6 +274,7 @@ function expandMicroBoardLines(lines: MicroBoardLines): MicroBoardLines {
     minerals: expandMicroLines(MICRO_BOARD_TEMPLATES.minerals, lines.minerals),
     aminoAcids: expandMicroLines(MICRO_BOARD_TEMPLATES.aminoAcids, lines.aminoAcids),
     fattyAcids: expandMicroLines(MICRO_BOARD_TEMPLATES.fattyAcids, lines.fattyAcids),
+    otherNutrients: expandMicroLines([], lines.otherNutrients ?? []),
   };
 }
 
@@ -355,8 +368,15 @@ function MicroPercentRadar({
   );
 }
 
-export function NutritionMicronutrientDailyBoard({ vitamins, minerals, aminoAcids, fattyAcids, className }: NutritionMicronutrientGridProps) {
-  const boardLines = expandMicroBoardLines({ vitamins, minerals, aminoAcids, fattyAcids });
+export function NutritionMicronutrientDailyBoard({
+  vitamins,
+  minerals,
+  aminoAcids,
+  fattyAcids,
+  otherNutrients,
+  className,
+}: NutritionMicronutrientGridProps) {
+  const boardLines = expandMicroBoardLines({ vitamins, minerals, aminoAcids, fattyAcids, otherNutrients });
 
   return (
     <div className={className ?? "empathy-micro-daily-board"}>
@@ -417,7 +437,14 @@ function MicronutrientTableSection({
 }
 
 /** Vista tabellare (meal plan / report): quattro blocchi colorati, lista completa dai props. */
-export function NutritionMicronutrientTable({ vitamins, minerals, aminoAcids, fattyAcids, className }: NutritionMicronutrientGridProps) {
+export function NutritionMicronutrientTable({
+  vitamins,
+  minerals,
+  aminoAcids,
+  fattyAcids,
+  otherNutrients,
+  className,
+}: NutritionMicronutrientGridProps) {
   return (
     <div className={className ?? "empathy-micro-table-outer"}>
       <div className="empathy-micro-table-stack">
@@ -425,6 +452,7 @@ export function NutritionMicronutrientTable({ vitamins, minerals, aminoAcids, fa
         <MicronutrientTableSection tone="minerals" title="Minerali" lines={minerals} />
         <MicronutrientTableSection tone="amino" title="Aminoacidi · profilo completo" lines={aminoAcids} />
         <MicronutrientTableSection tone="lipids" title="Grassi · catene · fibra" lines={fattyAcids} />
+        <MicronutrientTableSection tone="minerals" title="Altri nutrienti (USDA FDC)" lines={otherNutrients} />
       </div>
     </div>
   );
@@ -496,7 +524,7 @@ export function mealPlanDayTotalsToMicroLines(d: ScaledMealItemNutrients): Omit<
     { name: "Omega-3", value: n2(d.omega3G), unit: "g" },
   ].filter((row) => row.value > 0);
 
-  return { vitamins, minerals, aminoAcids, fattyAcids };
+  return { vitamins, minerals, aminoAcids, fattyAcids, otherNutrients: [] };
 }
 
 /** Tutti i micronutrienti del modello canonico (stima giorno da `dayTotals`), inclusi valori nulli → tabella completa. */
@@ -575,7 +603,7 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Lipidi totali", value: n2(d.fatG), unit: "g" },
   ];
 
-  return { vitamins, minerals, aminoAcids, fattyAcids };
+  return { vitamins, minerals, aminoAcids, fattyAcids, otherNutrients: [] };
 }
 
 /** Pathway / solver rollup (prima del piano LLM) → stesso layout del diario. */
@@ -612,5 +640,5 @@ export function pathwayNutrientSummaryToMicroLines(
     ...(minDailyMl > 0 ? [{ name: "Idratazione (target)", value: Math.round(minDailyMl), unit: "ml" as const }] : []),
   ];
 
-  return { vitamins, minerals, aminoAcids, fattyAcids };
+  return { vitamins, minerals, aminoAcids, fattyAcids, otherNutrients: [] };
 }

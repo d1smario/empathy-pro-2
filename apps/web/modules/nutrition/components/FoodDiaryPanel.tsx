@@ -87,6 +87,7 @@ type MicroRollupResponse = {
   minerals: Array<{ name: string; total: number; unit: string }>;
   aminoAcids: Array<{ name: string; total: number; unit: string }>;
   fattyAcids: Array<{ name: string; total: number; unit: string }>;
+  otherNutrients?: Array<{ name: string; total: number; unit: string }>;
   fdcEntryCount?: number;
   nonFdcEntryCount?: number;
 };

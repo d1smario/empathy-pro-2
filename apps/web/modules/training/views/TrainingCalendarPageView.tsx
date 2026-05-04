@@ -2,7 +2,7 @@
 
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/domain-training";
 import { formatExecutedWorkoutSummary } from "@empathy/domain-training";
-import { Activity, CalendarDays, FileUp, LineChart, Sparkles } from "lucide-react";
+import { Activity, CalendarDays, FileUp, Heart, LineChart, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -945,6 +945,17 @@ export default function TrainingCalendarPageView() {
                 icon={Sparkles}
               >
                 <p className="font-mono text-xs text-gray-500">{selectedDate}</p>
+
+                <div className="mt-3">
+                  <Pro2Link
+                    href={`/physiology/daily/${encodeURIComponent(selectedDate)}`}
+                    variant="ghost"
+                    className="border border-emerald-500/35 bg-emerald-500/10 text-emerald-100"
+                  >
+                    <Heart className="mr-1 inline h-4 w-4" aria-hidden />
+                    Fisiologia · giornata
+                  </Pro2Link>
+                </div>
 
                 <div className="mt-4 space-y-3">
                   <p className="text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">Pianificato · builder</p>
