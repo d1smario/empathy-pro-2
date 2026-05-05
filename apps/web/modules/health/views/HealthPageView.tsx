@@ -394,6 +394,11 @@ function isHormonePanelType(type: string | null | undefined): boolean {
   return t === "hormones" || t === "hormonal" || t === "hormone";
 }
 
+function structuredValuesFieldCount(values: Record<string, unknown> | null | undefined): number {
+  if (!values || typeof values !== "object") return 0;
+  return Object.keys(values).filter((k) => k !== "import").length;
+}
+
 function rowFromBloodPanel(panel: HealthPanelTimelineRow): {
   label: string;
   emoglobina: number | null;
@@ -1269,31 +1274,70 @@ export default function HealthPageView() {
         </div>
       </section>
 
-      {/* Archivio */}
-      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5">
-        <h3 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-400">Archivio test</h3>
-        <p className="mt-1 text-xs text-zinc-500">Memoria laboratorio collegata a biomarker_panels</p>
+      {/* Archivio referti (fine pagina) */}
+      <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5" aria-label="Archivio referti">
+        <h3 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-400">Archivio referti</h3>
+        <p className="mt-1 text-xs text-zinc-500">
+          Pannelli da <code className="text-zinc-400">biomarker_panels</code> per l&apos;atleta attivo
+          {!loadingTimeline && !timelineErr ? ` · ${panels.length} in memoria` : ""}.
+        </p>
         <ul className="mt-4 divide-y divide-white/10">
-          {panels.length === 0 ? (
-            <li className="py-6 text-center text-sm text-zinc-500">Nessun documento ancora. Usa «Carica esame» sopra.</li>
-          ) : (
+          {loadingTimeline ? (
+            <li className="py-6 text-center text-sm text-zinc-500">Caricamento archivio…</li>
+          ) : null}
+          {!loadingTimeline && timelineErr ? (
+            <li className="py-4" role="alert">
+              <p className="rounded-lg border border-amber-500/35 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
+                Lettura archivio non riuscita: {timelineErr}
+              </p>
+              <p className="mt-2 text-xs text-zinc-500">
+                Se il problema persiste, esci e rientra oppure verifica che l&apos;atleta selezionato sia quello con i referti in
+                database.
+              </p>
+            </li>
+          ) : null}
+          {!loadingTimeline && !timelineErr && panels.length === 0 ? (
+            <li className="py-6 text-center text-sm text-zinc-500">
+              Nessun referto in archivio per questo atleta. Usa «Carica esame» sopra, oppure applica lo seed SQL sullo stesso{" "}
+              <code className="text-zinc-400">athlete_id</code> attivo.
+            </li>
+          ) : null}
+          {!loadingTimeline &&
             panels.map((p) => {
-              const imp = (p.values as {
-                import?: { filename?: string; status?: string; storage_path?: string };
-              } | null)?.import;
+              const vals = (p.values ?? null) as Record<string, unknown> | null;
+              const imp = vals?.import as { filename?: string; status?: string; storage_path?: string } | undefined;
+              const nFields = structuredValuesFieldCount(vals);
               return (
-                <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
-                  <span className="font-medium text-white">{p.type}</span>
-                  <span className="text-zinc-500">{p.sample_date ?? p.created_at?.slice(0, 10) ?? "—"}</span>
-                  <span className="text-xs text-zinc-400">
-                    {imp?.filename
-                      ? `${imp.filename} · ${imp.status ?? "—"}${imp.storage_path ? ` · ${imp.storage_path}` : ""}`
-                      : "Valori strutturati"}
-                  </span>
+                <li
+                  key={p.id}
+                  className="grid gap-2 py-4 text-sm sm:grid-cols-[minmax(0,1.25fr)_auto_minmax(0,1fr)] sm:items-start sm:gap-x-4"
+                >
+                  <div className="min-w-0">
+                    <div className="font-semibold capitalize text-white">{p.type}</div>
+                    <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-zinc-500" title={p.source ?? ""}>
+                      {p.source ? `Sorgente: ${p.source}` : "Sorgente: —"}
+                    </div>
+                  </div>
+                  <div className="whitespace-nowrap font-mono text-xs text-zinc-400">
+                    {p.sample_date ?? p.reported_at?.slice(0, 10) ?? p.created_at?.slice(0, 10) ?? "—"}
+                  </div>
+                  <div className="min-w-0 break-words text-xs text-zinc-400">
+                    {imp?.filename ? (
+                      <>
+                        <span className="text-zinc-200">{imp.filename}</span>
+                        <span className="text-zinc-500"> · {imp.status ?? "—"}</span>
+                        {imp.storage_path ? <span className="block truncate text-zinc-600">{imp.storage_path}</span> : null}
+                      </>
+                    ) : (
+                      <span>
+                        Valori strutturati{nFields > 0 ? ` · ${nFields} campi` : ""}
+                        {nFields === 0 ? " (payload vuoto o solo import)" : ""}
+                      </span>
+                    )}
+                  </div>
                 </li>
               );
-            })
-          )}
+            })}
         </ul>
       </section>
     </Pro2ModulePageShell>

@@ -15,8 +15,9 @@ export async function fetchHealthPanelsTimeline(athleteId: string): Promise<{
   error: string | null;
 }> {
   const url = `/api/health/panels-timeline?athleteId=${encodeURIComponent(athleteId)}`;
+  const cookieOnly: RequestInit = { cache: "no-store", credentials: "same-origin" };
   let res = await fetch(url, {
-    cache: "no-store",
+    ...cookieOnly,
     headers: await buildSupabaseAuthHeaders(),
   });
   let json = (await res.json()) as
@@ -24,7 +25,7 @@ export async function fetchHealthPanelsTimeline(athleteId: string): Promise<{
     | { ok: false; error?: string };
   // In some production sessions a stale Bearer token can override valid cookies: retry cookie-only.
   if (!res.ok && res.status === 401) {
-    res = await fetch(url, { cache: "no-store" });
+    res = await fetch(url, cookieOnly);
     json = (await res.json()) as
       | { ok: true; panels: HealthPanelTimelineRow[] }
       | { ok: false; error?: string };
@@ -32,7 +33,7 @@ export async function fetchHealthPanelsTimeline(athleteId: string): Promise<{
   if (!res.ok || !json.ok) {
     return { panels: [], error: ("error" in json && json.error) || "Timeline non disponibile" };
   }
-  return { panels: json.panels, error: null };
+  return { panels: json.panels ?? [], error: null };
 }
 
 export async function uploadHealthDocument(input: {
@@ -75,20 +76,28 @@ export async function fetchHealthSystemMap(athleteId: string): Promise<{
   systemMap: HealthSystemMapViewModel;
   error: string | null;
 }> {
-  const res = await fetch(`/api/health/system-map?athleteId=${encodeURIComponent(athleteId)}`, {
-    cache: "no-store",
+  const url = `/api/health/system-map?athleteId=${encodeURIComponent(athleteId)}`;
+  const cookieOnly: RequestInit = { cache: "no-store", credentials: "same-origin" };
+  let res = await fetch(url, {
+    ...cookieOnly,
     headers: await buildSupabaseAuthHeaders(),
   });
-  const json = (await res.json()) as
+  let json = (await res.json()) as
     | { ok: true; systemMap: HealthSystemMapViewModel }
     | { ok: false; error?: string };
+  if (!res.ok && res.status === 401) {
+    res = await fetch(url, cookieOnly);
+    json = (await res.json()) as
+      | { ok: true; systemMap: HealthSystemMapViewModel }
+      | { ok: false; error?: string };
+  }
   if (!res.ok || !json.ok) {
     return {
       systemMap: { nodes: [], edges: [], bioenergeticsResponses: [], stagingRuns: [] },
       error: ("error" in json && json.error) || "System map non disponibile",
     };
   }
-  return { systemMap: json.systemMap, error: null };
+  return { systemMap: json.systemMap ?? { nodes: [], edges: [], bioenergeticsResponses: [], stagingRuns: [] }, error: null };
 }
 
 export async function patchHealthStagingRun(input: {
