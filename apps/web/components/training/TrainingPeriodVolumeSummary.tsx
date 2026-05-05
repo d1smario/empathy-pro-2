@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type {
@@ -346,7 +346,7 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
           )}
           <p className="mt-3 text-[0.65rem] leading-relaxed text-zinc-500">
             KPI da <code className="rounded border border-white/10 bg-white/5 px-1 text-zinc-400">GET /api/training/analytics</code> su trace reali.
-            I campi non presenti nelle tracce restano "—" finche' non arrivano da ingest provider/lab.
+            I campi non presenti nelle tracce restano non valorizzati finche non arrivano da ingest provider/lab.
           </p>
         </>
       )}
