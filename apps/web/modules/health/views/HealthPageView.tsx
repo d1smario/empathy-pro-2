@@ -388,6 +388,12 @@ function endocrineRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   };
 }
 
+function isHormonePanelType(type: string | null | undefined): boolean {
+  if (!type) return false;
+  const t = type.trim().toLowerCase();
+  return t === "hormones" || t === "hormonal" || t === "hormone";
+}
+
 function rowFromBloodPanel(panel: HealthPanelTimelineRow): {
   label: string;
   emoglobina: number | null;
@@ -403,7 +409,9 @@ function rowFromBloodPanel(panel: HealthPanelTimelineRow): {
   const ferritina = readNum(rec, ["ferritina", "ferritin", "ferritina_ng_ml"]);
   const vit_d = readNum(rec, ["vitamina_d", "vit_d", "vitamin_d", "25_oh_d"]);
   const b12 = readNum(rec, ["b12", "cobalamin", "vit_b12"]);
-  const glicemia = readNum(rec, ["glicemia", "glucose", "glucosio", "fasting_glucose_mg_dl"]);
+  const glicemiaMgDl = readNum(rec, ["glicemia", "glucose", "glucosio", "fasting_glucose_mg_dl"]);
+  const glicemiaMmol = readNum(rec, ["glucose_mmol_l", "glucose_mmol", "glycemia_mmol_l"]);
+  const glicemia = glicemiaMgDl ?? (glicemiaMmol != null ? Number((glicemiaMmol * 18.0182).toFixed(1)) : null);
   if (emoglobina == null && ferritina == null && vit_d == null && b12 == null && glicemia == null) return null;
   const label = panel.sample_date
     ? new Date(panel.sample_date).toLocaleDateString("it-IT", { month: "short", year: "numeric" })
@@ -534,7 +542,7 @@ export default function HealthPageView() {
 
   const latestInflammation = useMemo(() => panels.find((p) => p.type === "inflammation"), [panels]);
   const latestMicrobiota = useMemo(() => panels.find((p) => p.type === "microbiota"), [panels]);
-  const latestHormones = useMemo(() => panels.find((p) => p.type === "hormones"), [panels]);
+  const latestHormones = useMemo(() => panels.find((p) => isHormonePanelType(p.type)), [panels]);
   const latestEpigenetics = useMemo(() => panels.find((p) => p.type === "epigenetics"), [panels]);
   const latestOxidative = useMemo(() => panels.find((p) => p.type === "oxidative_stress"), [panels]);
 
