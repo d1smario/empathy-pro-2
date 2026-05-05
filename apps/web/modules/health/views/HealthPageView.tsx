@@ -510,9 +510,42 @@ export default function HealthPageView() {
       fetchHealthPanelsTimeline(athleteId),
       fetchHealthSystemMap(athleteId),
     ]);
-    setPanels(next);
-    setTimelineErr(error);
-    setTimelineDiag(diagnostics);
+    let resolvedPanels = next;
+    let resolvedErr = error;
+    let resolvedDiag = diagnostics;
+    // Production safeguard: retry direct cookie-only read if first pass returns empty without errors.
+    if (!error && next.length === 0) {
+      try {
+        const direct = await fetch(`/api/health/panels-timeline?athleteId=${encodeURIComponent(athleteId)}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        const json = (await direct.json()) as
+          | { ok: true; panels?: HealthPanelTimelineRow[] }
+          | {
+              ok: false;
+              error?: string;
+              requestedAthleteId?: string;
+              userProfileAthleteId?: string | null;
+            };
+        if (direct.ok && json.ok) {
+          resolvedPanels = Array.isArray(json.panels) ? json.panels : [];
+        } else if (!direct.ok || !json.ok) {
+          resolvedErr = ("error" in json && json.error) || resolvedErr || "Timeline non disponibile";
+          resolvedDiag = {
+            requestedAthleteId: ("requestedAthleteId" in json ? json.requestedAthleteId : athleteId) ?? athleteId,
+            userProfileAthleteId: ("userProfileAthleteId" in json ? json.userProfileAthleteId : null) ?? null,
+            errorCode: "direct_timeline_fallback_failed",
+            httpStatus: direct.status,
+          };
+        }
+      } catch {
+        // Keep first response as-is; diagnostic banner remains available.
+      }
+    }
+    setPanels(resolvedPanels);
+    setTimelineErr(resolvedErr);
+    setTimelineDiag(resolvedDiag);
     setSystemMap(nextMap);
     setSystemMapErr(mapErr);
     setLoadingTimeline(false);
