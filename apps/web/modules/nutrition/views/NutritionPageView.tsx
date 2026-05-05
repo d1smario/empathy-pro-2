@@ -1655,6 +1655,44 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     ];
   }, [nutritionDayModel?.performanceIntegration]);
 
+  /** Reality (diario) + twin snapshot: contesto L2 per il composer, senza sostituire il solver. */
+  const diaryTwinContextLinesForMealPlan = useMemo(() => {
+    const lines: string[] = [];
+    const insight = nutritionPerformanceIntegration?.diaryInsight;
+    if (insight && insight.windowDays != null && insight.loggedDays != null) {
+      lines.push(`Diario: ${insight.loggedDays}/${insight.windowDays} giorni con voci registrate (ingest).`);
+      if (insight.energyAdequacyRatio != null && Number.isFinite(insight.energyAdequacyRatio)) {
+        lines.push(`Adeguatezza energetica diario vs target ~${Math.round(insight.energyAdequacyRatio * 100)}%.`);
+      }
+      if (insight.avgDailyKcal != null) {
+        lines.push(`Media diario recente ~${Math.round(insight.avgDailyKcal)} kcal.`);
+      }
+    }
+    const dayRows = diaryMacroRows.filter((d) => d.date === selectedPlanDate);
+    if (dayRows.length) {
+      const kcalSum = dayRows.reduce((s, r) => s + r.kcal, 0);
+      if (kcalSum >= 30) {
+        lines.push(
+          `${selectedPlanDate}: voci diario ~${Math.round(kcalSum)} kcal (${dayRows.length} record) · confronto con piano deterministico.`,
+        );
+      }
+    }
+    const g = twinState?.glycogenStatus;
+    const read = twinState?.readiness;
+    if (typeof g === "number" && Number.isFinite(g) && typeof read === "number" && Number.isFinite(read)) {
+      lines.push(
+        `Twin: glicogeno ~${Math.round(g)}%, readiness ~${Math.round(read)}% (solo interpretazione — numeri piano da solver).`,
+      );
+    }
+    return lines;
+  }, [
+    diaryMacroRows,
+    nutritionPerformanceIntegration?.diaryInsight,
+    selectedPlanDate,
+    twinState?.glycogenStatus,
+    twinState?.readiness,
+  ]);
+
   const intelligentMealPlanRequest = useMemo(() => {
     if (!athleteId || !profile) return null;
     const mergedFoodExclusions = [
@@ -1688,6 +1726,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       })),
       mealPathwayBySlot,
       contextLines: [
+        ...diaryTwinContextLinesForMealPlan,
         recoverySummary?.guidance,
         ...(pathwayModulation?.notes ?? []).slice(0, 5),
         ...(nutritionPerformanceIntegration?.rationale ?? []).slice(0, 6),
@@ -1727,6 +1766,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     coachSessionFoodExclusions,
     selectedPlanSessions,
     nutritionApplicationDirective,
+    diaryTwinContextLinesForMealPlan,
   ]);
 
   const removeCoachMealPlanItem = useCallback((slot: MealSlotKey, index: number, foodLabel: string) => {

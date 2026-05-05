@@ -13,8 +13,10 @@
     "test:wahoo-plan-mapper": "tsx --test lib/integrations/wahoo-plan-from-generated-session.test.ts",
     "test:loop-closure": "tsx --test lib/training/expected-vs-obtained-loop-closure.test.ts",
     "test:functional-selector": "tsx --test lib/nutrition/functional-meal-selector.test.ts",
+    "test:physiology-bridge": "tsx --test lib/physiology/multisport-energy-physiology-bridge.test.ts",
+    "test:interpretation-boundaries": "tsx --test lib/generative-core/interpretation-boundaries.test.ts",
     "test:supabase-guards": "tsx --test lib/supabase/missing-relation-error.test.ts",
-    "test:operational-loop": "npm run test:loop-closure && npm run test:supabase-guards && npm run test:functional-selector && npm run test:wahoo-daycode && npm run test:wahoo-plan-mapper"
+    "test:operational-loop": "npm run test:loop-closure && npm run test:supabase-guards && npm run test:functional-selector && npm run test:wahoo-daycode && npm run test:wahoo-plan-mapper && npm run test:physiology-bridge && npm run test:interpretation-boundaries"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0",

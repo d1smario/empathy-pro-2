@@ -116,6 +116,7 @@ export async function GET(req: NextRequest) {
     const executed = ((executedRes.data ?? []) as ExecutedWorkoutDbRow[]).map(executedWorkoutFromDbRow);
     const readSpineCoverage = includeAthleteContext ? summarizeReadSpineCoverage(athleteMemory) : null;
     const twinContextStrip = includeAthleteContext ? twinContextStripFromMemory(athleteMemory?.twin ?? null) : null;
+    const physiologyState = includeAthleteContext ? (athleteMemory?.physiology ?? null) : null;
 
     return NextResponse.json(
       {
@@ -128,6 +129,7 @@ export async function GET(req: NextRequest) {
         executed,
         readSpineCoverage,
         twinContextStrip,
+        physiologyState,
       },
       { headers: NO_STORE },
     );

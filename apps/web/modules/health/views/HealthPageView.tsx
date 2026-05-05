@@ -48,6 +48,9 @@ import {
   type HealthPanelTimelineRow,
 } from "@/modules/health/services/health-module-api";
 
+/** Build produzione: niente KPI / grafici riempiti con serie demo quando mancano referti. */
+const SHOW_HEALTH_DEMO_FALLBACK_DATA = process.env.NODE_ENV !== "production";
+
 const DEMO_INFLAMMATION_RADAR = [
   { subject: "PCR-us", A: 78, fullMark: 100 },
   { subject: "IL-6", A: 72, fullMark: 100 },
@@ -160,7 +163,9 @@ function inflammationRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const ox = readNum(v, ["oxidized_ldl", "ldl_ox"]);
   const hasAny = [crp, il6, tnf, hcy, ox].some((x) => x != null);
   const d = DEMO_INFLAMMATION_RADAR;
-  if (!hasAny) return { rows: d, isDemo: true as const };
+  if (!hasAny) {
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
+  }
   return {
     rows: [
       { subject: "PCR-us", A: inflammationAxisScore(crp, 5, d[0].A), fullMark: 100 },
@@ -182,7 +187,9 @@ function microbiotaRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const div = readNum(v, ["diversity_shannon", "diversity", "alpha_diversity"]);
   const hasAny = [f, b, p, a, div].some((x) => x != null);
   const d = DEMO_MICROBIOTA_RADAR;
-  if (!hasAny) return { rows: d, isDemo: true as const };
+  if (!hasAny) {
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
+  }
   const divScore = div != null ? Math.max(0, Math.min(100, (div / 4.5) * 100)) : d[4].A;
   return {
     rows: [
@@ -206,7 +213,8 @@ function hormonesBarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const t4 = readNum(v, ["t4", "ft4", "t4_libera"]);
   const d = DEMO_HORMONES_BAR;
   const hasAny = [am, pm, tt, tsh, t3, t4].some((x) => x != null);
-  if (!hasAny) return { rows: d, isDemo: true as const };
+  if (!hasAny)
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
   return {
     rows: [
       { name: "Cortisolo AM", val: am ?? d[0].val },
@@ -225,7 +233,11 @@ function biologicalAgeRingScore(deltaYears: number | null, demo: number): number
   return Math.max(12, Math.min(100, 100 - Math.abs(deltaYears) * 9));
 }
 
-function epigeneticRingsFromPanel(panel: HealthPanelTimelineRow | undefined) {
+function epigeneticRingsFromPanel(panel: HealthPanelTimelineRow | undefined): Array<{ name: string; value: number; fill: string }> {
+  const missingPanel = !panel?.values || typeof panel.values !== "object";
+  if (missingPanel && !SHOW_HEALTH_DEMO_FALLBACK_DATA) {
+    return [];
+  }
   const v = (panel?.values as Record<string, unknown> | null) ?? null;
   const meth = readNum(v, ["methylation_score", "metilazione", "methylation", "score_metilazione"]);
   const delta = readNum(v, ["biological_age_delta", "epigenetic_age_delta", "eta_bio_vs_crono"]);
@@ -253,7 +265,9 @@ function epigeneticRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
     readNum(v, ["epigenetic_repair", "repair_score"]),
   ].some((x) => x != null);
   const d = DEMO_EPIGENETIC_RADAR;
-  if (!hasNumeric) return { rows: d, isDemo: true as const };
+  if (!hasNumeric) {
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
+  }
   const subjects = ["Metilazione", "Longevità", "Infiamm. cronica", "Detox genico", "Riparazione DNA"];
   return {
     rows: rings.map((r, i) => ({
@@ -304,7 +318,9 @@ function oxidativeStressRadarFromPanel(panel: HealthPanelTimelineRow | undefined
   const cat = readNum(v, ["catalase", "catalasi"]);
   const hasAny = [roms, bap, gsh, sod, cat].some((x) => x != null);
   const d = DEMO_OXIDATIVE_RADAR;
-  if (!hasAny) return { rows: d, isDemo: true as const };
+  if (!hasAny) {
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
+  }
   return {
     rows: [
       { subject: "d-ROMs ↓", A: oxidativeRomsScore(roms, d[0].A), fullMark: 100 },
@@ -357,7 +373,9 @@ function endocrineRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const igf = readNum(v, ["igf1", "igf_1", "igf-1"]);
   const hasAny = [am, pm, tt, tsh, dhea, igf].some((x) => x != null);
   const d = DEMO_ENDOCRINE_RADAR;
-  if (!hasAny) return { rows: d, isDemo: true as const };
+  if (!hasAny) {
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA ? { rows: d, isDemo: true as const } : { rows: [], isDemo: false as const };
+  }
   return {
     rows: [
       { subject: "Asse HPA", A: hpaAxisScore(am, pm, d[0].A), fullMark: 100 },
@@ -495,6 +513,7 @@ export default function HealthPageView() {
       .filter((r): r is NonNullable<typeof r> => r != null)
       .reverse();
     if (fromDb.length >= 2) return fromDb;
+    if (!SHOW_HEALTH_DEMO_FALLBACK_DATA) return fromDb.length ? fromDb : [];
     return DEMO_BLOOD_TREND.map((r) => ({
       label: r.label,
       emoglobina: r.emoglobina,
@@ -510,7 +529,7 @@ export default function HealthPageView() {
       .filter((p) => p.type === "blood")
       .map(rowFromBloodPanel)
       .filter((r): r is NonNullable<typeof r> => r != null);
-    return fromDb.length < 2;
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA && fromDb.length < 2;
   }, [panels]);
 
   const latestInflammation = useMemo(() => panels.find((p) => p.type === "inflammation"), [panels]);
@@ -531,7 +550,8 @@ export default function HealthPageView() {
       .filter((r): r is NonNullable<typeof r> => r != null)
       .reverse();
     if (fromDb.length >= 2) return { rows: fromDb, isDemo: false as const };
-    return { rows: DEMO_EPIGENETIC_TREND, isDemo: true as const };
+    if (SHOW_HEALTH_DEMO_FALLBACK_DATA) return { rows: DEMO_EPIGENETIC_TREND, isDemo: true as const };
+    return { rows: fromDb, isDemo: false as const };
   }, [panels]);
   const oxidativeRadar = useMemo(() => oxidativeStressRadarFromPanel(latestOxidative), [latestOxidative]);
   const endocrineRadar = useMemo(() => endocrineRadarFromPanel(latestHormones), [latestHormones]);
@@ -540,9 +560,10 @@ export default function HealthPageView() {
     const blood = panels.find((p) => p.type === "blood");
     const micro = panels.find((p) => p.type === "microbiota");
     const epi = panels.find((p) => p.type === "epigenetics");
-    const pick = (row: HealthPanelTimelineRow | undefined, keys: string[], fallback: number) => {
+    const pick = (row: HealthPanelTimelineRow | undefined, keys: string[], demoFallback: number): number | null => {
       const n = readNum((row?.values as Record<string, unknown>) ?? null, keys);
-      return n != null ? Math.round(Math.min(100, Math.max(0, n))) : fallback;
+      if (n != null) return Math.round(Math.min(100, Math.max(0, n)));
+      return SHOW_HEALTH_DEMO_FALLBACK_DATA ? demoFallback : null;
     };
     return {
       ematici: pick(blood, ["health_score_ematici", "score_ematici"], 92),
@@ -664,18 +685,23 @@ export default function HealthPageView() {
         <h2 className="text-center font-mono text-[0.7rem] font-bold uppercase tracking-[0.28em] text-fuchsia-300">
           Health score globale
         </h2>
+        {!SHOW_HEALTH_DEMO_FALLBACK_DATA ? (
+          <p className="mx-auto mt-3 max-w-lg text-center text-[0.7rem] text-zinc-500">
+            In produzione i punteggi sintetici compaiono solo se presenti nei referti caricati — niente valori demo.
+          </p>
+        ) : null}
         <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
+          {([
             { k: "Ematici", v: globalScores.ematici, border: "border-red-500/50", bg: "bg-red-950/40", text: "text-rose-200" },
             { k: "Microbiota", v: globalScores.microbiota, border: "border-emerald-500/50", bg: "bg-emerald-950/40", text: "text-emerald-200" },
             { k: "Epigenetica", v: globalScores.epigenetica, border: "border-violet-500/50", bg: "bg-violet-950/40", text: "text-violet-200" },
             { k: "Score totale", v: globalScores.totale, border: "border-orange-500/50", bg: "bg-orange-950/40", text: "text-orange-200" },
-          ].map((c) => (
+          ] satisfies Array<{ k: string; v: number | null; border: string; bg: string; text: string }>).map((c) => (
             <div
               key={c.k}
               className={`rounded-xl border ${c.border} ${c.bg} px-4 py-5 text-center shadow-inner`}
             >
-              <div className={`text-3xl font-black ${c.text}`}>{c.v}</div>
+              <div className={`text-3xl font-black ${c.text}`}>{c.v ?? "—"}</div>
               <div className="mt-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">{c.k}</div>
             </div>
           ))}
@@ -897,23 +923,29 @@ export default function HealthPageView() {
               Profilo a ciambelle
             </h3>
             <div className="h-[260px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadialBarChart
-                  cx="50%"
-                  cy="50%"
-                  innerRadius="20%"
-                  outerRadius="100%"
-                  data={epigeneticRings.map((r) => ({ ...r, fill: r.fill }))}
-                  startAngle={90}
-                  endAngle={-270}
-                >
-                  <RadialBar background dataKey="value" cornerRadius={6} />
-                  <Tooltip
-                    formatter={(v: number) => [`${v}%`, ""]}
-                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(167,139,250,0.35)" }}
-                  />
-                </RadialBarChart>
-              </ResponsiveContainer>
+              {epigeneticRings.length === 0 ? (
+                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                  Carica un panel <code className="mx-1 text-violet-300/90">epigenetics</code> per questo profilo.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadialBarChart
+                    cx="50%"
+                    cy="50%"
+                    innerRadius="20%"
+                    outerRadius="100%"
+                    data={epigeneticRings.map((r) => ({ ...r, fill: r.fill }))}
+                    startAngle={90}
+                    endAngle={-270}
+                  >
+                    <RadialBar background dataKey="value" cornerRadius={6} />
+                    <Tooltip
+                      formatter={(v: number) => [`${v}%`, ""]}
+                      contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(167,139,250,0.35)" }}
+                    />
+                  </RadialBarChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {epigeneticRings.map((r) => (
@@ -936,25 +968,25 @@ export default function HealthPageView() {
               Pathway · radar
             </h3>
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={epigeneticRadar.rows}>
-                  <PolarGrid stroke="rgba(255,255,255,0.12)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: "#c4b5fd", fontSize: 9 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-                  <Radar
-                    name="Score"
-                    dataKey="A"
-                    stroke="#a855f7"
-                    fill="#a855f7"
-                    fillOpacity={0.35}
-                    strokeWidth={2}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(168,85,247,0.4)" }}
-                    formatter={(v: number) => [`${Math.round(v)}`, ""]}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+              {epigeneticRadar.rows.length === 0 ? (
+                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                  Nessun dato numerico epigenetico strutturato — importa un referto{' '}
+                  <code className="mx-1 text-violet-300/90">epigenetics</code>.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="78%" data={epigeneticRadar.rows}>
+                    <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#c4b5fd", fontSize: 9 }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                    <Radar name="Score" dataKey="A" stroke="#a855f7" fill="#a855f7" fillOpacity={0.35} strokeWidth={2} />
+                    <Tooltip
+                      contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(168,85,247,0.4)" }}
+                      formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -965,8 +997,13 @@ export default function HealthPageView() {
             {epigeneticTrend.isDemo ? " (demo)" : ""}
           </h3>
           <div className="h-[260px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={epigeneticTrend.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            {epigeneticTrend.rows.length === 0 ? (
+              <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                Servono almeno due estrazioni epigenetiche con metilazione / detox / riparazione per il trend.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={epigeneticTrend.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="epiMeth" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#a855f7" stopOpacity={0.55} />
@@ -1015,8 +1052,9 @@ export default function HealthPageView() {
                   strokeWidth={2}
                   connectNulls
                 />
-              </AreaChart>
-            </ResponsiveContainer>
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </section>
@@ -1038,25 +1076,24 @@ export default function HealthPageView() {
               Equilibrio assi
             </h3>
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={endocrineRadar.rows}>
-                  <PolarGrid stroke="rgba(255,255,255,0.12)" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: "#fdba74", fontSize: 9 }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-                  <Radar
-                    name="Score"
-                    dataKey="A"
-                    stroke="#fb923c"
-                    fill="#fb923c"
-                    fillOpacity={0.32}
-                    strokeWidth={2}
-                  />
-                  <Tooltip
-                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(251,146,60,0.4)" }}
-                    formatter={(v: number) => [`${Math.round(v)}`, ""]}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+              {endocrineRadar.rows.length === 0 ? (
+                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                  Carica un panel <code className="mx-1 text-orange-200/90">hormones</code> con numeri strutturati.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart cx="50%" cy="50%" outerRadius="78%" data={endocrineRadar.rows}>
+                    <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: "#fdba74", fontSize: 9 }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                    <Radar name="Score" dataKey="A" stroke="#fb923c" fill="#fb923c" fillOpacity={0.32} strokeWidth={2} />
+                    <Tooltip
+                      contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(251,146,60,0.4)" }}
+                      formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
           <div>
@@ -1064,18 +1101,24 @@ export default function HealthPageView() {
               Valori ormonali (referto)
             </h3>
             <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={hormonesBar.rows} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                  <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 9 }} angle={-20} textAnchor="end" height={64} />
-                  <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                  <Tooltip
-                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(249,115,22,0.35)" }}
-                    formatter={(v: number) => [v, ""]}
-                  />
-                  <Bar dataKey="val" name="Valore" fill="#ea580c" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+              {hormonesBar.rows.length === 0 ? (
+                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                  Nessun dato ormonale strutturato — importa un referto <code className="mx-1 text-orange-200/90">hormones</code>.
+                </p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={hormonesBar.rows} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                    <XAxis dataKey="name" tick={{ fill: "#9ca3af", fontSize: 9 }} angle={-20} textAnchor="end" height={64} />
+                    <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(249,115,22,0.35)" }}
+                      formatter={(v: number) => [v, ""]}
+                    />
+                    <Bar dataKey="val" name="Valore" fill="#ea580c" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </div>
         </div>
@@ -1092,25 +1135,24 @@ export default function HealthPageView() {
           {oxidativeRadar.isDemo ? "Demo finché mancano valori." : ""}
         </p>
         <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={oxidativeRadar.rows}>
-              <PolarGrid stroke="rgba(255,255,255,0.12)" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "#7dd3fc", fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-              <Radar
-                name="Score"
-                dataKey="A"
-                stroke="#38bdf8"
-                fill="#38bdf8"
-                fillOpacity={0.35}
-                strokeWidth={2}
-              />
-              <Tooltip
-                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(56,189,248,0.4)" }}
-                formatter={(v: number) => [`${Math.round(v)}`, ""]}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+          {oxidativeRadar.rows.length === 0 ? (
+            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+              Carica un panel <code className="mx-1 text-sky-300">oxidative_stress</code> per vedere questo radar.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="78%" data={oxidativeRadar.rows}>
+                <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: "#7dd3fc", fontSize: 10 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                <Radar name="Score" dataKey="A" stroke="#38bdf8" fill="#38bdf8" fillOpacity={0.35} strokeWidth={2} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(56,189,248,0.4)" }}
+                  formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </section>
 
@@ -1125,25 +1167,24 @@ export default function HealthPageView() {
           {inflammationRadar.isDemo ? "— demo finché manca un panel `inflammation` con numeri" : ""}
         </p>
         <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={inflammationRadar.rows}>
-              <PolarGrid stroke="rgba(255,255,255,0.12)" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-              <Radar
-                name="Score"
-                dataKey="A"
-                stroke="#f59e0b"
-                fill="#f59e0b"
-                fillOpacity={0.35}
-                strokeWidth={2}
-              />
-              <Tooltip
-                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(245,158,11,0.35)" }}
-                formatter={(v: number) => [`${Math.round(v)}`, ""]}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+          {inflammationRadar.rows.length === 0 ? (
+            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+              Carica un panel <code className="mx-1 text-amber-200/90">inflammation</code> per questo grafico.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="78%" data={inflammationRadar.rows}>
+                <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                <Radar name="Score" dataKey="A" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.35} strokeWidth={2} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(245,158,11,0.35)" }}
+                  formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </section>
 
@@ -1158,25 +1199,24 @@ export default function HealthPageView() {
           {microbiotaRadar.isDemo ? "— demo finché manca un panel `microbiota` con numeri" : ""}
         </p>
         <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="78%" data={microbiotaRadar.rows}>
-              <PolarGrid stroke="rgba(255,255,255,0.12)" />
-              <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
-              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
-              <Radar
-                name="Valore"
-                dataKey="A"
-                stroke="#34d399"
-                fill="#34d399"
-                fillOpacity={0.35}
-                strokeWidth={2}
-              />
-              <Tooltip
-                contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(52,211,153,0.35)" }}
-                formatter={(v: number) => [`${Math.round(v)}`, ""]}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+          {microbiotaRadar.rows.length === 0 ? (
+            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+              Carica un panel <code className="mx-1 text-emerald-200/90">microbiota</code> per questo grafico.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart cx="50%" cy="50%" outerRadius="78%" data={microbiotaRadar.rows}>
+                <PolarGrid stroke="rgba(255,255,255,0.12)" />
+                <PolarAngleAxis dataKey="subject" tick={{ fill: "#a1a1aa", fontSize: 10 }} />
+                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fill: "#71717a", fontSize: 9 }} />
+                <Radar name="Valore" dataKey="A" stroke="#34d399" fill="#34d399" fillOpacity={0.35} strokeWidth={2} />
+                <Tooltip
+                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(52,211,153,0.35)" }}
+                  formatter={(v: number) => [`${Math.round(v)}`, ""]}
+                />
+              </RadarChart>
+            </ResponsiveContainer>
+          )}
         </div>
       </section>
 
@@ -1194,23 +1234,29 @@ export default function HealthPageView() {
           <h3 className="text-base font-bold text-pink-400">Andamento parametri ematici</h3>
           <p className="text-xs text-zinc-500">Ultimi 6 mesi · valori principali {usingDemoTrend ? "(demo finché mancano ≥2 punti reali)" : ""}</p>
           <div className="mt-4 h-[320px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={bloodChartRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-                <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
-                <Tooltip
-                  contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(244,63,94,0.35)" }}
-                  labelStyle={{ color: "#fda4af" }}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="emoglobina" name="Emoglobina (g/dL)" stroke="#f87171" strokeWidth={2} dot />
-                <Line type="monotone" dataKey="ferritina" name="Ferritina (ng/mL)" stroke="#fb923c" strokeWidth={2} dot />
-                <Line type="monotone" dataKey="vit_d" name="Vit. D (ng/mL)" stroke="#eab308" strokeWidth={2} dot />
-                <Line type="monotone" dataKey="b12" name="B12 (pg/mL)" stroke="#4ade80" strokeWidth={2} dot />
-                <Line type="monotone" dataKey="glicemia" name="Glicemia (mg/dL)" stroke="#60a5fa" strokeWidth={2} dot />
-              </LineChart>
-            </ResponsiveContainer>
+            {bloodChartRows.length === 0 ? (
+              <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                Servono almeno due punti ematici strutturati per il grafico — importa panel <code className="mx-1 text-rose-200/90">blood</code>.
+              </p>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={bloodChartRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                  <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
+                  <Tooltip
+                    contentStyle={{ background: "#0a0a0c", border: "1px solid rgba(244,63,94,0.35)" }}
+                    labelStyle={{ color: "#fda4af" }}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="emoglobina" name="Emoglobina (g/dL)" stroke="#f87171" strokeWidth={2} dot />
+                  <Line type="monotone" dataKey="ferritina" name="Ferritina (ng/mL)" stroke="#fb923c" strokeWidth={2} dot />
+                  <Line type="monotone" dataKey="vit_d" name="Vit. D (ng/mL)" stroke="#eab308" strokeWidth={2} dot />
+                  <Line type="monotone" dataKey="b12" name="B12 (pg/mL)" stroke="#4ade80" strokeWidth={2} dot />
+                  <Line type="monotone" dataKey="glicemia" name="Glicemia (mg/dL)" stroke="#60a5fa" strokeWidth={2} dot />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </section>

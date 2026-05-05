@@ -8,6 +8,7 @@ import type { FormEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
+import { TrainingPeriodVolumeSummary } from "@/components/training/TrainingPeriodVolumeSummary";
 import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
@@ -752,6 +753,10 @@ export default function TrainingCalendarPageView() {
               </div>
             </div>
           </section>
+
+          <div className="mb-8 w-full min-w-0">
+            <TrainingPeriodVolumeSummary athleteId={athleteId} />
+          </div>
 
           <div className="mb-10 w-full min-w-0">
             <TrainingCalendarAnalyzer

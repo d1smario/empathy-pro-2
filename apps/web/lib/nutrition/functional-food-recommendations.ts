@@ -136,6 +136,21 @@ export const FUNCTIONAL_NUTRIENT_CATALOG: FunctionalNutrientCatalogEntry[] = [
     ],
   },
   {
+    id: "quercetin_polyphenol",
+    kind: "other",
+    displayNameIt: "Quercetina (polifenolo redox/epigenetico)",
+    pathwayIds: ["mitochondrial_redox_support", "gut_absorption_barrier"],
+    textHints: ["quercetin", "quercetina", "polyphenol", "polifenol", "nrf2", "redox"],
+    searchQueries: ["red onion", "capers", "apple with peel", "buckwheat"],
+    rationaleIt:
+      "Polifenolo alimentare associato a modulazione redox (asse NRF2) e segnali epigenetici adattativi; resta supporto nutrizionale, non intervento farmacologico.",
+    curatedExamples: [
+      { name: "Cipolla rossa", why: "Fonte pratica di quercetina nel pasto quotidiano." },
+      { name: "Capperi", why: "Densita' elevata per piccole porzioni (supporto condimento)." },
+      { name: "Mela con buccia", why: "Polifenoli + fibra con impatto semplice su snack." },
+    ],
+  },
+  {
     id: "folate_b9",
     kind: "vitamin",
     displayNameIt: "Folati (B9, sintesi nucleotidi / turnover cellulare)",

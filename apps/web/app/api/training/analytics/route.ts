@@ -5,6 +5,10 @@ import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
+import {
+  rollupExecutedVolumeFromLoadRows,
+  rollupRecoveryContinuousFromLoadRows,
+} from "@/lib/training/analytics/trace-volume-rollup";
 import { buildTrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-regeneration-loop";
 import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
@@ -45,7 +49,9 @@ function summarizePlanWindow(
   }>,
   windowSize: number,
 ) {
-  const window = compareSeries.slice(-windowSize);
+  const n = Number.isFinite(windowSize) ? Math.floor(windowSize) : 0;
+  const window =
+    compareSeries.length === 0 || n <= 0 ? [] : n >= compareSeries.length ? compareSeries : compareSeries.slice(-n);
   const planned = window.reduce((sum, day) => sum + day.planned, 0);
   const executed = window.reduce((sum, day) => sum + day.executed, 0);
   const internal = window.reduce((sum, day) => sum + day.internal, 0);
@@ -154,6 +160,10 @@ export async function GET(req: NextRequest) {
     const last28 = summarizeWindow(series, 28);
     const planLast7 = summarizePlanWindow(compareSeries, 7);
     const planLast28 = summarizePlanWindow(compareSeries, 28);
+    const planLast90 = summarizePlanWindow(compareSeries, Math.min(90, compareSeries.length));
+    const planFullRange = summarizePlanWindow(compareSeries, compareSeries.length);
+    const executedVolumeRollup = rollupExecutedVolumeFromLoadRows(rows as ExecutedWorkoutLoadRow[]);
+    const recoveryContinuousRollup = rollupRecoveryContinuousFromLoadRows(rows as ExecutedWorkoutLoadRow[]);
     let recoverySummary: Awaited<ReturnType<typeof resolveLatestRecoverySummary>> = null;
     try {
       recoverySummary = await resolveLatestRecoverySummary(athleteId);
@@ -223,7 +233,11 @@ export async function GET(req: NextRequest) {
         planWindows: {
           last7: planLast7,
           last28: planLast28,
+          last90: planLast90,
+          fullRange: planFullRange,
         },
+        executedVolumeRollup,
+        recoveryContinuousRollup,
         adaptationLoop,
         twinState,
         athleteMemory,

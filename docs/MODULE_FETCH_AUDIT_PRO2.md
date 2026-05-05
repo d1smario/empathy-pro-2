@@ -54,6 +54,22 @@
 
 **Legacy:** `GET /api/physiology/profile-latest` resta disponibile (cookie session) ed è marcato `@deprecated`; nessun componente prodotto elencato sopra dovrebbe dipendervi.
 
+| Percorso | Endpoint |
+|----------|----------|
+| `components/training/TrainingPeriodVolumeSummary.tsx` (se presente) | `/api/training/analytics` |
+| `app/api/physiology/multisport-snapshot/route.ts` | `POST /api/physiology/multisport-snapshot` (orchestrazione compute → `metabolic_lab_runs`, write) |
+
+---
+
+## Piano “level-up” Pro 2 — stato checklist (sprint)
+
+- **Fase 0 · Smoke:** dalla root monorepo `npm run verify` (o `npm run build` se verify non disponibile in CI locale). Moduli: dashboard, training (hub/calendario), nutrition, physiology, health, settings — nessun redirect loop.
+- **Fase 1 · Lettura:** `GET /api/training/planned-window` con `includeAthleteContext` default include `resolveAthleteMemory` e ora espone anche `physiologyState` quando il contesto è attivo (evita fetch paralleli ridondanti per strip fisiologia).
+- **Fase 2 · Ingest:** qualità import file → `trace_summary.import_quality` su `executed_workouts` (canali + nota); analytics espone `executedVolumeRollup` (km, dislivello, kcal, ore) nella finestra `from`/`to`.
+- **Fase 3 · Generativo:** `POST /api/physiology/multisport-snapshot` = multisport energy → doppio insert `metabolic_lab_runs` (metabolic_profile + lactate_analysis), stessi contratti di `POST /api/physiology/snapshot`.
+- **Fase 4 · UI:** calendario training → `TrainingPeriodVolumeSummary` con preset 7 / 28 / 90 / 365 giorni; Health → score globali senza fallback numerici finti se mancano pannelli reali.
+- **Fase 5 · Test:** `lib/physiology/multisport-energy-physiology-bridge.test.ts` + `lib/generative-core/interpretation-boundaries.test.ts` (gate LLM vs motori).
+
 ---
 
 ## `fetchWithTimeout("/api/...")`

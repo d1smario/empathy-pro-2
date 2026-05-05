@@ -14,7 +14,13 @@ import { updateVendorOauthTokens } from "@/lib/integrations/vendor-oauth-persist
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
+import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { getMergedIngestStreams } from "@/lib/integrations/ingest-stream-policy";
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+}
 
 function whoopMaxCollectionPages(): number {
   const raw = process.env.WHOOP_API_MAX_COLLECTION_PAGES?.trim();
@@ -147,6 +153,117 @@ function buildWhoopObservation(
   return observation;
 }
 
+function num(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+function durationMinutesFromWhoopWorkout(rec: Record<string, unknown>): number {
+  const durationMs = num(rec.duration_milli) ?? num(rec.durationMillis);
+  if (durationMs != null && durationMs > 0) return Math.max(1, Math.round(durationMs / 60000));
+  const durationSec = num(rec.duration_seconds) ?? num(rec.duration);
+  if (durationSec != null && durationSec > 0) return Math.max(1, Math.round(durationSec / 60));
+  return 0;
+}
+
+function whoopWorkoutChannelCoverage(rec: Record<string, unknown>): Record<string, number> {
+  const score = asRecord(rec.score);
+  const merged: Record<string, unknown> = { ...rec, ...(score ?? {}) };
+  const hasHr = num(merged.average_heart_rate) != null || num(merged.max_heart_rate) != null;
+  const hasPower = num(merged.average_watts) != null || num(merged.max_watts) != null;
+  const hasSpeed = num(merged.distance_meter) != null || num(merged.max_velocity_meter_per_second) != null;
+  const hasCadence = num(merged.average_cadence_rpm) != null || num(merged.average_cadence_spm) != null;
+  const hasAltitude = num(merged.elevation_gain_meter) != null;
+  return {
+    power: hasPower ? 100 : 0,
+    hr: hasHr ? 100 : 0,
+    speed: hasSpeed ? 100 : 0,
+    cadence: hasCadence ? 100 : 0,
+    altitude: hasAltitude ? 100 : 0,
+    temperature: 0,
+  };
+}
+
+async function upsertExecutedWorkoutFromWhoopWorkout(input: {
+  athleteId: string;
+  workoutId: string;
+  day: string | null;
+  rec: Record<string, unknown>;
+}): Promise<void> {
+  const date = input.day;
+  if (!date) return;
+  const score = asRecord(input.rec.score);
+  const merged: Record<string, unknown> = { ...input.rec, ...(score ?? {}) };
+  const durationMinutes = durationMinutesFromWhoopWorkout(input.rec);
+  if (durationMinutes <= 0) return;
+  const strain = num(merged.strain) ?? 0;
+  const tss = Math.max(0, strain * 20);
+  const kj = num(merged.kilojoule);
+  const kcal = kj != null && kj > 0 ? Math.round((kj / 4.184) * 100) / 100 : null;
+  const channelCoverage = whoopWorkoutChannelCoverage(input.rec);
+  const quality = buildExecutedTrainingImportQuality({ channelCoverage });
+  const source = "api_sync:whoop:workout";
+  const supabase = createServerSupabaseClient();
+  const traceSummary = {
+    parser_engine: "whoop_v2_rest_workout",
+    parser_version: "2",
+    source,
+    whoop_workout_id: input.workoutId,
+    sport_name: merged.sport_name ?? input.rec.sport_name ?? null,
+    strain,
+    average_heart_rate: num(merged.average_heart_rate),
+    max_heart_rate: num(merged.max_heart_rate),
+    distance_m: num(merged.distance_meter),
+    elevation_gain_m: num(merged.elevation_gain_meter),
+    kcal,
+    kj,
+    channels_available: Object.fromEntries(Object.entries(channelCoverage).map(([k, v]) => [k, v > 0])) as Record<
+      string,
+      boolean
+    >,
+    import_quality: {
+      coverage_pct: quality.coveragePct,
+      quality_status: quality.qualityStatus,
+      quality_note: quality.qualityNote,
+      missing_channels: quality.missingChannels,
+      recommended_inputs: quality.recommendedInputs,
+      channel_coverage_pct: channelCoverage,
+    },
+  };
+  const externalId = `whoop:${input.workoutId}`;
+  const payload = {
+    athlete_id: input.athleteId,
+    date,
+    duration_minutes: durationMinutes,
+    tss,
+    kcal,
+    kj,
+    source,
+    external_id: externalId,
+    trace_summary: traceSummary,
+    subjective_notes: null as string | null,
+  };
+  const existing = await supabase
+    .from("executed_workouts")
+    .select("id")
+    .eq("athlete_id", input.athleteId)
+    .eq("external_id", externalId)
+    .limit(1)
+    .maybeSingle();
+  if (existing.error) throw new Error(existing.error.message);
+  if (existing.data?.id) {
+    const upd = await supabase.from("executed_workouts").update(payload).eq("id", existing.data.id);
+    if (upd.error) throw new Error(upd.error.message);
+    return;
+  }
+  const ins = await supabase.from("executed_workouts").insert(payload);
+  if (ins.error) throw new Error(ins.error.message);
+}
+
 async function persistWhoopRecords(input: {
   athleteId: string;
   records: Record<string, unknown>[];
@@ -182,6 +299,14 @@ async function persistWhoopRecords(input: {
         parserVersion: "2",
         observation,
       });
+      if (input.domain === "training" && input.payloadKey === "whoop_workout") {
+        await upsertExecutedWorkoutFromWhoopWorkout({
+          athleteId: input.athleteId,
+          workoutId: id,
+          day,
+          rec,
+        });
+      }
       inserted += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);

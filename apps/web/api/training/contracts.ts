@@ -44,6 +44,8 @@ export type TrainingPlannedWindowOkViewModel = {
   plannedProvenanceSummary?: Partial<Record<string, number>>;
   readSpineCoverage: ReadSpineCoverageSummary | null;
   twinContextStrip: TrainingTwinContextStripViewModel | null;
+  /** Stato fisiologia canonico da `AthleteMemory` quando `includeAthleteContext` è attivo. */
+  physiologyState: PhysiologyState | null;
 };
 
 export type TrainingAdaptationLoopViewModel = {
@@ -298,23 +300,41 @@ export type TrainingAnalyticsWindowViewModel = {
   couplingDelta: number;
 };
 
+export type TrainingAnalyticsPlanWindowSliceViewModel = {
+  planned: number;
+  executed: number;
+  internal: number;
+  delta: number;
+  compliancePct: number;
+  internalVsExecuted: number;
+};
+
 export type TrainingAnalyticsPlanWindowViewModel = {
-  last7: {
-    planned: number;
-    executed: number;
-    internal: number;
-    delta: number;
-    compliancePct: number;
-    internalVsExecuted: number;
-  };
-  last28: {
-    planned: number;
-    executed: number;
-    internal: number;
-    delta: number;
-    compliancePct: number;
-    internalVsExecuted: number;
-  };
+  last7: TrainingAnalyticsPlanWindowSliceViewModel;
+  last28: TrainingAnalyticsPlanWindowSliceViewModel;
+  /** Ultimi 90 giorni (se la serie è più corta, usa tutta la serie). */
+  last90: TrainingAnalyticsPlanWindowSliceViewModel;
+  /** Intera finestra `from`–`to` richiesta all’API. */
+  fullRange: TrainingAnalyticsPlanWindowSliceViewModel;
+};
+
+/** Volume aggregato da tracce import/sync nella finestra (vedi `trace-volume-rollup.ts`). */
+export type TrainingExecutedVolumeRollupViewModel = {
+  sessionCount: number;
+  durationMinutes: number;
+  tss: number;
+  distanceKm: number;
+  elevationGainM: number;
+  kcal: number;
+  kj: number;
+};
+
+export type TrainingRecoveryContinuousRollupViewModel = {
+  avgRestingHrBpm: number | null;
+  avgHrvRmssdMs: number | null;
+  avgSleepHours: number | null;
+  avgSkinTempC: number | null;
+  sampleCount: number;
 };
 
 export type TrainingAnalyticsViewModel = {
@@ -328,6 +348,8 @@ export type TrainingAnalyticsViewModel = {
   latest: DailyLoadPoint | null;
   windows: TrainingAnalyticsWindowViewModel | null;
   planWindows: TrainingAnalyticsPlanWindowViewModel | null;
+  executedVolumeRollup?: TrainingExecutedVolumeRollupViewModel | null;
+  recoveryContinuousRollup?: TrainingRecoveryContinuousRollupViewModel | null;
   adaptationLoop: TrainingAdaptationLoopViewModel | null;
   twinState: CanonicalTwinState | null;
   athleteMemory: AthleteMemory | null;

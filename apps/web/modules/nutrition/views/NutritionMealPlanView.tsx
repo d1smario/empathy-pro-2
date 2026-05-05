@@ -199,15 +199,18 @@ export function NutritionMealPlanLeadPanels({
         <AdaptationSectorStrip title="Settori · adattamento (giorno)" boxes={nutritionSectorBoxes} />
       </section>
 
-      {pathwayModulation &&
-      pathwayModulation.pathways.length === 0 &&
-      functionalFoodRecommendations.targets.length ? (
+      {functionalFoodRecommendations.targets.length ? (
         <section className="viz-card builder-panel" style={{ marginBottom: "12px", padding: "10px 14px", fontSize: "0.8rem" }}>
-          <strong>Alimenti funzionali (catalogo)</strong>
-          <span className="nutrition-muted"> — target sul giorno: </span>
+          <strong>Pillole nutrizionali adattive</strong>
+          <span className="nutrition-muted"> — suggerimenti funzionali su segnali del giorno (L2, non override solver): </span>
           <span style={{ display: "inline-flex", flexWrap: "wrap", gap: "4px", verticalAlign: "middle" }}>
-            {functionalFoodRecommendations.targets.slice(0, 6).map((t) => (
-              <span key={t.nutrientId} className="nutrition-ui-chip" style={{ fontSize: "0.72rem" }}>
+            {functionalFoodRecommendations.targets.slice(0, 8).map((t) => (
+              <span
+                key={t.nutrientId}
+                className="nutrition-ui-chip"
+                style={{ fontSize: "0.72rem" }}
+                title={t.rationaleIt}
+              >
                 {t.displayNameIt.split("(")[0].trim()}
               </span>
             ))}

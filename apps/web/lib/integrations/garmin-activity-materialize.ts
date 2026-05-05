@@ -6,6 +6,7 @@ import { shouldMaterializeGarminActivities } from "@/lib/integrations/garmin-hea
 import { observationDomainsFromGarminActivitySummary } from "@/lib/integrations/garmin-observation-from-summary";
 import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
+import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -57,6 +58,32 @@ function collectActivityRecords(node: unknown, sink: Record<string, unknown>[]):
   for (const v of Object.values(rec)) {
     if (v && typeof v === "object") collectActivityRecords(v, sink);
   }
+}
+
+/** Copertura canali da summary Garmin (nessuno stream intero: spesso parziale vs file). */
+function garminActivityChannelCoverage(r: Record<string, unknown>): Record<string, number> {
+  const hr =
+    typeof r.averageHeartRateInBeatsPerMinute === "number" ||
+    typeof r.averageHeartRate === "number" ||
+    typeof r.maxHeartRateInBeatsPerMinute === "number";
+  const power = typeof r.averagePower === "number" || typeof r.maxPower === "number";
+  const speed =
+    typeof r.averageSpeedInMetersPerSecond === "number" ||
+    typeof r.maxSpeedInMetersPerSecond === "number";
+  const cadence =
+    typeof r.averageRunCadenceInStepsPerMinute === "number" ||
+    typeof r.averageBikeCadenceInRoundsPerMinute === "number";
+  const altitude =
+    typeof r.totalElevationGainInMeters === "number" || typeof r.elevationGainInMeters === "number";
+  const temperature = typeof r.averageTemperatureInCelsius === "number";
+  return {
+    power: power ? 100 : 0,
+    hr: hr ? 100 : 0,
+    speed: speed ? 100 : 0,
+    cadence: cadence ? 100 : 0,
+    altitude: altitude ? 100 : 0,
+    temperature: temperature ? 100 : 0,
+  };
 }
 
 function pickExternalId(r: Record<string, unknown>): string {
@@ -149,6 +176,9 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
 
     const observation = buildGarminObservationForRow(r, date, null);
 
+    const channelCoverage = garminActivityChannelCoverage(r);
+    const quality = buildExecutedTrainingImportQuality({ channelCoverage });
+
     const traceSummary = {
       parser_engine: "garmin_wellness_api_summary",
       parser_version: "1",
@@ -157,6 +187,18 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       activity_id: r.activityId ?? null,
       source: "api_sync:garmin:activities",
       garmin_keys: Object.keys(r).slice(0, 40),
+      channels_available: Object.fromEntries(Object.entries(channelCoverage).map(([k, v]) => [k, v > 0])) as Record<
+        string,
+        boolean
+      >,
+      import_quality: {
+        coverage_pct: quality.coveragePct,
+        quality_status: quality.qualityStatus,
+        quality_note: quality.qualityNote,
+        missing_channels: quality.missingChannels,
+        recommended_inputs: quality.recommendedInputs,
+        channel_coverage_pct: channelCoverage,
+      },
       observation,
     };
 
