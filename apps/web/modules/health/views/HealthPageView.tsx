@@ -143,6 +143,121 @@ function readNum(obj: Record<string, unknown> | null | undefined, keys: string[]
   return null;
 }
 
+function sortPanelsNewestFirst(list: HealthPanelTimelineRow[]): HealthPanelTimelineRow[] {
+  return [...list].sort((a, b) => {
+    const da = `${a.sample_date ?? ""}\t${a.created_at ?? ""}`;
+    const db = `${b.sample_date ?? ""}\t${b.created_at ?? ""}`;
+    return db.localeCompare(da);
+  });
+}
+
+function humanizePayloadKey(key: string): string {
+  if (!key.trim()) return key;
+  const spaced = key.replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2");
+  return spaced.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function formatScalarForDisplay(val: unknown): string {
+  if (val == null) return "—";
+  if (typeof val === "number" && Number.isFinite(val))
+    return String(val).includes(".") ? String(val) : String(val);
+  if (typeof val === "boolean") return val ? "Sì" : "No";
+  if (typeof val === "string") {
+    const t = val.trim();
+    return t.length ? t : "—";
+  }
+  if (typeof val === "object") {
+    try {
+      return JSON.stringify(val);
+    } catch {
+      return "—";
+    }
+  }
+  return String(val);
+}
+
+function panelRawDisplayRows(panel: HealthPanelTimelineRow): Array<{ key: string; label: string; value: string }> {
+  const v = panel.values;
+  if (!v || typeof v !== "object") return [];
+  const rec = v as Record<string, unknown>;
+  return Object.keys(rec)
+    .filter((k) => k !== "import")
+    .sort((a, b) => a.localeCompare(b))
+    .map((key) => ({
+      key,
+      label: humanizePayloadKey(key),
+      value: formatScalarForDisplay(rec[key]),
+    }));
+}
+
+function BloodSnapshotTable({
+  row,
+  sampleLabel,
+}: {
+  row: NonNullable<ReturnType<typeof rowFromBloodPanel>>;
+  sampleLabel?: string | null;
+}) {
+  const cells: Array<{ label: string; value: string }> = [
+    { label: "Emoglobina", value: row.emoglobina != null ? `${row.emoglobina} g/dL` : "—" },
+    { label: "Ferritina", value: row.ferritina != null ? `${row.ferritina} ng/mL` : "—" },
+    { label: "Vit. D", value: row.vit_d != null ? `${row.vit_d} ng/mL` : "—" },
+    { label: "B12", value: row.b12 != null ? `${row.b12} pg/mL` : "—" },
+    { label: "Glicemia", value: row.glicemia != null ? `${row.glicemia} mg/dL` : "—" },
+  ];
+  return (
+    <div className="rounded-xl border border-rose-500/20 bg-rose-950/15 p-4">
+      <p className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-rose-300/90">
+        Ultimo referto ematico
+        {sampleLabel ? <span className="ml-2 font-sans font-normal normal-case text-zinc-400">· {sampleLabel}</span> : null}
+      </p>
+      <dl className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {cells.map((c) => (
+          <div key={c.label} className="rounded-lg border border-white/10 bg-black/35 px-3 py-2">
+            <dt className="text-[10px] uppercase tracking-wider text-zinc-500">{c.label}</dt>
+            <dd className="mt-1 text-sm font-semibold text-white">{c.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+function RawPanelValuesCard({
+  panel,
+  title,
+  className = "border-white/10",
+}: {
+  panel: HealthPanelTimelineRow;
+  title?: string;
+  className?: string;
+}) {
+  const rows = panelRawDisplayRows(panel);
+  if (rows.length === 0) return null;
+  const when = panel.sample_date ?? panel.created_at?.slice(0, 10) ?? null;
+  return (
+    <div className={`rounded-xl border bg-black/30 p-4 ${className}`}>
+      {title ? (
+        <p className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-zinc-400">
+          {title}
+          {when ? <span className="ml-2 font-sans font-normal normal-case text-zinc-500">· {when}</span> : null}
+        </p>
+      ) : when ? (
+        <p className="font-mono text-[0.6rem] text-zinc-500">Data referto · {when}</p>
+      ) : null}
+      <dl className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {rows.map((r) => (
+          <div key={r.key} className="min-w-0 rounded-lg border border-white/5 bg-black/25 px-2.5 py-1.5">
+            <dt className="truncate text-[10px] uppercase tracking-wider text-zinc-500" title={r.key}>
+              {r.label}
+            </dt>
+            <dd className="mt-0.5 break-words text-sm text-zinc-100">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
 /** Più basso è il marker infiammatorio, più alto è lo score (0–100, euristica). */
 function inflammationAxisScore(value: number | null, refHigh: number, demo: number): number {
   if (value == null) return demo;
@@ -556,14 +671,20 @@ export default function HealthPageView() {
     void loadTimeline();
   }, [ctxLoading, loadTimeline]);
 
-  const bloodChartRows = useMemo(() => {
-    const fromDb = panels
+  const panelsNewestFirst = useMemo(() => sortPanelsNewestFirst(panels), [panels]);
+
+  const bloodRowsChronological = useMemo(() => {
+    const rowsDesc = panelsNewestFirst
       .filter((p) => p.type === "blood")
       .map(rowFromBloodPanel)
-      .filter((r): r is NonNullable<typeof r> => r != null)
-      .reverse();
-    if (fromDb.length >= 2) return fromDb;
-    if (!SHOW_HEALTH_DEMO_FALLBACK_DATA) return fromDb.length ? fromDb : [];
+      .filter((r): r is NonNullable<typeof r> => r != null);
+    return [...rowsDesc].reverse();
+  }, [panelsNewestFirst]);
+
+  /** Serie per il grafico: ≥2 punti reali; in dev solo, fallback demo se mancano abbastanza referti. */
+  const bloodLineChartData = useMemo(() => {
+    if (bloodRowsChronological.length >= 2) return bloodRowsChronological;
+    if (!SHOW_HEALTH_DEMO_FALLBACK_DATA) return [];
     return DEMO_BLOOD_TREND.map((r) => ({
       label: r.label,
       emoglobina: r.emoglobina,
@@ -572,21 +693,50 @@ export default function HealthPageView() {
       b12: r.b12,
       glicemia: r.glicemia,
     }));
-  }, [panels]);
+  }, [bloodRowsChronological]);
+
+  const newestBloodPanel = useMemo(() => panelsNewestFirst.find((p) => p.type === "blood"), [panelsNewestFirst]);
+
+  const bloodLatestStructuredRow = useMemo(() => {
+    return newestBloodPanel ? rowFromBloodPanel(newestBloodPanel) : null;
+  }, [newestBloodPanel]);
 
   const usingDemoTrend = useMemo(() => {
-    const fromDb = panels
+    const nReal = panels
       .filter((p) => p.type === "blood")
       .map(rowFromBloodPanel)
-      .filter((r): r is NonNullable<typeof r> => r != null);
-    return SHOW_HEALTH_DEMO_FALLBACK_DATA && fromDb.length < 2;
+      .filter((r): r is NonNullable<typeof r> => r != null).length;
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA && nReal < 2;
   }, [panels]);
 
-  const latestInflammation = useMemo(() => panels.find((p) => p.type === "inflammation"), [panels]);
-  const latestMicrobiota = useMemo(() => panels.find((p) => p.type === "microbiota"), [panels]);
-  const latestHormones = useMemo(() => panels.find((p) => isHormonePanelType(p.type)), [panels]);
-  const latestEpigenetics = useMemo(() => panels.find((p) => p.type === "epigenetics"), [panels]);
-  const latestOxidative = useMemo(() => panels.find((p) => p.type === "oxidative_stress"), [panels]);
+  const latestPanelsByTypeForRaw = useMemo(() => {
+    const seen = new Set<string>();
+    const out: HealthPanelTimelineRow[] = [];
+    for (const p of panelsNewestFirst) {
+      if (seen.has(p.type)) continue;
+      seen.add(p.type);
+      if (structuredValuesFieldCount(p.values as Record<string, unknown> | null) > 0) out.push(p);
+    }
+    return out;
+  }, [panelsNewestFirst]);
+
+  const latestInflammation = useMemo(
+    () => panelsNewestFirst.find((p) => p.type === "inflammation"),
+    [panelsNewestFirst],
+  );
+  const latestMicrobiota = useMemo(
+    () => panelsNewestFirst.find((p) => p.type === "microbiota"),
+    [panelsNewestFirst],
+  );
+  const latestHormones = useMemo(() => panelsNewestFirst.find((p) => isHormonePanelType(p.type)), [panelsNewestFirst]);
+  const latestEpigenetics = useMemo(
+    () => panelsNewestFirst.find((p) => p.type === "epigenetics"),
+    [panelsNewestFirst],
+  );
+  const latestOxidative = useMemo(
+    () => panelsNewestFirst.find((p) => p.type === "oxidative_stress"),
+    [panelsNewestFirst],
+  );
 
   const inflammationRadar = useMemo(() => inflammationRadarFromPanel(latestInflammation), [latestInflammation]);
   const microbiotaRadar = useMemo(() => microbiotaRadarFromPanel(latestMicrobiota), [latestMicrobiota]);
@@ -607,9 +757,9 @@ export default function HealthPageView() {
   const endocrineRadar = useMemo(() => endocrineRadarFromPanel(latestHormones), [latestHormones]);
 
   const globalScores = useMemo(() => {
-    const blood = panels.find((p) => p.type === "blood");
-    const micro = panels.find((p) => p.type === "microbiota");
-    const epi = panels.find((p) => p.type === "epigenetics");
+    const blood = panelsNewestFirst.find((p) => p.type === "blood");
+    const micro = panelsNewestFirst.find((p) => p.type === "microbiota");
+    const epi = panelsNewestFirst.find((p) => p.type === "epigenetics");
     const pick = (row: HealthPanelTimelineRow | undefined, keys: string[], demoFallback: number): number | null => {
       const n = readNum((row?.values as Record<string, unknown>) ?? null, keys);
       if (n != null) return Math.round(Math.min(100, Math.max(0, n)));
@@ -621,7 +771,7 @@ export default function HealthPageView() {
       epigenetica: pick(epi, ["health_score_epigenetica", "score_epigenetica"], 85),
       totale: pick(blood, ["health_score_totale", "score_totale"], 90),
     };
-  }, [panels]);
+  }, [panelsNewestFirst]);
 
   async function onPickFile(panelType: string, file: File | null) {
     if (!file || !athleteId) return;
@@ -757,6 +907,41 @@ export default function HealthPageView() {
           ))}
         </div>
       </section>
+
+      {bloodLatestStructuredRow || latestPanelsByTypeForRaw.some((p) => p.type !== "blood") ? (
+        <section
+          className="rounded-2xl border border-fuchsia-500/25 bg-black/45 p-6"
+          aria-label="Valori ultimo referto per tipo"
+        >
+          <h2 className="text-center font-mono text-[0.68rem] font-bold uppercase tracking-[0.28em] text-fuchsia-300">
+            Ultimo referto caricato · valori estratti
+          </h2>
+          <p className="mx-auto mt-2 max-w-2xl text-center text-[0.7rem] text-zinc-500">
+            Un solo esame basta: qui vedi i campi strutturati dell&apos;ultimo panel per ogni tipo. I grafici di trend sotto si
+            riempiono quando ci sono più punti nel tempo.
+          </p>
+          <div className="mt-5 space-y-4">
+            {bloodLatestStructuredRow ? (
+              <BloodSnapshotTable
+                row={bloodLatestStructuredRow}
+                sampleLabel={newestBloodPanel?.sample_date ?? newestBloodPanel?.created_at?.slice(0, 10) ?? null}
+              />
+            ) : newestBloodPanel && structuredValuesFieldCount(newestBloodPanel.values as Record<string, unknown> | null) > 0 ? (
+              <RawPanelValuesCard panel={newestBloodPanel} title="blood" className="border-fuchsia-500/15" />
+            ) : null}
+            {latestPanelsByTypeForRaw
+              .filter((p) => p.type !== "blood")
+              .map((p) => (
+                <RawPanelValuesCard
+                  key={p.type}
+                  panel={p}
+                  title={p.type.replace(/_/g, " ")}
+                  className="border-fuchsia-500/15"
+                />
+              ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-cyan-500/30 bg-cyan-950/10 p-6">
         <h2 className="font-mono text-[0.68rem] font-bold uppercase tracking-[0.24em] text-cyan-300">
@@ -974,9 +1159,18 @@ export default function HealthPageView() {
             </h3>
             <div className="h-[260px] w-full">
               {epigeneticRings.length === 0 ? (
-                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                  Carica un panel <code className="mx-1 text-violet-300/90">epigenetics</code> per questo profilo.
-                </p>
+                latestEpigenetics && panelRawDisplayRows(latestEpigenetics).length > 0 ? (
+                  <div className="flex h-full flex-col justify-center space-y-2 px-2 text-center">
+                    <p className="text-xs text-zinc-500">
+                      Nessun campo mappabile agli anelli standard; valori caricati nell&apos;ultimo referto:
+                    </p>
+                    <RawPanelValuesCard panel={latestEpigenetics} className="border-violet-500/20 text-left" />
+                  </div>
+                ) : (
+                  <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
+                    Carica un panel <code className="mx-1 text-violet-300/90">epigenetics</code> per questo profilo.
+                  </p>
+                )
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadialBarChart
@@ -1017,12 +1211,21 @@ export default function HealthPageView() {
             <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-violet-300/90">
               Pathway · radar
             </h3>
-            <div className="h-[300px] w-full">
+            <div className="h-[300px] w-full overflow-y-auto">
               {epigeneticRadar.rows.length === 0 ? (
-                <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                  Nessun dato numerico epigenetico strutturato — importa un referto{' '}
-                  <code className="mx-1 text-violet-300/90">epigenetics</code>.
-                </p>
+                latestEpigenetics && panelRawDisplayRows(latestEpigenetics).length > 0 ? (
+                  <div className="space-y-2 px-2">
+                    <p className="text-center text-xs text-zinc-500">
+                      Nessun pathway nel radar sugli indicatori previsti — campi presenti nell&apos;estratto:
+                    </p>
+                    <RawPanelValuesCard panel={latestEpigenetics} className="border-violet-500/20" />
+                  </div>
+                ) : (
+                  <p className="flex min-h-[280px] items-center justify-center px-4 text-center text-sm text-zinc-500">
+                    Nessun dato numerico epigenetico strutturato — importa un referto{' '}
+                    <code className="mx-1 text-violet-300/90">epigenetics</code>.
+                  </p>
+                )
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="78%" data={epigeneticRadar.rows}>
@@ -1046,13 +1249,30 @@ export default function HealthPageView() {
             Trend metilazione / detox / riparazione
             {epigeneticTrend.isDemo ? " (demo)" : ""}
           </h3>
-          <div className="h-[260px] w-full">
+          {!epigeneticTrend.isDemo && epigeneticTrend.rows.length === 1 ? (
+            <p className="mb-2 px-3 text-center text-xs leading-relaxed text-zinc-500">
+              Hai un solo referto con metilazione / detox / riparazione: compaia anche nell&apos;area chart sotto come singolo punto. Per
+              un confronto temporale servono più estratti; i campi grezzi sono nella sezione &quot;Ultimo referto caricato&quot; sopra.
+            </p>
+          ) : null}
+          <div className="min-h-[260px] w-full">
             {epigeneticTrend.rows.length === 0 ? (
-              <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                Servono almeno due estrazioni epigenetiche con metilazione / detox / riparazione per il trend.
-              </p>
+              latestEpigenetics && panelRawDisplayRows(latestEpigenetics).length > 0 ? (
+                <div className="space-y-3 px-2">
+                  <p className="text-center text-xs text-zinc-500">
+                    Nessun marker metilazione / detox / riparazione mappabile per questo grafico. Valori caricati nell&apos;ultimo referto{' '}
+                    <code className="text-violet-300/90">epigenetics</code>:
+                  </p>
+                  <RawPanelValuesCard panel={latestEpigenetics} className="border-violet-500/20" />
+                </div>
+              ) : (
+                <p className="flex min-h-[220px] items-center justify-center px-4 text-center text-sm text-zinc-500">
+                  Carica almeno un panel <code className="mx-1 text-violet-300/90">epigenetics</code> con metilazione, detox e riparazione
+                  strutturati — il confronto nel tempo partirà dal secondo referto compatibile.
+                </p>
+              )
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height={260}>
                 <AreaChart data={epigeneticTrend.rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="epiMeth" x1="0" y1="0" x2="0" y2="1">
@@ -1120,6 +1340,13 @@ export default function HealthPageView() {
           <code className="text-orange-300/90">hormones</code>.
           {endocrineRadar.isDemo && hormonesBar.isDemo ? " Dati demo finché mancano numeri." : ""}
         </p>
+        {latestHormones && panelRawDisplayRows(latestHormones).length > 0 && (endocrineRadar.rows.length === 0 || hormonesBar.rows.length === 0) ? (
+          <RawPanelValuesCard
+            panel={latestHormones}
+            title="hormones — valori dal referto caricato"
+            className="mt-6 border-orange-500/25"
+          />
+        ) : null}
         <div className="mt-6 grid gap-8 lg:grid-cols-2">
           <div>
             <h3 className="mb-2 text-center text-xs font-bold uppercase tracking-wider text-orange-300/90">
@@ -1128,7 +1355,16 @@ export default function HealthPageView() {
             <div className="h-[300px] w-full">
               {endocrineRadar.rows.length === 0 ? (
                 <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                  Carica un panel <code className="mx-1 text-orange-200/90">hormones</code> con numeri strutturati.
+                  {latestHormones && panelRawDisplayRows(latestHormones).length > 0 ? (
+                    <>
+                      Dati strutturati nella scheda sopra. Il radar richiede campi mappati (cortisolo AM/PM, testosterone, TSH, DHEA,
+                      IGF-1).
+                    </>
+                  ) : (
+                    <>
+                      Carica un panel <code className="mx-1 text-orange-200/90">hormones</code> con numeri strutturati.
+                    </>
+                  )}
                 </p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1153,7 +1389,16 @@ export default function HealthPageView() {
             <div className="h-[300px] w-full">
               {hormonesBar.rows.length === 0 ? (
                 <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                  Nessun dato ormonale strutturato — importa un referto <code className="mx-1 text-orange-200/90">hormones</code>.
+                  {latestHormones && panelRawDisplayRows(latestHormones).length > 0 ? (
+                    <>
+                      Valori nella scheda sopra rispetto a questa sezione. Le barre usano gli ormoni mappati (cortisolo AM/PM, testosterone,
+                      TSH, T3/T4 libere).
+                    </>
+                  ) : (
+                    <>
+                      Nessun dato ormonale strutturato — importa un referto <code className="mx-1 text-orange-200/90">hormones</code>.
+                    </>
+                  )}
                 </p>
               ) : (
                 <ResponsiveContainer width="100%" height="100%">
@@ -1184,11 +1429,20 @@ export default function HealthPageView() {
           d-ROMs, BAP, glutatione, enzimi (panel <code className="text-sky-300/90">oxidative_stress</code>).{" "}
           {oxidativeRadar.isDemo ? "Demo finché mancano valori." : ""}
         </p>
-        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+        <div className="mt-4 min-h-[300px] w-full max-w-lg mx-auto">
           {oxidativeRadar.rows.length === 0 ? (
-            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-              Carica un panel <code className="mx-1 text-sky-300">oxidative_stress</code> per vedere questo radar.
-            </p>
+            latestOxidative && panelRawDisplayRows(latestOxidative).length > 0 ? (
+              <div className="space-y-2 px-2">
+                <p className="text-center text-xs text-zinc-500">
+                  Nessun marker mappato al radar sugli indicatori previsti — valori caricati nell&apos;ultimo referto:
+                </p>
+                <RawPanelValuesCard panel={latestOxidative} title="oxidative stress" className="border-sky-500/25" />
+              </div>
+            ) : (
+              <p className="flex min-h-[280px] items-center justify-center px-4 text-center text-sm text-zinc-500">
+                Carica un panel <code className="mx-1 text-sky-300">oxidative_stress</code> per vedere questo radar.
+              </p>
+            )
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="78%" data={oxidativeRadar.rows}>
@@ -1216,11 +1470,20 @@ export default function HealthPageView() {
           Radar · score sintetico (valori bassi = migliore){" "}
           {inflammationRadar.isDemo ? "— demo finché manca un panel `inflammation` con numeri" : ""}
         </p>
-        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+        <div className="mt-4 min-h-[300px] w-full max-w-lg mx-auto">
           {inflammationRadar.rows.length === 0 ? (
-            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-              Carica un panel <code className="mx-1 text-amber-200/90">inflammation</code> per questo grafico.
-            </p>
+            latestInflammation && panelRawDisplayRows(latestInflammation).length > 0 ? (
+              <div className="space-y-2 px-2">
+                <p className="text-center text-xs text-zinc-500">
+                  Nessun marker mappato agli assi PCR/IL-6 ecc. — valori caricati nell&apos;ultimo referto:
+                </p>
+                <RawPanelValuesCard panel={latestInflammation} title="inflammation" className="border-amber-500/25" />
+              </div>
+            ) : (
+              <p className="flex min-h-[280px] items-center justify-center px-4 text-center text-sm text-zinc-500">
+                Carica un panel <code className="mx-1 text-amber-200/90">inflammation</code> per questo grafico.
+              </p>
+            )
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="78%" data={inflammationRadar.rows}>
@@ -1248,11 +1511,20 @@ export default function HealthPageView() {
           Percentuali / diversità (asse 0–100){" "}
           {microbiotaRadar.isDemo ? "— demo finché manca un panel `microbiota` con numeri" : ""}
         </p>
-        <div className="mt-4 h-[300px] w-full max-w-lg mx-auto">
+        <div className="mt-4 min-h-[300px] w-full max-w-lg mx-auto">
           {microbiotaRadar.rows.length === 0 ? (
-            <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-              Carica un panel <code className="mx-1 text-emerald-200/90">microbiota</code> per questo grafico.
-            </p>
+            latestMicrobiota && panelRawDisplayRows(latestMicrobiota).length > 0 ? (
+              <div className="space-y-2 px-2">
+                <p className="text-center text-xs text-zinc-500">
+                  Composizioni attese non trovate con i nomi chiave Firmicutes/Bacteroidetes ecc. — valori caricati:
+                </p>
+                <RawPanelValuesCard panel={latestMicrobiota} title="microbiota" className="border-emerald-500/25" />
+              </div>
+            ) : (
+              <p className="flex min-h-[280px] items-center justify-center px-4 text-center text-sm text-zinc-500">
+                Carica un panel <code className="mx-1 text-emerald-200/90">microbiota</code> per questo grafico.
+              </p>
+            )
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <RadarChart cx="50%" cy="50%" outerRadius="78%" data={microbiotaRadar.rows}>
@@ -1283,14 +1555,25 @@ export default function HealthPageView() {
         <div className="rounded-2xl border border-rose-500/25 bg-black/50 p-5">
           <h3 className="text-base font-bold text-pink-400">Andamento parametri ematici</h3>
           <p className="text-xs text-zinc-500">Ultimi 6 mesi · valori principali {usingDemoTrend ? "(demo finché mancano ≥2 punti reali)" : ""}</p>
+          {bloodRowsChronological.length === 1 && !usingDemoTrend ? (
+            <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+              Hai un solo referto ematico strutturato: i numeri sono nella sezione{' '}
+              <span className="text-zinc-200">Ultimo referto caricato · valori estratti</span> sopra. Il grafico comparativo nel
+              tempo compare automaticamente dopo il secondo referto.
+            </p>
+          ) : null}
           <div className="mt-4 h-[320px] w-full">
-            {bloodChartRows.length === 0 ? (
+            {bloodLineChartData.length === 0 ? (
               <p className="flex h-full items-center justify-center px-4 text-center text-sm text-zinc-500">
-                Servono almeno due punti ematici strutturati per il grafico — importa panel <code className="mx-1 text-rose-200/90">blood</code>.
+                {!bloodLatestStructuredRow
+                  ? "Importa un panel "
+                  : "Aggiungi un secondo referto ematico strutturato per il grafico nel tempo · "}
+                <code className="mx-1 text-rose-200/90">blood</code>
+                {!bloodLatestStructuredRow ? " per iniziare." : ""}
               </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={bloodChartRows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <LineChart data={bloodLineChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
                   <XAxis dataKey="label" tick={{ fill: "#9ca3af", fontSize: 11 }} />
                   <YAxis tick={{ fill: "#9ca3af", fontSize: 11 }} />
