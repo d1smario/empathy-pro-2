@@ -14,13 +14,21 @@ export async function fetchHealthPanelsTimeline(athleteId: string): Promise<{
   panels: HealthPanelTimelineRow[];
   error: string | null;
 }> {
-  const res = await fetch(`/api/health/panels-timeline?athleteId=${encodeURIComponent(athleteId)}`, {
+  const url = `/api/health/panels-timeline?athleteId=${encodeURIComponent(athleteId)}`;
+  let res = await fetch(url, {
     cache: "no-store",
     headers: await buildSupabaseAuthHeaders(),
   });
-  const json = (await res.json()) as
+  let json = (await res.json()) as
     | { ok: true; panels: HealthPanelTimelineRow[] }
     | { ok: false; error?: string };
+  // In some production sessions a stale Bearer token can override valid cookies: retry cookie-only.
+  if (!res.ok && res.status === 401) {
+    res = await fetch(url, { cache: "no-store" });
+    json = (await res.json()) as
+      | { ok: true; panels: HealthPanelTimelineRow[] }
+      | { ok: false; error?: string };
+  }
   if (!res.ok || !json.ok) {
     return { panels: [], error: ("error" in json && json.error) || "Timeline non disponibile" };
   }
