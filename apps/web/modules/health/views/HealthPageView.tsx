@@ -44,6 +44,7 @@ import {
   patchHealthStagingRun,
   type HealthSystemMapViewModel,
   type HealthStagingRunAction,
+  type HealthTimelineFetchDiagnostics,
   uploadHealthDocument,
   type HealthPanelTimelineRow,
 } from "@/modules/health/services/health-module-api";
@@ -485,6 +486,7 @@ export default function HealthPageView() {
     stagingRuns: [],
   });
   const [timelineErr, setTimelineErr] = useState<string | null>(null);
+  const [timelineDiag, setTimelineDiag] = useState<HealthTimelineFetchDiagnostics | null>(null);
   const [systemMapErr, setSystemMapErr] = useState<string | null>(null);
   const [loadingTimeline, setLoadingTimeline] = useState(true);
   const [uploadBusy, setUploadBusy] = useState<string | null>(null);
@@ -497,18 +499,20 @@ export default function HealthPageView() {
     if (!athleteId) {
       setPanels([]);
       setTimelineErr(null);
+      setTimelineDiag(null);
       setSystemMap({ nodes: [], edges: [], bioenergeticsResponses: [], stagingRuns: [] });
       setSystemMapErr(null);
       setLoadingTimeline(false);
       return;
     }
     setLoadingTimeline(true);
-    const [{ panels: next, error }, { systemMap: nextMap, error: mapErr }] = await Promise.all([
+    const [{ panels: next, error, diagnostics }, { systemMap: nextMap, error: mapErr }] = await Promise.all([
       fetchHealthPanelsTimeline(athleteId),
       fetchHealthSystemMap(athleteId),
     ]);
     setPanels(next);
     setTimelineErr(error);
+    setTimelineDiag(diagnostics);
     setSystemMap(nextMap);
     setSystemMapErr(mapErr);
     setLoadingTimeline(false);
@@ -1276,7 +1280,17 @@ export default function HealthPageView() {
 
       {/* Archivio referti (fine pagina) */}
       <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5" aria-label="Archivio referti">
-        <h3 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-400">Archivio referti</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-cyan-400">Archivio referti</h3>
+          {athleteId ? (
+            <span
+              className="rounded-md border border-white/10 bg-black/40 px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-zinc-400"
+              title={`athleteId attivo: ${athleteId}`}
+            >
+              athlete: {athleteId.slice(0, 8)}…
+            </span>
+          ) : null}
+        </div>
         <p className="mt-1 text-xs text-zinc-500">
           Pannelli da <code className="text-zinc-400">biomarker_panels</code> per l&apos;atleta attivo
           {!loadingTimeline && !timelineErr ? ` · ${panels.length} in memoria` : ""}.
@@ -1290,16 +1304,59 @@ export default function HealthPageView() {
               <p className="rounded-lg border border-amber-500/35 bg-amber-950/30 px-3 py-2 text-sm text-amber-100">
                 Lettura archivio non riuscita: {timelineErr}
               </p>
-              <p className="mt-2 text-xs text-zinc-500">
-                Se il problema persiste, esci e rientra oppure verifica che l&apos;atleta selezionato sia quello con i referti in
-                database.
-              </p>
+              {timelineDiag ? (
+                <div className="mt-2 space-y-1 text-xs text-zinc-500">
+                  {timelineDiag.requestedAthleteId ? (
+                    <p>
+                      Atleta richiesto:{" "}
+                      <code className="text-zinc-300">{timelineDiag.requestedAthleteId}</code>
+                    </p>
+                  ) : null}
+                  {timelineDiag.userProfileAthleteId &&
+                  timelineDiag.userProfileAthleteId !== timelineDiag.requestedAthleteId ? (
+                    <p className="text-amber-300/90">
+                      Atleta collegato al tuo profilo:{" "}
+                      <code className="text-amber-100">{timelineDiag.userProfileAthleteId}</code>{" "}
+                      — l&apos;atleta attivo nella UI non corrisponde. Apri Athletes / Accesso e
+                      seleziona quello con i referti, oppure rilancia il seed SQL su{" "}
+                      <code className="text-amber-100">{timelineDiag.requestedAthleteId}</code>.
+                    </p>
+                  ) : null}
+                  {timelineDiag.errorCode ? (
+                    <p className="text-zinc-600">
+                      Codice: <code className="text-zinc-400">{timelineDiag.errorCode}</code>
+                      {typeof timelineDiag.httpStatus === "number"
+                        ? ` · HTTP ${timelineDiag.httpStatus}`
+                        : ""}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Se il problema persiste, esci e rientra oppure verifica che l&apos;atleta selezionato sia quello con i referti in
+                  database.
+                </p>
+              )}
+              <Pro2Button
+                type="button"
+                variant="secondary"
+                className="mt-3 border-white/15 text-xs"
+                onClick={() => void loadTimeline()}
+              >
+                Riprova
+              </Pro2Button>
             </li>
           ) : null}
           {!loadingTimeline && !timelineErr && panels.length === 0 ? (
             <li className="py-6 text-center text-sm text-zinc-500">
               Nessun referto in archivio per questo atleta. Usa «Carica esame» sopra, oppure applica lo seed SQL sullo stesso{" "}
-              <code className="text-zinc-400">athlete_id</code> attivo.
+              <code className="text-zinc-400">athlete_id</code> attivo
+              {athleteId ? (
+                <>
+                  {" "}(<code className="text-zinc-400">{athleteId}</code>)
+                </>
+              ) : null}
+              .
             </li>
           ) : null}
           {!loadingTimeline &&
