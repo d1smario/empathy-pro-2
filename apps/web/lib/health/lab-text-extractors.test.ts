@@ -21,6 +21,22 @@ test("blood parser recognizes RBC/WBC and core markers aliases", () => {
   assert.equal(out.hba1c, 5.2);
 });
 
+test("blood parser Italian CBC labels and EU decimals", () => {
+  const text = `
+    Emoglobina 14,2 g/dL
+    Globuli rossi 4,95
+    Ematocrito 43,5 %
+    Globuli bianchi 6,80
+    Serie piastrinica 238
+  `;
+  const out = extractStructuredValuesFromLabText(text, "blood");
+  assert.equal(out.emoglobina, 14.2);
+  assert.equal(out.rbc, 4.95);
+  assert.equal(out.hct, 43.5);
+  assert.equal(out.wbc, 6.8);
+  assert.equal(out.plt, 238);
+});
+
 test("hormones parser recognizes endocrine aliases", () => {
   const text = `
     Cortisol AM 18.2
@@ -54,6 +70,19 @@ test("microbiota parser returns taxa structure and fungi flag", () => {
   assert.ok(taxa.length >= 3);
   assert.equal(out.microbiota_fungi_present, 1);
   assert.equal(out.diversity_shannon, 3.8);
+  assert.equal(out.firmicutes_pct ?? out.firmicutes, 52.4);
+});
+
+test("microbiota parser recognizes Italian phylum/family labels", () => {
+  const text = `
+    Filum Firmicutes 48,2%
+    Famiglia Lachnospiraceae 18,5
+    Prevotellaceae 12,3
+  `;
+  const out = extractStructuredValuesFromLabText(text, "microbiota");
+  assert.equal(out.firmicutes_pct, 48.2);
+  assert.equal(out.lachnospiraceae_pct, 18.5);
+  assert.equal(out.prevotellaceae_pct, 12.3);
 });
 
 test("epigenetics parser detects gene hits and methylation flags", () => {
