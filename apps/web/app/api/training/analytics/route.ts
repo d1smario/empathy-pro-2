@@ -60,9 +60,13 @@ function readNumFromObject(obj: Record<string, unknown> | null, keys: string[]):
   return null;
 }
 
-function readDateFromPayload(payload: Record<string, unknown>): string | null {
+function readDateFromPayload(payload: Record<string, unknown>, fallbackCreatedAt?: string | null): string | null {
   const direct = payload.date ?? payload.summary_date ?? payload.source_date;
   if (typeof direct === "string" && /^\d{4}-\d{2}-\d{2}$/.test(direct)) return direct;
+  if (typeof fallbackCreatedAt === "string" && fallbackCreatedAt.length >= 10) {
+    const d = fallbackCreatedAt.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  }
   return null;
 }
 
@@ -70,12 +74,12 @@ function mergeTrace(base: Record<string, unknown>, patch: Record<string, unknown
   return { ...base, ...patch };
 }
 
-function normalizedTraceFromDeviceExport(payload: Record<string, unknown>): DeviceSyncAnalyticsRow | null {
+function normalizedTraceFromDeviceExport(payload: Record<string, unknown>, createdAt?: string | null): DeviceSyncAnalyticsRow | null {
   const sourcePayload = asRecord(payload.sourcePayload);
   const ingestion = asRecord(payload.realityIngestion);
   const canonicalPreview = asRecord(ingestion?.canonicalPreview);
   const merged = { ...(sourcePayload ?? {}), ...(canonicalPreview ?? {}) };
-  const date = readDateFromPayload(merged);
+  const date = readDateFromPayload(merged, createdAt ?? null);
   if (!date) return null;
 
   const sleepHours =
@@ -276,7 +280,12 @@ export async function GET(req: NextRequest) {
     }
 
     const deviceRows = ((deviceExportsData ?? []) as Array<Record<string, unknown>>)
-      .map((row) => normalizedTraceFromDeviceExport(asRecord(row.payload) ?? {}))
+      .map((row) =>
+        normalizedTraceFromDeviceExport(
+          asRecord(row.payload) ?? {},
+          typeof row.created_at === "string" ? row.created_at : null,
+        ),
+      )
       .filter((row): row is DeviceSyncAnalyticsRow => row != null);
     for (const dRow of deviceRows) {
       const existing = rowsByDate.get(dRow.date);

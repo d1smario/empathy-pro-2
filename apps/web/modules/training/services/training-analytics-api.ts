@@ -15,6 +15,13 @@ export async function fetchTrainingAnalyticsRows(input: {
       headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
       cache: "no-store",
     });
+    if (response.status === 401) {
+      response = await fetchWithTimeout(`/api/training/analytics?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+    }
   } catch (error) {
     return {
       rows: [],

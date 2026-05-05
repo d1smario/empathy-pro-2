@@ -26,9 +26,36 @@ import {
   valueForMetric,
 } from "@/lib/training/analytics/executed-metric-aggregates";
 
-function toDateOnly(d: Date): string {
-  return d.toISOString().slice(0, 10);
+/** Data locale YYYY-MM-DD (evita shift UTC su `toISOString`). */
+function toLocalDateKey(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+
+/** Finestra inclusiva che termina il giorno `anchorYmd` (locale). */
+function rangeEndingOnAnchor(anchorYmd: string, daysInclusive: number): { from: string; to: string } {
+  const parts = anchorYmd.split("-").map((x) => Number(x));
+  const y = parts[0];
+  const m = parts[1];
+  const day = parts[2];
+  if (!y || !m || !day || daysInclusive < 1) {
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    return rangeEndingOnAnchor(toLocalDateKey(today), Math.max(1, daysInclusive));
+  }
+  const anchor = new Date(y, m - 1, day, 12, 0, 0, 0);
+  const from = new Date(anchor);
+  from.setDate(anchor.getDate() - (daysInclusive - 1));
+  return { from: toLocalDateKey(from), to: toLocalDateKey(anchor) };
+}
+
+const WINDOW_PRESETS: Array<{ id: number; label: string }> = [
+  { id: 1, label: "1g" },
+  { id: 7, label: "7g" },
+  { id: 28, label: "28g" },
+  { id: 90, label: "90g" },
+  { id: 120, label: "120g" },
+  { id: 365, label: "365g" },
+];
 
 function polyline(values: number[], width: number, height: number) {
   if (!values.length) return "";
@@ -164,6 +191,10 @@ export default function TrainingAnalyticsPageView() {
   const [crossModuleDynamicsLines, setCrossModuleDynamicsLines] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** Ultimo giorno della finestra analizzata (incluso). */
+  const [anchorDate, setAnchorDate] = useState<string>(() => toLocalDateKey(new Date()));
+  const [windowDays, setWindowDays] = useState<number>(120);
+  const bounds = useMemo(() => rangeEndingOnAnchor(anchorDate, windowDays), [anchorDate, windowDays]);
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
     for (const d of OVERLAY_METRIC_DEFS) {
@@ -196,13 +227,10 @@ export default function TrainingAnalyticsPageView() {
       setLoading(true);
       setError(null);
 
-      const today = new Date();
-      const start = new Date(today);
-      start.setDate(today.getDate() - 120);
       const payload = await fetchTrainingAnalyticsRows({
         athleteId,
-        from: toDateOnly(start),
-        to: toDateOnly(today),
+        from: bounds.from,
+        to: bounds.to,
       });
 
       if (payload.error) {
@@ -240,7 +268,7 @@ export default function TrainingAnalyticsPageView() {
       setLoading(false);
     }
     void loadExecuted();
-  }, [athleteId]);
+  }, [athleteId, bounds.from, bounds.to]);
 
   const last42 = series.slice(-42);
   const last42Compare = compareSeries.slice(-42);
@@ -275,7 +303,7 @@ export default function TrainingAnalyticsPageView() {
   }, [operationalContext, adaptationLoop?.expectedLoad7d]);
 
   const dmMap = useMemo(() => dailyMetricMap(rows as ExecutedAnalyticsRow[]), [rows]);
-  const analyticsEndDate = compareSeries.at(-1)?.date ?? toDateOnly(new Date());
+  const analyticsEndDate = compareSeries.at(-1)?.date ?? bounds.to;
   const refKpis7d = useMemo(
     () => refKpisLastNDays(rows as ExecutedAnalyticsRow[], 7, analyticsEndDate),
     [rows, analyticsEndDate],
@@ -326,7 +354,7 @@ export default function TrainingAnalyticsPageView() {
       eyebrow="Training · Analyzer"
       eyebrowClassName="text-rose-400"
       title="Load intelligence"
-      description="External vs internal load, planned vs executed, adaptation loop — stesso endpoint V1 (`/api/training/analytics`)."
+      description={`External vs internal load, planned vs executed — finestra ${bounds.from} → ${bounds.to} (stesso endpoint /api/training/analytics).`}
       headerActions={
         <>
           <Pro2Link
@@ -349,6 +377,55 @@ export default function TrainingAnalyticsPageView() {
       <div className="scroll-mt-28">
         <TrainingSubnav />
       </div>
+
+      {athleteId ? (
+        <section
+          className="mb-6 rounded-2xl border border-cyan-500/25 bg-black/35 p-4"
+          aria-label="Finestra temporale analisi"
+        >
+          <p className="mb-3 font-mono text-[0.65rem] font-bold uppercase tracking-wider text-cyan-300/90">
+            Periodo analisi
+          </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="flex min-w-[12rem] flex-col gap-1 text-xs text-slate-400">
+              <span className="font-semibold text-slate-300">Data fine finestra (giorno incluso)</span>
+              <input
+                type="date"
+                value={anchorDate}
+                max={toLocalDateKey(new Date())}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) setAnchorDate(v);
+                }}
+                className="rounded-xl border border-white/15 bg-black/50 px-3 py-2 font-mono text-sm text-white outline-none focus:border-cyan-500/50"
+              />
+            </label>
+            <div className="flex flex-1 flex-col gap-1">
+              <span className="text-xs font-semibold text-slate-300">Ampiezza</span>
+              <div className="flex flex-wrap gap-2">
+                {WINDOW_PRESETS.map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setWindowDays(p.id)}
+                    className={`rounded-xl border px-3 py-1.5 text-xs font-bold uppercase tracking-wider transition ${
+                      windowDays === p.id
+                        ? "border-cyan-400/55 bg-cyan-500/20 text-cyan-100 shadow-[0_0_12px_rgba(34,211,238,0.15)]"
+                        : "border-white/15 bg-black/40 text-zinc-400 hover:border-white/25 hover:text-zinc-200"
+                    }`}
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <p className="mt-3 font-mono text-[0.7rem] text-slate-500">
+            Richiesta API: <span className="text-slate-400">{bounds.from}</span> → <span className="text-slate-400">{bounds.to}</span>
+            {windowDays === 1 ? " · un solo giorno (dettaglio giornaliero)" : null}
+          </p>
+        </section>
+      ) : null}
 
       {readSpineCoverage && athleteId && !error ? (
         <details className="mb-4 rounded-xl border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
@@ -377,7 +454,9 @@ export default function TrainingAnalyticsPageView() {
       ) : loading ? (
         <p className="text-sm text-slate-500">Caricamento…</p>
       ) : !series.length && !plannedRows.length ? (
-        <p className="text-sm text-slate-500">Nessun dato planned/executed negli ultimi 120 giorni.</p>
+        <p className="text-sm text-slate-500">
+          Nessun dato planned/executed nel periodo {bounds.from} → {bounds.to}. Prova un intervallo più ampio o un altro giorno di finestra.
+        </p>
       ) : (
         <>
           <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
