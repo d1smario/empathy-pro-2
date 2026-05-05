@@ -20,7 +20,13 @@ export type AthleteHubOperationalOk = {
   };
   nutrition: { constraintsLine: string | null; plansCount: number };
   physiology: { line: string } | null;
-  health: { panelsCount: number; lastPanelLabel: string | null };
+  health: {
+    panelsCount: number;
+    lastPanelLabel: string | null;
+    lastSampleDate: string | null;
+    timelineDays: number | null;
+    byType: Array<{ type: string; count: number }>;
+  };
   readSpineCoverage: ReadSpineCoverageSummary;
   operationalSignals: OperationalSignalsBundle | null;
   crossModuleDynamicsLines: string[];

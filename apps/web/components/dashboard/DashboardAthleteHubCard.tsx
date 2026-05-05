@@ -420,6 +420,21 @@ export function DashboardAthleteHubCard() {
             {hub.health.lastPanelLabel ? (
               <span className="text-gray-500"> · ultimo: {hub.health.lastPanelLabel}</span>
             ) : null}
+            {hub.health.lastSampleDate ? (
+              <span className="mt-1 block text-xs text-gray-500">Ultimo sample: {hub.health.lastSampleDate}</span>
+            ) : null}
+            {hub.health.timelineDays != null ? (
+              <span className="mt-1 block text-xs text-gray-500">Storico coperto: ~{hub.health.timelineDays} giorni</span>
+            ) : null}
+            {hub.health.byType.length > 0 ? (
+              <span className="mt-1 block text-xs text-gray-500">
+                Tipi:{" "}
+                {hub.health.byType
+                  .slice(0, 5)
+                  .map((row) => `${row.type} (${row.count})`)
+                  .join(" · ")}
+              </span>
+            ) : null}
           </HubRow>
         </div>
       ) : null}

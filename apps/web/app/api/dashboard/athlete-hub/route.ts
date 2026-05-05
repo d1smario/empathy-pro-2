@@ -88,6 +88,8 @@ export async function GET(req: NextRequest) {
       physRes,
       healthPanelsTotal,
       healthLastPanel,
+      healthByType,
+      healthTimelineBounds,
       athleteMemory,
     ] = await Promise.all([
       db.from("athlete_profiles").select(PROFILE_SELECT).eq("id", athleteId).maybeSingle(),
@@ -135,11 +137,23 @@ export async function GET(req: NextRequest) {
         .eq("athlete_id", athleteId),
       db
         .from("biomarker_panels")
-        .select("type")
+        .select("type, sample_date, created_at")
         .eq("athlete_id", athleteId)
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle(),
+      db
+        .from("biomarker_panels")
+        .select("type")
+        .eq("athlete_id", athleteId)
+        .order("sample_date", { ascending: false })
+        .limit(400),
+      db
+        .from("biomarker_panels")
+        .select("sample_date, created_at")
+        .eq("athlete_id", athleteId)
+        .order("sample_date", { ascending: true })
+        .limit(400),
       resolveAthleteMemory(athleteId).catch(() => null),
     ]);
 
@@ -154,6 +168,8 @@ export async function GET(req: NextRequest) {
       physRes.error?.message ??
       healthPanelsTotal.error?.message ??
       healthLastPanel.error?.message ??
+      healthByType.error?.message ??
+      healthTimelineBounds.error?.message ??
       null;
     if (errMsg) {
       return NextResponse.json({ ok: false as const, error: errMsg }, { status: 500, headers: NO_STORE });
@@ -168,11 +184,41 @@ export async function GET(req: NextRequest) {
     const physRow = physRes.data as PhysiologicalProfileDbRow | null;
     const phys = physRow ? physiologicalProfileFromDbRow(physRow) : null;
 
-    const lastRow = healthLastPanel.data as { type?: string } | null;
+    const lastRow = healthLastPanel.data as { type?: string; sample_date?: string | null; created_at?: string | null } | null;
     const lastLabel =
       lastRow && typeof lastRow.type === "string" && lastRow.type.trim() !== ""
         ? lastRow.type.trim()
         : null;
+    const lastSampleDate =
+      (lastRow?.sample_date && typeof lastRow.sample_date === "string" ? lastRow.sample_date : null) ??
+      (lastRow?.created_at && typeof lastRow.created_at === "string" ? lastRow.created_at.slice(0, 10) : null);
+
+    const byTypeMap = new Map<string, number>();
+    for (const row of (healthByType.data ?? []) as Array<{ type?: string | null }>) {
+      const type = typeof row.type === "string" && row.type.trim() ? row.type.trim() : "unknown";
+      byTypeMap.set(type, (byTypeMap.get(type) ?? 0) + 1);
+    }
+    const byType = Array.from(byTypeMap.entries())
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count || a.type.localeCompare(b.type));
+
+    const timelineRows = (healthTimelineBounds.data ?? []) as Array<{ sample_date?: string | null; created_at?: string | null }>;
+    const dateRows = timelineRows
+      .map((row) => {
+        if (typeof row.sample_date === "string" && row.sample_date) return row.sample_date;
+        if (typeof row.created_at === "string" && row.created_at.length >= 10) return row.created_at.slice(0, 10);
+        return null;
+      })
+      .filter((d): d is string => Boolean(d))
+      .sort();
+    let timelineDays: number | null = null;
+    if (dateRows.length >= 2) {
+      const first = new Date(`${dateRows[0]}T00:00:00`);
+      const last = new Date(`${dateRows[dateRows.length - 1]}T00:00:00`);
+      if (!Number.isNaN(first.getTime()) && !Number.isNaN(last.getTime())) {
+        timelineDays = Math.max(0, Math.round((last.getTime() - first.getTime()) / (1000 * 60 * 60 * 24)));
+      }
+    }
 
     const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
     const executedRows = ((executedLoads120.data ?? []) as Array<{ date: string | null; tss: number | null }>).map((row) => ({
@@ -280,6 +326,9 @@ export async function GET(req: NextRequest) {
       health: {
         panelsCount: healthPanelsTotal.count ?? 0,
         lastPanelLabel: lastLabel,
+        lastSampleDate,
+        timelineDays,
+        byType,
       },
       readSpineCoverage,
       operationalSignals,
