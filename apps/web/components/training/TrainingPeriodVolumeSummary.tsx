@@ -102,7 +102,7 @@ function asTrace(row: Record<string, unknown>): Record<string, unknown> | null {
 }
 
 export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string | null }) {
-  const [preset, setPreset] = useState<PresetId>("28");
+  const [preset, setPreset] = useState<PresetId>("365");
   const [loading, setLoading] = useState(false);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
   const [rollup, setRollup] = useState<TrainingExecutedVolumeRollupViewModel | null>(null);
