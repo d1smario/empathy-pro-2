@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeLoosePdfText } from "@/lib/health/lab-pdf-text-normalize";
 import { EPIGENETIC_GENE_BANK, HEALTH_MARKERS, MICROBIOTA_TAXA } from "@/lib/health/health-ontology";
 
 function stripDiacritics(s: string): string {
@@ -102,7 +103,7 @@ export function extractStructuredValuesFromLabText(
   rawText: string,
   panelType: HealthPanelTypeForParse,
 ): Record<string, unknown> {
-  const text = rawText.replace(/\u00a0/g, " ");
+  const text = normalizeLoosePdfText(rawText.replace(/\u00a0/g, " "));
   const out: Record<string, unknown> = {};
 
   const set = (key: string, v: number | null) => {

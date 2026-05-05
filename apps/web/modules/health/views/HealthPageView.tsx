@@ -701,6 +701,33 @@ export default function HealthPageView() {
     return newestBloodPanel ? rowFromBloodPanel(newestBloodPanel) : null;
   }, [newestBloodPanel]);
 
+  /** Referti ematici in ordine cronologico (vecchio → nuovo): colonne tabella comparativa. */
+  const bloodComparisonMatrix = useMemo(() => {
+    const cols = [...panelsNewestFirst]
+      .filter((p) => p.type === "blood")
+      .map((p) => {
+        const row = rowFromBloodPanel(p);
+        if (!row) return null;
+        const label = p.sample_date ?? p.reported_at?.slice(0, 10) ?? p.created_at?.slice(0, 10) ?? row.label;
+        return { id: p.id, label, row, source: p.source ?? null };
+      })
+      .filter((c): c is NonNullable<typeof c> => c != null)
+      .reverse();
+    return { cols };
+  }, [panelsNewestFirst]);
+
+  const microComparisonMatrix = useMemo(() => {
+    const cols = [...panelsNewestFirst]
+      .filter((p) => p.type === "microbiota")
+      .map((p) => ({
+        id: p.id,
+        label: p.sample_date ?? p.reported_at?.slice(0, 10) ?? p.created_at?.slice(0, 10) ?? "—",
+        v: (p.values ?? null) as Record<string, unknown> | null,
+      }))
+      .reverse();
+    return cols.length ? { cols } : null;
+  }, [panelsNewestFirst]);
+
   const usingDemoTrend = useMemo(() => {
     const nReal = panels
       .filter((p) => p.type === "blood")
@@ -1593,6 +1620,118 @@ export default function HealthPageView() {
           </div>
         </div>
       </section>
+
+      {/* Matrici longitudinali: tabella per referto + allineamento ai grafici */}
+      {bloodComparisonMatrix.cols.length > 0 || microComparisonMatrix ? (
+        <section
+          className="scroll-mt-24 space-y-6 rounded-2xl border border-white/10 bg-zinc-950/50 p-6"
+          aria-label="Tabelle comparative esami"
+        >
+          <div>
+            <h2 className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.22em] text-cyan-300">
+              Esami · matrici longitudinali
+            </h2>
+            <p className="mt-2 max-w-3xl text-xs leading-relaxed text-zinc-500">
+              Ogni colonna è un referto in archivio (data campione). Le righe sono gli stessi parametri usati dai grafici sopra, così
+              confronti valori nel tempo senza dipendere solo dal line chart.
+            </p>
+          </div>
+
+          {bloodComparisonMatrix.cols.length > 0 ? (
+            <div className="rounded-xl border border-rose-500/20 bg-black/35 p-4">
+              <h3 className="text-sm font-bold text-rose-200">Sangue — parametri chiave</h3>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
+                      <th className="py-2 pr-3">Parametro</th>
+                      {bloodComparisonMatrix.cols.map((c) => (
+                        <th key={c.id} className="px-2 py-2 font-medium text-zinc-300">
+                          <div>{c.label}</div>
+                          {c.source ? (
+                            <div
+                              className="mt-0.5 max-w-[140px] truncate font-mono text-[9px] font-normal normal-case text-zinc-600"
+                              title={c.source}
+                            >
+                              {c.source.length > 24 ? `${c.source.slice(0, 24)}…` : c.source}
+                            </div>
+                          ) : null}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="text-zinc-100">
+                    {(
+                      [
+                        { k: "emoglobina" as const, label: "Emoglobina", unit: "g/dL" },
+                        { k: "ferritina" as const, label: "Ferritina", unit: "ng/mL" },
+                        { k: "vit_d" as const, label: "Vit. D", unit: "ng/mL" },
+                        { k: "b12" as const, label: "B12", unit: "pg/mL" },
+                        { k: "glicemia" as const, label: "Glicemia", unit: "mg/dL" },
+                      ] as const
+                    ).map((m) => (
+                      <tr key={m.k} className="border-b border-white/5">
+                        <td className="py-2 pr-3 text-zinc-400">{m.label}</td>
+                        {bloodComparisonMatrix.cols.map((c) => {
+                          const v = c.row[m.k];
+                          return (
+                            <td key={`${c.id}-${m.k}`} className="px-2 py-2 font-mono tabular-nums">
+                              {v == null ? "—" : `${v} ${m.unit}`}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+
+          {microComparisonMatrix ? (
+            <div className="rounded-xl border border-emerald-500/20 bg-black/35 p-4">
+              <h3 className="text-sm font-bold text-emerald-200">Microbiota — abbondanze / diversità</h3>
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[480px] border-collapse text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-white/10 text-[10px] uppercase tracking-wider text-zinc-500">
+                      <th className="py-2 pr-3">Indicatore</th>
+                      {microComparisonMatrix.cols.map((c) => (
+                        <th key={c.id} className="px-2 py-2 font-medium text-zinc-300">
+                          {c.label}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="text-zinc-100">
+                    {(
+                      [
+                        { keys: ["firmicutes_pct", "firmicutes"], label: "Firmicutes", unit: "%" },
+                        { keys: ["bacteroidetes_pct", "bacteroidetes"], label: "Bacteroidetes", unit: "%" },
+                        { keys: ["proteobacteria_pct", "proteobacteria"], label: "Proteobacteria", unit: "%" },
+                        { keys: ["actinobacteria_pct", "actinobacteria"], label: "Actinobacteria", unit: "%" },
+                        { keys: ["diversity_shannon", "diversity"], label: "Diversità (Shannon)", unit: "" },
+                      ] as const
+                    ).map((m) => (
+                      <tr key={m.label} className="border-b border-white/5">
+                        <td className="py-2 pr-3 text-zinc-400">{m.label}</td>
+                        {microComparisonMatrix.cols.map((c) => {
+                          const v = readNum(c.v, [...m.keys]);
+                          return (
+                            <td key={`${c.id}-${m.label}`} className="px-2 py-2 font-mono tabular-nums">
+                              {v == null ? "—" : m.unit ? `${v} ${m.unit}` : String(v)}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Archivio referti (fine pagina) */}
       <section className="rounded-2xl border border-white/10 bg-zinc-950/60 p-5" aria-label="Archivio referti">
