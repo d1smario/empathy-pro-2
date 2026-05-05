@@ -202,7 +202,11 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
       { k: "VO₂", v: scan(["vo2_l_min", "vo2_lpm"]) != null ? `${scan(["vo2_l_min", "vo2_lpm"])?.toFixed(2)} L/min` : "—" },
       { k: "VCO₂", v: scan(["vco2_l_min", "vco2_lpm"]) != null ? `${scan(["vco2_l_min", "vco2_lpm"])?.toFixed(2)} L/min` : "—" },
       { k: "Glucosio", v: latestGlucose != null ? `${latestGlucose.toFixed(2)} mmol/L` : "—" },
+      { k: "TIR glicemico", v: scan(["time_in_range_pct", "glucose_tir_pct"]) != null ? `${(scan(["time_in_range_pct", "glucose_tir_pct"]) ?? 0).toFixed(0)}%` : "—" },
+      { k: "CV glicemica", v: scan(["glucose_variability_cv", "glucose_cv_pct"]) != null ? `${(scan(["glucose_variability_cv", "glucose_cv_pct"]) ?? 0).toFixed(1)}%` : "—" },
       { k: "Testosterone", v: scan(["testosterone", "testosterone_ng_dl"]) != null ? `${Math.round(scan(["testosterone", "testosterone_ng_dl"]) ?? 0)} ng/dL` : "—" },
+      { k: "Cortisolo", v: scan(["cortisol_ug_dl", "cortisol"]) != null ? `${(scan(["cortisol_ug_dl", "cortisol"]) ?? 0).toFixed(1)} ug/dL` : "—" },
+      { k: "DHEA-S", v: scan(["dhea_s_ug_dl", "dhea_s", "dhea"]) != null ? `${Math.round(scan(["dhea_s_ug_dl", "dhea_s", "dhea"]) ?? 0)} ug/dL` : "—" },
       { k: "Ossido nitrico", v: scan(["nitric_oxide", "nitric_oxide_index", "no_index"]) != null ? `${(scan(["nitric_oxide", "nitric_oxide_index", "no_index"]) ?? 0).toFixed(1)}` : "—" },
       { k: "Lattato", v: latestLactate != null ? `${latestLactate.toFixed(2)} mmol/L` : "—" },
       { k: "NAD", v: scan(["nad", "nad_plus", "nad_index"]) != null ? `${(scan(["nad", "nad_plus", "nad_index"]) ?? 0).toFixed(1)}` : "—" },
@@ -334,7 +338,7 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
                 ))}
               </div>
 
-              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-7">
+              <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 {biomarkerCells.map((cell) => (
                   <div key={cell.k} className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-950/10 px-3 py-3 text-center">
                     <div className="font-mono text-sm font-semibold text-fuchsia-100">{cell.v}</div>
