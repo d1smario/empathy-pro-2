@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { fetchHealthPanelsTimeline, type HealthPanelTimelineRow } from "@/modules/health/services/health-module-api";
 
 type BiomarkerPanelRow = {
   id: string;
@@ -9,9 +10,6 @@ type BiomarkerPanelRow = {
   sample_date: string | null;
   reported_at: string | null;
 };
-
-type ApiOk = { ok: true; athleteId: string; panels: BiomarkerPanelRow[] };
-type ApiErr = { ok: false; error?: string };
 
 export function HealthBiomarkerPanelsCard() {
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
@@ -32,17 +30,20 @@ export function HealthBiomarkerPanelsCard() {
       setLoading(true);
       setErr(null);
       try {
-        const res = await fetch(`/api/health/panels-latest?athleteId=${encodeURIComponent(athleteId)}`, {
-          cache: "no-store",
-        });
-        const json = (await res.json()) as ApiOk | ApiErr;
+        const { panels: timelinePanels, error } = await fetchHealthPanelsTimeline(athleteId);
         if (c) return;
-        if (!res.ok || !json.ok) {
+        if (error) {
           setPanels([]);
-          setErr(("error" in json && json.error) || "Lettura non riuscita.");
+          setErr(error);
           return;
         }
-        setPanels(json.panels);
+        const compactRows: BiomarkerPanelRow[] = (timelinePanels as HealthPanelTimelineRow[]).map((p) => ({
+          id: p.id,
+          type: p.type,
+          sample_date: p.sample_date,
+          reported_at: p.reported_at,
+        }));
+        setPanels(compactRows.slice(0, 8));
       } catch {
         if (!c) setErr("Errore di rete.");
       } finally {
