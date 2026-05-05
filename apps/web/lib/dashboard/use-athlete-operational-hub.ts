@@ -38,12 +38,17 @@ export function useAthleteOperationalHub(options?: { enabled?: boolean }): UseAt
     setLoading(true);
     setErr(null);
     try {
-      const res = await fetch(athleteHubOperationalUrl(athleteId), { cache: "no-store", credentials: "same-origin" });
-      const json = (await res.json()) as AthleteHubOperationalOk | AthleteHubOperationalErr;
+      let res = await fetch(athleteHubOperationalUrl(athleteId, true), { cache: "no-store", credentials: "same-origin" });
+      let json = (await res.json()) as AthleteHubOperationalOk | AthleteHubOperationalErr;
       if (!res.ok || !json.ok) {
-        setHub(null);
-        setErr(("error" in json && json.error) || "Lettura non riuscita.");
-        return;
+        // Fallback: almeno la sintesi base dashboard anche se segnali operativi falliscono.
+        res = await fetch(athleteHubOperationalUrl(athleteId, false), { cache: "no-store", credentials: "same-origin" });
+        json = (await res.json()) as AthleteHubOperationalOk | AthleteHubOperationalErr;
+        if (!res.ok || !json.ok) {
+          setHub(null);
+          setErr(("error" in json && json.error) || "Lettura non riuscita.");
+          return;
+        }
       }
       setHub(json);
     } catch {

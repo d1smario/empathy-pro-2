@@ -41,6 +41,7 @@ export type AthleteHubOperationalOk = {
 
 export type AthleteHubOperationalErr = { ok: false; error?: string };
 
-export function athleteHubOperationalUrl(athleteId: string): string {
-  return `/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}&includeOperationalSignals=1`;
+export function athleteHubOperationalUrl(athleteId: string, includeOperationalSignals = true): string {
+  const base = `/api/dashboard/athlete-hub?athleteId=${encodeURIComponent(athleteId)}`;
+  return includeOperationalSignals ? `${base}&includeOperationalSignals=1` : base;
 }

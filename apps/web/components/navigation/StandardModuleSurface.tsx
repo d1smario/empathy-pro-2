@@ -6,6 +6,7 @@ import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { DashboardAthleteHubCard } from "@/components/dashboard/DashboardAthleteHubCard";
 import { DashboardIntroAndPricing } from "@/components/dashboard/DashboardIntroAndPricing";
 import { DashboardLoadAnalysisSummary } from "@/components/dashboard/DashboardLoadAnalysisSummary";
+import { HealthBiomarkerPanelsCard } from "@/components/health/HealthBiomarkerPanelsCard";
 import { CoachAthletesModulePanel } from "@/components/coach/CoachAthletesModulePanel";
 import { SettingsCoachAccountCard } from "@/components/settings/SettingsCoachAccountCard";
 import { SettingsAthleteContextDiagnostics } from "@/components/settings/SettingsAthleteContextDiagnostics";
@@ -103,8 +104,13 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             trialDaysConfigured={dashboardTrialDays}
           />
           <DashboardLoadAnalysisSummary />
-          <section id="dash-operational" className="scroll-mt-28 flex justify-center">
-            <DashboardAthleteHubCard />
+          <section id="dash-operational" className="scroll-mt-28 grid gap-6 xl:grid-cols-2">
+            <div className="flex justify-center">
+              <DashboardAthleteHubCard />
+            </div>
+            <div className="flex justify-center">
+              <HealthBiomarkerPanelsCard />
+            </div>
           </section>
         </div>
       ) : null}
