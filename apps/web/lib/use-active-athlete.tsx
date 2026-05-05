@@ -233,8 +233,12 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
           if (!active) return;
           const coachList = dedupeAthletesByEmail((coachProfiles as AthleteOption[]) ?? []);
           setAthletes(coachList);
+          const profileAthleteId = typeof profile?.athlete_id === "string" ? profile.athlete_id : null;
           const resolvedCoachAthleteId =
-            (activeId && linkedAthleteIds.includes(activeId) ? activeId : null) ?? linkedAthleteIds[0] ?? null;
+            (activeId && linkedAthleteIds.includes(activeId) ? activeId : null) ??
+            (profileAthleteId && linkedAthleteIds.includes(profileAthleteId) ? profileAthleteId : null) ??
+            linkedAthleteIds[0] ??
+            null;
           if (resolvedCoachAthleteId) {
             writeActiveAthleteId(resolvedCoachAthleteId);
           } else {
