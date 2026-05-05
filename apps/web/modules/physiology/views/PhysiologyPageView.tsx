@@ -123,6 +123,20 @@ type WorkoutSample = {
   glucose_mmol_l: number | null;
 };
 
+type SportSpecificPanelVm = {
+  key: SupportedSport;
+  title: string;
+  sessionCount: number;
+  avgDurationMin: number | null;
+  avgTss: number | null;
+  avgPowerW: number | null;
+  avgVelocityMMin: number | null;
+  avgRer: number | null;
+  avgVo2LMin: number | null;
+  vo2EstimateMlKgMin: number | null;
+  lastDate: string | null;
+};
+
 type PubmedItem = {
   source: "pubmed";
   pmid: string;
@@ -244,6 +258,13 @@ function toSupportedSport(sportRaw: string | null | undefined): SupportedSport {
   if (sport.includes("swim")) return "swimming";
   if (sport.includes("ski")) return "xc_ski";
   return "cycling";
+}
+
+function sportLabelIt(sport: SupportedSport): string {
+  if (sport === "running") return "Corsa";
+  if (sport === "swimming") return "Nuoto";
+  if (sport === "xc_ski") return "Sci nordico";
+  return "Bici";
 }
 
 function lerp(a: number, b: number, t: number) {
@@ -970,6 +991,54 @@ export default function MetabolicLabPage() {
     () => workouts.find((w) => w.id === selectedWorkoutId) ?? null,
     [workouts, selectedWorkoutId],
   );
+  const sportSpecificPanels = useMemo<SportSpecificPanelVm[]>(() => {
+    const targetSports: SupportedSport[] = ["cycling", "running", "swimming"];
+    const bySport = new Map<SupportedSport, WorkoutSample[]>();
+    for (const s of targetSports) bySport.set(s, []);
+    for (const workout of workouts) {
+      const sport = toSupportedSport(workout.sport);
+      const list = bySport.get(sport);
+      if (list) list.push(workout);
+    }
+    return targetSports.map((sport) => {
+      const rows = bySport.get(sport) ?? [];
+      const sessionCount = rows.length;
+      const avg = (pick: (w: WorkoutSample) => number | null, digits = 1): number | null => {
+        const vals = rows.map(pick).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+        if (!vals.length) return null;
+        const mean = vals.reduce((s, v) => s + v, 0) / vals.length;
+        return Number(mean.toFixed(digits));
+      };
+      const latest = rows
+        .filter((w) => typeof w.date === "string" && w.date.length >= 10)
+        .sort((a, b) => (a.date > b.date ? -1 : 1))[0];
+      const avgPowerW = avg((w) => w.power_w, 0);
+      const avgVelocityMMin = avg((w) => w.velocity_m_min, 1);
+      const avgRer = avg((w) => w.rer, 2);
+      const avgVo2LMin = avg((w) => w.vo2_l_min, 2);
+      const vo2EstimateMlKgMin = estimateVo2FromDevice({
+        sport,
+        bodyMassKg: Math.max(30, labBodyMassKg),
+        rer: avgRer != null ? Math.max(0.72, Math.min(1.05, avgRer)) : 0.9,
+        powerW: avgPowerW ?? undefined,
+        velocityMMin: avgVelocityMMin ?? undefined,
+        gradeFraction: undefined,
+      }).vo2MlKgMin;
+      return {
+        key: sport,
+        title: sportLabelIt(sport),
+        sessionCount,
+        avgDurationMin: avg((w) => w.duration_min, 0),
+        avgTss: avg((w) => w.tss, 0),
+        avgPowerW,
+        avgVelocityMMin,
+        avgRer,
+        avgVo2LMin,
+        vo2EstimateMlKgMin: Number.isFinite(vo2EstimateMlKgMin) ? Number(vo2EstimateMlKgMin.toFixed(1)) : null,
+        lastDate: latest?.date ?? null,
+      };
+    });
+  }, [workouts, labBodyMassKg, cpModel.ftp]);
   function applyWorkoutToLactate(workout: WorkoutSample) {
     const mappedSport = toSupportedSport(workout.sport);
     setLactateSport(mappedSport);
@@ -2238,6 +2307,40 @@ export default function MetabolicLabPage() {
             }}
             onAfterApply={runProfileRecalc}
           />
+
+          <Pro2SectionCard
+            accent="violet"
+            title="Fisiologia sport-specifica (Bike / Run / Swim)"
+            subtitle="Tre pannelli separati dalla stessa memoria atleta: confronta carico, costo metabolico e risposta per disciplina."
+            icon={Layers}
+          >
+            <div className="grid gap-3 md:grid-cols-3">
+              {sportSpecificPanels.map((panel) => (
+                <article key={panel.key} className="rounded-2xl border border-white/10 bg-black/40 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-violet-300">{panel.title}</p>
+                  <p className="mt-1 font-mono text-sm text-slate-300">
+                    Sessioni: <span className="text-white">{panel.sessionCount}</span>
+                    {panel.lastDate ? ` · ultima ${panel.lastDate}` : ""}
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-400">
+                    <span>Durata media: {panel.avgDurationMin != null ? `${Math.round(panel.avgDurationMin)} min` : "—"}</span>
+                    <span>TSS medio: {panel.avgTss != null ? Math.round(panel.avgTss) : "—"}</span>
+                    <span>P media: {panel.avgPowerW != null ? `${Math.round(panel.avgPowerW)} W` : "—"}</span>
+                    <span>Velocita': {panel.avgVelocityMMin != null ? `${panel.avgVelocityMMin.toFixed(1)} m/min` : "—"}</span>
+                    <span>RER medio: {panel.avgRer != null ? panel.avgRer.toFixed(2) : "—"}</span>
+                    <span>VO₂ medio: {panel.avgVo2LMin != null ? `${panel.avgVo2LMin.toFixed(2)} L/min` : "—"}</span>
+                  </div>
+                  <p className="mt-2 text-xs text-amber-100/90">
+                    VO₂ stimato sport-specifico:{" "}
+                    <strong>{panel.vo2EstimateMlKgMin != null ? `${panel.vo2EstimateMlKgMin.toFixed(1)} ml/kg/min` : "—"}</strong>
+                  </p>
+                </article>
+              ))}
+            </div>
+            <p className="mt-3 text-[11px] text-slate-500">
+              Se una disciplina non ha sessioni recenti, il pannello resta visibile ma con metriche vuote: evita di confondere profili sport diversi.
+            </p>
+          </Pro2SectionCard>
 
           <PhysiologyPro2MetabolicDashboard
             cpPointDefs={CP_POINTS}
