@@ -883,9 +883,12 @@ export default function HealthPageView() {
     return [...rowsDesc].reverse();
   }, [panelsNewestFirst]);
 
-  /** Serie per il grafico: ≥2 punti reali; in dev solo, fallback demo se mancano abbastanza referti. */
+  /**
+   * Serie per il grafico: anche **1 solo punto** reale è valido.
+   * Demo fallback solo in dev e solo se non c'è alcun dato reale.
+   */
   const bloodLineChartData = useMemo(() => {
-    if (bloodRowsChronological.length >= 2) return bloodRowsChronological;
+    if (bloodRowsChronological.length >= 1) return bloodRowsChronological;
     if (!SHOW_HEALTH_DEMO_FALLBACK_DATA) return [];
     return DEMO_BLOOD_TREND.map((r) => ({
       label: r.label,
@@ -977,7 +980,7 @@ export default function HealthPageView() {
       .filter((p) => p.type === "blood")
       .map(rowFromBloodPanel)
       .filter((r): r is NonNullable<typeof r> => r != null).length;
-    return SHOW_HEALTH_DEMO_FALLBACK_DATA && nReal < 2;
+    return SHOW_HEALTH_DEMO_FALLBACK_DATA && nReal < 1;
   }, [panels]);
 
   const latestPanelsByTypeForRaw = useMemo(() => {
@@ -1020,7 +1023,7 @@ export default function HealthPageView() {
       .map(rowFromEpigeneticTrendPanel)
       .filter((r): r is NonNullable<typeof r> => r != null)
       .reverse();
-    if (fromDb.length >= 2) return { rows: fromDb, isDemo: false as const };
+    if (fromDb.length >= 1) return { rows: fromDb, isDemo: false as const };
     if (SHOW_HEALTH_DEMO_FALLBACK_DATA) return { rows: DEMO_EPIGENETIC_TREND, isDemo: true as const };
     return { rows: fromDb, isDemo: false as const };
   }, [panels]);
