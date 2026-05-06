@@ -2017,11 +2017,13 @@ export default function HealthPageView() {
               const expanded = expandedPanelId === p.id;
               const reviewRunId = pendingVlmRunByPanelId.get(p.id) ?? null;
               const importStatus = imp?.status ?? "";
-              const hasImage = (imp?.mime ?? "").toLowerCase().startsWith("image/");
+              const mimeLower = (imp?.mime ?? "").toLowerCase();
+              const hasImage = mimeLower.startsWith("image/");
+              const hasPdf = mimeLower === "application/pdf" || (imp?.filename ?? "").toLowerCase().endsWith(".pdf");
               const hasStorage = Boolean(imp?.storage_path);
               const canAnalyzeWithAi =
                 hasStorage &&
-                hasImage &&
+                (hasImage || hasPdf) &&
                 ["needs_manual_review", "failed", undefined, ""].includes(importStatus) &&
                 reviewRunId == null;
               const isPendingVlm =

@@ -96,15 +96,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const arrayBuffer = await dl.data.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Solo immagini per il VLM (PDF non supportato dalle API vision senza rasterizzazione)
+    // Anthropic Claude accetta image/* e application/pdf nativamente.
     const isImage = /^image\//i.test(mime);
-    if (!isImage) {
+    const isPdf = /^application\/pdf$/i.test(mime);
+    if (!isImage && !isPdf) {
       return NextResponse.json(
         {
           ok: false as const,
-          error: "vlm_requires_image",
-          note:
-            "Il VLM richiede un file image/* (jpeg/png/webp). Per PDF-scan ri-carica come immagine o esporta la prima pagina come PNG.",
+          error: "vlm_unsupported_mime",
+          note: "Il VLM accetta image/* o application/pdf.",
           mime,
           filename,
         },

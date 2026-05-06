@@ -155,12 +155,25 @@ async function callAnthropicVision(args: {
   prompt: string;
 }): Promise<string | null> {
   try {
+    const isPdf = /^application\/pdf$/i.test(args.mediaType);
+    const sourceBlock = isPdf
+      ? {
+          type: "document" as const,
+          source: { type: "base64" as const, media_type: "application/pdf" as const, data: args.base64 },
+        }
+      : {
+          type: "image" as const,
+          source: { type: "base64" as const, media_type: args.mediaType, data: args.base64 },
+        };
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "x-api-key": args.apiKey,
         "anthropic-version": "2023-06-01",
+        // PDF support beta header (Anthropic accepts the message even without it now,
+        // but we keep the explicit beta header for forward compatibility).
+        ...(isPdf ? { "anthropic-beta": "pdfs-2024-09-25" } : {}),
       },
       body: JSON.stringify({
         model: args.model,
@@ -169,13 +182,7 @@ async function callAnthropicVision(args: {
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "image",
-                source: { type: "base64", media_type: args.mediaType, data: args.base64 },
-              },
-              { type: "text", text: args.prompt },
-            ],
+            content: [sourceBlock, { type: "text", text: args.prompt }],
           },
         ],
       }),
@@ -250,13 +257,13 @@ export async function decodeHealthDocumentWithVlm(input: {
   const { buffer, mime, panelType } = input;
   if (!buffer.length) return null;
 
-  // VLM Anthropic supporta image/jpeg image/png image/webp image/gif. PDF non supportato → return null per pdf.
-  // Per PDF il caller dovrà già aver provato pdf-parse oppure rasterizzare la prima pagina (out of scope qui).
-  const allowed = /^image\/(jpeg|jpg|png|webp|gif)$/i;
-  if (!allowed.test(mime)) return null;
+  const allowedImage = /^image\/(jpeg|jpg|png|webp|gif)$/i;
+  const isPdf = /^application\/pdf$/i.test(mime);
+  if (!allowedImage.test(mime) && !isPdf) return null;
 
   const base64 = buffer.toString("base64");
   const prompt = buildPromptText(panelType);
+  const normalizedMedia = isPdf ? "application/pdf" : mime.replace(/^image\/jpg$/i, "image/jpeg");
 
   const anthropicKey = (process.env.ANTHROPIC_API_KEY ?? "").trim();
   const anthropicModel =
@@ -269,7 +276,7 @@ export async function decodeHealthDocumentWithVlm(input: {
       apiKey: anthropicKey,
       model: anthropicModel,
       base64,
-      mediaType: mime.replace(/^image\/jpg$/i, "image/jpeg"),
+      mediaType: normalizedMedia,
       prompt,
     });
     if (raw) {
@@ -288,12 +295,13 @@ export async function decodeHealthDocumentWithVlm(input: {
     }
   }
 
-  if (openaiKey) {
+  // GPT-4o non accetta PDF nelle chat completions: solo immagini.
+  if (openaiKey && !isPdf) {
     const raw = await callOpenAiVision({
       apiKey: openaiKey,
       model: openaiModel,
       base64,
-      mediaType: mime.replace(/^image\/jpg$/i, "image/jpeg"),
+      mediaType: normalizedMedia,
       prompt,
     });
     if (raw) {
