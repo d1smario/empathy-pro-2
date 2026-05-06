@@ -829,7 +829,35 @@ export default function HealthPageView() {
     }));
   }, [bloodRowsChronological]);
 
-  const newestBloodPanel = useMemo(() => panelsNewestFirst.find((p) => p.type === "blood"), [panelsNewestFirst]);
+  /**
+   * Sceglie il panel di un dato tipo da cui le card riassuntive devono leggere.
+   *
+   * Se gli ultimi referti caricati sono ancora in `needs_manual_review`/vuoti
+   * (file in attesa di VLM o di parser), pescare "il più recente assoluto"
+   * lascerebbe le card vuote anche con N panel più vecchi pieni di valori.
+   * Il selettore preferisce quindi il primo (più recente) **con almeno
+   * un valore numerico utile** tra: campi piatti canonici (es. `crp_mg_l`,
+   * `firmicutes_pct`) o `vlm_proposals` non vuote. Fallback: più recente assoluto.
+   */
+  const findLatestUsefulPanel = useCallback(
+    (matcher: (p: HealthPanelTimelineRow) => boolean): HealthPanelTimelineRow | undefined => {
+      const ofType = panelsNewestFirst.filter(matcher);
+      const useful = ofType.find((p) => {
+        const v = (p.values ?? null) as Record<string, unknown> | null;
+        if (!v) return false;
+        const flat = Object.keys(v).filter(
+          (k) => k !== "import" && k !== "vlm_proposals" && k !== "vlm_pending_validation",
+        );
+        if (flat.length > 0) return true;
+        const proposals = v.vlm_proposals;
+        return Array.isArray(proposals) && proposals.length > 0;
+      });
+      return useful ?? ofType[0];
+    },
+    [panelsNewestFirst],
+  );
+
+  const newestBloodPanel = useMemo(() => findLatestUsefulPanel((p) => p.type === "blood"), [findLatestUsefulPanel]);
 
   const bloodLatestStructuredRow = useMemo(() => {
     return newestBloodPanel ? rowFromBloodPanel(newestBloodPanel) : null;
@@ -882,21 +910,21 @@ export default function HealthPageView() {
   }, [panelsNewestFirst]);
 
   const latestInflammation = useMemo(
-    () => panelsNewestFirst.find((p) => p.type === "inflammation"),
-    [panelsNewestFirst],
+    () => findLatestUsefulPanel((p) => p.type === "inflammation"),
+    [findLatestUsefulPanel],
   );
   const latestMicrobiota = useMemo(
-    () => panelsNewestFirst.find((p) => p.type === "microbiota"),
-    [panelsNewestFirst],
+    () => findLatestUsefulPanel((p) => p.type === "microbiota"),
+    [findLatestUsefulPanel],
   );
-  const latestHormones = useMemo(() => panelsNewestFirst.find((p) => isHormonePanelType(p.type)), [panelsNewestFirst]);
+  const latestHormones = useMemo(() => findLatestUsefulPanel((p) => isHormonePanelType(p.type)), [findLatestUsefulPanel]);
   const latestEpigenetics = useMemo(
-    () => panelsNewestFirst.find((p) => p.type === "epigenetics"),
-    [panelsNewestFirst],
+    () => findLatestUsefulPanel((p) => p.type === "epigenetics"),
+    [findLatestUsefulPanel],
   );
   const latestOxidative = useMemo(
-    () => panelsNewestFirst.find((p) => p.type === "oxidative_stress"),
-    [panelsNewestFirst],
+    () => findLatestUsefulPanel((p) => p.type === "oxidative_stress"),
+    [findLatestUsefulPanel],
   );
 
   const inflammationRadar = useMemo(() => inflammationRadarFromPanel(latestInflammation), [latestInflammation]);
@@ -918,9 +946,9 @@ export default function HealthPageView() {
   const endocrineRadar = useMemo(() => endocrineRadarFromPanel(latestHormones), [latestHormones]);
 
   const globalScores = useMemo(() => {
-    const blood = panelsNewestFirst.find((p) => p.type === "blood");
-    const micro = panelsNewestFirst.find((p) => p.type === "microbiota");
-    const epi = panelsNewestFirst.find((p) => p.type === "epigenetics");
+    const blood = findLatestUsefulPanel((p) => p.type === "blood");
+    const micro = findLatestUsefulPanel((p) => p.type === "microbiota");
+    const epi = findLatestUsefulPanel((p) => p.type === "epigenetics");
     const pick = (row: HealthPanelTimelineRow | undefined, keys: string[], demoFallback: number): number | null => {
       const n = readNum((row?.values as Record<string, unknown>) ?? null, keys);
       if (n != null) return Math.round(Math.min(100, Math.max(0, n)));
@@ -932,7 +960,7 @@ export default function HealthPageView() {
       epigenetica: pick(epi, ["health_score_epigenetica", "score_epigenetica"], 85),
       totale: pick(blood, ["health_score_totale", "score_totale"], 90),
     };
-  }, [panelsNewestFirst]);
+  }, [findLatestUsefulPanel]);
 
   async function onPickFile(panelType: string, file: File | null) {
     if (!file || !athleteId) return;
