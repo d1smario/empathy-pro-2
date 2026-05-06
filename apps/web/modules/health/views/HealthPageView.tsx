@@ -39,6 +39,7 @@ import { Pro2Button } from "@/components/ui/empathy";
 import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
+  analyzePanelWithAi,
   fetchHealthPanelsTimeline,
   fetchHealthSystemMap,
   patchHealthStagingRun,
@@ -608,6 +609,8 @@ export default function HealthPageView() {
   const [stagingBusy, setStagingBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [sampleDate, setSampleDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
+  const [analyzeBusyPanelId, setAnalyzeBusyPanelId] = useState<string | null>(null);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadTimeline = useCallback(async () => {
@@ -672,6 +675,26 @@ export default function HealthPageView() {
   }, [ctxLoading, loadTimeline]);
 
   const panelsNewestFirst = useMemo(() => sortPanelsNewestFirst(panels), [panels]);
+
+  /** Map panelId → runId VLM in pending_validation, per il link "Apri review" sull'archivio. */
+  const pendingVlmRunByPanelId = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const run of systemMap.stagingRuns) {
+      const status = typeof run.status === "string" ? run.status : "";
+      const trigger = typeof run.trigger_source === "string" ? run.trigger_source : "";
+      if (status !== "pending_validation" || trigger !== "health_upload_vlm") continue;
+      const refs = Array.isArray(run.source_refs) ? run.source_refs : [];
+      for (const ref of refs) {
+        if (ref && typeof ref === "object" && !Array.isArray(ref)) {
+          const r = ref as Record<string, unknown>;
+          if (r.table === "biomarker_panels" && typeof r.id === "string" && typeof run.id === "string") {
+            out.set(r.id, run.id);
+          }
+        }
+      }
+    }
+    return out;
+  }, [systemMap.stagingRuns]);
 
   const bloodRowsChronological = useMemo(() => {
     const rowsDesc = panelsNewestFirst
@@ -818,6 +841,25 @@ export default function HealthPageView() {
     setToast(res.message ?? "Caricamento registrato.");
     void loadTimeline();
     /** Fase B: se l'AI ha proposto valori, instradiamo subito alla review per la conferma. */
+    if (res.reviewUrl) {
+      setTimeout(() => {
+        window.location.assign(res.reviewUrl as string);
+      }, 600);
+    }
+  }
+
+  async function onAnalyzePanelWithAi(panelId: string) {
+    if (!athleteId || !panelId) return;
+    setAnalyzeBusyPanelId(panelId);
+    setToast(null);
+    const res = await analyzePanelWithAi({ panelId, athleteId });
+    setAnalyzeBusyPanelId(null);
+    if (!res.ok) {
+      setToast(res.error ?? "Analisi AI fallita");
+      return;
+    }
+    setToast(res.message ?? "Analisi AI avviata.");
+    void loadTimeline();
     if (res.reviewUrl) {
       setTimeout(() => {
         window.location.assign(res.reviewUrl as string);
@@ -1844,36 +1886,137 @@ export default function HealthPageView() {
           {!loadingTimeline &&
             panels.map((p) => {
               const vals = (p.values ?? null) as Record<string, unknown> | null;
-              const imp = vals?.import as { filename?: string; status?: string; storage_path?: string } | undefined;
+              const imp = vals?.import as
+                | { filename?: string; status?: string; storage_path?: string; mime?: string }
+                | undefined;
               const nFields = structuredValuesFieldCount(vals);
+              const expanded = expandedPanelId === p.id;
+              const reviewRunId = pendingVlmRunByPanelId.get(p.id) ?? null;
+              const importStatus = imp?.status ?? "";
+              const hasImage = (imp?.mime ?? "").toLowerCase().startsWith("image/");
+              const hasStorage = Boolean(imp?.storage_path);
+              const canAnalyzeWithAi =
+                hasStorage &&
+                hasImage &&
+                ["needs_manual_review", "failed", undefined, ""].includes(importStatus) &&
+                reviewRunId == null;
+              const isPendingVlm =
+                Boolean(vals?.vlm_pending_validation) || importStatus === "vlm_proposed" || reviewRunId != null;
+              const valueEntries =
+                vals && typeof vals === "object"
+                  ? Object.entries(vals)
+                      .filter(([k]) => k !== "import" && k !== "vlm_proposals")
+                      .filter(([, v]) => v !== null && typeof v !== "object")
+                      .slice(0, 24)
+                  : [];
+              const analyzing = analyzeBusyPanelId === p.id;
               return (
                 <li
                   key={p.id}
-                  className="grid gap-2 py-4 text-sm sm:grid-cols-[minmax(0,1.25fr)_auto_minmax(0,1fr)] sm:items-start sm:gap-x-4"
+                  className={`py-4 text-sm ${
+                    isPendingVlm ? "border-l-2 border-fuchsia-500/40 pl-3" : ""
+                  }`}
                 >
-                  <div className="min-w-0">
-                    <div className="font-semibold capitalize text-white">{p.type}</div>
-                    <div className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-zinc-500" title={p.source ?? ""}>
-                      {p.source ? `Sorgente: ${p.source}` : "Sorgente: —"}
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1.25fr)_auto_minmax(0,1.5fr)] sm:items-start sm:gap-x-4">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold capitalize text-white">{p.type}</span>
+                        {isPendingVlm ? (
+                          <span className="rounded-md border border-fuchsia-500/40 bg-fuchsia-950/40 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-fuchsia-200">
+                            VLM pending
+                          </span>
+                        ) : null}
+                        {nFields > 0 ? (
+                          <span className="rounded-md border border-emerald-500/30 bg-emerald-950/30 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-emerald-200">
+                            {nFields} campi
+                          </span>
+                        ) : null}
+                      </div>
+                      <div
+                        className="mt-0.5 truncate font-mono text-[10px] uppercase tracking-wider text-zinc-500"
+                        title={p.source ?? ""}
+                      >
+                        {p.source ? `Sorgente: ${p.source}` : "Sorgente: —"}
+                      </div>
+                    </div>
+                    <div className="whitespace-nowrap font-mono text-xs text-zinc-400">
+                      {p.sample_date ?? p.reported_at?.slice(0, 10) ?? p.created_at?.slice(0, 10) ?? "—"}
+                    </div>
+                    <div className="min-w-0 break-words text-xs text-zinc-400">
+                      {imp?.filename ? (
+                        <>
+                          <span className="text-zinc-200">{imp.filename}</span>
+                          <span className="text-zinc-500"> · {imp.status ?? "—"}</span>
+                          {imp.storage_path ? (
+                            <span className="block truncate text-zinc-600">{imp.storage_path}</span>
+                          ) : null}
+                        </>
+                      ) : (
+                        <span>
+                          Valori strutturati{nFields > 0 ? ` · ${nFields} campi` : ""}
+                          {nFields === 0 ? " (payload vuoto o solo import)" : ""}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  <div className="whitespace-nowrap font-mono text-xs text-zinc-400">
-                    {p.sample_date ?? p.reported_at?.slice(0, 10) ?? p.created_at?.slice(0, 10) ?? "—"}
+
+                  {/* Azioni */}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPanelId(expanded ? null : p.id)}
+                      className="rounded-md border border-white/10 bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-zinc-200 transition hover:border-fuchsia-500/40 hover:text-white"
+                    >
+                      {expanded ? "Chiudi" : "Apri"}
+                    </button>
+                    {reviewRunId ? (
+                      <a
+                        href={`/health/staging/${reviewRunId}`}
+                        className="rounded-md border border-fuchsia-400/50 bg-fuchsia-600/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition hover:bg-fuchsia-500/60"
+                      >
+                        Apri review
+                      </a>
+                    ) : null}
+                    {canAnalyzeWithAi ? (
+                      <button
+                        type="button"
+                        disabled={analyzing}
+                        onClick={() => void onAnalyzePanelWithAi(p.id)}
+                        className="rounded-md border border-violet-400/50 bg-violet-600/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition hover:bg-violet-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {analyzing ? "Analizzo…" : "Analizza con AI"}
+                      </button>
+                    ) : null}
                   </div>
-                  <div className="min-w-0 break-words text-xs text-zinc-400">
-                    {imp?.filename ? (
-                      <>
-                        <span className="text-zinc-200">{imp.filename}</span>
-                        <span className="text-zinc-500"> · {imp.status ?? "—"}</span>
-                        {imp.storage_path ? <span className="block truncate text-zinc-600">{imp.storage_path}</span> : null}
-                      </>
-                    ) : (
-                      <span>
-                        Valori strutturati{nFields > 0 ? ` · ${nFields} campi` : ""}
-                        {nFields === 0 ? " (payload vuoto o solo import)" : ""}
-                      </span>
-                    )}
-                  </div>
+
+                  {/* Dettagli espansi */}
+                  {expanded ? (
+                    <div className="mt-3 rounded-lg border border-white/10 bg-black/40 p-3">
+                      {valueEntries.length === 0 ? (
+                        <p className="text-xs text-zinc-500">
+                          Nessun valore strutturato in questo pannello. Se hai un file in storage, prova «Analizza con AI».
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                          {valueEntries.map(([k, v]) => (
+                            <div key={k} className="min-w-0">
+                              <div className="truncate font-mono text-[10px] uppercase tracking-wider text-zinc-500" title={k}>
+                                {k}
+                              </div>
+                              <div className="truncate text-zinc-200" title={String(v)}>
+                                {typeof v === "number" ? v.toLocaleString() : String(v)}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {Array.isArray(vals?.vlm_proposals) && (vals?.vlm_proposals as unknown[]).length > 0 ? (
+                        <p className="mt-3 text-[11px] text-fuchsia-300">
+                          {(vals?.vlm_proposals as unknown[]).length} proposte VLM da confermare. Apri la review per accettarle.
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </li>
               );
             })}

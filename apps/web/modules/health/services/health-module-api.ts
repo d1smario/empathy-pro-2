@@ -316,6 +316,49 @@ export type HealthStagingApplyPatch = {
   confidence?: number;
 };
 
+export async function analyzePanelWithAi(input: {
+  panelId: string;
+  athleteId: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  message?: string;
+  reviewUrl?: string | null;
+  stagingRunId?: string | null;
+  fieldCount?: number;
+}> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/health/panels/${encodeURIComponent(input.panelId)}/analyze-with-ai`, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({ athleteId: input.athleteId }),
+  });
+  const json = (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    note?: string;
+    message?: string;
+    reviewUrl?: string | null;
+    stagingRunId?: string | null;
+    fieldCount?: number;
+  };
+  if (!res.ok || !json.ok) {
+    return {
+      ok: false,
+      error: json.note ? `${json.error ?? ""}: ${json.note}` : json.error || "Analisi AI fallita",
+    };
+  }
+  return {
+    ok: true,
+    message: json.message,
+    reviewUrl: json.reviewUrl ?? null,
+    stagingRunId: json.stagingRunId ?? null,
+    fieldCount: json.fieldCount,
+  };
+}
+
 export async function applyHealthStagingPatches(input: {
   runId: string;
   confirmedPatches: HealthStagingApplyPatch[];
