@@ -2,16 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import { getHealthUploadsBucket } from "@/lib/health/health-upload-storage";
 import {
-  decodeHealthDocumentWithVlm,
-  type HealthPanelKindForVlm,
-} from "@/lib/health/health-vlm-decode";
+  buildHealthImportBlock,
+  buildPanelValuesPayload,
+  decodeHealthDocument,
+  persistHealthVlmStagingRun,
+  selectPanelSourceTag,
+} from "@/lib/health/health-document-pipeline";
+import type { HealthPanelTypeForParse } from "@/lib/health/lab-text-extractors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
 
-const VLM_PANEL_TYPES = new Set<string>([
+const ALLOWED_TYPES = new Set<HealthPanelTypeForParse>([
   "blood",
   "microbiota",
   "epigenetics",
@@ -25,13 +29,17 @@ function asRecord(v: unknown): Record<string, unknown> {
 }
 
 /**
- * Re-analizza un `biomarker_panels` esistente:
- *  - scarica il file dal bucket Storage (deve essere image/* o PDF-scan)
- *  - chiama VLM (Claude → GPT-4o)
- *  - crea/aggiorna `interpretation_staging_runs` con `proposed_structured_patches`
- *  - **non** scrive in `biomarker_panels.values`: la conferma resta sulla review page
+ * Re-analyze panel esistente: thin entry-point, **convoglia** sulla stessa
+ * pipeline canonica usata da `/api/health/upload-document`. Niente decode,
+ * niente persist staging run reimplementati qui.
  *
- * Body JSON: `{ athleteId: string }` (per double-check; il panel ha già athlete_id).
+ * Architecture gate (`empathy_pro2_no_parallel_lines.mdc`):
+ *   - scarica il file dal bucket Storage del panel
+ *   - chiama `decodeHealthDocument` (parser → VLM Claude/GPT-4o)
+ *   - aggiorna `biomarker_panels.values` con la stessa shape canonica
+ *   - persiste lo staging run con `trigger_source: health_panel_reanalyze_vlm`
+ *
+ * Body JSON: `{ athleteId: string }`.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -58,18 +66,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     if (!panel) {
       return NextResponse.json({ ok: false as const, error: "panel_not_found" }, { status: 404, headers: NO_STORE });
     }
-    const panelType = String(panel.type ?? "");
-    if (!VLM_PANEL_TYPES.has(panelType)) {
+    const panelType = String(panel.type ?? "") as HealthPanelTypeForParse;
+    if (!ALLOWED_TYPES.has(panelType)) {
       return NextResponse.json(
         { ok: false as const, error: "unsupported_panel_type", panelType },
         { status: 409, headers: NO_STORE },
       );
     }
-    const values = asRecord((panel as { values?: unknown }).values);
-    const importBlock = asRecord(values.import);
-    const storagePath = typeof importBlock.storage_path === "string" ? importBlock.storage_path : null;
-    const mime = typeof importBlock.mime === "string" ? importBlock.mime : "application/octet-stream";
-    const filename = typeof importBlock.filename === "string" ? importBlock.filename : "upload.bin";
+    const valuesIn = asRecord((panel as { values?: unknown }).values);
+    const importIn = asRecord(valuesIn.import);
+    const storagePath = typeof importIn.storage_path === "string" ? importIn.storage_path : null;
+    const mime = typeof importIn.mime === "string" ? importIn.mime : "application/octet-stream";
+    const filename = typeof importIn.filename === "string" ? importIn.filename : "upload.bin";
 
     const bucket = getHealthUploadsBucket();
     if (!bucket) {
@@ -80,12 +88,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
     if (!storagePath) {
       return NextResponse.json(
-        { ok: false as const, error: "no_file_in_storage", note: "Il pannello non ha un file collegato (storage_path mancante)." },
+        { ok: false as const, error: "no_file_in_storage" },
         { status: 409, headers: NO_STORE },
       );
     }
 
-    // Scarica il file dal bucket
     const dl = await db.storage.from(bucket).download(storagePath);
     if (dl.error || !dl.data) {
       return NextResponse.json(
@@ -96,124 +103,83 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const arrayBuffer = await dl.data.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Anthropic Claude accetta image/* e application/pdf nativamente.
-    const isImage = /^image\//i.test(mime);
-    const isPdf = /^application\/pdf$/i.test(mime);
-    if (!isImage && !isPdf) {
-      return NextResponse.json(
-        {
-          ok: false as const,
-          error: "vlm_unsupported_mime",
-          note: "Il VLM accetta image/* o application/pdf.",
-          mime,
-          filename,
-        },
-        { status: 415, headers: NO_STORE },
-      );
-    }
+    const decode = await decodeHealthDocument({ buffer, mime, filename, panelType });
 
-    const vlm = await decodeHealthDocumentWithVlm({
-      buffer,
-      mime,
-      panelType: panelType as HealthPanelKindForVlm,
-    });
-    if (!vlm || vlm.fields.length === 0) {
+    if (decode.importStatus !== "vlm_proposed" && Object.keys(decode.parsed).length === 0) {
       return NextResponse.json(
         {
           ok: false as const,
-          error: "vlm_no_fields",
-          note: "Il VLM non ha estratto campi (chiavi mancanti o file non leggibile).",
+          error: "decode_no_fields",
+          note: "Né il parser deterministico né il VLM hanno estratto campi.",
+          importStatus: decode.importStatus,
         },
         { status: 502, headers: NO_STORE },
       );
     }
-
-    // Costruisci `proposed_structured_patches`
-    const patches = vlm.fields.map((p) => ({
-      target: `health.${panelType}`,
-      action: "set_field",
-      field: p.field,
-      proposed_value: p.value,
-      unit: p.unit ?? null,
-      reference_range: p.referenceRange ?? null,
-      confidence: p.confidence,
-      notes: p.notes ?? null,
-    }));
-    const overallConfidence =
-      vlm.fields.reduce((acc, p) => acc + (p.confidence || 0), 0) / Math.max(1, vlm.fields.length);
 
     const sampleDate =
       typeof panel.sample_date === "string" && panel.sample_date.length >= 8
         ? String(panel.sample_date).slice(0, 10)
         : new Date().toISOString().slice(0, 10);
 
-    const { data: stagingRun, error: stagingErr } = await db
-      .from("interpretation_staging_runs")
-      .insert({
-        athlete_id: athleteId,
-        domain: "health",
-        status: "pending_validation",
-        trigger_source: "health_upload_vlm",
-        source_refs: [{ table: "biomarker_panels", id: panelId }],
-        candidate_bundle: {
-          panel_type: panelType,
-          sample_date: sampleDate,
-          vlm_provider: vlm.providerUsed,
-          vlm_model: vlm.modelUsed,
-          detected_provider: vlm.detectedProvider,
-          quality_notes: vlm.qualityNotes,
-          field_count: vlm.fields.length,
-          re_analysis: true,
-        },
-        proposed_structured_patches: patches,
-        confidence: Math.max(0, Math.min(1, overallConfidence)),
-      })
-      .select("id")
-      .maybeSingle();
-    if (stagingErr) {
-      return NextResponse.json({ ok: false as const, error: stagingErr.message }, { status: 500, headers: NO_STORE });
-    }
-    const runId = stagingRun?.id ?? null;
-
-    // Aggiorna `biomarker_panels.values` per riflettere lo stato pending VLM
-    const nextValues: Record<string, unknown> = { ...values };
-    nextValues.vlm_pending_validation = true;
-    nextValues.vlm_proposals = vlm.fields.map((p) => ({
-      field: p.field,
-      value: p.value,
-      unit: p.unit,
-      reference_range: p.referenceRange,
-      confidence: p.confidence,
-      notes: p.notes,
-    }));
-    nextValues.import = {
+    const importBlock = buildHealthImportBlock({
+      filename,
+      mime,
+      sizeBytes: buffer.length,
+      decode,
+    });
+    // Conserviamo tag Storage già presenti su panel.values.import:
+    const importMerged = {
       ...importBlock,
-      status: "vlm_proposed",
-      vlm: {
-        provider: vlm.providerUsed,
-        model: vlm.modelUsed,
-        detected_provider: vlm.detectedProvider,
-        field_count: vlm.fields.length,
-        re_analyzed_at: new Date().toISOString(),
-      },
+      ...(typeof importIn.storage_bucket === "string" ? { storage_bucket: importIn.storage_bucket } : {}),
+      ...(typeof importIn.storage_path === "string" ? { storage_path: importIn.storage_path } : {}),
+      ...(typeof importIn.storage_uploaded_at === "string"
+        ? { storage_uploaded_at: importIn.storage_uploaded_at }
+        : {}),
     };
-    await db
+    const valuesOut = buildPanelValuesPayload({ decode, importBlock: importMerged });
+
+    const { error: updateErr } = await db
       .from("biomarker_panels")
-      .update({ values: nextValues, source: "health_upload_vlm_v1" })
+      .update({ values: valuesOut, source: selectPanelSourceTag(decode) })
       .eq("id", panelId)
       .eq("athlete_id", athleteId);
+    if (updateErr) {
+      return NextResponse.json({ ok: false as const, error: updateErr.message }, { status: 500, headers: NO_STORE });
+    }
+
+    let stagingRunId: string | null = null;
+    if (decode.importStatus === "vlm_proposed" && decode.vlmProposals.length > 0) {
+      const sr = await persistHealthVlmStagingRun({
+        db,
+        athleteId,
+        panelId,
+        panelType,
+        sampleDate,
+        decode,
+        triggerSource: "health_panel_reanalyze_vlm",
+      });
+      stagingRunId = sr.stagingRunId;
+    }
 
     return NextResponse.json(
       {
         ok: true as const,
         panelId,
-        stagingRunId: runId,
-        reviewUrl: runId ? `/health/staging/${runId}` : null,
-        fieldCount: vlm.fields.length,
-        provider: vlm.providerUsed,
-        model: vlm.modelUsed,
-        detectedProvider: vlm.detectedProvider,
-        message: `${vlm.fields.length} parametri proposti via ${vlm.providerUsed === "anthropic" ? "Claude" : "GPT-4o"}`,
+        importStatus: decode.importStatus,
+        stagingRunId,
+        reviewUrl: stagingRunId ? `/health/staging/${stagingRunId}` : null,
+        fieldCount:
+          decode.importStatus === "vlm_proposed"
+            ? decode.vlmProposals.length
+            : Object.keys(decode.parsed).length,
+        provider: decode.vlmProvider,
+        model: decode.vlmModel,
+        detectedProvider: decode.vlmDetectedProvider,
+        message:
+          decode.importStatus === "vlm_proposed"
+            ? `${decode.vlmProposals.length} parametri proposti via ${decode.vlmProvider === "anthropic" ? "Claude" : "GPT-4o"}`
+            : `${Object.keys(decode.parsed).length} parametri letti dal parser`,
       },
       { headers: NO_STORE },
     );

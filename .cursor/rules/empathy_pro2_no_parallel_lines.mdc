@@ -1,0 +1,37 @@
+---
+description: Pro 2 — convogliare nei file/pipeline esistenti, mai linee parallele
+alwaysApply: true
+---
+
+# EMPATHY Pro 2 — Convoglia, non duplicare (no parallel lines)
+
+Ogni nuova feature, fix o estensione che tocca un sistema **già con linea generativa** (route, pipeline, file canonico, tabella di memoria) **deve convogliare** nel file/pipeline esistente. Vietato creare percorsi paralleli che duplicano logica, scritture o contratti.
+
+## Esempi vincolanti
+
+- **Health ingest**: la pipeline canonica vive in `apps/web/app/api/health/upload-document/route.ts` con stadi `decode (parser deterministico → VLM fallback) → biomarker_panels.values → interpretation_staging_runs → normalize + causal_graph → Storage`. Re-analyze, ri-trigger e nuove sorgenti VLM **devono** chiamare le stesse funzioni di `lib/health/health-document-pipeline.ts` (o equivalenti se rinominate); **non** è permessa una seconda rotta che ricalca la decodifica o crea uno staging run con il proprio codice.
+- **Training session generation**: builder è la generazione canonica della singola sessione. VIRYA, calendario, integrazioni esterne **convogliano** nel builder (vedi `empathy_pro2_virya_builder_pipeline.mdc`). Vietato un secondo motore sessione.
+- **Nutrition meal plan**: solver deterministico unico. Non aggiungere ramo LLM che produce piani in parallelo.
+- **Athlete memory**: `athlete_id` è chiave canonica unica; non creare twin o store ombra per lo stesso atleta (`empathy_athlete_memory.mdc`).
+- **Schema/SQL**: nessun fix isolato senza migration ordinata + uso nel codice; vedi `empathy_schema_whole_picture.mdc`.
+
+## Regole operative
+
+1. **Prima di scrivere**: leggere il file/route già esistente che fa parte del flusso e identificare gli stadi (decode, persist, normalize, side effects). Se la logica che servirebbe è dentro un route, **estrarla** in `lib/<dominio>/<dominio>-pipeline.ts` e farla **chiamare** da entrambi i caller (vecchio e nuovo). Mai duplicare.
+2. **No retrigger paralleli**: se un panel/record ha bisogno di ri-elaborazione (es. ri-decodifica VLM su panel esistente), il nuovo entry-point è **thin** (download dati → invocazione pipeline condivisa → return). Niente VLM-call, niente persist o `update values` reimplementati.
+3. **No file shadow per la memoria**: se un sistema scrive su una tabella canonica (`biomarker_panels.values`, `interpretation_staging_runs`, `executed_workouts`, ecc.), non aggiungere colonne JSON paralleli o tabelle "_v2" senza migration esplicita e dismissione del precedente.
+4. **No conflitti contrattuali**: i payload (request/response, JSON in `values`, shape di `proposed_structured_patches`) hanno **un solo schema** per dominio. Modifiche allo schema = aggiornamento contemporaneo di tutti i consumer.
+5. **No risposta semplicistica**: se l'intervento richiesto sembra "veloce" ma rischia di creare un secondo flusso, fermarsi e **rifattorizzare** la pipeline esistente prima. Nessun `// TODO unify later`.
+
+## Quando si è autorizzati a creare un nuovo file
+
+Solo se:
+- Non esiste una pipeline canonica per quel dominio (greenfield).
+- La nuova capability è ortogonale per scope (dominio diverso, non lo stesso dato).
+- Si **estraggono** in libreria comune le parti riusabili e si aggiornano i caller.
+
+Tutto il resto è linea parallela e va respinto in self-review prima dell'edit.
+
+## Subordinazione
+
+Questa regola **non** sostituisce `empathy_architecture_gate.mdc`, `empathy_generative_core.mdc`, `empathy_stability_first.mdc`, `empathy_schema_whole_picture.mdc`, `empathy_athlete_memory.mdc`, `empathy_pro2_integrated_agent_execution.mdc`, `empathy_pro2_virya_builder_pipeline.mdc`. Le **rinforza**: convogliare i dati nel file canonico è il modo concreto per non rompere quei vincoli.
