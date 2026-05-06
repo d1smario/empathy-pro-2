@@ -85,6 +85,12 @@ export type ScaledMealItemNutrients = {
   eaa_ile: number;
   eaa_val: number;
   eaa_his: number;
+  /** Indice glicemico (Wolever-style estimate da macro USDA, pesato per la quota CHO dell'item). 0 = sconosciuto. */
+  glycemicIndex: number;
+  /** Indice insulinico (Holt-derived estimate da macro USDA). 0 = sconosciuto. */
+  insulinIndex: number;
+  /** Carico glicemico per item (GI × CHO disponibili / 100). 0 se sconosciuto. */
+  glycemicLoad: number;
 };
 
 const Z: CanonicalFoodNutrients = {
@@ -877,6 +883,9 @@ export function scaleCanonicalNutrientsToKcal(row: CanonicalFoodNutrients, targe
     eaa_ile: num(row.eaa_ile),
     eaa_val: num(row.eaa_val),
     eaa_his: num(row.eaa_his),
+    glycemicIndex: 0,
+    insulinIndex: 0,
+    glycemicLoad: 0,
   };
 }
 
@@ -955,6 +964,9 @@ export function scaleCanonicalNutrientsToGrams(row: CanonicalFoodNutrients, gram
     eaa_ile: num(row.eaa_ile),
     eaa_val: num(row.eaa_val),
     eaa_his: num(row.eaa_his),
+    glycemicIndex: 0,
+    insulinIndex: 0,
+    glycemicLoad: 0,
   };
 }
 
@@ -978,14 +990,8 @@ export function nutrientsForMealPlanItem(item: { name: string; portionHint: stri
   return { compositionKey, compositionStatus: "canonical_estimate", nutrients };
 }
 
-function addScaled(a: ScaledMealItemNutrients, b: ScaledMealItemNutrients): ScaledMealItemNutrients {
-  const keys = Object.keys(a) as (keyof ScaledMealItemNutrients)[];
-  const out = { ...a };
-  for (const k of keys) {
-    out[k] = Math.round((a[k] + b[k]) * 1000) / 1000;
-  }
-  return out;
-}
+/** Chiavi NON additive: si calcolano per media pesata sul totale kcal del rollup. */
+const NON_ADDITIVE_KEYS = new Set<keyof ScaledMealItemNutrients>(["glycemicIndex", "insulinIndex"]);
 
 const ZERO_SCALED: ScaledMealItemNutrients = {
   kcal: 0,
@@ -1025,8 +1031,32 @@ const ZERO_SCALED: ScaledMealItemNutrients = {
   eaa_ile: 0,
   eaa_val: 0,
   eaa_his: 0,
+  glycemicIndex: 0,
+  insulinIndex: 0,
+  glycemicLoad: 0,
 };
 
 export function sumScaledNutrients(rows: ScaledMealItemNutrients[]): ScaledMealItemNutrients {
-  return rows.reduce((acc, r) => addScaled(acc, r), { ...ZERO_SCALED });
+  const out: ScaledMealItemNutrients = { ...ZERO_SCALED };
+  if (rows.length === 0) return out;
+  const keys = Object.keys(out) as (keyof ScaledMealItemNutrients)[];
+  let weightedGi = 0;
+  let weightedIi = 0;
+  let totKcalForIndices = 0;
+  for (const r of rows) {
+    for (const k of keys) {
+      if (NON_ADDITIVE_KEYS.has(k)) continue;
+      out[k] = Math.round((out[k] + r[k]) * 1000) / 1000;
+    }
+    if (r.kcal > 0 && r.glycemicIndex > 0) {
+      weightedGi += r.glycemicIndex * r.kcal;
+      totKcalForIndices += r.kcal;
+    }
+    if (r.kcal > 0 && r.insulinIndex > 0) {
+      weightedIi += r.insulinIndex * r.kcal;
+    }
+  }
+  out.glycemicIndex = totKcalForIndices > 0 ? Math.round(weightedGi / totKcalForIndices) : 0;
+  out.insulinIndex = totKcalForIndices > 0 ? Math.round(weightedIi / totKcalForIndices) : 0;
+  return out;
 }

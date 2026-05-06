@@ -2047,7 +2047,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const mealTabMicronutrientProps = useMemo(() => {
     const dayTotals = intelligentMealPlan?.nutrientRollup?.dayTotals;
     if (dayTotals) {
-      return mealPlanDayTotalsToMicroLines(dayTotals);
+      return mealPlanDayTotalsToMicroLines(dayTotals, { stripZero: true });
     }
     return pathwayNutrientSummaryToMicroLines(nutrientSummary, hydrationPlan.minDailyMl);
   }, [intelligentMealPlan?.nutrientRollup?.dayTotals, nutrientSummary, hydrationPlan.minDailyMl]);

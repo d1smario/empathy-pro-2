@@ -13,7 +13,7 @@ import type {
 import type { AdaptationSectorBoxVm } from "@/lib/adaptation/adaptation-sector-box";
 import {
   NutritionMicronutrientDailyBoard,
-  mealPlanDayTotalsToMicroLinesComplete,
+  mealPlanDayTotalsToMicroLines,
   type NutritionMicronutrientGridProps,
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
 import { buildFunctionalFoodOptionGroupsForSlot } from "@/lib/nutrition/functional-food-option-groups";
@@ -290,7 +290,7 @@ export function NutritionMealPlanWorkspace({
   const router = useRouter();
   const hasApplicativeContext = Boolean(nutritionApplicationDirective) || Boolean(functionalMealSelectorNotes?.length);
   const mealPlanMicroBoardProps = intelligentMealPlan?.nutrientRollup?.dayTotals
-    ? mealPlanDayTotalsToMicroLinesComplete(intelligentMealPlan.nutrientRollup.dayTotals)
+    ? mealPlanDayTotalsToMicroLines(intelligentMealPlan.nutrientRollup.dayTotals)
     : mealTabMicronutrientProps;
 
   return (

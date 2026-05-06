@@ -479,57 +479,19 @@ function fattyPct(part: number, total: number): number {
   return total > 0 ? n1((part / total) * 100) : 0;
 }
 
-/** Da totali giornali stimati del piano (banca canonica) → stesso layout del diario. */
-export function mealPlanDayTotalsToMicroLines(d: ScaledMealItemNutrients): Omit<NutritionMicronutrientGridProps, "className"> {
-  const vitamins: NutritionMicroLine[] = [
-    { name: "Vitamina A (RAE)", value: n2(d.vitA_mcg_RAE), unit: "µg" },
-    { name: "Vitamina C", value: n1(d.vitC_mg), unit: "mg" },
-    { name: "Vitamina D", value: n2(d.vitD_mcg), unit: "µg" },
-    { name: "Vitamina E", value: n2(d.vitE_mg), unit: "mg" },
-    { name: "Vitamina K", value: n2(d.vitK_mcg), unit: "µg" },
-    { name: "Tiamina (B1)", value: n2(d.thiamineB1_mg), unit: "mg" },
-    { name: "Riboflavina (B2)", value: n2(d.riboflavinB2_mg), unit: "mg" },
-    { name: "Niacina (B3)", value: n2(d.niacinB3_mg), unit: "mg" },
-    { name: "Vitamina B6", value: n2(d.vitB6_mg), unit: "mg" },
-    { name: "Folati", value: Math.round(d.folate_mcg), unit: "µg" },
-    { name: "Vitamina B12", value: n2(d.vitB12_mcg), unit: "µg" },
-  ].filter((row) => row.value > 0);
-
-  const minerals: NutritionMicroLine[] = [
-    { name: "Calcio", value: Math.round(d.ca_mg), unit: "mg" },
-    { name: "Ferro", value: n2(d.fe_mg), unit: "mg" },
-    { name: "Magnesio", value: Math.round(d.mg_mg), unit: "mg" },
-    { name: "Fosforo", value: Math.round(d.p_mg), unit: "mg" },
-    { name: "Potassio", value: Math.round(d.k_mg), unit: "mg" },
-    { name: "Sodio", value: Math.round(d.na_mg), unit: "mg" },
-    { name: "Zinco", value: n2(d.zn_mg), unit: "mg" },
-    { name: "Selenio", value: n2(d.se_mcg), unit: "µg" },
-  ].filter((row) => row.value > 0);
-
-  const aminoAcids: NutritionMicroLine[] = [
-    { name: "Leucina", value: n2(d.eaa_leu), unit: "g" },
-    { name: "Lisina", value: n2(d.eaa_lys), unit: "g" },
-    { name: "Metionina", value: n2(d.eaa_met), unit: "g" },
-    { name: "Fenilalanina", value: n2(d.eaa_phe), unit: "g" },
-    { name: "Treonina", value: n2(d.eaa_thr), unit: "g" },
-    { name: "Triptofano", value: n2(d.eaa_trp), unit: "g" },
-    { name: "Isoleucina", value: n2(d.eaa_ile), unit: "g" },
-    { name: "Valina", value: n2(d.eaa_val), unit: "g" },
-    { name: "Istidina", value: n2(d.eaa_his), unit: "g" },
-  ].filter((row) => row.value > 0);
-
-  const fattyAcids: NutritionMicroLine[] = [
-    { name: "Saturi", value: n2(d.saturatedFatG), unit: "g" },
-    { name: "Monoinsaturi", value: n2(d.monoFatG), unit: "g" },
-    { name: "Polinsaturi", value: n2(d.polyFatG), unit: "g" },
-    { name: "Omega-3", value: n2(d.omega3G), unit: "g" },
-  ].filter((row) => row.value > 0);
-
-  return { vitamins, minerals, aminoAcids, fattyAcids, otherNutrients: [] };
-}
-
-/** Tutti i micronutrienti del modello canonico (stima giorno da `dayTotals`), inclusi valori nulli → tabella completa. */
-export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients): Omit<NutritionMicronutrientGridProps, "className"> {
+/**
+ * Da totali giornalieri stimati del piano (banca canonica) → layout micronutrienti completo.
+ * Versione canonica unica (ex `mealPlanDayTotalsToMicroLinesComplete`):
+ * include EAA + 11 amminoacidi derivati da proteina, fibra, omega-6 stim., trans/colesterolo stim.,
+ * cloruro/rame/manganese/iodio stim. (etichettati come tali). 56 righe totali.
+ *
+ * Opzioni:
+ * - `stripZero`: rimuove righe con `value <= 0` (vista compatta, es. fallback senza ricco rollup).
+ */
+export function mealPlanDayTotalsToMicroLines(
+  d: ScaledMealItemNutrients,
+  opts: { stripZero?: boolean } = {},
+): Omit<NutritionMicronutrientGridProps, "className"> {
   const omega6G = n2(Math.max(0, d.polyFatG - d.omega3G));
   const unsaturatedFatG = n2(d.monoFatG + d.polyFatG);
   const omegaRatio = d.omega3G > 0 ? n2(omega6G / d.omega3G) : 0;
@@ -604,6 +566,16 @@ export function mealPlanDayTotalsToMicroLinesComplete(d: ScaledMealItemNutrients
     { name: "Lipidi totali", value: n2(d.fatG), unit: "g" },
   ];
 
+  if (opts.stripZero) {
+    const keep = (row: NutritionMicroLine) => row.value > 0;
+    return {
+      vitamins: vitamins.filter(keep),
+      minerals: minerals.filter(keep),
+      aminoAcids: aminoAcids.filter(keep),
+      fattyAcids: fattyAcids.filter(keep),
+      otherNutrients: [],
+    };
+  }
   return { vitamins, minerals, aminoAcids, fattyAcids, otherNutrients: [] };
 }
 
