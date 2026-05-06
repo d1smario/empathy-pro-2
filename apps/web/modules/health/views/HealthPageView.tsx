@@ -131,14 +131,41 @@ const DEMO_ENDOCRINE_RADAR = [
   { subject: "GH / IGF-1", A: 71, fullMark: 100 },
 ];
 
+function coerceFiniteNumber(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(String(v).replace(",", "."));
+    if (Number.isFinite(n)) return n;
+  }
+  return null;
+}
+
+/**
+ * Legge un numero da `panel.values` con la stessa pipe per:
+ *  1. campi piatti canonici (es. `crp_mg_l: 1.2`) post-conferma o seed
+ *  2. fallback su `vlm_proposals[]` quando il panel ha proposte VLM
+ *     non ancora confermate (campo + valore + unità). Le card e i grafici
+ *     popolano i numeri "shadow" senza mai scrivere in DB: la conferma
+ *     resta esplicita in /health/staging/<id> e promuove la proposta a
+ *     valore canonico in `values.<field>`.
+ */
 function readNum(obj: Record<string, unknown> | null | undefined, keys: string[]): number | null {
   if (!obj) return null;
   for (const k of keys) {
-    const v = obj[k];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "string" && v.trim()) {
-      const n = Number(String(v).replace(",", "."));
-      if (Number.isFinite(n)) return n;
+    const direct = coerceFiniteNumber(obj[k]);
+    if (direct != null) return direct;
+  }
+  const proposals = obj.vlm_proposals;
+  if (Array.isArray(proposals)) {
+    for (const k of keys) {
+      for (const p of proposals) {
+        if (!p || typeof p !== "object" || Array.isArray(p)) continue;
+        const rec = p as Record<string, unknown>;
+        if (rec.field === k) {
+          const n = coerceFiniteNumber(rec.value);
+          if (n != null) return n;
+        }
+      }
     }
   }
   return null;
@@ -181,14 +208,32 @@ function panelRawDisplayRows(panel: HealthPanelTimelineRow): Array<{ key: string
   const v = panel.values;
   if (!v || typeof v !== "object") return [];
   const rec = v as Record<string, unknown>;
-  return Object.keys(rec)
-    .filter((k) => k !== "import")
+  const flat = Object.keys(rec)
+    .filter((k) => k !== "import" && k !== "vlm_proposals" && k !== "vlm_pending_validation")
     .sort((a, b) => a.localeCompare(b))
     .map((key) => ({
       key,
       label: humanizePayloadKey(key),
       value: formatScalarForDisplay(rec[key]),
     }));
+  const proposals = rec.vlm_proposals;
+  if (!Array.isArray(proposals) || proposals.length === 0) return flat;
+  // Append VLM proposals as virtual rows (clearly tagged) so the inline "Apri"
+  // toggle and the cards above stay coherent: same data, single panel.values.
+  const seenFields = new Set(flat.map((r) => r.key));
+  const proposed = proposals
+    .filter((p): p is Record<string, unknown> => Boolean(p) && typeof p === "object" && !Array.isArray(p))
+    .map((p) => {
+      const field = typeof p.field === "string" ? p.field : "";
+      const unit = typeof p.unit === "string" && p.unit.trim() ? ` ${p.unit}` : "";
+      return {
+        key: field || `proposal_${Math.random().toString(36).slice(2, 8)}`,
+        label: `${humanizePayloadKey(field || "—")} · proposto`,
+        value: `${formatScalarForDisplay(p.value)}${unit}`,
+      };
+    })
+    .filter((r) => !seenFields.has(r.key));
+  return [...flat, ...proposed];
 }
 
 function BloodSnapshotTable({
@@ -513,7 +558,12 @@ function isHormonePanelType(type: string | null | undefined): boolean {
 
 function structuredValuesFieldCount(values: Record<string, unknown> | null | undefined): number {
   if (!values || typeof values !== "object") return 0;
-  return Object.keys(values).filter((k) => k !== "import").length;
+  const flat = Object.keys(values).filter(
+    (k) => k !== "import" && k !== "vlm_proposals" && k !== "vlm_pending_validation",
+  ).length;
+  const proposals = (values as Record<string, unknown>).vlm_proposals;
+  const proposed = Array.isArray(proposals) ? proposals.length : 0;
+  return flat + proposed;
 }
 
 function rowFromBloodPanel(panel: HealthPanelTimelineRow): {
@@ -685,23 +735,32 @@ export default function HealthPageView() {
    */
   const archiveDiagnostics = useMemo(() => {
     let withCanonicalValues = 0;
+    let withProposalsOnly = 0;
     let importOnly = 0;
     let vlmPending = 0;
     for (const p of panels) {
       const vals = (p.values ?? null) as Record<string, unknown> | null;
-      const fields = structuredValuesFieldCount(vals);
+      const flatFields = vals
+        ? Object.keys(vals).filter(
+            (k) => k !== "import" && k !== "vlm_proposals" && k !== "vlm_pending_validation",
+          ).length
+        : 0;
+      const proposals = vals?.vlm_proposals;
+      const proposalCount = Array.isArray(proposals) ? proposals.length : 0;
       const isPendingVlm =
         Boolean(vals?.vlm_pending_validation) ||
         (typeof vals?.import === "object" &&
           vals?.import !== null &&
           (vals.import as Record<string, unknown>).status === "vlm_proposed");
       if (isPendingVlm) vlmPending++;
-      if (fields > 0) withCanonicalValues++;
+      if (flatFields > 0) withCanonicalValues++;
+      else if (proposalCount > 0) withProposalsOnly++;
       else importOnly++;
     }
     return {
       total: panels.length,
       withCanonicalValues,
+      withProposalsOnly,
       importOnly,
       vlmPending,
     };
@@ -1855,26 +1914,32 @@ export default function HealthPageView() {
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] tracking-wider text-zinc-300">
               <span>
                 <span className="text-emerald-300">{archiveDiagnostics.withCanonicalValues}</span>
-                <span className="text-zinc-500"> con valori strutturati</span>
+                <span className="text-zinc-500"> canonici</span>
               </span>
               <span>
-                <span className="text-fuchsia-300">{archiveDiagnostics.vlmPending}</span>
-                <span className="text-zinc-500"> in attesa di conferma VLM</span>
+                <span className="text-fuchsia-300">{archiveDiagnostics.withProposalsOnly}</span>
+                <span className="text-zinc-500"> con proposte VLM (shadow)</span>
               </span>
               <span>
                 <span className="text-amber-300">{archiveDiagnostics.importOnly}</span>
-                <span className="text-zinc-500"> solo file (senza valori)</span>
+                <span className="text-zinc-500"> solo file (vuoti)</span>
               </span>
+              {archiveDiagnostics.vlmPending > 0 ? (
+                <span>
+                  <span className="text-violet-300">{archiveDiagnostics.vlmPending}</span>
+                  <span className="text-zinc-500"> review da confermare</span>
+                </span>
+              ) : null}
             </div>
             <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
-              Le card e i grafici qui sopra leggono i campi numerici da <code className="text-zinc-300">values</code> dei
-              pannelli più recenti per tipo (es. <code>crp_mg_l</code>, <code>cortisol_am</code>, <code>firmicutes_pct</code>,{" "}
-              <code>methylation_score</code>).{" "}
-              {archiveDiagnostics.vlmPending > 0
-                ? `${archiveDiagnostics.vlmPending} referti hanno proposte VLM da confermare: apri le review qui sotto e clicca «Conferma» per scrivere i numeri canonici e popolare i grafici.`
-                : archiveDiagnostics.withCanonicalValues === 0
-                  ? "Nessun referto ha valori strutturati: i grafici restano vuoti (o in modalità demo) finché non confermi una review VLM o non importi un referto leggibile dal parser deterministico."
-                  : "I grafici attingono dai referti con valori canonici."}
+              Le card e i grafici qui sopra leggono i numeri da <code className="text-zinc-300">values</code> del pannello più
+              recente per tipo (es. <code>crp_mg_l</code>, <code>cortisol_am</code>, <code>firmicutes_pct</code>,{" "}
+              <code>methylation_score</code>) e in fallback dalle <code>vlm_proposals</code> non ancora confermate.{" "}
+              {archiveDiagnostics.withCanonicalValues + archiveDiagnostics.withProposalsOnly === 0
+                ? "Nessun referto ha numeri leggibili: carica un esame oppure applica un seed canonico."
+                : archiveDiagnostics.vlmPending > 0
+                  ? "Le review aperte aggiornano lo stato canonico in DB; finché non le confermi, i numeri sopra restano in modalità «proposto»."
+                  : "I grafici sono allineati alla memoria dell'atleta."}
             </p>
           </div>
         ) : null}
