@@ -41,6 +41,11 @@ export type DailyMetricAgg = {
   coreTempLast: number | null;
   vo2Last: number | null;
   vco2Last: number | null;
+  lactateLast: number | null;
+  nadIndexLast: number | null;
+  noIndexLast: number | null;
+  naSweatLast: number | null;
+  kSweatLast: number | null;
 };
 
 const EMPTY_DAY: DailyMetricAgg = {
@@ -54,6 +59,11 @@ const EMPTY_DAY: DailyMetricAgg = {
   coreTempLast: null,
   vo2Last: null,
   vco2Last: null,
+  lactateLast: null,
+  nadIndexLast: null,
+  noIndexLast: null,
+  naSweatLast: null,
+  kSweatLast: null,
 };
 
 function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricAgg {
@@ -69,6 +79,12 @@ function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricA
   const core = pickMetric(tr, ["core_temp_c", "core_temperature_c", "skin_temp_c"]);
   const vo2 = pickMetric(tr, ["vo2_ml_kg_min", "vo2_l_min", "vo2"]);
   const vco2 = pickMetric(tr, ["vco2_ml_kg_min", "vco2_l_min", "vco2"]);
+  const lactate =
+    row.lactate_mmoll ?? pickMetric(tr, ["lactate_mmol_l", "lactate_mmoll", "lactate"]);
+  const nadIndex = pickMetric(tr, ["nad_index", "nad", "nad_plus"]);
+  const noIndex = pickMetric(tr, ["nitric_oxide_index", "no_index", "nitric_oxide"]);
+  const naSweat = pickMetric(tr, ["sweat_sodium_mmol_l", "na_sweat_mmol_l", "na_sweat", "sweat_na"]);
+  const kSweat = pickMetric(tr, ["sweat_potassium_mmol_l", "k_sweat_mmol_l", "k_sweat", "sweat_k"]);
 
   const w = minutes > 0 ? minutes : 1;
   const next: DailyMetricAgg = {
@@ -82,6 +98,11 @@ function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricA
     coreTempLast: core ?? prev.coreTempLast,
     vo2Last: vo2 ?? prev.vo2Last,
     vco2Last: vco2 ?? prev.vco2Last,
+    lactateLast: lactate ?? prev.lactateLast,
+    nadIndexLast: nadIndex ?? prev.nadIndexLast,
+    noIndexLast: noIndex ?? prev.noIndexLast,
+    naSweatLast: naSweat ?? prev.naSweatLast,
+    kSweatLast: kSweat ?? prev.kSweatLast,
   };
   return next;
 }
@@ -120,6 +141,16 @@ export function dayMetricValue(day: DailyMetricAgg | undefined, key: MetricSerie
       return day.vo2Last ?? 0;
     case "vco2":
       return day.vco2Last ?? 0;
+    case "lactate":
+      return day.lactateLast ?? 0;
+    case "nadIndex":
+      return day.nadIndexLast ?? 0;
+    case "noIndex":
+      return day.noIndexLast ?? 0;
+    case "naSweat":
+      return day.naSweatLast ?? 0;
+    case "kSweat":
+      return day.kSweatLast ?? 0;
     default:
       return 0;
   }
@@ -179,7 +210,12 @@ export type MetricSeriesKey =
   | "smo2"
   | "coreTemp"
   | "vo2"
-  | "vco2";
+  | "vco2"
+  | "lactate"
+  | "nadIndex"
+  | "noIndex"
+  | "naSweat"
+  | "kSweat";
 
 export const OVERLAY_METRIC_DEFS: Array<{ key: MetricSeriesKey; label: string; color: string }> = [
   { key: "planned", label: "Planned TSS", color: "#60a5fa" },
@@ -193,6 +229,11 @@ export const OVERLAY_METRIC_DEFS: Array<{ key: MetricSeriesKey; label: string; c
   { key: "smo2", label: "Moxy smO2", color: "#a78bfa" },
   { key: "vo2", label: "VO2", color: "#4ade80" },
   { key: "vco2", label: "VCO2", color: "#2dd4bf" },
+  { key: "lactate", label: "Lattato", color: "#fb7185" },
+  { key: "nadIndex", label: "NAD index", color: "#facc15" },
+  { key: "noIndex", label: "NO index", color: "#34d399" },
+  { key: "naSweat", label: "Na+ sudore", color: "#38bdf8" },
+  { key: "kSweat", label: "K+ sudore", color: "#c084fc" },
 ];
 
 /** 0–100 per vertex; flat series → midline. */

@@ -19,6 +19,8 @@ import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/perfo
 import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import type { ViryaRetuneProposalVm } from "@/lib/training/virya-retune-proposal";
+import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
+import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
 
 /** Strip twin per contesto operativo su calendario / giornata (senza payload twin completo). */
 export type TrainingTwinContextStripViewModel = {
@@ -46,6 +48,11 @@ export type TrainingPlannedWindowOkViewModel = {
   twinContextStrip: TrainingTwinContextStripViewModel | null;
   /** Stato fisiologia canonico da `AthleteMemory` quando `includeAthleteContext` è attivo. */
   physiologyState: PhysiologyState | null;
+  /**
+   * Riassunto compatto sonno/HRV/RHR per giorno della finestra (Fase 2 device→UI).
+   * Presente solo quando `includeWellness=1`; UI Calendar usa questo per il badge cella senza N+1.
+   */
+  wellnessByDate?: WellnessByDateMap;
 };
 
 export type TrainingAdaptationLoopViewModel = {
@@ -360,6 +367,8 @@ export type TrainingAnalyticsViewModel = {
   nutritionPerformanceIntegration?: NutritionPerformanceIntegrationDials | null;
   crossModuleDynamicsLines?: string[];
   readSpineCoverage?: ReadSpineCoverageSummary | null;
+  /** Fase 4 device→UI: incroci intra-sessione (power/HR vs CGM glucosio) per Analyzer. */
+  crossChannelSessions?: CrossChannelSessionVm[];
   error?: string | null;
 };
 

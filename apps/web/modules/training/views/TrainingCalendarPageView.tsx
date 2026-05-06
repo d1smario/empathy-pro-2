@@ -6,6 +6,8 @@ import { Activity, CalendarDays, FileUp, Heart, LineChart, Sparkles } from "luci
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDaySessionDetail } from "@/components/training/CalendarDaySessionDetail";
+import { CalendarDayWellnessDetail } from "@/components/training/CalendarDayWellnessDetail";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
 import { TrainingPeriodVolumeSummary } from "@/components/training/TrainingPeriodVolumeSummary";
@@ -22,6 +24,7 @@ import {
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
+import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
@@ -207,6 +210,7 @@ export default function TrainingCalendarPageView() {
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
   const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
+  const [wellnessByDate, setWellnessByDate] = useState<WellnessByDateMap>({});
   const [showFileImport, setShowFileImport] = useState(false);
   const [fileImportForm, setFileImportForm] = useState({
     mode: "executed" as "executed" | "planned",
@@ -274,6 +278,8 @@ export default function TrainingCalendarPageView() {
       const q = new URLSearchParams({ athleteId, from, to });
       /** Calendario: solo planned/executed; evita `resolveAthleteMemory` su ogni cambio mese (vedi `docs/MODULE_FETCH_AUDIT_PRO2.md`). */
       q.set("includeAthleteContext", "0");
+      /** Badge cella sonno/HRV: server-side pre-fetch per evitare N+1 lato cella. */
+      q.set("includeWellness", "1");
       const res = await fetch(`/api/training/planned-window?${q}`, {
         cache: "no-store",
         credentials: "same-origin",
@@ -288,6 +294,7 @@ export default function TrainingCalendarPageView() {
         setReadSpineCoverage(null);
         setTwinContextStrip(null);
         setPlannedProvenanceSummary(null);
+        setWellnessByDate({});
         setFetchDiag({
           status: res.status,
           plannedN: 0,
@@ -304,6 +311,7 @@ export default function TrainingCalendarPageView() {
       setReadSpineCoverage(json.readSpineCoverage ?? null);
       setTwinContextStrip(json.twinContextStrip ?? null);
       setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
+      setWellnessByDate(json.wellnessByDate ?? {});
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
@@ -319,6 +327,7 @@ export default function TrainingCalendarPageView() {
       setReadSpineCoverage(null);
       setTwinContextStrip(null);
       setPlannedProvenanceSummary(null);
+      setWellnessByDate({});
       setFetchDiag({ status: 0, plannedN: 0, executedN: 0, apiError: "network" });
     } finally {
       if (!isStale()) {
@@ -688,14 +697,43 @@ export default function TrainingCalendarPageView() {
                     const pList = plannedByDate.get(date) ?? [];
                     const eList = executedByDate.get(date) ?? [];
                     const active = selectedDate === date;
+                    const hasExecuted = eList.length > 0;
+                    const wellness = wellnessByDate[date];
                     return (
                       <button
                         key={date}
                         type="button"
-                        onClick={() => setSelectedDate(date)}
+                        onClick={() => {
+                          setSelectedDate(date);
+                          const target = hasExecuted ? "day-session-detail" : wellness ? "day-wellness-detail" : null;
+                          if (target) {
+                            window.setTimeout(() => {
+                              document.getElementById(target)?.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start",
+                              });
+                            }, 60);
+                          }
+                        }}
                         className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
                       >
                         <div className="tc2-calendar-day-num">{day}</div>
+                        {wellness ? (
+                          <div className="tc2-calendar-wellness">
+                            {wellness.sleepHours != null ? (
+                              <span className="text-emerald-200/90">
+                                Z {Math.floor(wellness.sleepHours)}h
+                                {String(Math.round((wellness.sleepHours - Math.floor(wellness.sleepHours)) * 60)).padStart(2, "0")}
+                              </span>
+                            ) : null}
+                            {wellness.hrvMs != null ? (
+                              <span className="text-violet-200/90">HRV {Math.round(wellness.hrvMs)}</span>
+                            ) : null}
+                            {wellness.restingHrBpm != null ? (
+                              <span className="text-fuchsia-200/90">RHR {Math.round(wellness.restingHrBpm)}</span>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {pList.slice(0, 2).map((w) => {
                           const chip = plannedChipMetrics(w);
                           return (
@@ -756,6 +794,18 @@ export default function TrainingCalendarPageView() {
 
           <div className="mb-8 w-full min-w-0">
             <TrainingPeriodVolumeSummary athleteId={athleteId} />
+          </div>
+
+          <div className="mb-8 w-full min-w-0">
+            <CalendarDaySessionDetail
+              selectedDate={selectedDate}
+              dayExecuted={dayExecuted}
+              athleteId={athleteId}
+            />
+          </div>
+
+          <div className="mb-8 w-full min-w-0">
+            <CalendarDayWellnessDetail athleteId={athleteId} selectedDate={selectedDate} />
           </div>
 
           <div className="mb-10 w-full min-w-0">

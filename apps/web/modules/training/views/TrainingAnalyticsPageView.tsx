@@ -25,6 +25,8 @@ import {
   refKpisLastNDays,
   valueForMetric,
 } from "@/lib/training/analytics/executed-metric-aggregates";
+import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
+import { TrainingAnalyzerCrossChannelSection } from "@/components/training/TrainingAnalyzerCrossChannelSection";
 
 /** Data locale YYYY-MM-DD (evita shift UTC su `toISOString`). */
 function toLocalDateKey(d: Date): string {
@@ -189,6 +191,7 @@ export default function TrainingAnalyticsPageView() {
   const [bioenergeticModulation, setBioenergeticModulation] = useState<TrainingBioenergeticModulationViewModel | null>(null);
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [crossModuleDynamicsLines, setCrossModuleDynamicsLines] = useState<string[]>([]);
+  const [crossChannelSessions, setCrossChannelSessions] = useState<CrossChannelSessionVm[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Ultimo giorno della finestra analizzata (incluso). */
@@ -221,6 +224,7 @@ export default function TrainingAnalyticsPageView() {
         setBioenergeticModulation(null);
         setReadSpineCoverage(null);
         setCrossModuleDynamicsLines([]);
+        setCrossChannelSessions([]);
         setLoading(false);
         return;
       }
@@ -249,6 +253,7 @@ export default function TrainingAnalyticsPageView() {
         setBioenergeticModulation(null);
         setReadSpineCoverage(null);
         setCrossModuleDynamicsLines([]);
+        setCrossChannelSessions([]);
       } else {
         setRows(payload.rows ?? []);
         setPlannedRows(payload.plannedRows ?? []);
@@ -264,6 +269,7 @@ export default function TrainingAnalyticsPageView() {
         setBioenergeticModulation(payload.bioenergeticModulation ?? null);
         setReadSpineCoverage(payload.readSpineCoverage ?? null);
         setCrossModuleDynamicsLines(payload.crossModuleDynamicsLines ?? []);
+        setCrossChannelSessions(payload.crossChannelSessions ?? []);
       }
       setLoading(false);
     }
@@ -830,6 +836,8 @@ export default function TrainingAnalyticsPageView() {
               </span>
             </div>
           </div>
+
+          <TrainingAnalyzerCrossChannelSection sessions={crossChannelSessions} />
 
           <div className="mb-6 overflow-x-auto rounded-2xl border border-white/10 bg-black/30 p-4">
             <h2 className="mb-3 text-sm font-bold text-white">Planned vs real · finestre</h2>

@@ -7,6 +7,7 @@ import { observationDomainsFromGarminActivitySummary } from "@/lib/integrations/
 import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
+import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -95,6 +96,115 @@ function pickExternalId(r: Record<string, unknown>): string {
   return `garmin_api:hash:${t}:${Math.trunc(d)}:${String(r.activityType ?? "act")}`;
 }
 
+function pickNumber(r: Record<string, unknown>, keys: string[]): number | null {
+  for (const k of keys) {
+    const v = r[k];
+    if (typeof v === "number" && Number.isFinite(v)) return v;
+  }
+  return null;
+}
+
+/**
+ * Rimap medie/min/max dal summary Garmin in chiavi canoniche `trace_summary`,
+ * coerenti con `apps/web/lib/training/import-normalizer.ts`. Niente serie HD: il
+ * summary non le espone, eventuali curve dense restano dipendenti dal file FIT.
+ */
+function buildGarminCanonicalSummary(r: Record<string, unknown>): Record<string, number | null> {
+  const distanceMeters = pickNumber(r, ["distanceInMeters", "distance"]);
+  const distanceKm = distanceMeters != null ? distanceMeters / 1000 : null;
+
+  const speedAvgMs = pickNumber(r, ["averageSpeedInMetersPerSecond", "averageSpeed"]);
+  const speedMaxMs = pickNumber(r, ["maxSpeedInMetersPerSecond", "maxSpeed"]);
+
+  return {
+    distance_km: distanceKm,
+    power_avg_w: pickNumber(r, ["averagePower", "avgPower"]),
+    power_max_w: pickNumber(r, ["maxPower"]),
+    hr_avg_bpm: pickNumber(r, [
+      "averageHeartRateInBeatsPerMinute",
+      "averageHeartRate",
+      "avgHeartRate",
+    ]),
+    hr_max_bpm: pickNumber(r, ["maxHeartRateInBeatsPerMinute", "maxHeartRate"]),
+    cadence_avg_rpm: pickNumber(r, [
+      "averageBikeCadenceInRoundsPerMinute",
+      "averageRunCadenceInStepsPerMinute",
+      "averageSwimCadenceInStrokesPerMinute",
+    ]),
+    cadence_max_rpm: pickNumber(r, [
+      "maxBikeCadenceInRoundsPerMinute",
+      "maxRunCadenceInStepsPerMinute",
+      "maxSwimCadenceInStrokesPerMinute",
+    ]),
+    speed_avg_kmh: speedAvgMs != null ? speedAvgMs * 3.6 : null,
+    speed_max_kmh: speedMaxMs != null ? speedMaxMs * 3.6 : null,
+    elevation_gain_m: pickNumber(r, [
+      "totalElevationGainInMeters",
+      "elevationGainInMeters",
+      "totalAscentInMeters",
+    ]),
+    temperature_avg_c: pickNumber(r, ["averageTemperatureInCelsius"]),
+  };
+}
+
+/**
+ * Estrazione serie HD da `samples[]` Garmin Activity Details API.
+ * Schema: vedi https://developer.garmin.com/wellness-api/.
+ * Restituisce le chiavi canoniche `*_series_*` compatibili con
+ * `persistExecutedWorkoutSeriesFromTrace` (Fase 3 device → UI).
+ */
+function extractGarminActivitySeries(samples: unknown): Record<string, number[]> {
+  if (!Array.isArray(samples) || samples.length < 2) return {};
+  const power: number[] = [];
+  const hr: number[] = [];
+  const speedKmh: number[] = [];
+  const cadence: number[] = [];
+  const altitude: number[] = [];
+  const tempC: number[] = [];
+
+  for (const raw of samples) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const s = raw as Record<string, unknown>;
+
+    const p = s.powerInWatts;
+    if (typeof p === "number" && Number.isFinite(p)) power.push(p);
+
+    const h = s.heartRate;
+    if (typeof h === "number" && Number.isFinite(h)) hr.push(h);
+
+    const v = s.speedMetersPerSecond;
+    if (typeof v === "number" && Number.isFinite(v)) speedKmh.push(v * 3.6);
+
+    const cBike = s.bikeCadenceInRPM;
+    const cRun = s.stepsPerMinute;
+    const cSwim = s.swimCadenceInStrokesPerMinute;
+    const c =
+      typeof cBike === "number" && Number.isFinite(cBike)
+        ? cBike
+        : typeof cRun === "number" && Number.isFinite(cRun)
+          ? cRun
+          : typeof cSwim === "number" && Number.isFinite(cSwim)
+            ? cSwim
+            : null;
+    if (c != null) cadence.push(c);
+
+    const e = s.elevationInMeters;
+    if (typeof e === "number" && Number.isFinite(e)) altitude.push(e);
+
+    const t = s.airTemperatureCelcius;
+    if (typeof t === "number" && Number.isFinite(t)) tempC.push(t);
+  }
+
+  const out: Record<string, number[]> = {};
+  if (power.length > 1) out.power_series_w = power;
+  if (hr.length > 1) out.hr_series_bpm = hr;
+  if (speedKmh.length > 1) out.speed_series_kmh = speedKmh;
+  if (cadence.length > 1) out.cadence_series_rpm = cadence;
+  if (altitude.length > 1) out.altitude_series_m = altitude;
+  if (tempC.length > 1) out.temperature_series_c = tempC;
+  return out;
+}
+
 function inferTss(r: Record<string, unknown>): number {
   const direct = r.trainingLoadScore ?? r.trainingStressScore ?? r.tss;
   if (typeof direct === "number" && Number.isFinite(direct) && direct >= 0) return direct;
@@ -176,16 +286,32 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
 
     const observation = buildGarminObservationForRow(r, date, null);
 
+    const samplesSeries = extractGarminActivitySeries(r.samples);
+    const hasSamples = Object.keys(samplesSeries).length > 0;
+
     const channelCoverage = garminActivityChannelCoverage(r);
+    if (hasSamples) {
+      if (samplesSeries.power_series_w) channelCoverage.power = 100;
+      if (samplesSeries.hr_series_bpm) channelCoverage.hr = 100;
+      if (samplesSeries.speed_series_kmh) channelCoverage.speed = 100;
+      if (samplesSeries.cadence_series_rpm) channelCoverage.cadence = 100;
+      if (samplesSeries.altitude_series_m) channelCoverage.altitude = 100;
+      if (samplesSeries.temperature_series_c) channelCoverage.temperature = 100;
+    }
     const quality = buildExecutedTrainingImportQuality({ channelCoverage });
+    const canonical = buildGarminCanonicalSummary(r);
 
     const traceSummary = {
-      parser_engine: "garmin_wellness_api_summary",
-      parser_version: "1",
+      parser_engine: hasSamples
+        ? "garmin_wellness_api_activity_details"
+        : "garmin_wellness_api_summary",
+      parser_version: "2",
       activity_type: activityType,
       summary_id: r.summaryId ?? null,
       activity_id: r.activityId ?? null,
       source: "api_sync:garmin:activities",
+      ...canonical,
+      ...samplesSeries,
       garmin_keys: Object.keys(r).slice(0, 40),
       channels_available: Object.fromEntries(Object.entries(channelCoverage).map(([k, v]) => [k, v > 0])) as Record<
         string,
@@ -225,23 +351,53 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
 
     if (existing.error) continue;
 
+    let executedWorkoutId: string | null = null;
+    let traceFinal: Record<string, unknown> | null = null;
+
     if (existing.data?.id) {
       const obsWithId = buildGarminObservationForRow(r, date, existing.data.id);
+      traceFinal = { ...traceSummary, observation: obsWithId };
       const up = await supabase
         .from("executed_workouts")
         .update({
           ...payload,
-          trace_summary: { ...traceSummary, observation: obsWithId },
+          trace_summary: traceFinal,
         })
         .eq("id", existing.data.id);
-      if (!up.error) upserted += 1;
+      if (!up.error) {
+        upserted += 1;
+        executedWorkoutId = existing.data.id;
+      }
     } else {
       const ins = await supabase.from("executed_workouts").insert(payload).select("id").maybeSingle();
       if (!ins.error && ins.data?.id) {
         const obsWithId = buildGarminObservationForRow(r, date, ins.data.id);
-        const traceFinal = { ...traceSummary, observation: obsWithId };
-        const patch = await supabase.from("executed_workouts").update({ trace_summary: traceFinal }).eq("id", ins.data.id);
-        if (!patch.error) upserted += 1;
+        traceFinal = { ...traceSummary, observation: obsWithId };
+        const patch = await supabase
+          .from("executed_workouts")
+          .update({ trace_summary: traceFinal })
+          .eq("id", ins.data.id);
+        if (!patch.error) {
+          upserted += 1;
+          executedWorkoutId = ins.data.id;
+        }
+      }
+    }
+
+    /** Fase 3 device → UI: persistenza HD su `executed_workout_series` quando samples[] presenti. */
+    if (hasSamples && executedWorkoutId && traceFinal) {
+      try {
+        await persistExecutedWorkoutSeriesFromTrace({
+          db: supabase,
+          athleteId: input.athleteId,
+          executedWorkoutId,
+          traceSummary: traceFinal,
+          parserEngine: traceFinal.parser_engine as string,
+          parserVersion: traceFinal.parser_version as string,
+          source: "api_sync:garmin:activities",
+        });
+      } catch {
+        // best-effort: non bloccare l'ingest se la tabella manca o RLS blocca.
       }
     }
   }

@@ -110,17 +110,43 @@ export function normalizeImportedTraceSummary(input: NormalizeInput): {
       "weighted_avg_power",
       "mean_power",
     ]) ?? null;
+  const powerMaxW = deepPickNumber(raw, [
+    "power_max_w",
+    "power_max",
+    "max_power",
+    "maximum_power",
+    "peak_power",
+  ]);
   const hrAvgBpm = deepPickNumber(raw, ["hr_avg_bpm", "heart_rate_avg", "avg_hr", "average_hr", "avg_heartrate"]);
+  const hrMaxBpm = deepPickNumber(raw, [
+    "hr_max_bpm",
+    "heart_rate_max",
+    "max_hr",
+    "maximum_hr",
+    "max_heart_rate",
+    "max_heartrate",
+  ]);
   const cadenceAvgRpm = deepPickNumber(raw, ["cadence_avg_rpm", "avg_cadence", "cadence", "avg_cadence_rpm"]);
+  const cadenceMaxRpm = deepPickNumber(raw, ["cadence_max_rpm", "max_cadence", "maximum_cadence", "peak_cadence"]);
   const speedAvgKmh =
     deepPickNumber(raw, ["speed_avg_kmh", "avg_speed_kmh", "enhanced_avg_speed", "avg_speed", "speed_kmh", "velocity_kmh"]) ??
     (() => {
       const mps = deepPickNumber(raw, ["speed_avg_m_s", "avg_speed_m_s", "speed_m_s", "velocity_m_s"]);
       return mps != null ? mps * 3.6 : null;
     })();
+  const speedMaxKmh =
+    deepPickNumber(raw, ["speed_max_kmh", "max_speed_kmh", "max_speed", "enhanced_max_speed", "peak_speed_kmh"]) ??
+    (() => {
+      const mps = deepPickNumber(raw, ["speed_max_m_s", "max_speed_m_s", "peak_speed_m_s"]);
+      return mps != null ? mps * 3.6 : null;
+    })();
   const elevationGainM = deepPickNumber(raw, ["elevation_gain_m", "elev_gain_m", "ascent_m", "total_ascent", "altitude_gain_m"]);
   const tempAvgC = deepPickNumber(raw, ["temperature_avg_c", "temp_avg_c", "temperature_c", "avg_temperature", "avg_temp", "temperature"]);
+  const tempMinC = deepPickNumber(raw, ["temperature_min_c", "temp_min_c", "min_temperature", "min_temp"]);
+  const tempMaxC = deepPickNumber(raw, ["temperature_max_c", "temp_max_c", "max_temperature", "max_temp"]);
   const altitudeAvgM = deepPickNumber(raw, ["altitude_avg_m", "enhanced_avg_altitude", "avg_altitude", "altitude"]);
+  const altitudeMinM = deepPickNumber(raw, ["altitude_min_m", "min_altitude", "elevation_min_m"]);
+  const altitudeMaxM = deepPickNumber(raw, ["altitude_max_m", "max_altitude", "elevation_max_m", "peak_altitude_m"]);
   const lactateMmolL = deepPickNumber(raw, ["lactate_mmoll", "lactate_mmol_l", "lactate"]);
   const glucoseMmolL = deepPickNumber(raw, ["glucose_mmol", "blood_glucose_mmol_l", "glucose"]);
   const smo2Pct = deepPickNumber(raw, ["smo2", "smo2_avg_pct", "muscle_oxygen_pct"]);
@@ -143,12 +169,20 @@ export function normalizeImportedTraceSummary(input: NormalizeInput): {
       distance_km: distanceKm,
       power_avg_w: powerAvgW,
       power_avg: powerAvgW,
+      power_max_w: powerMaxW,
       hr_avg_bpm: hrAvgBpm,
+      hr_max_bpm: hrMaxBpm,
       cadence_avg_rpm: cadenceAvgRpm,
+      cadence_max_rpm: cadenceMaxRpm,
       speed_avg_kmh: speedAvgKmh,
+      speed_max_kmh: speedMaxKmh,
       elevation_gain_m: elevationGainM,
       altitude_avg_m: altitudeAvgM,
+      altitude_min_m: altitudeMinM,
+      altitude_max_m: altitudeMaxM,
       temperature_avg_c: tempAvgC,
+      temperature_min_c: tempMinC,
+      temperature_max_c: tempMaxC,
       lactate_mmol_l: lactateMmolL,
       glucose_mmol: glucoseMmolL,
       smo2: smo2Pct,

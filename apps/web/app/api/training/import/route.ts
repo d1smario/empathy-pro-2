@@ -7,6 +7,7 @@ import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-impor
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
+import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
 import {
   normalizeTrainingImportIntent,
   resolveTrainingImportRoute,
@@ -321,6 +322,24 @@ export async function POST(req: NextRequest) {
       data = insertRes.data as Record<string, unknown>;
     }
 
+    /** Fase 3: serie HD su tabella dedicata. Best-effort: niente errore se la tabella manca. */
+    const persistedSeriesResult = data?.id
+      ? await persistExecutedWorkoutSeriesFromTrace({
+          db,
+          athleteId,
+          executedWorkoutId: data.id as string,
+          traceSummary: payload.trace_summary as Record<string, unknown>,
+          parserEngine,
+          parserVersion,
+          source: `file_import:${parsed.format}`,
+        }).catch((err) => ({
+          attempted: 0,
+          written: 0,
+          skipped: 0,
+          errors: [err instanceof Error ? err.message : "unknown"],
+        }))
+      : null;
+
     if (importJobId) {
       await db
         .from("training_import_jobs")
@@ -370,6 +389,7 @@ export async function POST(req: NextRequest) {
           date,
         },
         importJobId,
+        ...(persistedSeriesResult ? { seriesPersist: persistedSeriesResult } : {}),
       },
       { headers: NO_STORE },
     );

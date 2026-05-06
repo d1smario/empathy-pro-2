@@ -113,11 +113,53 @@ Quando si aggiungono KPI altrove, **riusare la stessa mappa token** (non inventa
 - **Eyebrow per modulo** — `apps/web/core/navigation/module-ui-accent.ts` (`moduleEyebrowClass`).
 - **Superfici route** — `StandardModuleSurface` (hub/coach/settings) e `GenerativeModuleSurface` (profile, training, nutrition, …) usano shell + sezioni; training hub/vyria in `modules/training/views/*`.
 
-## 11. Riferimenti incrociati
+## 11. Pattern card "device data" (Calendar + Analyzer)
+
+Tre pattern figli della Section §3 standardizzano l’esposizione dei dati device (Garmin/Whoop/Strava/Wahoo/file) in modo coerente con Physiology. Tutte e tre **non** fanno fetch direttamente verso vendor: leggono dalle API canoniche `/api/training/planned-window`, `/api/health/daily-wellness`, `/api/training/session-series`, `/api/training/analytics`.
+
+### 11.a Session detail (sessione eseguita)
+
+- Componente: `apps/web/components/training/CalendarDaySessionDetail.tsx` (id ancora `#day-session-detail`).
+- Helper VM: `apps/web/lib/training/session-detail-summary.ts`.
+- Sorgente: `executed_workouts.trace_summary` + (best-effort) `executed_workout_series` via `/api/training/session-series`.
+- Composizione:
+  1. **Header**: `Pro2SectionCard` accent `cyan`, glifo disciplina (`SportDisciplineGlyph`) + titolo (sport · durata · data) + sottotitolo provenienza (`source: garmin | strava | file fit | …`).
+  2. **KPI hero**: 4 tile (durata, distanza, kJ, TSS) + 2 tile rotanti (power avg, HR avg) — accenti canonici da §4.
+  3. **Tabella secondaria min/avg/max**: chip-table compatta `power · hr · cadence · speed · altitude · temperature`. Riga vuota se la metrica manca.
+  4. **Grafico**: `TrainingSingleTraceChart` con selettore canale (power · hr · speed · cadence · altitude · temperature). Se le serie non sono in `trace_summary` viene fatta una chiamata best-effort a `/api/training/session-series`.
+
+### 11.b Wellness detail (giornata, sonno e recovery)
+
+- Componente: `apps/web/components/training/CalendarDayWellnessDetail.tsx` (id ancora `#day-wellness-detail`).
+- API: `/api/health/daily-wellness?athleteId=…&date=YYYY-MM-DD` → `buildPhysiologyDailyPanel`.
+- Composizione:
+  1. **Header**: `Pro2SectionCard` accent `violet` con glifo "moon"/"heart" e provenienza badge (`whoop`, `garmin`, …).
+  2. **KPI grid 2×4**: sonno totale, HRV, RHR, passi, calorie attive, frequenza respiratoria, temperatura cute, stress (riusano `KpiCard` token).
+  3. **Sleep stages bar**: barre orizzontali colorate per `deep · rem · light · awake` (proporzionali al totale).
+  4. **Hypnogram**: `TrainingSingleTraceChart` mono-canale stage-over-time quando il provider espone l’ipnogramma.
+
+Sul calendario, ogni cella che ha wellness mostra un mini-badge (`.tc2-calendar-wellness`, classe definita in `apps/web/app/globals.css`) tipo `Z 7h12 · HRV 58`. Click cella → soft scroll a `#day-wellness-detail` se non c’è executed, altrimenti a `#day-session-detail`.
+
+### 11.c Analyzer cross-channel intra-session
+
+- Componente: `apps/web/components/training/TrainingAnalyzerCrossChannelSection.tsx`.
+- Helper: `apps/web/lib/training/analytics/cross-channel-session.ts`.
+- Sorgente: `/api/training/analytics` aggiunge `crossChannelSessions` ricavato da `executed_workouts` + `device_sync_exports` filtrati `provider = 'cgm'`.
+- Composizione:
+  1. **Header**: `Pro2SectionCard` accent `orange`, sottotitolo "power/HR vs glucosio · 1 sessione attiva".
+  2. **Selettore sessione**: chip orizzontale (data + sport) per saltare tra sessioni con CGM disponibile.
+  3. **Grafico**: `ComposedChart` (Recharts) con asse Y sinistro **power/HR** (linee) + asse Y destro **glucosio** (scatter). X = secondi dall’inizio sessione.
+
+Resta valido il principio: gli **overlay metrici trend (42g)** restano nel `TrainingCalendarAnalyzer` esistente. Le metriche continue (lattato, NAD, NO, Na/K) vengono solo aggiunte agli overlay senza nuova griglia separata (cfr. `OVERLAY_METRIC_DEFS` in `apps/web/lib/training/analytics/executed-metric-aggregates.ts`).
+
+---
+
+## 12. Riferimenti incrociati
 
 | Documento / regola | Ruolo |
 |--------------------|--------|
 | `docs/DESIGN_SYSTEM_AND_FIGMA.md` | Figma, token, WCAG, pipeline |
+| `docs/DEVICE_DATA_TO_UI_MATRIX.md` | Mapping campi device → tabelle → UI surface |
 | `.cursor/rules/empathy_pro2_ui_language.mdc` | Densità, generative island, separation da V1 |
 | `.cursor/rules/empathy_training_macro_sport_strip.mdc` | Fila orizzontale quadratini nei macro sport |
 | `components/shell/BrutalistAppBackdrop.tsx` | Canvas marketing / matrix (contesto shell) |

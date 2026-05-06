@@ -191,6 +191,27 @@ body {
   opacity: 0.95;
 }
 
+/* Badge wellness compatto sopra le chip plan/exec di una cella giorno (Fase 2 device→UI). */
+.tc2-calendar-wellness {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Cascadia Mono", monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.02em;
+  color: rgba(165, 243, 252, 0.85);
+}
+.tc2-calendar-wellness > span {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+
 /* Contenitore griglia pasti + legenda (piano generato o piano base) */
 .empathy-meal-plan-expo-shell {
   margin-bottom: 1rem;

@@ -6,6 +6,11 @@ import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 import {
+  buildCrossChannelSessionVms,
+  type CrossChannelCgmRow,
+  type CrossChannelExecutedRow,
+} from "@/lib/training/analytics/cross-channel-session";
+import {
   rollupExecutedVolumeFromLoadRows,
   rollupRecoveryContinuousFromLoadRows,
 } from "@/lib/training/analytics/trace-volume-rollup";
@@ -239,7 +244,9 @@ export async function GET(req: NextRequest) {
     ] = await Promise.all([
       db
         .from("executed_workouts")
-        .select("id, date, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2")
+        .select(
+          "id, date, started_at, ended_at, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2",
+        )
         .eq("athlete_id", athleteId)
         .gte("date", from)
         .lte("date", to)
@@ -341,6 +348,31 @@ export async function GET(req: NextRequest) {
       const dbb = typeof b.date === "string" ? b.date : "";
       return da < dbb ? -1 : 1;
     });
+
+    /** Fase 4 device→UI: cross-channel intra-sessione (power/HR ↔ glucosio CGM). */
+    const cgmRows: CrossChannelCgmRow[] = ((deviceExportsData ?? []) as Array<Record<string, unknown>>)
+      .filter((row) => row.provider === "cgm")
+      .map((row) => ({
+        payload: asRecord(row.payload) ?? {},
+        createdAt: typeof row.created_at === "string" ? row.created_at : null,
+      }));
+    const crossChannelExecuted: CrossChannelExecutedRow[] = rows.map((r) => ({
+      id: typeof r.id === "string" ? r.id : "",
+      date: typeof r.date === "string" ? r.date : null,
+      startedAt: typeof r.started_at === "string" ? r.started_at : null,
+      endedAt: typeof r.ended_at === "string" ? r.ended_at : null,
+      durationMinutes:
+        typeof r.duration_minutes === "number" && Number.isFinite(r.duration_minutes)
+          ? r.duration_minutes
+          : null,
+      traceSummary: asRecord(r.trace_summary),
+    }));
+    const crossChannelSessions = buildCrossChannelSessionVms({
+      executed: crossChannelExecuted.filter((r) => r.id),
+      cgmExports: cgmRows,
+      maxSessions: 4,
+    });
+
     const plannedRows = (plannedData ?? []) as PlannedWorkoutAnalyticsRow[];
     const series = computeDailyLoadSeries(rows as ExecutedWorkoutLoadRow[]);
     const compareSeries = buildCompareSeries(from, to, plannedRows, series);
@@ -439,6 +471,7 @@ export async function GET(req: NextRequest) {
         nutritionPerformanceIntegration,
         crossModuleDynamicsLines,
         readSpineCoverage,
+        crossChannelSessions,
         source: "analytics_v3_planned_real_internal_external",
       },
       { headers: NO_STORE },

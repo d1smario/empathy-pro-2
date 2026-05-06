@@ -10,6 +10,7 @@ import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
+import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import type { TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,12 @@ function wantsAthleteContextFromQuery(req: NextRequest): boolean {
   const raw = (req.nextUrl.searchParams.get("includeAthleteContext") ?? "").trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "skip") return false;
   return true;
+}
+
+/** Default: wellness OFF (richiesto solo dalla pagina Calendar). Attiva con `1|true|yes|on`. */
+function wantsWellnessFromQuery(req: NextRequest): boolean {
+  const raw = (req.nextUrl.searchParams.get("includeWellness") ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
 }
 
 function addDays(isoDate: string, delta: number): string {
@@ -82,22 +89,33 @@ export async function GET(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
     const includeAthleteContext = wantsAthleteContextFromQuery(req);
+    const includeWellness = wantsWellnessFromQuery(req);
 
     const windowPromise = queryPlannedExecutedWindow(db, athleteId, from, to);
+    const wellnessPromise = includeWellness
+      ? buildWellnessWindowSummary({ db, athleteId, from, to }).catch(() => ({ wellnessByDate: {} as WellnessByDateMap, rowCount: 0 }))
+      : Promise.resolve(null);
 
     let plannedRes: { data: unknown[] | null; error: { message: string } | null };
     let executedRes: { data: unknown[] | null; error: { message: string } | null };
     let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+    let wellnessByDate: WellnessByDateMap | undefined;
 
     if (includeAthleteContext) {
-      const batch = await Promise.all([windowPromise, resolveAthleteMemory(athleteId).catch(() => null)]);
+      const batch = await Promise.all([
+        windowPromise,
+        resolveAthleteMemory(athleteId).catch(() => null),
+        wellnessPromise,
+      ]);
       plannedRes = batch[0].planned;
       executedRes = batch[0].executed;
       athleteMemory = batch[1];
+      wellnessByDate = batch[2]?.wellnessByDate;
     } else {
-      const windowRes = await windowPromise;
+      const [windowRes, wellnessRes] = await Promise.all([windowPromise, wellnessPromise]);
       plannedRes = windowRes.planned;
       executedRes = windowRes.executed;
+      wellnessByDate = wellnessRes?.wellnessByDate;
     }
 
     const errMsg = firstWindowQueryError(plannedRes, executedRes);
@@ -130,6 +148,7 @@ export async function GET(req: NextRequest) {
         readSpineCoverage,
         twinContextStrip,
         physiologyState,
+        ...(includeWellness ? { wellnessByDate: wellnessByDate ?? {} } : {}),
       },
       { headers: NO_STORE },
     );
