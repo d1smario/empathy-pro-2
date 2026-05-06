@@ -40,6 +40,7 @@ import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
   analyzePanelWithAi,
+  bulkReanalyzePanelsWithAi,
   fetchHealthPanelsTimeline,
   fetchHealthSystemMap,
   patchHealthStagingRun,
@@ -661,6 +662,7 @@ export default function HealthPageView() {
   const [sampleDate, setSampleDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [expandedPanelId, setExpandedPanelId] = useState<string | null>(null);
   const [analyzeBusyPanelId, setAnalyzeBusyPanelId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const loadTimeline = useCallback(async () => {
@@ -738,6 +740,7 @@ export default function HealthPageView() {
     let withProposalsOnly = 0;
     let importOnly = 0;
     let vlmPending = 0;
+    let bulkCandidates = 0;
     for (const p of panels) {
       const vals = (p.values ?? null) as Record<string, unknown> | null;
       const flatFields = vals
@@ -747,15 +750,24 @@ export default function HealthPageView() {
         : 0;
       const proposals = vals?.vlm_proposals;
       const proposalCount = Array.isArray(proposals) ? proposals.length : 0;
-      const isPendingVlm =
-        Boolean(vals?.vlm_pending_validation) ||
-        (typeof vals?.import === "object" &&
-          vals?.import !== null &&
-          (vals.import as Record<string, unknown>).status === "vlm_proposed");
+      const importBlock =
+        vals && typeof vals.import === "object" && vals.import !== null
+          ? (vals.import as Record<string, unknown>)
+          : null;
+      const importStatus = typeof importBlock?.status === "string" ? (importBlock?.status as string) : "";
+      const isPendingVlm = Boolean(vals?.vlm_pending_validation) || importStatus === "vlm_proposed";
       if (isPendingVlm) vlmPending++;
       if (flatFields > 0) withCanonicalValues++;
       else if (proposalCount > 0) withProposalsOnly++;
       else importOnly++;
+      // Bulk candidate: file in storage, mime supportato, no canonici, no review pendente
+      const storagePath = typeof importBlock?.storage_path === "string" ? (importBlock?.storage_path as string) : null;
+      const mimeStr =
+        typeof importBlock?.mime === "string" ? (importBlock?.mime as string).toLowerCase() : "";
+      const filenameStr =
+        typeof importBlock?.filename === "string" ? (importBlock?.filename as string).toLowerCase() : "";
+      const supports = mimeStr.startsWith("image/") || mimeStr === "application/pdf" || filenameStr.endsWith(".pdf");
+      if (storagePath && supports && flatFields === 0 && proposalCount === 0) bulkCandidates++;
     }
     return {
       total: panels.length,
@@ -763,6 +775,7 @@ export default function HealthPageView() {
       withProposalsOnly,
       importOnly,
       vlmPending,
+      bulkCandidates,
     };
   }, [panels]);
 
@@ -955,6 +968,20 @@ export default function HealthPageView() {
         window.location.assign(res.reviewUrl as string);
       }, 600);
     }
+  }
+
+  async function onBulkReanalyze() {
+    if (!athleteId) return;
+    setBulkBusy(true);
+    setToast(null);
+    const res = await bulkReanalyzePanelsWithAi({ athleteId });
+    setBulkBusy(false);
+    if (!res.ok) {
+      setToast(res.error ?? "Bulk re-analyze fallito");
+      return;
+    }
+    setToast(res.message ?? "Bulk re-analyze completato.");
+    void loadTimeline();
   }
 
   async function onPatchStagingRun(runId: string, status: HealthStagingRunAction) {
@@ -1941,6 +1968,24 @@ export default function HealthPageView() {
                   ? "Le review aperte aggiornano lo stato canonico in DB; finché non le confermi, i numeri sopra restano in modalità «proposto»."
                   : "I grafici sono allineati alla memoria dell'atleta."}
             </p>
+            {archiveDiagnostics.bulkCandidates > 0 ? (
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => void onBulkReanalyze()}
+                  className="rounded-md border border-violet-400/60 bg-violet-600/40 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-violet-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {bulkBusy
+                    ? "Analizzo in corso…"
+                    : `Trasforma ${archiveDiagnostics.bulkCandidates} file in proposte VLM`}
+                </button>
+                <span className="text-[10px] text-zinc-500">
+                  Convoglia i referti senza valori sulla pipeline canonica (Claude / GPT-4o vision); i numeri arrivano nei
+                  grafici come «shadow» e restano in attesa di conferma in review.
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
         <ul className="mt-4 divide-y divide-white/10">

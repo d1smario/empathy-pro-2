@@ -359,6 +359,53 @@ export async function analyzePanelWithAi(input: {
   };
 }
 
+export async function bulkReanalyzePanelsWithAi(input: {
+  athleteId: string;
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  message?: string;
+  analyzed?: number;
+  candidates?: number;
+  withVlmProposals?: number;
+  withParsedValues?: number;
+  failed?: number;
+  canonicalSkipped?: number;
+}> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/health/panels/reanalyze-bulk`, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({ athleteId: input.athleteId }),
+  });
+  const json = (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    message?: string;
+    analyzed?: number;
+    candidates?: number;
+    withVlmProposals?: number;
+    withParsedValues?: number;
+    failed?: number;
+    canonicalSkipped?: number;
+  };
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: json.error || "Bulk re-analyze fallito" };
+  }
+  return {
+    ok: true,
+    message: json.message,
+    analyzed: json.analyzed,
+    candidates: json.candidates,
+    withVlmProposals: json.withVlmProposals,
+    withParsedValues: json.withParsedValues,
+    failed: json.failed,
+    canonicalSkipped: json.canonicalSkipped,
+  };
+}
+
 export async function applyHealthStagingPatches(input: {
   runId: string;
   confirmedPatches: HealthStagingApplyPatch[];
