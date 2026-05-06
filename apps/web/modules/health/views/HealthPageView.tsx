@@ -381,6 +381,8 @@ function hormonesBarFromPanel(panel: HealthPanelTimelineRow | undefined) {
     "cortisolo_am",
     "cortisolo_mattina",
     "cortisol_ug_dl",
+    "cortisol",
+    "cortisolo",
   ]);
   const pm = readNum(v, ["cortisol_pm", "cortisol_evening", "cortisolo_pm", "cortisolo_sera"]);
   const tt = readNum(v, ["testosterone", "testosterone_total", "testosterone_totale", "testosterone_ng_dl"]);
@@ -592,6 +594,8 @@ function endocrineRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
     "cortisolo_am",
     "cortisolo_mattina",
     "cortisol_ug_dl",
+    "cortisol",
+    "cortisolo",
   ]);
   const pm = readNum(v, ["cortisol_pm", "cortisol_evening", "cortisolo_pm", "cortisolo_sera"]);
   const tt = readNum(v, ["testosterone", "testosterone_total", "testosterone_totale", "testosterone_ng_dl"]);
