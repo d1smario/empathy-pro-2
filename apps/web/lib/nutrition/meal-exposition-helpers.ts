@@ -2,8 +2,13 @@ import type { IntelligentMealPlanItemOut, IntelligentMealPlanSlotOut } from "@/l
 import { nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 
 /**
- * Macro per voce: sempre da banca canonica (nome+porzione+approxKcal), coerente con finalize server.
- * Non usare `item.nutrients` qui: evita righe tutte uguali se il client riceve blob omogenei o path «dry» senza item strutturati.
+ * Macro per voce.
+ *
+ * Preferenza: `item.nutrients` server (post-finalize), che ora arriva da cache USDA `nutrition_fdc_foods`
+ * con fallback automatico al `CANONICAL_FOOD_TABLE` TS. È l'unica sorgente di verità lato client.
+ *
+ * Fallback sync: ricalcolo dalla banca canonica TS via `nutrientsForMealPlanItem`. Si attiva solo
+ * quando `item.nutrients` non è presente (path dry / item non strutturati / payload pre-finalize).
  */
 export function approxMacrosForPlanItem(item: IntelligentMealPlanItemOut): {
   kcal: number;
@@ -11,6 +16,15 @@ export function approxMacrosForPlanItem(item: IntelligentMealPlanItemOut): {
   proteinG: number;
   fatG: number;
 } {
+  if (item.nutrients) {
+    const n = item.nutrients;
+    return {
+      kcal: Math.round(n.kcal),
+      carbsG: round1(n.carbsG),
+      proteinG: round1(n.proteinG),
+      fatG: round1(n.fatG),
+    };
+  }
   const { nutrients } = nutrientsForMealPlanItem({
     name: item.name,
     portionHint: item.portionHint ?? "",
@@ -28,8 +42,18 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
-/** IG stimato (non clinico): da ripartizione energia e ruolo macro. */
+/**
+ * IG dell'item.
+ *
+ * Preferenza: `item.nutrients.glycemicIndex` quando proviene dalla cache USDA (Wolever-style estimate
+ * server-side, salvato in `nutrition_fdc_foods`). È l'unica formula canonica del progetto post-Step 3.
+ *
+ * Fallback sync: stima locale da macro + bias `macroRole` (path dry / nutrients assenti).
+ */
 export function estimatedItemGlycemicIndex(item: IntelligentMealPlanItemOut): number {
+  if (item.nutrients && item.nutrients.glycemicIndex > 0) {
+    return Math.round(item.nutrients.glycemicIndex);
+  }
   const { carbsG, proteinG, fatG } = approxMacrosForPlanItem(item);
   const denom = Math.max(1, carbsG * 4 + proteinG * 4 + fatG * 9);
   const carbEnergyPct = (carbsG * 4) / denom;
