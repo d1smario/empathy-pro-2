@@ -832,27 +832,41 @@ export default function HealthPageView() {
   /**
    * Sceglie il panel di un dato tipo da cui le card riassuntive devono leggere.
    *
-   * Se gli ultimi referti caricati sono ancora in `needs_manual_review`/vuoti
-   * (file in attesa di VLM o di parser), pescare "il più recente assoluto"
-   * lascerebbe le card vuote anche con N panel più vecchi pieni di valori.
-   * Il selettore preferisce quindi il primo (più recente) **con almeno
-   * un valore numerico utile** tra: campi piatti canonici (es. `crp_mg_l`,
-   * `firmicutes_pct`) o `vlm_proposals` non vuote. Fallback: più recente assoluto.
+   * Ordering deterministico (priorità decrescente):
+   *   1. `sample_date` DESC (più recente vince)
+   *   2. **richezza** del payload: numero di chiavi flat numeriche + numero di
+   *      `vlm_proposals` (a parità di data, il panel più informativo vince —
+   *      così se due seed/upload hanno stessa `sample_date` ma uno ha solo
+   *      `glicemia` e l'altro ha tutti i marker, il selettore prende il ricco).
+   *   3. `created_at` DESC (tie-break stabile sull'ultimo ad arrivare).
+   *
+   * Fallback: se nessun panel matcha, ritorna il più recente assoluto.
    */
   const findLatestUsefulPanel = useCallback(
     (matcher: (p: HealthPanelTimelineRow) => boolean): HealthPanelTimelineRow | undefined => {
       const ofType = panelsNewestFirst.filter(matcher);
-      const useful = ofType.find((p) => {
+      const fieldsCount = (p: HealthPanelTimelineRow): number => {
         const v = (p.values ?? null) as Record<string, unknown> | null;
-        if (!v) return false;
+        if (!v) return 0;
         const flat = Object.keys(v).filter(
           (k) => k !== "import" && k !== "vlm_proposals" && k !== "vlm_pending_validation",
-        );
-        if (flat.length > 0) return true;
+        ).length;
         const proposals = v.vlm_proposals;
-        return Array.isArray(proposals) && proposals.length > 0;
-      });
-      return useful ?? ofType[0];
+        const proposalsLen = Array.isArray(proposals) ? proposals.length : 0;
+        return flat + proposalsLen;
+      };
+      const ranked = ofType
+        .filter((p) => fieldsCount(p) > 0)
+        .sort((a, b) => {
+          const da = a.sample_date ?? "";
+          const db = b.sample_date ?? "";
+          if (da !== db) return db.localeCompare(da);
+          const fa = fieldsCount(a);
+          const fb = fieldsCount(b);
+          if (fa !== fb) return fb - fa;
+          return (b.created_at ?? "").localeCompare(a.created_at ?? "");
+        });
+      return ranked[0] ?? ofType[0];
     },
     [panelsNewestFirst],
   );
