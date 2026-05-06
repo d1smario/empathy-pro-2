@@ -44,35 +44,48 @@ export type HealthVlmDecodeResult = {
   detectedProvider: string | null;
 };
 
+/**
+ * Schema canonico per le proposte VLM.
+ *
+ * Le chiavi qui SONO le stesse che i selettori (`readNum`) della UI Health
+ * leggono per popolare grafici e card. Allineamento chiavi obbligatorio:
+ * il VLM deve emettere `crp_mg_l` (non `pcr_us`), `cortisol_am` (non
+ * `cortisolo_am`), `firmicutes_pct`, `methylation_score`, ecc. Gli alias
+ * italiani sono comunque accettati lato consumer per resilienza, ma il
+ * canonical è inglese snake_case lowercase.
+ */
 const SCHEMA_HINTS: Record<HealthPanelKindForVlm, string> = {
   blood:
-    "blood (sangue): emoglobina g/dL, ematocrito %, eritrociti M/uL, leucociti K/uL, piastrine K/uL, ferritina ng/mL, sideremia µg/dL, transferrina mg/dL, vitamina_d_25oh ng/mL, vitamina_b12 pg/mL, folati ng/mL, glicemia mg/dL, hba1c %, colesterolo_tot mg/dL, ldl mg/dL, hdl mg/dL, trigliceridi mg/dL, ast U/L, alt U/L, ggt U/L, creatinina mg/dL, urea mg/dL, sodio mmol/L, potassio mmol/L, magnesio mg/dL, calcio mg/dL, omocisteina umol/L. Esprimi nomi in snake_case lowercase.",
+    "blood (esami del sangue): hb (emoglobina) g/dL, hematocrit %, rbc M/uL, wbc K/uL, plt K/uL, ferritin ng/mL, transferrin mg/dL, iron_serum ug/dL, vit_d (25-OH-D) ng/mL, b12 pg/mL, folate ng/mL, glucose mg/dL, hba1c %, total_cholesterol mg/dL, ldl mg/dL, hdl mg/dL, triglycerides mg/dL, ast U/L, alt U/L, ggt U/L, creatinine mg/dL, urea mg/dL, sodium mmol/L, potassium mmol/L, magnesium mg/dL, calcium mg/dL, homocysteine umol/L, crp_mg_l (PCR) mg/L, tsh mUI/L. snake_case lowercase, valori inglesi quando possibile.",
   microbiota:
-    "microbiota: phylum_<nome> con abbondanza %, family_<nome> %, genus_<nome> %, species_<nome> %; diversita_shannon, diversita_simpson, diversita_chao, indice_disbiosi (0-100), butyrate_producers %, lps_producers %, bile_acid_metab %, scfa_score, akkermansia_pct, faecalibacterium_pct, lactobacillus_pct, bifidobacterium_pct, roseburia_pct, prevotella_pct, bacteroides_pct, fusobacterium_pct. Tutti in snake_case lowercase.",
+    "microbiota (analisi del microbiota intestinale): a livello phylum SEMPRE includere quando presenti `firmicutes_pct`, `bacteroidetes_pct`, `proteobacteria_pct`, `actinobacteria_pct`, `verrucomicrobia_pct`, `fusobacteria_pct` (abbondanze 0-100). Diversità: `diversity_shannon` (Shannon index), `diversity_simpson`, `diversity_chao`, `dysbiosis_index` (0-100). Generi/specie chiave: `akkermansia_pct`, `faecalibacterium_pct`, `lactobacillus_pct`, `bifidobacterium_pct`, `roseburia_pct`, `prevotella_pct`, `bacteroides_pct`. Funzionali: `butyrate_producers_pct`, `lps_producers_pct`, `scfa_score`. Famiglie/generi extra: usare `family_<nome>` o `genus_<nome>`.",
   epigenetics:
-    "epigenetics: eta_biologica_anni, eta_cronologica_anni, gap_anni, telomere_length_kb, metilazione_score (0-100), pace_of_aging, dunedin_pace, horvath_clock, hannum_clock, phenoage, grim_age, smoke_pack_years, dna_repair_score, mitochondrial_score, inflammaging_score, oxidative_methylation, longevity_score. Tutti snake_case.",
+    "epigenetics (test epigenetico / orologio biologico): SEMPRE includere quando presenti `methylation_score` (0-100), `biological_age_years`, `chronological_age_years`, `biological_age_delta` (delta anni), `epigenetic_oxidative_stress` (0-100), `epigenetic_detox` (0-100), `epigenetic_repair` (0-100). Plus: `pace_of_aging` (DunedinPACE), `horvath_clock`, `hannum_clock`, `phenoage`, `grim_age`, `telomere_length_kb`, `inflammaging_score`, `mitochondrial_score`, `longevity_score`. snake_case.",
   hormones:
-    "hormones: cortisolo_am ug/dL, cortisolo_pm ug/dL, dhea_s ug/dL, testosterone_totale ng/dL, testosterone_libero pg/mL, estradiolo pg/mL, progesterone ng/mL, lh mUI/mL, fsh mUI/mL, prolattina ng/mL, tsh mUI/L, t3_libero pg/mL, t4_libero ng/dL, igf1 ng/mL, gh ng/mL, melatonina_notturna pg/mL, insulina uUI/mL, homa_ir, leptina ng/mL, grelina pg/mL.",
+    "hormones (profilo ormonale): SEMPRE includere quando presenti `cortisol_am` (mattina) ug/dL, `cortisol_pm` (sera) ug/dL, `testosterone` ng/dL (totale), `testosterone_free` pg/mL, `tsh` mUI/L, `ft3` pg/mL, `ft4` ng/dL, `dhea_s` ug/dL, `igf1` ng/mL. Plus se presenti: `estradiol` pg/mL, `progesterone` ng/mL, `lh`, `fsh`, `prolactin` ng/mL, `gh`, `melatonin_night`, `insulin` uUI/mL, `homa_ir`, `leptin`, `ghrelin`. snake_case lowercase, **chiavi inglesi** (NON `cortisolo_am`).",
   inflammation:
-    "inflammation: pcr_us mg/L, vss mm/h, il6 pg/mL, il1b pg/mL, il10 pg/mL, tnf_alpha pg/mL, ldl_ox U/L, omocisteina umol/L, fibrinogeno mg/dL, calprotectina_fecale ug/g, lpa mg/dL, neopterina nmol/L, ferritina ng/mL, asma_score.",
+    "inflammation (markers infiammatori): SEMPRE includere quando presenti `crp_mg_l` (PCR) mg/L, `il6` pg/mL, `tnf_alpha` pg/mL, `homocysteine` umol/L, `oxidized_ldl` U/L. Plus: `esr_mm_h` (VES) mm/h, `il1b`, `il10`, `fibrinogen` mg/dL, `fecal_calprotectin` ug/g, `lpa` mg/dL, `neopterin` nmol/L. snake_case lowercase, chiavi inglesi.",
   oxidative_stress:
-    "oxidative_stress: d_roms U_carr (riferim 250-300), bap_score uM, glutatione_ridotto umol/L, glutatione_ossidato umol/L, glutatione_ratio, sod U/g_hb, catalasi U/g_hb, gpx U/g_hb, vitamina_e_alfatocoferolo mg/L, vitamina_c mg/L, coq10 ng/mL, malondialdeide_mda umol/L, 8_ohdg ng/mg_creat, ros_total, capacity_total_antiox.",
+    "oxidative_stress (stress ossidativo): SEMPRE includere quando presenti `d_roms` U_CARR (riferim 250-300), `bap` uM, `glutathione` umol/L, `sod` U/g_hb, `catalase` U/g_hb. Plus: `gpx` U/g_hb, `vitamin_e` mg/L, `vitamin_c` mg/L, `coq10` ng/mL, `mda` (malondialdehyde) umol/L, `8_ohdg` ng/mg_creat, `ros_total`, `total_antioxidant_capacity`. snake_case lowercase, chiavi inglesi.",
 };
 
 function buildPromptText(panelType: HealthPanelKindForVlm): string {
   return [
-    "Sei un assistente esperto di referti clinici (Italia / EU). Estrai dal documento allegato i parametri quantitativi.",
+    "Sei un assistente esperto di referti clinici (Italia / EU). Estrai dal documento allegato TUTTI i parametri quantitativi presenti.",
     "",
     `Tipo di referto: ${panelType}.`,
-    `Schema target: ${SCHEMA_HINTS[panelType]}`,
+    `Schema target (chiavi canoniche): ${SCHEMA_HINTS[panelType]}`,
     "",
     "Regole rigide:",
     "1. NON inventare valori: se non sei sicuro, ometti il campo o usa confidence ≤ 0.4.",
     "2. Restituisci SOLO un oggetto JSON, niente testo extra.",
     "3. Confidence = 0..1 in base alla leggibilità del valore nel referto (0.9+ se chiaramente stampato; 0.6-0.85 se interpretato; 0.4- se incerto).",
     "4. Se nel referto è presente l'unità di misura, includila in `unit`. Se il range di riferimento è stampato, includilo in `reference_range`.",
-    "5. Per microbiota: usa abbondanze relative in percentuale (0-100), non frazioni.",
-    "6. Riconosci nome del laboratorio / provider se presente (es. 'Atlas Biomed', 'Synlab', 'Viome', 'Lifeline'); riportalo come `detected_provider`.",
+    "5. **Esaustività**: estrai ogni parametro che il referto contiene, non solo i principali. Includi anche colesterolo, lipidi, elettroliti, enzimi epatici, indici ematici secondari quando presenti.",
+    "6. **Lessico canonico**: usa SEMPRE le chiavi inglesi snake_case del schema target (es. `cortisol_am`, NON `cortisolo_am`; `crp_mg_l`, NON `pcr_us`; `firmicutes_pct`, NON `firmicutes_phylum`). Se il referto è in italiano, traduci la chiave in inglese canonico ma mantieni il valore numerico esatto.",
+    "7. Per microbiota: usa abbondanze relative in percentuale (0-100), non frazioni; preferisci sempre suffisso `_pct` per phylum/genus principali.",
+    "8. Per epigenetics: includi sia `biological_age_years` che `chronological_age_years` quando presenti (oltre al delta).",
+    "9. Riconosci nome del laboratorio / provider se presente (es. 'Atlas Biomed', 'Synlab', 'Viome', 'Lifeline', 'TruDiagnostic', 'Cerba'); riportalo come `detected_provider`.",
     "",
     "Schema JSON output:",
     "{",
