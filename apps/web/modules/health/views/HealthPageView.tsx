@@ -347,7 +347,14 @@ function microbiotaRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const b = readNum(v, ["bacteroidetes_pct", "bacteroidetes", "bacteroidetes_phylum", "phylum_bacteroidetes"]);
   const p = readNum(v, ["proteobacteria_pct", "proteobacteria", "proteobacteria_phylum", "phylum_proteobacteria"]);
   const a = readNum(v, ["actinobacteria_pct", "actinobacteria", "actinobacteria_phylum", "phylum_actinobacteria"]);
-  const div = readNum(v, ["diversity_shannon", "diversity", "alpha_diversity", "shannon", "diversita_shannon"]);
+  const div = readNum(v, [
+    "diversity_shannon",
+    "diversity",
+    "alpha_diversity",
+    "shannon",
+    "shannon_index",
+    "diversita_shannon",
+  ]);
   const hasAny = [f, b, p, a, div].some((x) => x != null);
   const d = DEMO_MICROBIOTA_RADAR;
   if (!hasAny) {
@@ -368,12 +375,18 @@ function microbiotaRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
 
 function hormonesBarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const v = (panel?.values as Record<string, unknown> | null) ?? null;
-  const am = readNum(v, ["cortisol_am", "cortisol_morning", "cortisolo_am", "cortisolo_mattina"]);
+  const am = readNum(v, [
+    "cortisol_am",
+    "cortisol_morning",
+    "cortisolo_am",
+    "cortisolo_mattina",
+    "cortisol_ug_dl",
+  ]);
   const pm = readNum(v, ["cortisol_pm", "cortisol_evening", "cortisolo_pm", "cortisolo_sera"]);
   const tt = readNum(v, ["testosterone", "testosterone_total", "testosterone_totale", "testosterone_ng_dl"]);
-  const tsh = readNum(v, ["tsh"]);
-  const t3 = readNum(v, ["ft3", "t3_free", "t3_libero", "t3_libera", "t3"]);
-  const t4 = readNum(v, ["ft4", "t4_free", "t4_libero", "t4_libera", "t4"]);
+  const tsh = readNum(v, ["tsh", "tsh_miu_l"]);
+  const t3 = readNum(v, ["ft3", "t3_free", "t3_libero", "t3_libera", "t3", "free_t3_pg_ml"]);
+  const t4 = readNum(v, ["ft4", "t4_free", "t4_libero", "t4_libera", "t4", "free_t4_ng_dl"]);
   const d = DEMO_HORMONES_BAR;
   const hasAny = [am, pm, tt, tsh, t3, t4].some((x) => x != null);
   if (!hasAny)
@@ -402,11 +415,34 @@ function epigeneticRingsFromPanel(panel: HealthPanelTimelineRow | undefined): Ar
     return [];
   }
   const v = (panel?.values as Record<string, unknown> | null) ?? null;
-  const meth = readNum(v, ["methylation_score", "metilazione", "methylation", "score_metilazione", "metilazione_score"]);
-  const delta = readNum(v, ["biological_age_delta", "epigenetic_age_delta", "eta_bio_vs_crono", "age_delta_years", "gap_anni"]);
+  const meth = readNum(v, [
+    "methylation_score",
+    "metilazione",
+    "methylation",
+    "score_metilazione",
+    "metilazione_score",
+    "metabolic_methylation_score",
+    "inflammation_methylation_index",
+  ]);
+  const directDelta = readNum(v, [
+    "biological_age_delta",
+    "epigenetic_age_delta",
+    "eta_bio_vs_crono",
+    "age_delta_years",
+    "gap_anni",
+  ]);
+  const epiAge = readNum(v, ["epigenetic_age_years", "biological_age_years", "eta_biologica"]);
+  const chronoAge = readNum(v, ["chronological_age_years", "age_years", "eta_cronologica"]);
+  const delta = directDelta ?? (epiAge != null && chronoAge != null ? Number((epiAge - chronoAge).toFixed(2)) : null);
   const ox = readNum(v, ["epigenetic_oxidative_stress", "stress_oss_epigenetico", "oxidative_epigenetic", "oxidative_methylation"]);
   const detox = readNum(v, ["epigenetic_detox", "detox_score", "detox_epigenetico"]);
-  const repair = readNum(v, ["epigenetic_repair", "repair_score", "dna_repair", "dna_repair_score"]);
+  const repair = readNum(v, [
+    "epigenetic_repair",
+    "repair_score",
+    "dna_repair",
+    "dna_repair_score",
+    "mitochondrial_resilience_index",
+  ]);
   return EPIGENETIC_RINGS.map((r) => {
     if (r.name === "Metilazione") return { ...r, value: Math.round(capPercentDisplay(meth, r.value)) };
     if (r.name === "Età biologica") return { ...r, value: Math.round(biologicalAgeRingScore(delta, r.value)) };
@@ -420,12 +456,22 @@ function epigeneticRingsFromPanel(panel: HealthPanelTimelineRow | undefined): Ar
 function epigeneticRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const rings = epigeneticRingsFromPanel(panel);
   const v = (panel?.values as Record<string, unknown> | null) ?? null;
+  const epiAge = readNum(v, ["epigenetic_age_years", "biological_age_years", "eta_biologica"]);
+  const chronoAge = readNum(v, ["chronological_age_years", "age_years", "eta_cronologica"]);
   const hasNumeric = [
-    readNum(v, ["methylation_score", "metilazione", "methylation", "metilazione_score"]),
-    readNum(v, ["biological_age_delta", "epigenetic_age_delta", "gap_anni"]),
+    readNum(v, [
+      "methylation_score",
+      "metilazione",
+      "methylation",
+      "metilazione_score",
+      "metabolic_methylation_score",
+      "inflammation_methylation_index",
+    ]),
+    readNum(v, ["biological_age_delta", "epigenetic_age_delta", "gap_anni"]) ??
+      (epiAge != null && chronoAge != null ? epiAge - chronoAge : null),
     readNum(v, ["epigenetic_oxidative_stress", "stress_oss_epigenetico", "oxidative_methylation"]),
     readNum(v, ["epigenetic_detox", "detox_score"]),
-    readNum(v, ["epigenetic_repair", "repair_score", "dna_repair_score"]),
+    readNum(v, ["epigenetic_repair", "repair_score", "dna_repair_score", "mitochondrial_resilience_index"]),
   ].some((x) => x != null);
   const d = DEMO_EPIGENETIC_RADAR;
   if (!hasNumeric) {
@@ -451,9 +497,21 @@ function rowFromEpigeneticTrendPanel(panel: HealthPanelTimelineRow): {
   const v = panel.values;
   if (!v || typeof v !== "object") return null;
   const rec = v as Record<string, unknown>;
-  const metilazione = readNum(rec, ["methylation_score", "metilazione", "methylation", "metilazione_score"]);
+  const metilazione = readNum(rec, [
+    "methylation_score",
+    "metilazione",
+    "methylation",
+    "metilazione_score",
+    "metabolic_methylation_score",
+    "inflammation_methylation_index",
+  ]);
   const detox = readNum(rec, ["epigenetic_detox", "detox_score"]);
-  const riparazione = readNum(rec, ["epigenetic_repair", "repair_score", "dna_repair_score"]);
+  const riparazione = readNum(rec, [
+    "epigenetic_repair",
+    "repair_score",
+    "dna_repair_score",
+    "mitochondrial_resilience_index",
+  ]);
   if (metilazione == null && detox == null && riparazione == null) return null;
   const label = panel.sample_date
     ? new Date(panel.sample_date).toLocaleDateString("it-IT", { month: "short", year: "2-digit" })
@@ -528,11 +586,17 @@ function igfAxisScore(igf: number | null, demo: number): number {
 
 function endocrineRadarFromPanel(panel: HealthPanelTimelineRow | undefined) {
   const v = (panel?.values as Record<string, unknown> | null) ?? null;
-  const am = readNum(v, ["cortisol_am", "cortisol_morning", "cortisolo_am", "cortisolo_mattina"]);
+  const am = readNum(v, [
+    "cortisol_am",
+    "cortisol_morning",
+    "cortisolo_am",
+    "cortisolo_mattina",
+    "cortisol_ug_dl",
+  ]);
   const pm = readNum(v, ["cortisol_pm", "cortisol_evening", "cortisolo_pm", "cortisolo_sera"]);
   const tt = readNum(v, ["testosterone", "testosterone_total", "testosterone_totale", "testosterone_ng_dl"]);
-  const tsh = readNum(v, ["tsh"]);
-  const dhea = readNum(v, ["dhea_s", "dhea", "dehydroepiandrosterone"]);
+  const tsh = readNum(v, ["tsh", "tsh_miu_l"]);
+  const dhea = readNum(v, ["dhea_s", "dhea", "dehydroepiandrosterone", "dhea_s_ug_dl"]);
   const igf = readNum(v, ["igf1", "igf_1", "igf-1", "insulin_like_growth_factor_1"]);
   const hasAny = [am, pm, tt, tsh, dhea, igf].some((x) => x != null);
   const d = DEMO_ENDOCRINE_RADAR;
@@ -1946,7 +2010,11 @@ export default function HealthPageView() {
                         { keys: ["bacteroidetes_pct", "bacteroidetes"], label: "Bacteroidetes", unit: "%" },
                         { keys: ["proteobacteria_pct", "proteobacteria"], label: "Proteobacteria", unit: "%" },
                         { keys: ["actinobacteria_pct", "actinobacteria"], label: "Actinobacteria", unit: "%" },
-                        { keys: ["diversity_shannon", "diversity"], label: "Diversità (Shannon)", unit: "" },
+                        {
+                          keys: ["diversity_shannon", "diversity", "shannon_index", "shannon"],
+                          label: "Diversità (Shannon)",
+                          unit: "",
+                        },
                       ] as const
                     ).map((m) => (
                       <tr key={m.label} className="border-b border-white/5">
