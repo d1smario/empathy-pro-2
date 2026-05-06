@@ -676,6 +676,37 @@ export default function HealthPageView() {
 
   const panelsNewestFirst = useMemo(() => sortPanelsNewestFirst(panels), [panels]);
 
+  /**
+   * Diagnostica leggera dell'archivio: distingue i panel che effettivamente
+   * popolano i grafici (values strutturati canonici) da quelli che attendono
+   * conferma o sono solo file caricati. Le card riassuntive Health leggono
+   * `values.<chiave>` diretto, NON `vlm_proposals`: senza conferma review
+   * restano vuote anche con N referti in archivio.
+   */
+  const archiveDiagnostics = useMemo(() => {
+    let withCanonicalValues = 0;
+    let importOnly = 0;
+    let vlmPending = 0;
+    for (const p of panels) {
+      const vals = (p.values ?? null) as Record<string, unknown> | null;
+      const fields = structuredValuesFieldCount(vals);
+      const isPendingVlm =
+        Boolean(vals?.vlm_pending_validation) ||
+        (typeof vals?.import === "object" &&
+          vals?.import !== null &&
+          (vals.import as Record<string, unknown>).status === "vlm_proposed");
+      if (isPendingVlm) vlmPending++;
+      if (fields > 0) withCanonicalValues++;
+      else importOnly++;
+    }
+    return {
+      total: panels.length,
+      withCanonicalValues,
+      importOnly,
+      vlmPending,
+    };
+  }, [panels]);
+
   /** Map panelId → runId VLM in pending_validation, per il link "Apri review" sull'archivio. */
   const pendingVlmRunByPanelId = useMemo(() => {
     const out = new Map<string, string>();
@@ -1819,6 +1850,34 @@ export default function HealthPageView() {
           Pannelli da <code className="text-zinc-400">biomarker_panels</code> per l&apos;atleta attivo
           {!loadingTimeline && !timelineErr ? ` · ${panels.length} in memoria` : ""}.
         </p>
+        {!loadingTimeline && !timelineErr && archiveDiagnostics.total > 0 ? (
+          <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-950/15 p-3">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-[11px] tracking-wider text-zinc-300">
+              <span>
+                <span className="text-emerald-300">{archiveDiagnostics.withCanonicalValues}</span>
+                <span className="text-zinc-500"> con valori strutturati</span>
+              </span>
+              <span>
+                <span className="text-fuchsia-300">{archiveDiagnostics.vlmPending}</span>
+                <span className="text-zinc-500"> in attesa di conferma VLM</span>
+              </span>
+              <span>
+                <span className="text-amber-300">{archiveDiagnostics.importOnly}</span>
+                <span className="text-zinc-500"> solo file (senza valori)</span>
+              </span>
+            </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-zinc-400">
+              Le card e i grafici qui sopra leggono i campi numerici da <code className="text-zinc-300">values</code> dei
+              pannelli più recenti per tipo (es. <code>crp_mg_l</code>, <code>cortisol_am</code>, <code>firmicutes_pct</code>,{" "}
+              <code>methylation_score</code>).{" "}
+              {archiveDiagnostics.vlmPending > 0
+                ? `${archiveDiagnostics.vlmPending} referti hanno proposte VLM da confermare: apri le review qui sotto e clicca «Conferma» per scrivere i numeri canonici e popolare i grafici.`
+                : archiveDiagnostics.withCanonicalValues === 0
+                  ? "Nessun referto ha valori strutturati: i grafici restano vuoti (o in modalità demo) finché non confermi una review VLM o non importi un referto leggibile dal parser deterministico."
+                  : "I grafici attingono dai referti con valori canonici."}
+            </p>
+          </div>
+        ) : null}
         <ul className="mt-4 divide-y divide-white/10">
           {loadingTimeline ? (
             <li className="py-6 text-center text-sm text-zinc-500">Caricamento archivio…</li>
