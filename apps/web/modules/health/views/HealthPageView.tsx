@@ -741,6 +741,8 @@ export default function HealthPageView() {
     let importOnly = 0;
     let vlmPending = 0;
     let bulkCandidates = 0;
+    let importOnlyNoStorage = 0;
+    let importOnlyUnsupported = 0;
     for (const p of panels) {
       const vals = (p.values ?? null) as Record<string, unknown> | null;
       const flatFields = vals
@@ -767,7 +769,11 @@ export default function HealthPageView() {
       const filenameStr =
         typeof importBlock?.filename === "string" ? (importBlock?.filename as string).toLowerCase() : "";
       const supports = mimeStr.startsWith("image/") || mimeStr === "application/pdf" || filenameStr.endsWith(".pdf");
-      if (storagePath && supports && flatFields === 0 && proposalCount === 0) bulkCandidates++;
+      const noValues = flatFields === 0 && proposalCount === 0;
+      if (storagePath && supports && noValues) bulkCandidates++;
+      // Diagnosi extra per import-only senza candidati: spiega all'utente perché il bulk non parte
+      if (noValues && !storagePath && (supports || filenameStr || mimeStr)) importOnlyNoStorage++;
+      else if (noValues && storagePath && !supports) importOnlyUnsupported++;
     }
     return {
       total: panels.length,
@@ -776,6 +782,8 @@ export default function HealthPageView() {
       importOnly,
       vlmPending,
       bulkCandidates,
+      importOnlyNoStorage,
+      importOnlyUnsupported,
     };
   }, [panels]);
 
@@ -1968,24 +1976,36 @@ export default function HealthPageView() {
                   ? "Le review aperte aggiornano lo stato canonico in DB; finché non le confermi, i numeri sopra restano in modalità «proposto»."
                   : "I grafici sono allineati alla memoria dell'atleta."}
             </p>
-            {archiveDiagnostics.bulkCandidates > 0 ? (
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  disabled={bulkBusy}
-                  onClick={() => void onBulkReanalyze()}
-                  className="rounded-md border border-violet-400/60 bg-violet-600/40 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-violet-500/60 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {bulkBusy
-                    ? "Analizzo in corso…"
-                    : `Trasforma ${archiveDiagnostics.bulkCandidates} file in proposte VLM`}
-                </button>
-                <span className="text-[10px] text-zinc-500">
-                  Convoglia i referti senza valori sulla pipeline canonica (Claude / GPT-4o vision); i numeri arrivano nei
-                  grafici come «shadow» e restano in attesa di conferma in review.
-                </span>
-              </div>
-            ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={bulkBusy || archiveDiagnostics.bulkCandidates === 0}
+                onClick={() => void onBulkReanalyze()}
+                className="rounded-md border border-violet-400/60 bg-violet-600/40 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition hover:bg-violet-500/60 disabled:cursor-not-allowed disabled:opacity-50"
+                title={
+                  archiveDiagnostics.bulkCandidates > 0
+                    ? "Avvia bulk re-analyze sui file in storage"
+                    : "Nessun file riusabile (nessun referto con file in Storage e formato image/pdf)"
+                }
+              >
+                {bulkBusy
+                  ? "Analizzo in corso…"
+                  : archiveDiagnostics.bulkCandidates > 0
+                    ? `Trasforma ${archiveDiagnostics.bulkCandidates} file in proposte VLM`
+                    : "Trasforma file in proposte VLM (0 candidati)"}
+              </button>
+              <span className="text-[10px] text-zinc-500">
+                {archiveDiagnostics.bulkCandidates > 0
+                  ? "Convoglia i referti senza valori sulla pipeline canonica (Claude/GPT-4o vision); i numeri arrivano nei grafici come «shadow» e restano in attesa di conferma in review."
+                  : archiveDiagnostics.importOnlyNoStorage > 0
+                    ? `${archiveDiagnostics.importOnlyNoStorage} referti non hanno il file in Storage (caricati prima che il bucket fosse configurato, o upload fallito). Per analizzarli, ri-carica il file dal modulo «Carica esame» qui sopra.`
+                    : archiveDiagnostics.importOnlyUnsupported > 0
+                      ? `${archiveDiagnostics.importOnlyUnsupported} referti hanno un formato non supportato (solo image/* o application/pdf passano dal VLM).`
+                      : archiveDiagnostics.importOnly === 0
+                        ? "Tutti i referti hanno già valori canonici o proposte VLM: niente da rielaborare."
+                        : "Nessun candidato per il bulk (verifica che i referti abbiano un file image/pdf in Storage)."}
+              </span>
+            </div>
           </div>
         ) : null}
         <ul className="mt-4 divide-y divide-white/10">
