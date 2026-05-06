@@ -64,8 +64,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "plan.mealPlanSolverMeta obbligatorio (dailyMealsKcalTotal + integrationLeverLines)" }, { status: 400 });
     }
 
-    /** Solo assemblaggio deterministico: nessun LLM (generative core EMPATHY — AI non genera piani pasto). */
-    const assembled = buildDeterministicMealPlanFromRequest(request);
+    /** Solo assemblaggio deterministico: nessun LLM (generative core EMPATHY — AI non genera piani pasto).
+     *  Composizione preferita da cache USDA `nutrition_fdc_foods`; fallback al TS table per le voci non mappate. */
+    const assembled = await buildDeterministicMealPlanFromRequest(request);
     const res = NextResponse.json(attachSolverBasisToAssembled(assembled, request));
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
     return res;

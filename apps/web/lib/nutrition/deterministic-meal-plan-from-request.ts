@@ -6,7 +6,8 @@ import type {
   IntelligentMealPlanSlotOut,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
+import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
+import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
@@ -46,8 +47,14 @@ function pickItemsForSlot(slot: IntelligentMealPlanRequestSlot, dayCtx: Mediterr
  * Piano pasti assemblato solo da dati già nel request, senza OpenAI.
  * Flusso: fabbisogno e macro per slot (solver × profilo × training) → scelta fonti (CHO / PRO / grassi / fibre-vitamine)
  * → porzioni stimati dal composer → kcal voce da banca canonica + quantità (mai ripartizione uguale sul numero di voci).
+ *
+ * Composizione finale dei nutrienti (vit/min/EAA/grassi/GI/II) preferenzialmente da cache USDA
+ * `nutrition_fdc_foods` (single source of truth lato server). Fallback automatico al TS table per
+ * canonicalKey non ancora mappati o quando la cache non risponde (RLS, USDA giù, ecc.).
  */
-export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRequest): IntelligentMealPlanAssembledCore {
+export async function buildDeterministicMealPlanFromRequest(
+  req: IntelligentMealPlanRequest,
+): Promise<IntelligentMealPlanAssembledCore> {
   const slotByKey = new Map(req.slots.map((s) => [s.slot, s] as const));
   const orderedSlots = MEAL_SLOT_ORDER.map((k) => slotByKey.get(k)).filter(
     (s): s is IntelligentMealPlanRequestSlot => Boolean(s),
@@ -86,12 +93,20 @@ export function buildDeterministicMealPlanFromRequest(req: IntelligentMealPlanRe
   const core: IntelligentMealPlanAssembledCore = {
     layer: "deterministic_meal_assembly_v1",
     disclaimer:
-      "Piano da motore deterministico: per ogni pasto si scelgono fonti di carboidrati, proteine, grassi e fibre (verdura/frutta), poi si stimano le quantità e le kcal per voce dalla banca composizione (non ripartizione uguale tra alimenti). Target pasto = output solver; la somma delle voci può discostarsi leggermente se le porzioni sono arrotondate. Non sostituisce parere medico.",
+      "Piano da motore deterministico: per ogni pasto si scelgono fonti di carboidrati, proteine, grassi e fibre (verdura/frutta), poi si stimano le quantità e le kcal per voce dalla banca composizione (USDA FDC quando mappata, fallback canonica TS). Target pasto = output solver; la somma delle voci può discostarsi leggermente se le porzioni sono arrotondate. Non sostituisce parere medico.",
     slots,
     dayInteractionSummary:
       dayBits.join(" · ").slice(0, 800) ||
       "Distribuire i pasti secondo orari e target solver; rispettare intolleranze, allergie ed esclusioni del profilo.",
     mealRotationStaples: Array.from(dayCtx.usedStaples),
   };
-  return finalizeIntelligentMealPlanCore(core, req);
+
+  /**
+   * Pre-load USDA snapshot per tutti gli item del giorno: un solo round-trip Supabase invece di N.
+   * Fail-soft: se il batch fallisce (no service role, USDA giù, ecc.) lo snapshot resta vuoto e il
+   * finalizer cade automaticamente sul TS table item per item — comportamento identico al pre-Step3.
+   */
+  const allKeys = slots.flatMap((s) => s.items.map((it) => inferCanonicalFoodKey(`${it.name} ${it.portionHint}`)));
+  const fdcSnapshot = await buildFdcCanonicalSnapshot(allKeys);
+  return await finalizeIntelligentMealPlanCore(core, req, fdcSnapshot);
 }
