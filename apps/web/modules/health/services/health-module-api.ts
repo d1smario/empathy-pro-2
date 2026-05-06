@@ -108,7 +108,14 @@ export async function uploadHealthDocument(input: {
   panelType: string;
   sampleDate: string;
   file: File;
-}): Promise<{ ok: boolean; error?: string; message?: string }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  message?: string;
+  importStatus?: string;
+  stagingRunId?: string | null;
+  reviewUrl?: string | null;
+}> {
   const form = new FormData();
   form.set("athleteId", input.athleteId);
   form.set("panelType", input.panelType);
@@ -123,11 +130,24 @@ export async function uploadHealthDocument(input: {
     body: form,
     headers,
   });
-  const json = (await res.json()) as { ok: boolean; error?: string; message?: string };
+  const json = (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    message?: string;
+    importStatus?: string;
+    stagingRunId?: string | null;
+    reviewUrl?: string | null;
+  };
   if (!res.ok || !json.ok) {
     return { ok: false, error: json.error || "Upload fallito" };
   }
-  return { ok: true, message: json.message };
+  return {
+    ok: true,
+    message: json.message,
+    importStatus: json.importStatus,
+    stagingRunId: json.stagingRunId ?? null,
+    reviewUrl: json.reviewUrl ?? null,
+  };
 }
 
 export type HealthSystemMapViewModel = {
@@ -184,4 +204,137 @@ export async function patchHealthStagingRun(input: {
     return { ok: false, error: json.error || "Aggiornamento staging fallito" };
   }
   return { ok: true };
+}
+
+export type HealthStagingRunDetail = {
+  id: string;
+  athleteId: string;
+  domain: string;
+  status: string;
+  triggerSource: string | null;
+  candidateBundle: Record<string, unknown> | null;
+  proposedPatches: Array<Record<string, unknown>>;
+  confidence: number | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type HealthStagingPanelSnapshot = {
+  id: string;
+  type: string;
+  sampleDate: string | null;
+  source: string | null;
+  values: Record<string, unknown> | null;
+  createdAt: string | null;
+};
+
+export async function fetchHealthStagingRunDetail(runId: string): Promise<{
+  ok: boolean;
+  run: HealthStagingRunDetail | null;
+  panel: HealthStagingPanelSnapshot | null;
+  signedUrl: string | null;
+  importBlock: Record<string, unknown> | null;
+  error?: string;
+}> {
+  const headers = await buildSupabaseAuthHeaders();
+  let res = await fetch(`/api/health/staging-runs/${encodeURIComponent(runId)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+  });
+  let json = (await res.json()) as
+    | {
+        ok: true;
+        run: Record<string, unknown>;
+        panel: Record<string, unknown> | null;
+        signedUrl: string | null;
+        importBlock: Record<string, unknown> | null;
+      }
+    | { ok: false; error?: string };
+  if (!res.ok && (res.status === 401 || res.status === 403)) {
+    res = await fetch(`/api/health/staging-runs/${encodeURIComponent(runId)}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+    json = (await res.json()) as typeof json;
+  }
+  if (!res.ok || !json.ok) {
+    return {
+      ok: false,
+      run: null,
+      panel: null,
+      signedUrl: null,
+      importBlock: null,
+      error: ("error" in json && json.error) || "Review non disponibile",
+    };
+  }
+  const r = json.run as Record<string, unknown>;
+  const p = json.panel as Record<string, unknown> | null;
+  const detail: HealthStagingRunDetail = {
+    id: String(r.id ?? ""),
+    athleteId: String(r.athlete_id ?? ""),
+    domain: String(r.domain ?? ""),
+    status: String(r.status ?? ""),
+    triggerSource: typeof r.trigger_source === "string" ? r.trigger_source : null,
+    candidateBundle:
+      r.candidate_bundle && typeof r.candidate_bundle === "object" && !Array.isArray(r.candidate_bundle)
+        ? (r.candidate_bundle as Record<string, unknown>)
+        : null,
+    proposedPatches: Array.isArray(r.proposed_structured_patches)
+      ? (r.proposed_structured_patches as Array<Record<string, unknown>>)
+      : [],
+    confidence: typeof r.confidence === "number" ? r.confidence : null,
+    createdAt: typeof r.created_at === "string" ? r.created_at : null,
+    updatedAt: typeof r.updated_at === "string" ? r.updated_at : null,
+  };
+  const panel: HealthStagingPanelSnapshot | null = p
+    ? {
+        id: String(p.id ?? ""),
+        type: String(p.type ?? ""),
+        sampleDate: typeof p.sample_date === "string" ? p.sample_date : null,
+        source: typeof p.source === "string" ? p.source : null,
+        values:
+          p.values && typeof p.values === "object" && !Array.isArray(p.values)
+            ? (p.values as Record<string, unknown>)
+            : null,
+        createdAt: typeof p.created_at === "string" ? p.created_at : null,
+      }
+    : null;
+  return {
+    ok: true,
+    run: detail,
+    panel,
+    signedUrl: json.signedUrl ?? null,
+    importBlock: json.importBlock ?? null,
+  };
+}
+
+export type HealthStagingApplyPatch = {
+  field: string;
+  value: number | string | null;
+  unit?: string | null;
+  confidence?: number;
+};
+
+export async function applyHealthStagingPatches(input: {
+  runId: string;
+  confirmedPatches: HealthStagingApplyPatch[];
+  reason?: string;
+}): Promise<{ ok: boolean; error?: string; confirmedCount?: number }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/health/staging-runs/${encodeURIComponent(input.runId)}/apply`, {
+    method: "POST",
+    cache: "no-store",
+    headers,
+    body: JSON.stringify({
+      confirmedPatches: input.confirmedPatches,
+      reason: input.reason ?? null,
+    }),
+  });
+  const json = (await res.json()) as { ok: boolean; error?: string; confirmedCount?: number };
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: json.error || "Conferma fallita" };
+  }
+  return { ok: true, confirmedCount: json.confirmedCount };
 }

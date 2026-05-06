@@ -817,6 +817,12 @@ export default function HealthPageView() {
     }
     setToast(res.message ?? "Caricamento registrato.");
     void loadTimeline();
+    /** Fase B: se l'AI ha proposto valori, instradiamo subito alla review per la conferma. */
+    if (res.reviewUrl) {
+      setTimeout(() => {
+        window.location.assign(res.reviewUrl as string);
+      }, 600);
+    }
   }
 
   async function onPatchStagingRun(runId: string, status: HealthStagingRunAction) {
@@ -1057,14 +1063,34 @@ export default function HealthPageView() {
               <div className="space-y-2">
                 {systemMap.stagingRuns.slice(0, 8).map((s, i) => {
                   const runId = typeof s.id === "string" ? s.id : null;
+                  const triggerSource = typeof s.trigger_source === "string" ? s.trigger_source : "";
+                  const isVlmReview = triggerSource === "health_upload_vlm" && s.status === "pending_validation";
                   return (
-                    <div key={`staging-${i}-${String(s.id ?? i)}`} className="rounded-lg border border-rose-500/25 bg-rose-950/20 px-2.5 py-2 text-xs">
-                      <div className="font-semibold text-rose-100">{String(s.domain ?? "domain")} · {String(s.status ?? "status")}</div>
-                      <div className="text-rose-200/80">
+                    <div
+                      key={`staging-${i}-${String(s.id ?? i)}`}
+                      className={`rounded-lg border px-2.5 py-2 text-xs ${
+                        isVlmReview
+                          ? "border-fuchsia-500/40 bg-fuchsia-950/30"
+                          : "border-rose-500/25 bg-rose-950/20"
+                      }`}
+                    >
+                      <div className={`font-semibold ${isVlmReview ? "text-fuchsia-100" : "text-rose-100"}`}>
+                        {String(s.domain ?? "domain")} · {String(s.status ?? "status")}
+                        {isVlmReview ? <span className="ml-2 text-[10px] uppercase tracking-wider text-fuchsia-300">VLM</span> : null}
+                      </div>
+                      <div className={isVlmReview ? "text-fuchsia-200/80" : "text-rose-200/80"}>
                         conf {typeof s.confidence === "number" ? s.confidence.toFixed(2) : "n/d"} · {String(s.created_at ?? "n/d")}
                       </div>
                       {runId ? (
                         <div className="mt-2 flex flex-wrap gap-2">
+                          {isVlmReview ? (
+                            <a
+                              href={`/health/staging/${runId}`}
+                              className="rounded-md border border-fuchsia-400/50 bg-fuchsia-600/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white transition hover:bg-fuchsia-500/60"
+                            >
+                              Apri review
+                            </a>
+                          ) : null}
                           {[
                             { status: "committed" as const, label: "Valida" },
                             { status: "rejected" as const, label: "Scarta" },
@@ -1131,6 +1157,7 @@ export default function HealthPageView() {
                   }}
                   type="file"
                   accept=".pdf,image/*"
+                  capture="environment"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];

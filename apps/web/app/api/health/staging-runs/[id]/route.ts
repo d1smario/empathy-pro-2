@@ -3,15 +3,95 @@ import { randomUUID } from "node:crypto";
 import {
   AthleteReadContextError,
   requireAuthenticatedTrainingUser,
+  requireAthleteReadContext,
   requireAthleteWriteContext,
   supabaseForAthleteTableRead,
 } from "@/lib/auth/athlete-read-context";
+import { getHealthUploadsBucket } from "@/lib/health/health-upload-storage";
 import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
+
+/**
+ * Lettura singolo staging run + arricchimento (panel sorgente, signed url storage).
+ * Usata dalla review page `/health/staging/[id]`.
+ */
+export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const runId = params.id?.trim();
+    if (!runId) {
+      return NextResponse.json({ ok: false as const, error: "missing_run_id" }, { status: 400, headers: NO_STORE });
+    }
+    const { rlsClient } = await requireAuthenticatedTrainingUser(req);
+    const readDb = supabaseForAthleteTableRead(rlsClient);
+    const { data: run, error: runErr } = await readDb
+      .from("interpretation_staging_runs")
+      .select(
+        "id, athlete_id, domain, status, trigger_source, source_refs, candidate_bundle, proposed_structured_patches, confidence, created_at, updated_at",
+      )
+      .eq("id", runId)
+      .maybeSingle();
+    if (runErr) {
+      return NextResponse.json({ ok: false as const, error: runErr.message }, { status: 500, headers: NO_STORE });
+    }
+    if (!run) {
+      return NextResponse.json({ ok: false as const, error: "staging_run_not_found" }, { status: 404, headers: NO_STORE });
+    }
+    const athleteId = String(run.athlete_id ?? "");
+    const { db } = await requireAthleteReadContext(req, athleteId);
+
+    let panel: Record<string, unknown> | null = null;
+    const sourceRefs = Array.isArray(run.source_refs) ? (run.source_refs as unknown[]) : [];
+    const panelRef = sourceRefs.find((r) => {
+      const rec = r && typeof r === "object" && !Array.isArray(r) ? (r as Record<string, unknown>) : {};
+      return rec.table === "biomarker_panels" && typeof rec.id === "string";
+    });
+    if (panelRef) {
+      const panelId = String((panelRef as Record<string, unknown>).id ?? "");
+      const { data: pRow } = await db
+        .from("biomarker_panels")
+        .select("id, type, sample_date, source, values, created_at")
+        .eq("id", panelId)
+        .eq("athlete_id", athleteId)
+        .maybeSingle();
+      if (pRow) panel = pRow as Record<string, unknown>;
+    }
+
+    let signedUrl: string | null = null;
+    const valuesObj = panel && panel.values && typeof panel.values === "object" && !Array.isArray(panel.values)
+      ? (panel.values as Record<string, unknown>)
+      : {};
+    const importBlock = valuesObj.import && typeof valuesObj.import === "object" && !Array.isArray(valuesObj.import)
+      ? (valuesObj.import as Record<string, unknown>)
+      : {};
+    const storagePath = typeof importBlock.storage_path === "string" ? importBlock.storage_path : null;
+    const bucket = getHealthUploadsBucket();
+    if (storagePath && bucket) {
+      const sig = await db.storage.from(bucket).createSignedUrl(storagePath, 300);
+      if (!sig.error && sig.data) signedUrl = sig.data.signedUrl ?? null;
+    }
+
+    return NextResponse.json(
+      {
+        ok: true as const,
+        run,
+        panel,
+        signedUrl,
+        importBlock,
+      },
+      { headers: NO_STORE },
+    );
+  } catch (err) {
+    if (err instanceof AthleteReadContextError) {
+      return NextResponse.json({ ok: false as const, error: err.message }, { status: err.status, headers: NO_STORE });
+    }
+    const message = err instanceof Error ? err.message : "staging_run_get_failed";
+    return NextResponse.json({ ok: false as const, error: message }, { status: 500, headers: NO_STORE });
+  }
+}
 
 type StagingAction = "committed" | "rejected" | "archived";
 type ManualActionScope = "coach" | "private";
