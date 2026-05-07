@@ -21,3 +21,4 @@ export * from "./knowledge";
 export * from "./training-engine";
 export * from "./research";
 export * from "./common";
+export * from "./cross-domain-interpretation";

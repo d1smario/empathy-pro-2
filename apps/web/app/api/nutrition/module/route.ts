@@ -14,6 +14,7 @@ import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/met
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildFunctionalMealSelectorViewModel } from "@/lib/nutrition/functional-meal-selector";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
+import { buildCrossDomainInterpretationRoadmapV1 } from "@/lib/nutrition/cross-domain-interpretation-roadmap";
 import {
   mergeNutritionModuleProfileWithAthleteProfileRow,
   type NutritionModuleFlatProfile,
@@ -208,6 +209,53 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    const roadmapAnchorDate =
+      pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to ? pathwayDateParam : from;
+    const roadmapPlannedSessions =
+      pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to
+        ? plannedRaw
+            .filter((row) => row.date.slice(0, 10) === pathwayDateParam)
+            .map((row) => {
+              const bs = parsePro2BuilderSessionFromNotes(row.notes ?? null);
+              return {
+                label: String(bs?.sessionName ?? bs?.discipline ?? row.type ?? "Sessione"),
+                adaptationTarget: bs?.adaptationTarget ?? null,
+              };
+            })
+        : [];
+
+    const crossDomainInterpretationRoadmap = buildCrossDomainInterpretationRoadmapV1({
+      athleteId,
+      anchorDate: roadmapAnchorDate,
+      pathwayModulation,
+      plannedSessions: roadmapPlannedSessions,
+      twin: twinState
+        ? {
+            glycogenStatus: twinState.glycogenStatus ?? null,
+            readiness: twinState.readiness ?? null,
+            redoxStressIndex: twinState.redoxStressIndex ?? null,
+            inflammationRisk: twinState.inflammationRisk ?? null,
+          }
+        : null,
+      physiology: physiologyState
+        ? {
+            performanceProfile: physiologyState.performanceProfile
+              ? { redoxStressIndex: physiologyState.performanceProfile.redoxStressIndex ?? null }
+              : null,
+            lactateProfile: physiologyState.lactateProfile
+              ? {
+                  gutStressScore: physiologyState.lactateProfile.gutStressScore ?? null,
+                  bloodDeliveryPctOfIngested:
+                    physiologyState.lactateProfile.bloodDeliveryPctOfIngested ?? null,
+                }
+              : null,
+          }
+        : null,
+      recoverySummary: recoverySummary ? { status: recoverySummary.status, guidance: recoverySummary.guidance } : null,
+      researchTraceSummaries,
+      hasNutritionPerformanceIntegration: nutritionPerformanceIntegration != null,
+    });
+
     const res = NextResponse.json({
       athleteId,
       from,
@@ -258,6 +306,7 @@ export async function GET(req: NextRequest) {
         };
       }),
       researchTraceSummaries,
+      crossDomainInterpretationRoadmap,
       error,
     });
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");

@@ -13,6 +13,8 @@ import type {
   TrainingAdaptationLoopViewModel,
   TrainingBioenergeticModulationViewModel,
 } from "@/api/training/contracts";
+import type { CrossDomainInterpretationRoadmap } from "@empathy/contracts";
+export type { CrossDomainInterpretationRoadmap };
 
 export type NutritionPlanVm = {
   date: string;
@@ -275,6 +277,11 @@ export type NutritionModuleViewModel = {
   executed: Array<Record<string, unknown>>;
   planned: NutritionPlannedWorkoutRow[];
   researchTraceSummaries?: KnowledgeResearchTraceSummary[];
+  /**
+   * Road map Interpretation cross-domain (stub v1). Non modifica solver né piani; base per retrieval orchestrato nel tempo.
+   * Presente su ogni risposta 200 di `GET /api/nutrition/module`.
+   */
+  crossDomainInterpretationRoadmap?: CrossDomainInterpretationRoadmap | null;
   error?: string | null;
 };
 
