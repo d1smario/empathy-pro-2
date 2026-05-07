@@ -97,7 +97,9 @@ const preferred =
 const port = await findPort(preferred);
 if (port !== preferred) {
   console.log(
-    `\n\x1b[33m[empathy-pro-2]\x1b[0m Porta ${preferred} occupata → uso \x1b[1m${port}\x1b[0m\n`,
+    `\n\x1b[33m[empathy-pro-2]\x1b[0m Porta ${preferred} occupata → uso la porta \x1b[1m${port}\x1b[0m.\n` +
+      `  PC: \x1b[1mhttp://localhost:${port}\x1b[0m  ·  Telefono (stessa Wi‑Fi): \x1b[1mhttp://<IP-LAN>:${port}\x1b[0m (\x1b[1mipconfig\x1b[0m → IPv4). Importante: usa \x1b[1m:${port}\x1b[0m, non :${preferred}.\n` +
+      `  Per liberare la ${preferred}: chiudi l’altra finestra \x1b[1mnpm run dev\x1b[0m (Ctrl+C) oppure \x1b[1mnetstat -ano | findstr :${preferred}\x1b[0m poi \x1b[1mtaskkill /PID … /F\x1b[0m sul PID LISTENING.\n`,
   );
 }
 
