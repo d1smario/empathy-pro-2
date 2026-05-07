@@ -2,7 +2,10 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { ensureFreshGarminAccessTokenForAthlete } from "@/lib/integrations/garmin-access-token";
-import { GARMIN_SUMMARY_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
+import {
+  GARMIN_SUMMARY_BACKFILL_STREAMS,
+  type GarminSummaryBackfillStream,
+} from "@/lib/integrations/garmin-summary-backfill-streams";
 import { isGarminSummaryBackfillStream, requestGarminSummaryBackfill } from "@/lib/integrations/garmin-wellness-backfill";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -13,10 +16,43 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 
 type Body = {
   athleteId?: string;
+  /** Singolo stream (retrocompatibile). */
   stream?: string;
+  /** Più stream nella stessa finestra temporale (sequenziale lato server). */
+  streams?: string[];
   summaryStartTimeInSeconds?: number;
   summaryEndTimeInSeconds?: number;
+  /** Se mancano start/end: ultimi N giorni UTC (clamp 1–365). */
+  days?: number;
 };
+
+function clampGarminBackfillDays(n: unknown): number | null {
+  if (typeof n !== "number" || !Number.isFinite(n)) return null;
+  return Math.min(365, Math.max(1, Math.floor(n)));
+}
+
+function resolveGarminBackfillWindow(body: Body): { start: number; end: number } | { error: string } {
+  const startRaw = body.summaryStartTimeInSeconds;
+  const endRaw = body.summaryEndTimeInSeconds;
+  const hasStart = typeof startRaw === "number" && Number.isFinite(startRaw);
+  const hasEnd = typeof endRaw === "number" && Number.isFinite(endRaw);
+  if (hasStart && hasEnd) {
+    const start = Math.trunc(startRaw);
+    const end = Math.trunc(endRaw);
+    if (start >= end) {
+      return { error: "summaryStartTimeInSeconds deve essere minore di summaryEndTimeInSeconds." };
+    }
+    return { start, end };
+  }
+  const days = clampGarminBackfillDays(body.days);
+  if (days != null) {
+    const end = Math.floor(Date.now() / 1000);
+    return { start: end - days * 86400, end };
+  }
+  return {
+    error: "Passa summaryStartTimeInSeconds e summaryEndTimeInSeconds, oppure days.",
+  };
+}
 
 /** Elenco stream `…/rest/backfill/<stream>` (stesso elenco di apiDocs / `garmin-summary-backfill-streams.ts`). */
 export async function GET() {
@@ -25,7 +61,9 @@ export async function GET() {
 
 /**
  * Richiesta **Summary Backfill** Garmin (GET wellness `…/rest/backfill/<stream>`) per l’atleta collegato.
- * Body JSON: `athleteId`, `stream` (uno di `GARMIN_SUMMARY_BACKFILL_STREAMS`), `summaryStartTimeInSeconds`, `summaryEndTimeInSeconds`.
+ * Body JSON:
+ * - Singolo: `athleteId`, `stream`, `summaryStartTimeInSeconds`, `summaryEndTimeInSeconds` **oppure** `days`.
+ * - Batch: `athleteId`, `streams: string[]`, stessa finestra (`start`+`end` o `days`).
  * Richiede sessione + accesso in lettura all’atleta; usa token OAuth2 salvato in `garmin_athlete_links`.
  */
 export async function POST(req: NextRequest) {
@@ -38,28 +76,18 @@ export async function POST(req: NextRequest) {
     }
 
     const athleteId = String(body.athleteId ?? "").trim();
-    const stream = String(body.stream ?? "").trim();
-    const start = body.summaryStartTimeInSeconds;
-    const end = body.summaryEndTimeInSeconds;
+    const streamSingle = String(body.stream ?? "").trim();
+    const streamsRaw = Array.isArray(body.streams) ? body.streams : null;
 
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
     }
-    if (!isGarminSummaryBackfillStream(stream)) {
-      return NextResponse.json(
-        {
-          error: "stream non valido.",
-          allowed: [...GARMIN_SUMMARY_BACKFILL_STREAMS],
-        },
-        { status: 400, headers: NO_STORE },
-      );
+
+    const window = resolveGarminBackfillWindow(body);
+    if ("error" in window) {
+      return NextResponse.json({ error: window.error }, { status: 400, headers: NO_STORE });
     }
-    if (typeof start !== "number" || typeof end !== "number" || !Number.isFinite(start) || !Number.isFinite(end)) {
-      return NextResponse.json(
-        { error: "summaryStartTimeInSeconds e summaryEndTimeInSeconds devono essere numeri finiti." },
-        { status: 400, headers: NO_STORE },
-      );
-    }
+    const { start, end } = window;
 
     await requireAthleteReadContext(req, athleteId);
 
@@ -73,36 +101,130 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: tok.error }, { status: 400, headers: NO_STORE });
     }
 
-    const result = await requestGarminSummaryBackfill({
-      accessToken: tok.accessToken,
-      stream,
-      summaryStartTimeInSeconds: start,
-      summaryEndTimeInSeconds: end,
-    });
+    const token = tok.accessToken;
 
-    if (result.ok) {
+    const batchList =
+      streamsRaw != null && streamsRaw.length > 0
+        ? streamsRaw.map((s) => String(s ?? "").trim()).filter(Boolean)
+        : streamSingle
+          ? [streamSingle]
+          : [];
+
+    if (batchList.length === 0) {
       return NextResponse.json(
-        {
-          ok: true as const,
-          stream,
-          httpStatus: result.httpStatus,
-          message:
-            result.httpStatus === 202
-              ? "Backfill accettato da Garmin (202); i dati possono arrivare in seguito via Push/Ping."
-              : "Richiesta completata.",
-        },
-        { headers: NO_STORE },
+        { error: "Specifica stream oppure streams (array non vuoto)." },
+        { status: 400, headers: NO_STORE },
       );
     }
 
+    if (streamsRaw != null && streamsRaw.length > 0 && streamSingle) {
+      return NextResponse.json(
+        { error: "Non combinare stream e streams nello stesso body." },
+        { status: 400, headers: NO_STORE },
+      );
+    }
+
+    const invalid = batchList.filter((s) => !isGarminSummaryBackfillStream(s));
+    if (invalid.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Uno o più stream non validi.",
+          invalid,
+          allowed: [...GARMIN_SUMMARY_BACKFILL_STREAMS],
+        },
+        { status: 400, headers: NO_STORE },
+      );
+    }
+
+    const streams = batchList as GarminSummaryBackfillStream[];
+
+    if (streams.length === 1) {
+      const stream = streams[0]!;
+      const result = await requestGarminSummaryBackfill({
+        accessToken: token,
+        stream,
+        summaryStartTimeInSeconds: start,
+        summaryEndTimeInSeconds: end,
+      });
+
+      if (result.ok) {
+        return NextResponse.json(
+          {
+            ok: true as const,
+            stream,
+            httpStatus: result.httpStatus,
+            message:
+              result.httpStatus === 202
+                ? "Backfill accettato da Garmin (202); i dati possono arrivare in seguito via Push/Ping."
+                : "Richiesta completata.",
+          },
+          { headers: NO_STORE },
+        );
+      }
+
+      return NextResponse.json(
+        {
+          ok: false as const,
+          stream,
+          httpStatus: result.httpStatus,
+          errorMessage: result.errorMessage ?? null,
+        },
+        { status: result.httpStatus >= 400 && result.httpStatus < 600 ? result.httpStatus : 502, headers: NO_STORE },
+      );
+    }
+
+    const results: Array<{
+      stream: string;
+      ok: boolean;
+      httpStatus: number;
+      errorMessage?: string | null;
+      message?: string;
+    }> = [];
+
+    for (let i = 0; i < streams.length; i += 1) {
+      const stream = streams[i]!;
+      const result = await requestGarminSummaryBackfill({
+        accessToken: token,
+        stream,
+        summaryStartTimeInSeconds: start,
+        summaryEndTimeInSeconds: end,
+      });
+      if (result.ok) {
+        results.push({
+          stream,
+          ok: true,
+          httpStatus: result.httpStatus,
+          message:
+            result.httpStatus === 202
+              ? "Accettato (202); dati possono arrivare via Push/Ping."
+              : "OK.",
+        });
+      } else {
+        results.push({
+          stream,
+          ok: false,
+          httpStatus: result.httpStatus,
+          errorMessage: result.errorMessage ?? null,
+        });
+      }
+      if (i < streams.length - 1) {
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
+
+    const allOk = results.every((r) => r.ok);
     return NextResponse.json(
       {
-        ok: false as const,
-        stream,
-        httpStatus: result.httpStatus,
-        errorMessage: result.errorMessage ?? null,
+        batch: true as const,
+        allOk,
+        summaryStartTimeInSeconds: start,
+        summaryEndTimeInSeconds: end,
+        results,
+        message: allOk
+          ? "Tutte le richieste di backfill sono state accettate da Garmin (controlla 202 per stream)."
+          : "Alcune richieste sono fallite; vedi results[].",
       },
-      { status: result.httpStatus >= 400 && result.httpStatus < 600 ? result.httpStatus : 502, headers: NO_STORE },
+      { status: 200, headers: NO_STORE },
     );
   } catch (e) {
     if (e instanceof AthleteReadContextError) {

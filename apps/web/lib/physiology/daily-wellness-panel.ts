@@ -113,6 +113,7 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
     return typeof created === "string" ? normalizeDayToken(created) : null;
   }
 
+  /** WHOOP (e vendor analoghi): il “giorno del sonno” in UI è il risveglio → `end` prima di `start`, altrimenti recovery (HRV/RHR) resta su un ISO day diverso e il merge giornaliero perde i KPI autonomici. */
   const keys = [
     "calendar_day",
     "calendarDate",
@@ -123,10 +124,10 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
     "sleep_date",
     "activity_date",
     "recovery_date",
-    "start",
-    "start_time",
     "end",
     "end_time",
+    "start",
+    "start_time",
   ];
   for (const rec of expandDevicePayloadMetricRecords(merged)) {
     for (const key of keys) {

@@ -12,6 +12,10 @@ import {
   garminLogIdPrefix,
   logGarminCallbackEvent,
 } from "@/lib/integrations/garmin-callback-telemetry";
+import {
+  readGarminPostConnectBackfillDays,
+  readGarminPostConnectBackfillStreams,
+} from "@/lib/integrations/garmin-post-connect-backfill-config";
 import { requestGarminSummaryBackfill } from "@/lib/integrations/garmin-wellness-backfill";
 import { parseRealityCallbackState, persistRealityProviderCallback } from "@/lib/reality/provider-adapters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -213,37 +217,50 @@ export async function GET(req: NextRequest) {
         hasError: false,
       });
 
-      /** Summary Backfill post-collegamento (apiDocs): best-effort, non blocca il redirect. */
+      /** Summary Backfill post-collegamento (apiDocs): più stream + giorni configurabili; non blocca il redirect. */
       const backfillEnd = Math.floor(Date.now() / 1000);
-      const backfillStart = backfillEnd - 14 * 86400;
-      void requestGarminSummaryBackfill({
-        accessToken: tokens.access_token,
-        stream: "activityDetails",
-        summaryStartTimeInSeconds: backfillStart,
-        summaryEndTimeInSeconds: backfillEnd,
-      })
-        .then((br) => {
-          if (br.ok) {
-            logGarminCallbackEvent({
-              step: "post_connect_backfill_ok",
-              athleteIdPrefix: garminLogIdPrefix(athleteId),
-              detailSnippet: `activityDetails_http_${br.httpStatus}`,
+      const backfillDays = readGarminPostConnectBackfillDays();
+      const backfillStart = backfillEnd - backfillDays * 86400;
+      const postStreams = readGarminPostConnectBackfillStreams();
+      void (async () => {
+        const snippets: string[] = [];
+        for (let i = 0; i < postStreams.length; i += 1) {
+          const stream = postStreams[i]!;
+          try {
+            const br = await requestGarminSummaryBackfill({
+              accessToken: tokens.access_token,
+              stream,
+              summaryStartTimeInSeconds: backfillStart,
+              summaryEndTimeInSeconds: backfillEnd,
             });
-          } else {
+            if (br.ok) {
+              snippets.push(`${stream}:${br.httpStatus}`);
+            } else {
+              snippets.push(`${stream}:FAIL:${br.httpStatus}`);
+              logGarminCallbackEvent({
+                step: "post_connect_backfill_fail",
+                athleteIdPrefix: garminLogIdPrefix(athleteId),
+                detailSnippet: `${stream}:${br.httpStatus}:${(br.errorMessage ?? "").slice(0, 120)}`,
+              });
+            }
+          } catch (be) {
+            snippets.push(`${stream}:EX`);
             logGarminCallbackEvent({
-              step: "post_connect_backfill_fail",
+              step: "post_connect_backfill_exception",
               athleteIdPrefix: garminLogIdPrefix(athleteId),
-              detailSnippet: `${br.httpStatus}:${(br.errorMessage ?? "").slice(0, 160)}`,
+              detailSnippet: `${stream}:${be instanceof Error ? be.message.slice(0, 160) : "unknown"}`,
             });
           }
-        })
-        .catch((be) => {
-          logGarminCallbackEvent({
-            step: "post_connect_backfill_exception",
-            athleteIdPrefix: garminLogIdPrefix(athleteId),
-            detailSnippet: be instanceof Error ? be.message.slice(0, 200) : "unknown",
-          });
+          if (i < postStreams.length - 1) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
+        logGarminCallbackEvent({
+          step: "post_connect_backfill_batch_done",
+          athleteIdPrefix: garminLogIdPrefix(athleteId),
+          detailSnippet: `${backfillDays}d:${snippets.join(";").slice(0, 380)}`,
         });
+      })();
 
       logGarminCallbackEvent({
         step: "connected",

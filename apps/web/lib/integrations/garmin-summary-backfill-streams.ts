@@ -21,3 +21,11 @@ export const GARMIN_SUMMARY_BACKFILL_STREAMS = [
 ] as const;
 
 export type GarminSummaryBackfillStream = (typeof GARMIN_SUMMARY_BACKFILL_STREAMS)[number];
+
+/** Preset Profilo: un solo click richiede più stream wellness (stesso intervallo giorni). */
+export const GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS: GarminSummaryBackfillStream[] = [
+  "dailies",
+  "sleeps",
+  "hrv",
+  "stressDetails",
+];

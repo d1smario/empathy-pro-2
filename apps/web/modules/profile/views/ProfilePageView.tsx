@@ -14,7 +14,7 @@ import type { AthleteMemory, PhysiologyState, TwinState } from "@/lib/empathy/sc
 import { cn } from "@/lib/cn";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { garminOAuthReasonGuidance } from "@/lib/integrations/garmin-oauth-reason-copy";
-import { GARMIN_SUMMARY_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
+import { GARMIN_SUMMARY_BACKFILL_STREAMS, GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
@@ -813,9 +813,7 @@ export default function ProfilePage() {
     setGarminBackfillBusy(true);
     setGarminBackfillNotice(null);
     try {
-      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
-      const end = Math.floor(Date.now() / 1000);
-      const start = end - days * 86400;
+      const days = Math.min(180, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
       const r = await fetch("/api/integrations/garmin/backfill", {
         method: "POST",
         credentials: "include",
@@ -823,21 +821,62 @@ export default function ProfilePage() {
         body: JSON.stringify({
           athleteId: activeAthleteId,
           stream: garminBackfillStream,
-          summaryStartTimeInSeconds: start,
-          summaryEndTimeInSeconds: end,
+          days,
         }),
       });
       const j = (await r.json()) as {
         ok?: boolean;
+        batch?: boolean;
         message?: string;
         error?: string;
         errorMessage?: string | null;
         httpStatus?: number;
+        results?: Array<{ stream: string; ok: boolean; httpStatus: number; errorMessage?: string | null }>;
       };
       if (j.ok) {
         setGarminBackfillNotice(j.message ?? "Richiesta inviata a Garmin.");
       } else {
         setGarminBackfillNotice(j.errorMessage ?? j.error ?? `Errore HTTP ${j.httpStatus ?? r.status}`);
+      }
+    } catch {
+      setGarminBackfillNotice("Errore di rete.");
+    } finally {
+      setGarminBackfillBusy(false);
+    }
+  }
+
+  async function runGarminBackfillWellnessBatch() {
+    if (!activeAthleteId || !garminLink?.linked || garminBackfillBusy) return;
+    setGarminBackfillBusy(true);
+    setGarminBackfillNotice(null);
+    try {
+      const days = Math.min(180, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const r = await fetch("/api/integrations/garmin/backfill", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          athleteId: activeAthleteId,
+          streams: [...GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS],
+          days,
+        }),
+      });
+      const j = (await r.json()) as {
+        batch?: boolean;
+        allOk?: boolean;
+        message?: string;
+        error?: string;
+        results?: Array<{ stream: string; ok: boolean; httpStatus: number; errorMessage?: string | null }>;
+      };
+      if (j.batch && j.results && j.results.length > 0) {
+        const bits = j.results.map((row) =>
+          row.ok ? `${row.stream}:${row.httpStatus}` : `${row.stream}:FAIL:${row.httpStatus}`,
+        );
+        setGarminBackfillNotice(`${j.message ?? ""} ${bits.join(" · ")}`.trim());
+      } else if (j.error) {
+        setGarminBackfillNotice(j.error);
+      } else {
+        setGarminBackfillNotice("Risposta imprevista dal server.");
       }
     } catch {
       setGarminBackfillNotice("Errore di rete.");
@@ -1587,9 +1626,11 @@ export default function ProfilePage() {
                 <p className="muted-copy">Qui colleghiamo le API device: Garmin, Strava, Whoop, Oura e altri provider.</p>
                 {garminReturn === "connected" ? (
                   <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
-                    Garmin Connect collegato. Abbiamo richiesto in automatico uno storico iniziale (Summary Backfill{" "}
-                    <code className="text-white/80">activityDetails</code>, ultimi 14 giorni); i dati arrivano quando
-                    Garmin li elabora, poi il worker pull (cron) li scarica.
+                    Garmin Connect collegato. In automatico abbiamo richiesto uno storico iniziale via Summary Backfill
+                    (stream multipli e giorni configurabili lato server con{" "}
+                    <code className="text-white/80">GARMIN_POST_CONNECT_BACKFILL_STREAMS</code> e{" "}
+                    <code className="text-white/80">GARMIN_POST_CONNECT_BACKFILL_DAYS</code>
+                    ); i dati arrivano quando Garmin li elabora, poi il worker pull (cron) li scarica.
                   </p>
                 ) : null}
                 {garminReturn === "error" ? (
@@ -1877,8 +1918,8 @@ export default function ProfilePage() {
                         style={{ marginTop: 10 }}
                       >
                         <p className="muted-copy text-xs" style={{ marginBottom: 8 }}>
-                          Storico Garmin (Summary Backfill): chiedi a Garmin un intervallo UTC in secondi; risposta
-                          tipica 202, poi notifiche + pull.
+                          Storico Garmin (Summary Backfill): intervallo ultimi N giorni UTC (max 180); risposta tipica
+                          202, poi notifiche + pull.
                         </p>
                         <div className="flex flex-wrap items-end gap-2">
                           <div className="form-group" style={{ minWidth: 160 }}>
@@ -1900,7 +1941,7 @@ export default function ProfilePage() {
                             <input
                               type="number"
                               min={1}
-                              max={90}
+                              max={180}
                               className="form-input text-sm"
                               value={garminBackfillDays}
                               onChange={(e) => setGarminBackfillDays(Number(e.target.value))}
@@ -1914,6 +1955,15 @@ export default function ProfilePage() {
                             onClick={() => void runGarminBackfill()}
                           >
                             {garminBackfillBusy ? "Invio…" : "Richiedi storico"}
+                          </Pro2Button>
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={garminBackfillBusy}
+                            className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-fuchsia-50 hover:bg-fuchsia-500/18"
+                            onClick={() => void runGarminBackfillWellnessBatch()}
+                          >
+                            {garminBackfillBusy ? "Invio…" : "Wellness batch"}
                           </Pro2Button>
                         </div>
                         {garminBackfillNotice ? (

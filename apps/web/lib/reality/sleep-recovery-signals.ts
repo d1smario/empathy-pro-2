@@ -157,6 +157,7 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "sleep_date",
       "recovery_date",
       "timestamp",
+      "created_at",
     ]);
   }
 
