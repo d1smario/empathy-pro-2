@@ -16,6 +16,7 @@ import {
   computePostWorkoutMealFlags,
   computeSnackSlotsSuppressedByTrainingWindow,
 } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
+import { pathwayCofactorsToNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 
 export type PathwaySlotBundleInput = {
   pathwayTargets?: FunctionalFoodTargetViewModel[];
@@ -88,6 +89,22 @@ export function buildIntelligentMealPlanRequest(input: {
     plannedSessions: plannedForDay,
   });
 
+  /**
+   * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai
+   * cofactors + substrates di tutti i pathway attivi. Il generatore vedrà solo `(B12, Folati, Ferro)`
+   * non il concetto di "eritropoiesi" — coerente con `empathy_generative_core.mdc`.
+   */
+  const cofactorStrings: string[] = [];
+  for (const pw of pathwayPathways) {
+    for (const c of pw.cofactors ?? []) cofactorStrings.push(c);
+    for (const s of pw.substrates ?? []) cofactorStrings.push(s);
+  }
+  const nutrientBoostTargets = pathwayCofactorsToNutrientTargets(cofactorStrings).map((t) => ({
+    nutrientId: t.nutrientId,
+    labelIt: t.labelIt,
+    sourceText: t.sourceText,
+  }));
+
   const slots = ORDER.map((slot) => {
     const row = mealRows.find((r) => r.key === slot);
     const bundle = mealPathwayBySlot[slot];
@@ -141,6 +158,7 @@ export function buildIntelligentMealPlanRequest(input: {
       planDate: input.planDate,
       postWorkoutMealBySlot: Object.keys(postWorkoutMealBySlot).length ? postWorkoutMealBySlot : undefined,
       suppressedSlots: suppressedSlots.length > 0 ? suppressedSlots : undefined,
+      nutrientBoostTargets: nutrientBoostTargets.length > 0 ? nutrientBoostTargets : undefined,
       mealPlanSolverMeta: {
         dailyMealsKcalTotal,
         integrationLeverLines: (input.integrationLeverLines ?? []).slice(0, 16),

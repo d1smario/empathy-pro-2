@@ -4,6 +4,7 @@ import type {
   IntelligentMealPlanRequest,
   IntelligentMealPlanRequestSlot,
   IntelligentMealPlanSlotOut,
+  MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
@@ -12,6 +13,52 @@ import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutri
 import { composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
+import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { rankUsdaCacheForTargets, type UsdaRankedFood } from "@/lib/nutrition/usda-nutrient-density-ranker";
+import { shortFoodLabelFromUsda } from "@/lib/nutrition/usda-food-label";
+
+/** Validi `NutrientTargetId` (subset di chiavi del CanonicalFoodNutrients) — keys statiche per filtro di sicurezza. */
+const VALID_NUTRIENT_TARGET_IDS = new Set<NutrientTargetId>([
+  "vitA_mcg_RAE",
+  "vitC_mg",
+  "vitD_mcg",
+  "vitE_mg",
+  "vitK_mcg",
+  "thiamineB1_mg",
+  "riboflavinB2_mg",
+  "niacinB3_mg",
+  "vitB6_mg",
+  "folate_mcg",
+  "vitB12_mcg",
+  "ca_mg",
+  "fe_mg",
+  "mg_mg",
+  "p_mg",
+  "k_mg",
+  "na_mg",
+  "zn_mg",
+  "se_mcg",
+  "fiberG",
+  "omega3G",
+]);
+
+/** Filtra/typizza i `nutrientBoostTargets` ricevuti dal request (il typing del request è loose: `string`). */
+function selectValidBoostTargets(
+  targets: NonNullable<IntelligentMealPlanRequest["nutrientBoostTargets"]>,
+): Array<{ nutrientId: NutrientTargetId; labelIt: string }> {
+  return targets
+    .filter((t) => VALID_NUTRIENT_TARGET_IDS.has(t.nutrientId as NutrientTargetId))
+    .map((t) => ({ nutrientId: t.nutrientId as NutrientTargetId, labelIt: t.labelIt }));
+}
+
+/** Costruisce 1 riga sintetica per UI: "Vitamina B12 → top 3: salmone, uova, yogurt" (compatta, ≤ 220 char). */
+function formatBoostLineForNutrient(label: string, items: UsdaRankedFood[]): string | null {
+  if (items.length === 0) return null;
+  const names = items.slice(0, 3).map((i) => shortFoodLabelFromUsda(i.description, 28)).join(", ");
+  const lead = items[0]!;
+  const headDose = `${lead.amountPer100g.toFixed(lead.amountPer100g >= 10 ? 0 : 1)} ${lead.unit}/100g`;
+  return `${label} → top 3: ${names} (top1 ~${headDose})`.slice(0, 240);
+}
 
 /** Mappa la stringa libera `req.dietType` (profilo Supabase) sull'enum forte del composer. */
 function normalizeDietTypeForComposer(raw: string | null | undefined): MediterraneanDietType | undefined {
@@ -83,6 +130,36 @@ export async function buildDeterministicMealPlanFromRequest(
     suppressed,
   );
 
+  /**
+   * STEP C — Bridge "sistema intelligente → generatore" (regola utente):
+   *   il pathway-modulation produce `cofactors`/`substrates` (es. "B12, folati, ferro" per eritropoiesi),
+   *   il request builder li mappa in `nutrientBoostTargets`, e qui interroghiamo la cache USDA per i
+   *   top-3 alimenti più ricchi di ciascun nutriente. Il generatore NON ragiona sul pathway: scrive solo
+   *   note testuali nel piano (`slotCoherence` e `dayInteractionSummary`).
+   */
+  const validBoostTargets = req.nutrientBoostTargets ? selectValidBoostTargets(req.nutrientBoostTargets) : [];
+  const boostRanking: Partial<Record<NutrientTargetId, UsdaRankedFood[]>> = {};
+  if (validBoostTargets.length > 0) {
+    try {
+      const ids = validBoostTargets.map((t) => t.nutrientId);
+      const ranked = await rankUsdaCacheForTargets(ids, 3);
+      Object.assign(boostRanking, ranked);
+    } catch {
+      /** Fail-soft: se la cache USDA non è disponibile (RLS, service role, ecc.) il piano resta valido senza note boost. */
+    }
+  }
+  /** Linee compatte per la UI: "B12 → top 3: salmone, uova, yogurt". Solo nutrienti con almeno 1 alimento ranked. */
+  const boostLines: string[] = [];
+  for (const t of validBoostTargets) {
+    const rows = boostRanking[t.nutrientId];
+    if (!rows || rows.length === 0) continue;
+    const line = formatBoostLineForNutrient(t.labelIt, rows);
+    if (line) boostLines.push(line);
+  }
+
+  /** Slot principali in cui appendere la nota dei boost (lunch + dinner: dove i micro densi servono). */
+  const PRIMARY_BOOST_SLOTS = new Set<MealSlotKey>(["lunch", "dinner"]);
+
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const items = pickItemsForSlot(slot, dayCtx);
     const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
@@ -93,11 +170,17 @@ export async function buildDeterministicMealPlanFromRequest(
           req.pathwayTimingLines[0] ??
           `Orario pasto ${slot.scheduledTimeLocal || "—"}; allinea al carico del giorno.`);
 
-    const slotCoherenceText = isSuppressed
+    const baseCoherence = isSuppressed
       ? `Spuntino convenzionale soppresso: lo slot ${slot.slot} (${slot.scheduledTimeLocal || "—"}) ricade nella finestra di allenamento. Le kcal/CHO/elettroliti necessari sono coperti dal piano Fueling (gel + sport drink + idratazione).`
       : groupTitles
         ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
         : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`;
+
+    /** Append boost note solo nei pasti principali e solo se ci sono target ranked. */
+    const slotBoostSuffix =
+      !isSuppressed && PRIMARY_BOOST_SLOTS.has(slot.slot) && boostLines.length > 0
+        ? ` · Boost richiesti dal sistema intelligente: ${boostLines.slice(0, 3).join(" | ")}`
+        : "";
 
     const row: IntelligentMealPlanSlotOut = {
       slot: slot.slot,
@@ -106,7 +189,7 @@ export async function buildDeterministicMealPlanFromRequest(
         ? Math.max(15, items.reduce((a, i) => a + i.approxKcal, 0))
         : slot.targetKcal,
       items,
-      slotCoherence: slotCoherenceText,
+      slotCoherence: `${baseCoherence}${slotBoostSuffix}`.slice(0, 480),
       slotTimingRationale: timing.slice(0, 400),
     };
     return row;
@@ -116,9 +199,15 @@ export async function buildDeterministicMealPlanFromRequest(
     ? `Spuntini soppressi (cadono dentro la finestra di allenamento): ${suppressed.join(", ")} → vedi modulo Fueling per gel/idratazione/elettroliti in seduta.`
     : null;
 
+  const boostSummary =
+    boostLines.length > 0
+      ? `Boost richiesti dal sistema intelligente (cofactors/substrates pathway-modulation): ${boostLines.join(" | ")}. Suggerimento operativo: privilegiare top-3 nei pasti principali (pranzo/cena); per la post-seduta vedi anche modulo Fueling (recovery).`
+      : null;
+
   const dayBits = [
     `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (cinque slot)`,
     suppressedNote,
+    boostSummary,
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),
     ...req.pathwayTimingLines.slice(0, 4),
     ...req.trainingDayLines.slice(0, 3),

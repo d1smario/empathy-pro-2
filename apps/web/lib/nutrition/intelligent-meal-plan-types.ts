@@ -122,6 +122,13 @@ export type IntelligentMealPlanRequest = {
    * per gel/elettroliti/idratazione in seduta.
    */
   suppressedSlots?: MealSlotKey[];
+  /**
+   * Nutrient target richiesti dal sistema intelligente (estratti dai cofactors di pathway-modulation).
+   * Es. erythropoiesis attiva → `[{nutrientId: "vitB12_mcg"}, {nutrientId: "folate_mcg"}, {nutrientId: "fe_mg"}]`.
+   * Il generatore meal-plan NON ragiona sul pathway: cerca in cache USDA i top-3 alimenti più ricchi del
+   * nutriente e produce note testuali nelle slotCoherence + dayInteractionSummary.
+   */
+  nutrientBoostTargets?: Array<{ nutrientId: string; labelIt: string; sourceText?: string }>;
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */
@@ -140,6 +147,8 @@ export type IntelligentMealPlanSolverBasis = {
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
   /** Eco degli slot soppressi (cadono nella finestra training): la UI può evidenziarli come "in-ride fueling". */
   suppressedSlots?: MealSlotKey[];
+  /** Eco dei nutrient boost target (sistema intelligente → generatore): la UI può rendere il chip "Boost richiesti". */
+  nutrientBoostTargets?: Array<{ nutrientId: string; labelIt: string }>;
   slots: Array<{
     slot: MealSlotKey;
     labelIt: string;

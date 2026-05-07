@@ -21,6 +21,10 @@ export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): In
   const postWorkoutMealBySlot =
     req.postWorkoutMealBySlot && Object.keys(req.postWorkoutMealBySlot).length ? req.postWorkoutMealBySlot : undefined;
   const suppressedSlots = req.suppressedSlots && req.suppressedSlots.length > 0 ? [...req.suppressedSlots] : undefined;
+  const nutrientBoostTargets =
+    req.nutrientBoostTargets && req.nutrientBoostTargets.length > 0
+      ? req.nutrientBoostTargets.map((t) => ({ nutrientId: t.nutrientId, labelIt: t.labelIt }))
+      : undefined;
   return {
     source: "nutrition_meal_plan_solver",
     planDate: req.planDate,
@@ -34,6 +38,7 @@ export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): In
     aggregateInhibitors: req.aggregateInhibitors ? [...req.aggregateInhibitors] : null,
     postWorkoutMealBySlot,
     suppressedSlots,
+    nutrientBoostTargets,
     slots: req.slots.map((s) => ({
       slot: s.slot,
       labelIt: s.labelIt,
