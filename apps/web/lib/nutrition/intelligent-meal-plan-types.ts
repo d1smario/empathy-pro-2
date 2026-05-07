@@ -129,6 +129,11 @@ export type IntelligentMealPlanRequest = {
    * nutriente e produce note testuali nelle slotCoherence + dayInteractionSummary.
    */
   nutrientBoostTargets?: Array<{ nutrientId: string; labelIt: string; sourceText?: string }>;
+  /**
+   * Etichette pathway attivi nel modello deterministico (solo trasparenza UI): esplica perché compaiono
+   * certi boost (es. redox → Vit C / Se / Zn) solo quando il pathway è incluso nel twin/fisiologia del giorno.
+   */
+  pathwayModulationActiveLabels?: string | null;
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */
@@ -149,6 +154,8 @@ export type IntelligentMealPlanSolverBasis = {
   suppressedSlots?: MealSlotKey[];
   /** Eco dei nutrient boost target (sistema intelligente → generatore): la UI può rendere il chip "Boost richiesti". */
   nutrientBoostTargets?: Array<{ nutrientId: string; labelIt: string }>;
+  /** Eco pathway attivi (solo label leggibili) — perché certi micronutrienti compaiono nelle note. */
+  pathwayModulationActiveLabels?: string | null;
   slots: Array<{
     slot: MealSlotKey;
     labelIt: string;
@@ -181,6 +188,12 @@ export type IntelligentMealPlanSlotOut = {
   slotCoherence: string;
   /** Perché questo pasto in questo orario rispetto a vie/emivita qualitative e allenamento. */
   slotTimingRationale: string;
+  /**
+   * Nota "boost richiesti dal sistema intelligente": top-3 alimenti USDA per ciascun nutrient target
+   * (cofactors/substrates pathway-modulation). Compare solo nei pasti principali (lunch/dinner) come
+   * SUGGERIMENTO COMPLEMENTARE — non sostituisce la scelta del composer.
+   */
+  boostNote?: string;
 };
 
 /** Unico layer attivo: piano pasti sempre da motore deterministico (nessun orchestratore LLM). */

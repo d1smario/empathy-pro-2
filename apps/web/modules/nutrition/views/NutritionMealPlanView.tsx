@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { Zap } from "lucide-react";
 import { ResearchTraceStatusSummary } from "@/components/nutrition/ResearchTraceStatusSummary";
 import { AdaptationSectorStrip } from "@/components/nutrition/AdaptationSectorStrip";
 import { NutritionDayKpiStrip } from "@/components/nutrition/NutritionDayKpiStrip";
@@ -437,6 +438,8 @@ export function NutritionMealPlanWorkspace({
                         proteinG={totals.proteinG}
                         fatG={totals.fatG}
                         items={expoItems}
+                        boostNote={sl.boostNote}
+                        integrationHref="/nutrition/integration"
                         showCoachControls={role === "coach"}
                         athleteId={athleteId}
                         profileFoodExcludeBusyLabel={profileFoodExcludeBusy}
@@ -479,6 +482,19 @@ export function NutritionMealPlanWorkspace({
                 <p className="muted-copy" style={{ fontSize: 12, lineHeight: 1.45 }}>
                   {intelligentMealPlan.dayInteractionSummary}
                 </p>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => router.push("/nutrition/integration")}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-400/40 bg-fuchsia-500/10 px-3 py-1.5 text-[11px] font-semibold text-fuchsia-100 hover:bg-fuchsia-500/20 hover:text-fuchsia-50"
+                  >
+                    <Zap className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                    Vai a Integrazione →
+                  </button>
+                  <span className="text-[10px] text-slate-400/80">
+                    Tutti i punti operativi (cofactors, leve solver, prodotti) sono raccolti nel modulo Integrazione.
+                  </span>
+                </div>
               </details>
               <details className="collapsible-card" style={{ marginBottom: 12 }}>
                 <summary style={{ fontSize: 13, cursor: "pointer" }}>
@@ -496,6 +512,16 @@ export function NutritionMealPlanWorkspace({
                         <li key={l}>{l}</li>
                       ))}
                     </ul>
+                  ) : null}
+                  {intelligentMealPlan.solverBasis.pathwayModulationActiveLabels?.trim() ? (
+                    <p style={{ marginBottom: 8 }}>
+                      <strong>Pathway modulation attivi</strong>:{" "}
+                      {intelligentMealPlan.solverBasis.pathwayModulationActiveLabels.trim()}
+                      {" · "}
+                      <span className="text-slate-400">
+                        I boost micronutrienti nelle note seguono i cofactors di questi pathway, non la lista alimenti del composer.
+                      </span>
+                    </p>
                   ) : null}
                   {intelligentMealPlan.solverBasis.integrationLeverLines.length ? (
                     <p style={{ marginBottom: 8 }}>

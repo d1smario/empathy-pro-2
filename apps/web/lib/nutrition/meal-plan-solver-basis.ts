@@ -25,6 +25,10 @@ export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): In
     req.nutrientBoostTargets && req.nutrientBoostTargets.length > 0
       ? req.nutrientBoostTargets.map((t) => ({ nutrientId: t.nutrientId, labelIt: t.labelIt }))
       : undefined;
+  const pathwayModulationActiveLabels =
+    req.pathwayModulationActiveLabels && req.pathwayModulationActiveLabels.trim()
+      ? req.pathwayModulationActiveLabels.trim().slice(0, 360)
+      : undefined;
   return {
     source: "nutrition_meal_plan_solver",
     planDate: req.planDate,
@@ -39,6 +43,7 @@ export function buildSolverBasisFromRequest(req: IntelligentMealPlanRequest): In
     postWorkoutMealBySlot,
     suppressedSlots,
     nutrientBoostTargets,
+    pathwayModulationActiveLabels,
     slots: req.slots.map((s) => ({
       slot: s.slot,
       labelIt: s.labelIt,

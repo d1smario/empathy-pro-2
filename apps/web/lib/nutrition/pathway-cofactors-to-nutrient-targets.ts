@@ -69,28 +69,47 @@ const PATTERNS: Array<{ regex: RegExp; nutrientId: NutrientTargetId; labelIt: st
   { regex: /\b(magnes|\bmg\b)/i, nutrientId: "mg_mg", labelIt: "Magnesio" },
   { regex: /\b(ferr|iron|\bfe\b)/i, nutrientId: "fe_mg", labelIt: "Ferro" },
   { regex: /\b(zinc|zinco|\bzn\b)/i, nutrientId: "zn_mg", labelIt: "Zinco" },
-  { regex: /\b(seleni|seleni)\b/i, nutrientId: "se_mcg", labelIt: "Selenio" },
-  { regex: /\b(calci|calcium|\bca\b)/i, nutrientId: "ca_mg", labelIt: "Calcio" },
-  { regex: /\b(potass|\bk\b)/i, nutrientId: "k_mg", labelIt: "Potassio" },
-  { regex: /\b(sodi|sodium|\bna\b)/i, nutrientId: "na_mg", labelIt: "Sodio" },
+  /** "selenio" ≠ `\bseleni\b` (suffix -o): prima regex non matchava mai il cofactor italiano. */
+  { regex: /\b(seleni[o]?|selenium)\b/i, nutrientId: "se_mcg", labelIt: "Selenio" },
+  { regex: /\b(calci|calcium)\b/i, nutrientId: "ca_mg", labelIt: "Calcio" },
+  /**
+   * Vietato `\bk\b` / `\bna\b`: in substrati tipo "Na/K" matchano lettere chimiche e saturano i boost
+   * con falsi Potassio/Sodio prima dei cofactor redox (Vit C, Se, Zn).
+   */
+  { regex: /\b(potassio|potassium|kalium)\b/i, nutrientId: "k_mg", labelIt: "Potassio" },
+  { regex: /\b(sodio|sodium|natrium)\b/i, nutrientId: "na_mg", labelIt: "Sodio" },
   { regex: /\b(fosfor|phosph|\bp\b)/i, nutrientId: "p_mg", labelIt: "Fosforo" },
   /** Macro funzionali rilevanti per pathway (omega-3, fibre) */
   { regex: /\b(omega.?3|epa|dha)\b/i, nutrientId: "omega3G", labelIt: "Omega-3 (EPA/DHA)" },
   { regex: /\b(fibre?|fiber)\b/i, nutrientId: "fiberG", labelIt: "Fibre alimentari" },
 ];
 
+/** Righe solo operative su osmolalità elettroliti (Na/K simboli) — non sono target micronutrienti pasto. */
+function isElectrolyteAbbreviationNoise(text: string): boolean {
+  const t = text.trim();
+  if (/elettroliti.{0,40}\bna\s*\/\s*k\b/i.test(t)) return true;
+  if (/^\s*na\s*\/\s*k\b/i.test(t)) return true;
+  return false;
+}
+
 /**
  * Estrae i nutrient target da una lista di stringhe cofactor / substrate (es. da `pathway.cofactors`).
- * Deduplica su `nutrientId` (prima occorrenza vince per la sourceText). Output massimo: 8 (ranking
- * top-N per non saturare la UI; la priorità segue l'ordine di apparizione nelle stringhe).
+ * Deduplica su `nutrientId` (prima occorrenza vince per la sourceText).
+ *
+ * Ordine atteso dal caller: **tutti i cofactors di tutti i pathway**, poi **substrates** — così i cofactor
+ * redox (Vit C, Se, Zn, …) non vengono espulsi da falsi positivi su substrati del primo pathway.
+ *
+ * Output massimo: 10 (ranking USDA resta leggero; UI mostra max 3 linee per slot).
  */
 export function pathwayCofactorsToNutrientTargets(strings: readonly string[]): NutrientTarget[] {
   const seen = new Set<NutrientTargetId>();
   const out: NutrientTarget[] = [];
+  const MAX_TARGETS = 10;
   for (const raw of strings) {
     if (!raw) continue;
     const text = String(raw).trim();
     if (!text) continue;
+    if (isElectrolyteAbbreviationNoise(text)) continue;
     for (const p of PATTERNS) {
       if (seen.has(p.nutrientId)) continue;
       if (p.regex.test(text)) {
@@ -98,7 +117,7 @@ export function pathwayCofactorsToNutrientTargets(strings: readonly string[]): N
         out.push({ nutrientId: p.nutrientId, labelIt: p.labelIt, sourceText: text.slice(0, 140) });
       }
     }
-    if (out.length >= 8) break;
+    if (out.length >= MAX_TARGETS) break;
   }
   return out;
 }

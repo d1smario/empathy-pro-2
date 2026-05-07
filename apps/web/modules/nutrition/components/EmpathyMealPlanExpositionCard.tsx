@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity,
   Apple,
@@ -114,6 +115,13 @@ type EmpathyMealPlanExpositionCardProps = {
   onCoachExcludeProfile?: (sourceIndex: number) => void;
   profileFoodExcludeBusyLabel?: string | null;
   athleteId?: string | null;
+  /**
+   * Suggerimento complementare dal sistema intelligente (cofactors/substrates pathway-modulation):
+   * top-3 alimenti USDA per nutrient target. Non sostituisce gli alimenti scelti dal composer.
+   */
+  boostNote?: string;
+  /** URL del modulo Integrazione (se passato, il banner boost mostra "Apri integrazione →"). */
+  integrationHref?: string;
 };
 
 export function EmpathyMealPlanExpositionCard({
@@ -131,6 +139,8 @@ export function EmpathyMealPlanExpositionCard({
   onCoachExcludeProfile,
   profileFoodExcludeBusyLabel,
   athleteId,
+  boostNote,
+  integrationHref,
 }: EmpathyMealPlanExpositionCardProps) {
   const Icon = slotHeaderIcon(slot);
   const kcalDenom = Math.max(1, totalKcal);
@@ -229,6 +239,41 @@ export function EmpathyMealPlanExpositionCard({
         <span className="empathy-meal-expo-macro-seg empathy-meal-expo-macro-seg--pro">PRO {proPct}%</span>
         <span className="empathy-meal-expo-macro-seg empathy-meal-expo-macro-seg--fat">FAT {fatPct}%</span>
       </div>
+
+      {boostNote ? (
+        <aside
+          className="mt-2 rounded-xl border border-fuchsia-400/30 bg-fuchsia-500/8 px-3 py-2"
+          aria-label="Suggerimenti complementari dal sistema intelligente"
+        >
+          <div className="flex items-start gap-2">
+            <Zap
+              className="mt-[2px] h-3.5 w-3.5 shrink-0 text-fuchsia-300"
+              strokeWidth={2}
+              aria-hidden
+            />
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-fuchsia-200/90">
+                Suggerimenti complementari (sistema intelligente)
+              </div>
+              <p className="mt-0.5 text-[11px] leading-snug text-fuchsia-50/90">{boostNote}</p>
+              <p className="mt-1 text-[10px] leading-snug text-fuchsia-200/70">
+                Sono complementi da aggiungere o preferire al pasto, non sostituiscono gli alimenti scelti.
+                {integrationHref ? (
+                  <>
+                    {" "}
+                    <Link
+                      href={integrationHref}
+                      className="font-semibold text-fuchsia-200 underline decoration-fuchsia-300/60 underline-offset-2 hover:text-fuchsia-100"
+                    >
+                      Apri Integrazione →
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            </div>
+          </div>
+        </aside>
+      ) : null}
 
       <section className="empathy-meal-expo-detail-head">
         <span className="empathy-meal-expo-detail-bar" aria-hidden />
