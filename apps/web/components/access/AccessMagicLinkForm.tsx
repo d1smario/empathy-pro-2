@@ -44,7 +44,24 @@ export function AccessMagicLinkForm({ redirectAfterLogin, appRole }: Props) {
       },
     });
     setBusy(false);
-    if (error) setMsg(error.message);
+    if (error) {
+      const em = error.message.toLowerCase();
+      if (
+        em.includes("redirect") &&
+        (em.includes("not allowed") || em.includes("disallowed") || em.includes("url"))
+      ) {
+        setMsg(
+          "Redirect non consentito: in Supabase → Authentication → URL aggiungi http://TUO_IP:3020/** e il callback /auth/callback (stesso schema host/porta che usi sul telefono).",
+        );
+        return;
+      }
+      if (em.includes("invalid api key") || em.includes("invalid api")) {
+        setMsg(
+          "Chiavi Supabase non valide nel client: verifica NEXT_PUBLIC_SUPABASE_* in apps/web/.env.local e riavvia npm run dev.",
+        );
+        return;
+      }
+      setMsg(error.message);
     else setMsg("Controlla la posta: ti abbiamo inviato un link per entrare.");
   }
 

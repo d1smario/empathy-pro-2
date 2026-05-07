@@ -14,6 +14,12 @@ type Props = {
 
 function formatAuthErrorMessage(message: string): string {
   const m = message.toLowerCase();
+  if (m.includes("invalid api key") || m.includes("invalid api")) {
+    return "Chiavi Supabase non valide o assenti nel client: controlla NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in apps/web/.env.local (nessuno spazio extra), poi riavvia il dev server.";
+  }
+  if (m.includes("redirect") && (m.includes("not allowed") || m.includes("disallowed") || m.includes("url"))) {
+    return "Redirect non consentito da Supabase: in Dashboard → Authentication → URL aggiungi esattamente questa origine (es. http://192.168.1.109:3020/** e …/auth/callback).";
+  }
   if (m.includes("invalid login credentials") || m.includes("invalid credentials")) {
     return "Email o password non corretti. Se l’account esiste solo con magic link, crea una password da “Password dimenticata?” oppure usa la scheda Link email.";
   }
