@@ -3,6 +3,8 @@ import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import withPWAInit from "@ducanh2912/next-pwa";
+
 const require = createRequire(import.meta.url);
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -116,4 +118,27 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+/** PWA: Workbox 7 (@ducanh2912/next-pwa). In dev disabilitato; cache shell/API conservative per auth + RSC. */
+const withPWA = withPWAInit({
+  dest: "public",
+  disable:
+    process.env.NODE_ENV === "development" ||
+    process.env.NEXT_DISABLE_PWA === "1",
+  register: true,
+  sw: "/sw.js",
+  scope: "/",
+  cacheStartUrl: false,
+  cacheOnFrontEndNav: false,
+  reloadOnOnline: true,
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    runtimeCaching: [
+      {
+        urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
+        handler: "NetworkOnly",
+      },
+    ],
+  },
+});
+
+export default withPWA(nextConfig);

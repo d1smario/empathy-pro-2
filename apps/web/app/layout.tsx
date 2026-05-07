@@ -41,6 +41,11 @@ export const metadata: Metadata = {
     title: "Empathy Pro 2.0",
     description: "Performance & metabolic adaptation platform",
   },
+  appleWebApp: {
+    capable: true,
+    title: "Empathy Pro",
+    statusBarStyle: "black-translucent",
+  },
   icons: {
     icon: [{ url: "/icon.svg", type: "image/svg+xml", sizes: "32x32" }],
     apple: [{ url: "/icon.svg", type: "image/svg+xml" }],

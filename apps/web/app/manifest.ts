@@ -2,20 +2,22 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
+    id: "/",
     name: "Empathy Pro 2.0",
-    short_name: "Empathy Pro",
+    short_name: "Empathy",
     description: "Performance & metabolic adaptation platform",
     start_url: "/",
+    scope: "/",
     display: "standalone",
+    orientation: "any",
     background_color: "#000000",
     theme_color: "#000000",
-    orientation: "portrait-primary",
-    lang: "it",
+    categories: ["health", "fitness", "sports"],
     icons: [
       {
         src: "/icon.svg",
+        sizes: "any",
         type: "image/svg+xml",
-        sizes: "32x32",
         purpose: "any",
       },
     ],

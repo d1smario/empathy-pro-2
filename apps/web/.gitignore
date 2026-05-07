@@ -2,3 +2,11 @@
 out/
 .env*.local
 .vercel
+
+# Service worker / Workbox (generati da `next build` con @ducanh2912/next-pwa)
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/swe-worker-*.js
+public/swe-worker-*.js.map
