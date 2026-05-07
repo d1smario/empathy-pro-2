@@ -44,6 +44,36 @@ export const TIMING_IT: Record<FuelingProduct["timing"][number], string> = {
   daily: "Giornaliero",
 };
 
+/** Colonna primaria per la griglia integrazione (Pre / Intra / Post). */
+export type IntegrationTimingBucket = "pre" | "intra" | "post";
+
+export function primaryIntegrationTimingBucket(product: FuelingProduct): IntegrationTimingBucket {
+  const { timing, category, functionalFocus } = product;
+  if (timing.includes("intra")) return "intra";
+  if (timing.includes("post")) return "post";
+  if (timing.includes("pre")) return "pre";
+  if (timing.includes("daily")) {
+    if (
+      functionalFocus.includes("recovery") ||
+      functionalFocus.includes("creatine") ||
+      functionalFocus.includes("protein") ||
+      functionalFocus.includes("eaa") ||
+      functionalFocus.includes("bcaa") ||
+      category === "recovery"
+    ) {
+      return "post";
+    }
+    if (functionalFocus.includes("preworkout") || functionalFocus.includes("caffeine")) return "pre";
+    if (category === "gel" || functionalFocus.includes("carbo")) return "intra";
+    return "post";
+  }
+  if (category === "gel") return "intra";
+  if (category === "recovery") return "post";
+  if (functionalFocus.includes("recovery") || functionalFocus.includes("creatine")) return "post";
+  if (functionalFocus.includes("preworkout") || functionalFocus.includes("caffeine")) return "pre";
+  return "intra";
+}
+
 export type IntegrationQuantityContext = {
   choGHour: number;
   energyAdequacyRatio: number | null | undefined;

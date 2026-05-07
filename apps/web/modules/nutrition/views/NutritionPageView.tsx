@@ -62,7 +62,9 @@ import {
   FUELING_CATEGORY_IT,
   FUELING_FORMAT_IT,
   FOCUS_IT,
+  primaryIntegrationTimingBucket,
   TIMING_IT,
+  type IntegrationTimingBucket,
 } from "@/lib/nutrition/integration-product-ui";
 import { resolveFuelingPro2MediaUrlFromCandidates } from "@/lib/nutrition/fueling-pro2-media-manifest";
 import {
@@ -536,6 +538,203 @@ function nutritionToneForLabel(label: string): "amber" | "cyan" | "green" | "ros
   if (normalized.includes("score") || normalized.includes("coverage") || normalized.includes("protein")) return "green";
   if (normalized.includes("risk") || normalized.includes("esaur") || normalized.includes("redox")) return "rose";
   return "slate";
+}
+
+/** Vie metaboliche — colori fase (allineati palette Pro 2). */
+function pathwayOperationalPhaseRowClass(phase: string): string {
+  switch (phase) {
+    case "pre_acute":
+      return "border-l-4 border-l-violet-400 bg-violet-500/10 pl-3 py-2 rounded-r-md border-y border-r border-white/10";
+    case "peri_workout":
+      return "border-l-4 border-l-fuchsia-400 bg-fuchsia-500/10 pl-3 py-2 rounded-r-md border-y border-r border-white/10";
+    case "early_recovery":
+      return "border-l-4 border-l-orange-400 bg-orange-500/[0.12] pl-3 py-2 rounded-r-md border-y border-r border-white/10";
+    case "late_recovery":
+      return "border-l-4 border-l-sky-400 bg-sky-500/10 pl-3 py-2 rounded-r-md border-y border-r border-white/10";
+    default:
+      return "border-l-4 border-l-zinc-500 bg-white/[0.04] pl-3 py-2 rounded-r-md border-y border-r border-white/10";
+  }
+}
+
+const FUNCTIONAL_EXAMPLE_CELL_CLASSES = [
+  "rounded-lg border border-fuchsia-500/35 bg-fuchsia-500/10 px-3 py-2.5",
+  "rounded-lg border border-violet-500/35 bg-violet-500/10 px-3 py-2.5",
+  "rounded-lg border border-orange-500/35 bg-orange-500/[0.11] px-3 py-2.5",
+] as const;
+
+function metabolicPhaseSlotCardClass(
+  phase: FunctionalMealSelectorViewModel["slots"][number]["metabolicPhase"],
+): string {
+  switch (phase) {
+    case "pre_load":
+      return "border-violet-400/45 bg-gradient-to-br from-violet-500/[0.14] to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+    case "during_load":
+      return "border-fuchsia-400/45 bg-gradient-to-br from-fuchsia-500/[0.14] to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+    case "early_recovery":
+      return "border-orange-400/45 bg-gradient-to-br from-orange-500/[0.14] to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+    case "late_recovery":
+      return "border-sky-400/45 bg-gradient-to-br from-sky-500/[0.12] to-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]";
+    default:
+      return "border-white/15 bg-white/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]";
+  }
+}
+
+function functionalCandidateRowClass(
+  timing: FunctionalMealSelectorViewModel["slots"][number]["candidates"][number]["timing"],
+): string {
+  switch (timing) {
+    case "pre":
+      return "border-l-[3px] border-l-violet-400 bg-violet-500/[0.07]";
+    case "peri":
+      return "border-l-[3px] border-l-fuchsia-400 bg-fuchsia-500/[0.07]";
+    case "early_recovery":
+      return "border-l-[3px] border-l-orange-400 bg-orange-500/[0.09]";
+    case "late_recovery":
+      return "border-l-[3px] border-l-sky-400 bg-sky-500/[0.07]";
+    default:
+      return "border-l-[3px] border-l-zinc-500 bg-white/[0.03]";
+  }
+}
+
+type IntegrationProductCardProduct = FuelingProduct & { displayImage: string; isLogoFallback: boolean };
+
+function IntegrationProductCard({
+  product,
+  qtyHint,
+  accent,
+}: {
+  product: IntegrationProductCardProduct;
+  qtyHint: string;
+  accent: IntegrationTimingBucket;
+}) {
+  const metaChips = [
+    FUELING_FORMAT_IT[product.format],
+    FUELING_CATEGORY_IT[product.category],
+    ...product.functionalFocus.map((f) => FOCUS_IT[f] ?? f),
+  ];
+  const accentBorder =
+    accent === "pre"
+      ? "rgba(167,139,250,0.55)"
+      : accent === "intra"
+        ? "rgba(232,121,249,0.5)"
+        : "rgba(251,146,60,0.5)";
+  return (
+    <article
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        minHeight: 168,
+        overflow: "hidden",
+        borderRadius: 12,
+        border: `1px solid ${accentBorder}`,
+        background: "linear-gradient(135deg, rgba(76,29,149,0.18), rgba(0,0,0,0.55))",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-between",
+          padding: "12px 14px",
+          borderRight: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <div>
+          <div className="nutrition-product-brand" style={{ fontSize: "0.65rem", letterSpacing: "0.08em" }}>
+            {product.brand}
+          </div>
+          <strong style={{ display: "block", marginTop: 6, fontSize: "1rem", lineHeight: 1.25 }}>{product.product}</strong>
+          <p className="nutrition-muted" style={{ margin: "10px 0 0", fontSize: "0.72rem", lineHeight: 1.45 }}>
+            {qtyHint}
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
+            {metaChips.map((chip) => (
+              <span
+                key={`${product.brand}-${product.product}-m-${chip}`}
+                style={{
+                  borderRadius: 999,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.06)",
+                  padding: "2px 8px",
+                  fontSize: "0.62rem",
+                  color: "var(--empathy-text-muted, #cbd5e1)",
+                }}
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            {product.timing.map((timing) => (
+              <span
+                key={`${product.brand}-${product.product}-t-${timing}`}
+                style={{
+                  borderRadius: 999,
+                  border: "1px solid rgba(34,211,238,0.35)",
+                  background: "rgba(6,78,95,0.35)",
+                  padding: "2px 8px",
+                  fontSize: "0.62rem",
+                  color: "#a5f3fc",
+                }}
+              >
+                {TIMING_IT[timing] ?? timing}
+              </span>
+            ))}
+          </div>
+        </div>
+        <a
+          href={product.productUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="nutrition-product-link"
+          style={{ marginTop: 12, fontSize: "0.68rem", fontWeight: 600 }}
+        >
+          Scheda produttore
+        </a>
+      </div>
+      <a
+        href={product.productUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="nutrition-product-media-link"
+        style={{
+          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          minHeight: 140,
+          background: "rgba(0,0,0,0.35)",
+          padding: 12,
+        }}
+        title={product.isLogoFallback ? "Fallback logo marchio" : "Immagine catalogo / archivio"}
+      >
+        <img
+          src={product.displayImage}
+          alt={product.product}
+          className={`nutrition-product-image ${product.isLogoFallback ? "nutrition-product-image-logo" : ""}`}
+          style={{ maxHeight: 132, width: "100%", objectFit: "contain" }}
+          loading="lazy"
+        />
+        {product.isLogoFallback ? (
+          <span
+            style={{
+              position: "absolute",
+              bottom: 8,
+              right: 8,
+              borderRadius: 4,
+              background: "rgba(0,0,0,0.55)",
+              padding: "2px 6px",
+              fontSize: "0.58rem",
+              color: "#94a3b8",
+            }}
+          >
+            Logo
+          </span>
+        ) : null}
+      </a>
+    </article>
+  );
 }
 
 export default function NutritionPageView({ subRoute }: { subRoute: NutritionSubRoute }) {
@@ -2329,6 +2528,18 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     }));
   }, [fuelingMediaByKey, normalizedPreferredBrands]);
 
+  const integrationProductsByTiming = useMemo(() => {
+    const buckets: Record<IntegrationTimingBucket, IntegrationProductCardProduct[]> = {
+      pre: [],
+      intra: [],
+      post: [],
+    };
+    for (const product of integrationProductCards) {
+      buckets[primaryIntegrationTimingBucket(product)].push(product);
+    }
+    return buckets;
+  }, [integrationProductCards]);
+
   const integrationStackSummary = useMemo(() => {
     const brandCount = new Set(integrationProductCards.map((product) => product.brand)).size;
     const focusCount = new Set(integrationProductCards.flatMap((product) => product.functionalFocus)).size;
@@ -3476,34 +3687,45 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               ) : null}
               <details className="collapsible-card" style={{ marginBottom: "10px" }}>
                 <summary>+ Vie metaboliche · substrati, cofattori, inibitori, timing</summary>
-                <div className="table-shell" style={{ marginTop: "10px" }}>
-                  <table>
+                <p className="nutrition-muted mb-2 mt-2 text-[0.74rem] leading-snug">
+                  Quattro colonne codificate colore: via/stimolo · fonte segnale · strategia substrati · supporto integrativo e attenuazioni.
+                </p>
+                <div className="table-shell mt-2 overflow-hidden rounded-xl border border-white/10">
+                  <table className="w-full border-collapse text-left text-[0.8rem]">
                     <thead>
-                      <tr>
-                        <th>Via / stimolo</th>
-                        <th>Fonte segnale</th>
-                        <th>Strategia (substrati)</th>
-                        <th>Supporto integrativo &amp; attenuazioni</th>
+                      <tr className="text-[0.65rem] font-bold uppercase tracking-[0.06em]">
+                        <th className="border border-white/10 bg-violet-500/25 px-3 py-2.5 text-violet-100">Via / stimolo</th>
+                        <th className="border border-white/10 bg-fuchsia-500/22 px-3 py-2.5 text-fuchsia-100">Fonte segnale</th>
+                        <th className="border border-white/10 bg-orange-500/20 px-3 py-2.5 text-orange-100">
+                          Strategia (substrati)
+                        </th>
+                        <th className="border border-white/10 bg-sky-500/18 px-3 py-2.5 text-sky-100">
+                          Supporto integrativo &amp; attenuazioni
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {pathwayModulation?.pathways.length ? (
                         pathwayModulation.pathways.map((pw) => (
-                          <tr key={pw.id}>
-                            <td>
+                          <tr key={pw.id} className="align-top">
+                            <td className="border border-white/10 bg-violet-500/[0.07] px-3 py-2 text-[0.8rem] text-white">
                               <strong>{pw.pathwayLabel}</strong>
-                              <div className="nutrition-muted" style={{ fontSize: "0.75rem", marginTop: "4px" }}>
+                              <div className="nutrition-muted mt-1 text-[0.74rem]">
                                 {pw.stimulatedBy.length ? pw.stimulatedBy.join(", ") : "—"}
                               </div>
                             </td>
-                            <td>{pw.confidence}</td>
-                            <td>{pw.substrates.join("; ")}</td>
-                            <td>
-                              <span style={{ display: "block", marginBottom: "4px" }}>
+                            <td className="border border-white/10 bg-fuchsia-500/[0.06] px-3 py-2 text-[0.78rem] text-zinc-200">
+                              {pw.confidence}
+                            </td>
+                            <td className="border border-white/10 bg-orange-500/[0.08] px-3 py-2 text-[0.78rem] text-zinc-100">
+                              {pw.substrates.join("; ")}
+                            </td>
+                            <td className="border border-white/10 bg-sky-500/[0.07] px-3 py-2 text-[0.78rem] text-zinc-100">
+                              <span className="mb-1 block">
                                 <strong>Cofattori:</strong> {pw.cofactors.join("; ") || "—"}
                               </span>
                               {pw.inhibitorsToAvoid.length ? (
-                                <span style={{ fontSize: "0.82rem" }}>
+                                <span className="text-[0.8rem]">
                                   <strong>Attenuare:</strong> {pw.inhibitorsToAvoid.join("; ")}
                                 </span>
                               ) : null}
@@ -3512,8 +3734,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={4}>
-                            Nessuna via calcolata per <strong>{selectedPlanDateLabel}</strong>: aggiungi una seduta pianificata
+                          <td className="border border-white/10 bg-white/[0.03] px-3 py-3 text-[0.82rem] text-zinc-300" colSpan={4}>
+                            Nessuna via calcolata per <strong className="text-white">{selectedPlanDateLabel}</strong>: aggiungi una seduta pianificata
                             o verifica twin/fisiologia. I template engine (glicogeno, redox, gut) compaiono quando ci sono
                             stimoli o segnali.
                           </td>
@@ -3523,20 +3745,20 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   </table>
                 </div>
                 {pathwayModulation?.pathways.length ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "16px" }}>
-                    <div className="nutrition-muted" style={{ fontSize: "0.78rem", marginBottom: "4px" }}>
-                      Timing operativo (fasi · classi emivita)
+                  <div className="mt-4 flex flex-col gap-3">
+                    <div className="nutrition-muted text-[0.78rem]">
+                      Timing operativo — colore per fase (pre acuto · peri-seduta · recovery precoce · recovery tardiva)
                     </div>
                     {pathwayModulation.pathways.map((pw) => (
                       <div
                         key={`${pw.id}-timing`}
-                        style={{ fontSize: "0.82rem", borderLeft: "2px solid rgba(14,165,233,0.4)", paddingLeft: "10px" }}
+                        className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-[0.82rem]"
                       >
-                        <strong>{pw.pathwayLabel}</strong>
-                        <ul style={{ margin: "6px 0 0", paddingLeft: "1rem" }}>
+                        <strong className="text-white">{pw.pathwayLabel}</strong>
+                        <ul className="mt-2 list-none space-y-2 pl-0">
                           {pw.phases.map((ph) => (
-                            <li key={`${pw.id}-${ph.phase}-${ph.windowLabel}`} style={{ marginBottom: "4px" }}>
-                              <strong>
+                            <li key={`${pw.id}-${ph.phase}-${ph.windowLabel}`} className={cn(pathwayOperationalPhaseRowClass(ph.phase))}>
+                              <strong className="text-white">
                                 {ph.phase === "pre_acute"
                                   ? "Pre acuto"
                                   : ph.phase === "peri_workout"
@@ -3548,7 +3770,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                                         : "Supporto giornaliero"}
                               </strong>
                               {" · "}
-                              {ph.windowLabel} <span className="nutrition-muted">({ph.halfLifeClass})</span> — {ph.actions.join(" ")}
+                              {ph.windowLabel}{" "}
+                              <span className="nutrition-muted text-[0.74rem]">({ph.halfLifeClass})</span>
+                              {" — "}
+                              {ph.actions.join(" ")}
                             </li>
                           ))}
                         </ul>
@@ -3597,15 +3822,25 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                         <div className="nutrition-muted" style={{ fontSize: "0.75rem", marginBottom: "8px" }}>
                           Vie: {t.pathwayLabel}
                         </div>
-                        <div style={{ marginBottom: "8px" }}>
-                          <strong style={{ fontSize: "0.8rem" }}>Esempi alimentari</strong>
-                          <ul style={{ margin: "4px 0 0", paddingLeft: "1.1rem" }}>
-                            {t.curatedExamples.map((ex) => (
-                              <li key={`${t.nutrientId}-${ex.name}`} style={{ marginBottom: "4px" }}>
-                                <strong>{ex.name}</strong> — {ex.why}
-                              </li>
+                        <div className="mb-2">
+                          <strong className="text-[0.8rem] text-white">Esempi alimentari</strong>
+                          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                            {t.curatedExamples.slice(0, 3).map((ex, idx) => (
+                              <div key={`${t.nutrientId}-${ex.name}`} className={FUNCTIONAL_EXAMPLE_CELL_CLASSES[idx % 3]}>
+                                <div className="text-[0.78rem] font-semibold leading-snug text-white">{ex.name}</div>
+                                <div className="mt-1 text-[0.72rem] leading-snug text-zinc-300">{ex.why}</div>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
+                          {t.curatedExamples.length > 3 ? (
+                            <ul className="nutrition-muted mb-0 mt-2 list-disc pl-[1.1rem] text-[0.74rem]">
+                              {t.curatedExamples.slice(3).map((ex) => (
+                                <li key={`${t.nutrientId}-${ex.name}-more`} className="mb-1">
+                                  <strong className="text-zinc-200">{ex.name}</strong> — {ex.why}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : null}
                         </div>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
                           {t.searchQueries.map((sq) => (
@@ -3712,32 +3947,37 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       {effectiveFunctionalMealSelector.slots.map((slot) => (
                         <div
                           key={`${slot.slot}-${slot.focus}`}
-                          style={{
-                            border: "1px solid rgba(14,165,233,0.22)",
-                            borderRadius: "10px",
-                            background: "rgba(8,47,73,0.18)",
-                            padding: "10px",
-                          }}
+                          className={cn(
+                            "rounded-xl border-2 p-3",
+                            metabolicPhaseSlotCardClass(slot.metabolicPhase),
+                          )}
                         >
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
-                            <strong style={{ textTransform: "capitalize" }}>{slot.slot.replace("_", " ")}</strong>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="capitalize text-white">{slot.slot.replace("_", " ")}</strong>
                             <span className="nutrition-ui-chip">{slot.focus}</span>
-                            <span className="nutrition-ui-chip">{slot.metabolicPhase}</span>
+                            <span className="rounded-full border border-white/15 bg-black/30 px-2 py-0.5 text-[0.62rem] uppercase tracking-wide text-zinc-300">
+                              {slot.metabolicPhase.replace(/_/g, " ")}
+                            </span>
                           </div>
-                          <p className="nutrition-muted" style={{ fontSize: "0.78rem", margin: "8px 0" }}>
-                            {slot.rationale}
-                          </p>
-                          <ul style={{ margin: 0, paddingLeft: "1.1rem", fontSize: "0.78rem" }}>
+                          <p className="nutrition-muted my-2 text-[0.78rem] leading-snug">{slot.rationale}</p>
+                          <div className="flex flex-col gap-2">
                             {slot.candidates.map((candidate) => (
-                              <li key={`${slot.slot}-${candidate.name}`} style={{ marginBottom: "6px" }}>
-                                <strong>{candidate.name}</strong> — {candidate.reason}
-                                <div className="nutrition-muted" style={{ fontSize: "0.7rem", marginTop: "2px" }}>
+                              <div
+                                key={`${slot.slot}-${candidate.name}`}
+                                className={cn(
+                                  "rounded-lg border border-white/10 py-2 pl-3 pr-2 text-[0.76rem] leading-snug text-zinc-100",
+                                  functionalCandidateRowClass(candidate.timing),
+                                )}
+                              >
+                                <strong className="text-white">{candidate.name}</strong>
+                                <span className="text-zinc-300"> — {candidate.reason}</span>
+                                <div className="nutrition-muted mt-1 text-[0.68rem] leading-snug">
                                   Elementi: {candidate.functionalElements.join(", ")} · timing {candidate.timing}
                                   {candidate.caution ? ` · cautela: ${candidate.caution}` : ""}
                                 </div>
-                              </li>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -3790,144 +4030,72 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 )}
               </details>
               {integrationProductCards.length ? (
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 12,
-                    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                  }}
-                >
-                  {integrationProductCards.map((product) => {
-                    const qtyHint = buildIntegrationQuantityHint(product, {
-                      choGHour: resolvedFuelingChoGPerHour,
-                      energyAdequacyRatio: nutritionPerformanceIntegration?.diaryInsight?.energyAdequacyRatio,
-                      proteinBiasPctPoints: nutritionPerformanceIntegration?.proteinBiasPctPoints ?? 0,
-                      fuelingChoScale: nutritionPerformanceIntegration?.fuelingChoScale ?? 1,
-                    });
-                    const metaChips = [
-                      FUELING_FORMAT_IT[product.format],
-                      FUELING_CATEGORY_IT[product.category],
-                      ...product.functionalFocus.map((f) => FOCUS_IT[f] ?? f),
-                    ];
-                    return (
-                      <article
-                        key={`${product.brand}-${product.product}`}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "1fr 1fr",
-                          minHeight: 168,
-                          overflow: "hidden",
-                          borderRadius: 12,
-                          border: "1px solid rgba(167,139,250,0.35)",
-                          background: "linear-gradient(135deg, rgba(76,29,149,0.22), rgba(0,0,0,0.55))",
-                          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.06)",
-                        }}
+                <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                  {(
+                    [
+                      {
+                        key: "pre" as const,
+                        title: "Pre workout",
+                        subtitle: "Pre-hydration, caffeina, carichi moderati prima dello stimolo",
+                      },
+                      {
+                        key: "intra" as const,
+                        title: "Intra workout",
+                        subtitle: "Gel, barrette e drink durante seduta (tolleranza + solver)",
+                      },
+                      {
+                        key: "post" as const,
+                        title: "Post workout",
+                        subtitle: "Recovery, proteine, creatina — dopo lo stimolo",
+                      },
+                    ] as const
+                  ).map((col) => (
+                    <div
+                      key={col.key}
+                      className={cn(
+                        "flex min-h-[120px] flex-col gap-3 rounded-2xl border bg-black/30 p-3",
+                        col.key === "pre" && "border-violet-500/40",
+                        col.key === "intra" && "border-fuchsia-500/40",
+                        col.key === "post" && "border-orange-500/45",
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "rounded-lg border border-white/10 bg-gradient-to-r px-3 py-2 to-transparent",
+                          col.key === "pre" && "from-violet-600/28",
+                          col.key === "intra" && "from-fuchsia-600/28",
+                          col.key === "post" && "from-orange-600/28",
+                        )}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "space-between",
-                            padding: "12px 14px",
-                            borderRight: "1px solid rgba(255,255,255,0.08)",
-                          }}
-                        >
-                          <div>
-                            <div className="nutrition-product-brand" style={{ fontSize: "0.65rem", letterSpacing: "0.08em" }}>
-                              {product.brand}
-                            </div>
-                            <strong style={{ display: "block", marginTop: 6, fontSize: "1rem", lineHeight: 1.25 }}>{product.product}</strong>
-                            <p className="nutrition-muted" style={{ margin: "10px 0 0", fontSize: "0.72rem", lineHeight: 1.45 }}>
-                              {qtyHint}
-                            </p>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 10 }}>
-                              {metaChips.map((chip) => (
-                                <span
-                                  key={`${product.brand}-${product.product}-m-${chip}`}
-                                  style={{
-                                    borderRadius: 999,
-                                    border: "1px solid rgba(255,255,255,0.1)",
-                                    background: "rgba(255,255,255,0.06)",
-                                    padding: "2px 8px",
-                                    fontSize: "0.62rem",
-                                    color: "var(--empathy-text-muted, #cbd5e1)",
-                                  }}
-                                >
-                                  {chip}
-                                </span>
-                              ))}
-                            </div>
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
-                              {product.timing.map((timing) => (
-                                <span
-                                  key={`${product.brand}-${product.product}-t-${timing}`}
-                                  style={{
-                                    borderRadius: 999,
-                                    border: "1px solid rgba(34,211,238,0.35)",
-                                    background: "rgba(6,78,95,0.35)",
-                                    padding: "2px 8px",
-                                    fontSize: "0.62rem",
-                                    color: "#a5f3fc",
-                                  }}
-                                >
-                                  {TIMING_IT[timing] ?? timing}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                          <a
-                            href={product.productUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="nutrition-product-link"
-                            style={{ marginTop: 12, fontSize: "0.68rem", fontWeight: 600 }}
-                          >
-                            Scheda produttore
-                          </a>
-                        </div>
-                        <a
-                          href={product.productUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="nutrition-product-media-link"
-                          style={{
-                            position: "relative",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            minHeight: 140,
-                            background: "rgba(0,0,0,0.35)",
-                            padding: 12,
-                          }}
-                          title={product.isLogoFallback ? "Fallback logo marchio" : "Immagine catalogo / archivio"}
-                        >
-                          <img
-                            src={product.displayImage}
-                            alt={product.product}
-                            className={`nutrition-product-image ${product.isLogoFallback ? "nutrition-product-image-logo" : ""}`}
-                            style={{ maxHeight: 132, width: "100%", objectFit: "contain" }}
-                            loading="lazy"
-                          />
-                          {product.isLogoFallback ? (
-                            <span
-                              style={{
-                                position: "absolute",
-                                bottom: 8,
-                                right: 8,
-                                borderRadius: 4,
-                                background: "rgba(0,0,0,0.55)",
-                                padding: "2px 6px",
-                                fontSize: "0.58rem",
-                                color: "#94a3b8",
-                              }}
-                            >
-                              Logo
-                            </span>
-                          ) : null}
-                        </a>
-                      </article>
-                    );
-                  })}
+                        <div className="text-[0.68rem] font-bold uppercase tracking-wider text-white">{col.title}</div>
+                        <div className="nutrition-muted mt-0.5 text-[0.66rem] leading-snug">{col.subtitle}</div>
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {integrationProductsByTiming[col.key].length ? (
+                          integrationProductsByTiming[col.key].map((product) => {
+                            const qtyHint = buildIntegrationQuantityHint(product, {
+                              choGHour: resolvedFuelingChoGPerHour,
+                              energyAdequacyRatio: nutritionPerformanceIntegration?.diaryInsight?.energyAdequacyRatio,
+                              proteinBiasPctPoints: nutritionPerformanceIntegration?.proteinBiasPctPoints ?? 0,
+                              fuelingChoScale: nutritionPerformanceIntegration?.fuelingChoScale ?? 1,
+                            });
+                            return (
+                              <IntegrationProductCard
+                                key={`${col.key}-${product.brand}-${product.product}`}
+                                product={product}
+                                qtyHint={qtyHint}
+                                accent={col.key}
+                              />
+                            );
+                          })
+                        ) : (
+                          <p className="nutrition-muted m-0 rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-2 py-3 text-center text-[0.72rem]">
+                            Nessun integratore classificato qui dalla selezione corrente (bucket primario da timing catalogo).
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : null}
             </section>
