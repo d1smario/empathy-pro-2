@@ -62,7 +62,9 @@ export function AccessMagicLinkForm({ redirectAfterLogin, appRole }: Props) {
         return;
       }
       setMsg(error.message);
-    else setMsg("Controlla la posta: ti abbiamo inviato un link per entrare.");
+    } else {
+      setMsg("Controlla la posta: ti abbiamo inviato un link per entrare.");
+    }
   }
 
   return (
