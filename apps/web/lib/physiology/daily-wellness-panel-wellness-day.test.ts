@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/daily-wellness-panel";
+import { wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/wellness-day-key-from-device-export";
 
 test("WHOOP sleep: giorno logico = risveglio (end) così recovery HRV combacia sulla stessa data", () => {
   const row = {

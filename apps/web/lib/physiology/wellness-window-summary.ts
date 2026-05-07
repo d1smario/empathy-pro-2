@@ -3,13 +3,12 @@
  * Pensato per **una sola query** lato server (`device_sync_exports`) e zero N+1
  * lato client: la cella della griglia legge da `wellnessByDate` già pronta.
  *
- * Sorgente: stessa logica di `daily-wellness-panel.ts` — `extractSignalFromDeviceExportRow`
- * + `wellnessDayKeyFromDeviceExportRow` — applicata in batch.
+ * Sorgente: stessa logica di `wellness-day-key-from-device-export.ts` + `extractSignalFromDeviceExportRow`
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
-import { wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/daily-wellness-panel";
+import { wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/wellness-day-key-from-device-export";
 
 export type WellnessDaySummary = {
   date: string;

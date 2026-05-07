@@ -1,6 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  mergedPayloadFromExportRow,
+  wellnessDayKeyFromDeviceExportRow,
+} from "@/lib/physiology/wellness-day-key-from-device-export";
 import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
+
+/** Re-export storico: alcuni import puntano a `daily-wellness-panel`. */
+export { mergedPayloadFromExportRow, wellnessDayKeyFromDeviceExportRow };
 
 export type PhysiologyDailyPanelOk = {
   ok: true;
@@ -68,12 +75,6 @@ function pickNumber(record: Record<string, unknown> | null, keys: string[]): num
   return null;
 }
 
-function normalizeDayToken(raw: string | null | undefined): string | null {
-  if (!raw || typeof raw !== "string") return null;
-  const m = raw.trim().match(/^(\d{4}-\d{2}-\d{2})/);
-  return m ? m[1] : null;
-}
-
 function addDaysIso(dateIso: string, delta: number): string {
   const base = new Date(`${dateIso.slice(0, 10)}T12:00:00`);
   if (Number.isNaN(base.getTime())) return dateIso.slice(0, 10);
@@ -84,67 +85,10 @@ function addDaysIso(dateIso: string, delta: number): string {
   return `${y}-${m}-${d}`;
 }
 
-function mergedPayloadFromExportRow(row: Record<string, unknown>): Record<string, unknown> | null {
-  const payload = asRecord(row.payload);
-  if (!payload) return null;
-  const source = asRecord(payload.sourcePayload);
-  const reality = asRecord(payload.realityIngestion);
-  const preview = asRecord(reality?.canonicalPreview);
-  return { ...payload, ...(source ?? {}), ...(preview ?? {}) };
-}
-
 function hoursFromSleepMilli(record: Record<string, unknown>, keys: string[]): number | null {
   const milli = pickNumber(record, keys);
   if (milli == null || milli <= 0) return null;
   return Number((milli / 3_600_000).toFixed(2));
-}
-
-/**
- * Giorno “logico” del campione (sonno/recovery/riassunto giornaliero), allineato alla cella calendario ISO.
- */
-export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>): string | null {
-  const sig = extractSignalFromDeviceExportRow(row);
-  const d1 = normalizeDayToken(sig.sourceDate);
-  if (d1) return d1;
-
-  const merged = mergedPayloadFromExportRow(row);
-  if (!merged) {
-    const created = row.created_at;
-    return typeof created === "string" ? normalizeDayToken(created) : null;
-  }
-
-  /** WHOOP (e vendor analoghi): il “giorno del sonno” in UI è il risveglio → `end` prima di `start`, altrimenti recovery (HRV/RHR) resta su un ISO day diverso e il merge giornaliero perde i KPI autonomici. */
-  const keys = [
-    "calendar_day",
-    "calendarDate",
-    "calendar_date",
-    "day",
-    "date",
-    "summary_date",
-    "sleep_date",
-    "activity_date",
-    "recovery_date",
-    "end",
-    "end_time",
-    "start",
-    "start_time",
-  ];
-  for (const rec of expandDevicePayloadMetricRecords(merged)) {
-    for (const key of keys) {
-      const raw = rec[key];
-      if (typeof raw === "string") {
-        const d = normalizeDayToken(raw);
-        if (d) return d;
-      }
-    }
-  }
-
-  const created = row.created_at;
-  if (typeof created === "string") {
-    const d = normalizeDayToken(created);
-    if (d) return d;
-  }
-  return null;
 }
 
 function extractActivityWellness(payload: Record<string, unknown> | null): {
