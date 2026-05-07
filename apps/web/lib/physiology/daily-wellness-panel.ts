@@ -4,6 +4,10 @@ import {
   wellnessDayKeyFromDeviceExportRow,
   wellnessExportMatchesPanelDate,
 } from "@/lib/physiology/wellness-day-key-from-device-export";
+import {
+  extractSleepStagesFromDevicePayload,
+  tryBuildSleepHypnogramFromDevicePayload,
+} from "@/lib/physiology/sleep-stages-from-device-payload";
 import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
 
@@ -86,12 +90,6 @@ function addDaysIso(dateIso: string, delta: number): string {
   return `${y}-${m}-${d}`;
 }
 
-function hoursFromSleepMilli(record: Record<string, unknown>, keys: string[]): number | null {
-  const milli = pickNumber(record, keys);
-  if (milli == null || milli <= 0) return null;
-  return Number((milli / 3_600_000).toFixed(2));
-}
-
 function extractActivityWellness(payload: Record<string, unknown> | null): {
   steps: number | null;
   activeCaloriesKcal: number | null;
@@ -158,85 +156,6 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
     }
   }
   return out;
-}
-
-function extractSleepStages(payload: Record<string, unknown> | null): PhysiologyDailyPanelOk["sleepStages"] {
-  const empty: PhysiologyDailyPanelOk["sleepStages"] = {
-    deepHours: null,
-    lightHours: null,
-    remHours: null,
-    awakeHours: null,
-    summaryLabel: null,
-  };
-  if (!payload) return empty;
-  for (const rec of expandDevicePayloadMetricRecords(payload)) {
-    const deep =
-      pickNumber(rec, ["deep_sleep_duration_hours", "deep_sleep_hours", "deep_sleep_duration"]) ??
-      (() => {
-        const min = pickNumber(rec, ["deep_sleep_duration_min", "deep_sleep_minutes"]);
-        return min != null ? Number((min / 60).toFixed(2)) : null;
-      })() ??
-      hoursFromSleepMilli(rec, ["slow_wave_sleep_time_milli", "deep_sleep_duration_milli"]);
-    const light =
-      pickNumber(rec, ["light_sleep_duration_hours", "light_sleep_hours"]) ??
-      (() => {
-        const min = pickNumber(rec, ["light_sleep_duration_min", "light_sleep_minutes"]);
-        return min != null ? Number((min / 60).toFixed(2)) : null;
-      })() ??
-      hoursFromSleepMilli(rec, ["light_sleep_time_milli"]);
-    const rem =
-      pickNumber(rec, ["rem_duration_hours", "rem_sleep_hours", "rem_sleep_duration_hours"]) ??
-      (() => {
-        const min = pickNumber(rec, ["rem_duration_min", "rem_sleep_minutes"]);
-        return min != null ? Number((min / 60).toFixed(2)) : null;
-      })() ??
-      hoursFromSleepMilli(rec, ["rem_sleep_time_milli"]);
-    const awake =
-      pickNumber(rec, ["awake_duration_hours", "awake_time_hours"]) ??
-      (() => {
-        const min = pickNumber(rec, ["awake_duration_min", "awake_minutes"]);
-        return min != null ? Number((min / 60).toFixed(2)) : null;
-      })() ??
-      hoursFromSleepMilli(rec, ["wake_duration_milli", "awake_time_milli"]);
-    const perfPct = pickNumber(rec, ["sleep_performance_percentage"]);
-    const labelStr = typeof rec.sleep_performance === "string" ? rec.sleep_performance.trim() : "";
-    const summaryLabel =
-      labelStr ||
-      (perfPct != null ? `${Math.round(perfPct)}% sleep` : null);
-    if (deep != null || light != null || rem != null || awake != null || summaryLabel) {
-      return {
-        deepHours: deep,
-        lightHours: light,
-        remHours: rem,
-        awakeHours: awake,
-        summaryLabel,
-      };
-    }
-  }
-  return empty;
-}
-
-function tryBuildHypnogram(payload: Record<string, unknown> | null): Array<{ t: number; stage: number }> {
-  if (!payload) return [];
-  const merged = expandDevicePayloadMetricRecords(payload);
-  for (const rec of merged) {
-    const phases = rec.sleep_phase_minutes ?? rec.phases_minutes ?? rec.sleep_phases;
-    if (Array.isArray(phases) && phases.length > 0) {
-      const series: Array<{ t: number; stage: number }> = [];
-      let acc = 0;
-      for (const chunk of phases) {
-        const o = asRecord(chunk);
-        if (!o) continue;
-        const minutes = asNumber(o.minutes ?? o.duration_min ?? o.m) ?? 0;
-        const stage = asNumber(o.stage ?? o.type ?? o.code) ?? 0;
-        const start = acc / 60;
-        acc += minutes;
-        series.push({ t: start, stage });
-      }
-      if (series.length) return series;
-    }
-  }
-  return [];
 }
 
 function mergeActivityFromRows(rows: Array<Record<string, unknown>>): PhysiologyDailyPanelOk["activity"] {
@@ -356,8 +275,8 @@ export async function buildPhysiologyDailyPanel(input: {
   let sleepHypnogram: Array<{ t: number; stage: number }> = [];
   for (const row of rows) {
     const p = mergedPayloadFromExportRow(row);
-    sleepStages = extractSleepStages(p);
-    sleepHypnogram = tryBuildHypnogram(p);
+    sleepStages = extractSleepStagesFromDevicePayload(p);
+    sleepHypnogram = tryBuildSleepHypnogramFromDevicePayload(p);
     if (sleepStages.deepHours != null || sleepHypnogram.length) break;
   }
 
