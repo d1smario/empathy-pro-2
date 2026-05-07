@@ -1,10 +1,23 @@
 import "server-only";
 
 const WHOOP_TOKEN_URL_DEFAULT = "https://api.prod.whoop.com/oauth/oauth2/token";
-const WHOOP_PROFILE_URL_DEFAULT = "https://api.prod.whoop.com/v2/user/profile/basic";
+/** OpenAPI `servers[0].url` — le collection v2 vivono sotto `/developer`, non sulla root host. */
+const WHOOP_API_BASE_DEFAULT = "https://api.prod.whoop.com/developer";
+const WHOOP_PROFILE_URL_DEFAULT = `${WHOOP_API_BASE_DEFAULT}/v2/user/profile/basic`;
 
 export function whoopApiBaseUrl(): string {
-  return process.env.WHOOP_API_BASE_URL?.trim().replace(/\/$/, "") || "https://api.prod.whoop.com";
+  const raw = process.env.WHOOP_API_BASE_URL?.trim().replace(/\/$/, "");
+  if (!raw) return WHOOP_API_BASE_DEFAULT;
+  try {
+    const u = new URL(raw);
+    /** Deploy legacy: env puntava alla root senza `/developer` → 404 “default backend”. */
+    if (u.hostname === "api.prod.whoop.com" && (!u.pathname || u.pathname === "/")) {
+      return WHOOP_API_BASE_DEFAULT;
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
 }
 
 /**
@@ -22,7 +35,14 @@ function whoopTokenUrl(): string {
 }
 
 function whoopProfileUrl(): string {
-  return process.env.WHOOP_API_PROFILE_URL?.trim() || WHOOP_PROFILE_URL_DEFAULT;
+  const raw = process.env.WHOOP_API_PROFILE_URL?.trim();
+  if (raw) {
+    if (raw.includes("api.prod.whoop.com/v2/") && !raw.includes("/developer/")) {
+      return raw.replace("api.prod.whoop.com/v2/", "api.prod.whoop.com/developer/v2/");
+    }
+    return raw;
+  }
+  return WHOOP_PROFILE_URL_DEFAULT;
 }
 
 export async function exchangeWhoopAuthorizationCode(input: {

@@ -32,6 +32,15 @@ export function whoopRecordPrimaryId(rec: Record<string, unknown>): string | nul
   const id = rec.id;
   if (typeof id === "string" && id.trim()) return id.trim();
   if (typeof id === "number" && Number.isFinite(id)) return String(Math.trunc(id));
+  /** Recovery v2: nessun `id` top-level, solo `cycle_id` (+ `sleep_id`). */
+  const cycleId = rec.cycle_id;
+  if (typeof cycleId === "number" && Number.isFinite(cycleId)) {
+    return `whoop_cycle:${Math.trunc(cycleId)}`;
+  }
+  const sleepRef = rec.sleep_id;
+  if (typeof sleepRef === "string" && sleepRef.trim()) {
+    return `whoop_sleep_ref:${sleepRef.trim()}`;
+  }
   return null;
 }
 

@@ -19,10 +19,9 @@ test("extractWhoopListRecords legge records", () => {
   assert.equal(r.length, 2);
 });
 
-test("whoopRecordPrimaryId stringa o numero", () => {
-  assert.equal(whoopRecordPrimaryId({ id: "uuid-here" }), "uuid-here");
-  assert.equal(whoopRecordPrimaryId({ id: 42 }), "42");
-  assert.equal(whoopRecordPrimaryId({}), null);
+test("whoopRecordPrimaryId: recovery usa cycle_id / sleep_id", () => {
+  assert.equal(whoopRecordPrimaryId({ cycle_id: 93845, sleep_id: "abc" }), "whoop_cycle:93845");
+  assert.equal(whoopRecordPrimaryId({ sleep_id: "solo-sleep" }), "whoop_sleep_ref:solo-sleep");
 });
 
 test("dedupeWhoopRecordsById mantiene ultima occorrenza", () => {
