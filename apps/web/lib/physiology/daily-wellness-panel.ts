@@ -2,12 +2,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   mergedPayloadFromExportRow,
   wellnessDayKeyFromDeviceExportRow,
+  wellnessExportMatchesPanelDate,
 } from "@/lib/physiology/wellness-day-key-from-device-export";
 import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
 
 /** Re-export storico: alcuni import puntano a `daily-wellness-panel`. */
-export { mergedPayloadFromExportRow, wellnessDayKeyFromDeviceExportRow };
+export { mergedPayloadFromExportRow, wellnessDayKeyFromDeviceExportRow, wellnessExportMatchesPanelDate };
 
 export type PhysiologyDailyPanelOk = {
   ok: true;
@@ -326,10 +327,9 @@ export async function buildPhysiologyDailyPanel(input: {
   }
 
   const rawExportCount = (exportRows ?? []).length;
-  const rows = ((exportRows ?? []) as Array<Record<string, unknown>>).filter((row) => {
-    const key = wellnessDayKeyFromDeviceExportRow(row);
-    return key === date;
-  });
+  const rows = ((exportRows ?? []) as Array<Record<string, unknown>>).filter((row) =>
+    wellnessExportMatchesPanelDate(row, date),
+  );
 
   const recoveryRows = rows.filter((row) => {
     const s = extractSignalFromDeviceExportRow(row);
