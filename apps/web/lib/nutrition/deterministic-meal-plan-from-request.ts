@@ -8,9 +8,20 @@ import type {
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
-import type { MediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
+import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
 import { composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
+import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
+
+/** Mappa la stringa libera `req.dietType` (profilo Supabase) sull'enum forte del composer. */
+function normalizeDietTypeForComposer(raw: string | null | undefined): MediterraneanDietType | undefined {
+  const d = (raw ?? "").trim().toLowerCase();
+  if (!d || d === "omnivore" || d === "onnivor" || d === "other") return "omnivore";
+  if (d === "vegan" || d.includes("vegan")) return "vegan";
+  if (d === "vegetarian" || d.includes("veget")) return "vegetarian";
+  if (d === "pescatarian" || d.includes("pesc")) return "pescatarian";
+  return "omnivore";
+}
 
 /** Allinea `approxKcal` alla stima canonica da nome + porzione (grammi/ml dove parsabili), non a ripartizioni uguali sulle voci. */
 function syncItemsApproxKcalFromCanonical(items: IntelligentMealPlanItemOut[]): IntelligentMealPlanItemOut[] {
@@ -59,7 +70,16 @@ export async function buildDeterministicMealPlanFromRequest(
   const orderedSlots = MEAL_SLOT_ORDER.map((k) => slotByKey.get(k)).filter(
     (s): s is IntelligentMealPlanRequestSlot => Boolean(s),
   );
-  const dayCtx = createMediterraneanDayContext(req.planDate, req.weeklyStapleCounts, req.postWorkoutMealBySlot);
+  /** dietType + denyFragments dal request (allergie/intolleranze/esclusioni + dieta) → vincoli MANDATORY sul composer. */
+  const dietType = normalizeDietTypeForComposer(req.dietType);
+  const denyFragments = buildMealPlanFoodDenyFragments(req);
+  const dayCtx = createMediterraneanDayContext(
+    req.planDate,
+    req.weeklyStapleCounts,
+    req.postWorkoutMealBySlot,
+    dietType,
+    denyFragments,
+  );
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const items = pickItemsForSlot(slot, dayCtx);

@@ -16,6 +16,9 @@ export type MealMacroTargets = {
   fatG: number;
 };
 
+/** Tipologia dieta dichiarata sul profilo: vincolo MANDATORY su famiglie alimentari del composer. */
+export type MediterraneanDietType = "omnivore" | "vegetarian" | "pescatarian" | "vegan";
+
 /** Contesto unico per tutti gli slot dello stesso giorno: evita stessi amidi/proteine ripetuti. */
 export type MediterraneanDayContext = {
   planDate: string;
@@ -25,6 +28,10 @@ export type MediterraneanDayContext = {
   weekStapleCounts?: Record<string, number>;
   /** Orario slot spostato vs routine (fine seduta + propagazione): pranzo/cena CHO più refeed; spuntini più CHO / meno grassi. */
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
+  /** Tipologia dieta atleta — esclude famiglie proteiche/CHO incompatibili (vegan, vegetarian, pescatarian, omnivore). */
+  dietType?: MediterraneanDietType;
+  /** Sottostringhe da escludere per allergie/intolleranze/esclusioni (lowercase, già normalizzate dal request builder). */
+  denyFragments?: string[];
 };
 
 /** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
@@ -34,6 +41,8 @@ export function createMediterraneanDayContext(
   planDate: string,
   weekStapleCounts?: Record<string, number>,
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>,
+  dietType?: MediterraneanDietType,
+  denyFragments?: string[],
 ): MediterraneanDayContext {
   const w =
     weekStapleCounts && Object.keys(weekStapleCounts).length
@@ -43,7 +52,31 @@ export function createMediterraneanDayContext(
     postWorkoutMealBySlot && Object.keys(postWorkoutMealBySlot).length
       ? { ...postWorkoutMealBySlot }
       : undefined;
-  return { planDate, usedStaples: new Set(), weekStapleCounts: w, postWorkoutMealBySlot: pw };
+  const deny =
+    denyFragments && denyFragments.length > 0
+      ? denyFragments.map((s) => s.toLowerCase()).filter((s) => s.length >= 2)
+      : undefined;
+  return {
+    planDate,
+    usedStaples: new Set(),
+    weekStapleCounts: w,
+    postWorkoutMealBySlot: pw,
+    dietType,
+    denyFragments: deny,
+  };
+}
+
+/** Match deterministico (case-insensitive, sostringa) tra una keyword e i fragments di blocco. */
+function denyHit(keywords: readonly string[], deny: readonly string[] | undefined): boolean {
+  if (!deny || deny.length === 0) return false;
+  for (const kw of keywords) {
+    const k = kw.toLowerCase();
+    for (const d of deny) {
+      if (!d) continue;
+      if (k.includes(d) || d.includes(k)) return true;
+    }
+  }
+  return false;
 }
 
 function planDateHash(s: string): number {
@@ -150,32 +183,75 @@ function item(
   };
 }
 
-const BREAKFAST_BEVERAGES: Array<{ label: string; hint: (ml: number) => string }> = [
+type BreakfastBeverage = {
+  label: string;
+  hint: (ml: number) => string;
+  /** Keyword interne per filtrare contro `denyFragments` (lattosio/latticini/soia ecc). */
+  tags: readonly string[];
+  /** True se animal-derived (escluso da vegan). */
+  animal: boolean;
+};
+
+const BREAKFAST_BEVERAGES: BreakfastBeverage[] = [
   {
     label: "Latte vaccino",
     hint: (ml) => `${ml} ml latte vaccino parzialmente scremato`,
+    tags: ["latte", "lattosio", "latticino"],
+    animal: true,
   },
   {
     label: "Latte senza lattosio",
     hint: (ml) => `${ml} ml latte vaccino senza lattosio`,
+    tags: ["latte", "latticino"],
+    animal: true,
   },
   {
     label: "Bevanda mandorla",
     hint: (ml) => `${ml} ml bevanda di mandorla non zuccherata`,
+    tags: ["mandorl", "frutta a guscio"],
+    animal: false,
   },
   {
     label: "Bevanda riso",
     hint: (ml) => `${ml} ml bevanda di riso non zuccherata`,
+    tags: ["riso"],
+    animal: false,
   },
   {
     label: "Bevanda avena",
     hint: (ml) => `${ml} ml bevanda d’avena non zuccherata`,
+    tags: ["avena", "glutine"],
+    animal: false,
   },
   {
     label: "Latte capra",
     hint: (ml) => `${ml} ml latte di capra`,
+    tags: ["latte", "lattosio", "latticino", "capra"],
+    animal: true,
   },
 ];
+
+function allowedBreakfastBeverages(ctx: MediterraneanDayContext): BreakfastBeverage[] {
+  const isVegan = ctx.dietType === "vegan";
+  const deny = ctx.denyFragments;
+  const filtered = BREAKFAST_BEVERAGES.filter((b) => {
+    if (isVegan && b.animal) return false;
+    if (denyHit(b.tags, deny)) return false;
+    return true;
+  });
+  /** Garanzia non-vuota: se tutto è bandito, fallback su una bevanda vegetale neutra (riso) per non rompere il pasto. */
+  if (filtered.length === 0) {
+    return [
+      {
+        label: "Bevanda vegetale neutra",
+        hint: (ml) => `${ml} ml bevanda vegetale non zuccherata`,
+        tags: [],
+        animal: false,
+      },
+    ];
+  }
+  return filtered;
+}
 
 function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanDayContext): MediterraneanComposedMeal {
   const K = Math.max(220, m.kcal);
@@ -235,13 +311,19 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
 
+  const isVegan = ctx.dietType === "vegan";
+  const denyDairy = denyHit(["latte", "lattosio", "latticino", "yogurt"], ctx.denyFragments);
+  const skipDairyYogurt = isVegan || denyDairy;
+
   const mk = milkMl * D.milkKcalPerMl;
-  const bevIdx = (planDateHash(ctx.planDate) + seed * 7) % BREAKFAST_BEVERAGES.length;
-  const bev = BREAKFAST_BEVERAGES[bevIdx] ?? BREAKFAST_BEVERAGES[0]!;
+  const bevPool = allowedBreakfastBeverages(ctx);
+  const bevIdx = (planDateHash(ctx.planDate) + seed * 7) % bevPool.length;
+  const bev = bevPool[bevIdx] ?? bevPool[0]!;
   const mlRounded = clamp(milkMl, 120, 320);
+  const bevName = bev.animal ? "Latte o bevanda vegetale" : "Bevanda vegetale";
   items.push(
     item(
-      "Latte o bevanda vegetale",
+      bevName,
       bev.hint(mlRounded).slice(0, 160),
       mk,
       "protein",
@@ -264,24 +346,44 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
 
   if (yogurtG >= 50) {
     const yk = yogurtG * D.yogurtKcalPerG;
-    items.push(
-      item(
-        "Yogurt o kefir",
-        `${clamp(yogurtG, 80, 200)} g yogurt greco o kefir`,
-        yk,
-        "protein",
-        "Fermentato lattiero; aumenta proteine senza duplicare una seconda fonte proteica animale intera.",
-      ),
-    );
-    lines.push(`${clamp(yogurtG, 80, 200)} g yogurt greco o kefir`);
+    if (skipDairyYogurt) {
+      /** Yogurt vegetale (soia/cocco) per vegani o intolleranti lattosio: densità energetica simile, profilo proteico inferiore — il whey/proteine vegetali coprono il delta. */
+      const ygLabel = `${clamp(yogurtG, 80, 200)} g yogurt vegetale (soia o cocco) non zuccherato`;
+      items.push(
+        item(
+          "Yogurt vegetale",
+          ygLabel,
+          yk,
+          "protein",
+          "Yogurt vegetale (soia/cocco): mantiene volume e fibra; quota proteica completata dalle proteine vegetali in polvere.",
+        ),
+      );
+      lines.push(ygLabel);
+    } else {
+      items.push(
+        item(
+          "Yogurt o kefir",
+          `${clamp(yogurtG, 80, 200)} g yogurt greco o kefir`,
+          yk,
+          "protein",
+          "Fermentato lattiero; aumenta proteine senza duplicare una seconda fonte proteica animale intera.",
+        ),
+      );
+      lines.push(`${clamp(yogurtG, 80, 200)} g yogurt greco o kefir`);
+    }
   }
 
   if (wheyG >= 8) {
     const wk = wheyG * D.wheyKcalPerG;
+    const isVeganProt = isVegan || denyHit(["whey", "siero"], ctx.denyFragments);
+    const protLabel = isVeganProt
+      ? `${clamp(wheyG, 10, 35)} g proteine vegetali in polvere (pisello/riso/soia)`
+      : `${clamp(wheyG, 10, 35)} g proteine in polvere (shake)`;
+    const protName = isVeganProt ? "Proteine vegetali in polvere" : "Proteine in polvere";
     items.push(
-      item("Proteine in polvere", `${clamp(wheyG, 10, 35)} g proteine in polvere (shake)`, wk, "protein", "Complemento proteico sul target dello slot."),
+      item(protName, protLabel, wk, "protein", "Complemento proteico sul target dello slot."),
     );
-    lines.push(`${clamp(wheyG, 10, 35)} g proteine in polvere (sciolte nel latte)`);
+    lines.push(`${clamp(wheyG, 10, 35)} g proteine ${isVeganProt ? "vegetali" : "in polvere"} (shake)`);
   }
 
   const total = items.reduce((a, i) => a + i.approxKcal, 0);
@@ -289,14 +391,72 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
 }
 
 type CarbKey = "pasta" | "riso" | "patate" | "farro";
-type ProtKey = "pollo" | "pesce" | "legumi" | "manzo" | "uova";
+type ProtKey = "pollo" | "pesce" | "legumi" | "manzo" | "uova" | "tofu" | "tempeh" | "seitan";
 
 const CARB_ORDER: CarbKey[] = ["pasta", "riso", "patate", "farro"];
 const PROT_ORDER: ProtKey[] = ["pollo", "pesce", "legumi", "manzo", "uova"];
 
+/** Ordini proteine per dietType: vegan/vegetarian/pescatarian estendono con plant-based, escludono famiglie animali non consentite. */
+const PROT_ORDER_VEGAN: ProtKey[] = ["legumi", "tofu", "tempeh", "seitan"];
+const PROT_ORDER_VEGETARIAN: ProtKey[] = ["legumi", "uova", "tofu", "tempeh"];
+const PROT_ORDER_PESCATARIAN: ProtKey[] = ["pesce", "legumi", "uova", "tofu"];
+
 type FishKind = "merluzzo" | "spigola" | "salmone";
 
 const FISH_KINDS: FishKind[] = ["merluzzo", "spigola", "salmone"];
+
+/** Keyword da matchare contro `denyFragments` per ogni famiglia. */
+const CARB_DENY_KEYWORDS: Record<CarbKey, readonly string[]> = {
+  pasta: ["pasta", "glutine", "gluten", "frumento", "wheat", "semola"],
+  riso: ["riso", "rice"],
+  patate: ["patate", "patata", "potato"],
+  farro: ["farro", "orzo", "spelt", "barley", "glutine", "gluten"],
+};
+
+const PROT_DENY_KEYWORDS: Record<ProtKey, readonly string[]> = {
+  pollo: ["pollo", "tacchino", "pollame", "carne"],
+  pesce: ["pesce", "fish", "merluzz", "spigola", "salmone", "tonno", "ittic"],
+  legumi: ["legumi", "ceci", "lenticchie", "fagioli"],
+  manzo: ["manzo", "carne", "maiale", "bovino", "vitello"],
+  uova: ["uov", "ovo", "egg", "album"],
+  tofu: ["tofu", "soia", "soy"],
+  tempeh: ["tempeh", "soia", "soy"],
+  seitan: ["seitan", "glutine", "gluten"],
+};
+
+const FISH_DENY_KEYWORDS: Record<FishKind, readonly string[]> = {
+  merluzzo: ["merluzz", "cod"],
+  spigola: ["spigola", "branzino", "sea bass"],
+  salmone: ["salmone", "salmon"],
+};
+
+function baseProtOrderForDiet(dietType: MediterraneanDietType | undefined): ProtKey[] {
+  if (dietType === "vegan") return PROT_ORDER_VEGAN;
+  if (dietType === "vegetarian") return PROT_ORDER_VEGETARIAN;
+  if (dietType === "pescatarian") return PROT_ORDER_PESCATARIAN;
+  return PROT_ORDER;
+}
+
+function allowedCarbOrder(ctx?: MediterraneanDayContext): CarbKey[] {
+  const deny = ctx?.denyFragments;
+  const filtered = CARB_ORDER.filter((k) => !denyHit(CARB_DENY_KEYWORDS[k], deny));
+  /** Se denyFragments esclude tutto (caso limite), torna alla lista completa: il composer gestisce un pasto coerente comunque. */
+  return filtered.length > 0 ? filtered : CARB_ORDER;
+}
+
+function allowedProtOrder(ctx?: MediterraneanDayContext): ProtKey[] {
+  const base = baseProtOrderForDiet(ctx?.dietType);
+  const deny = ctx?.denyFragments;
+  const filtered = base.filter((k) => !denyHit(PROT_DENY_KEYWORDS[k], deny));
+  /** Garanzia: almeno legumi (sempre vegan-safe + onnivoro) se nulla resta. */
+  return filtered.length > 0 ? filtered : (base.includes("legumi") ? ["legumi"] : base);
+}
+
+function allowedFishKinds(ctx?: MediterraneanDayContext): FishKind[] {
+  const deny = ctx?.denyFragments;
+  const filtered = FISH_KINDS.filter((k) => !denyHit(FISH_DENY_KEYWORDS[k], deny));
+  return filtered.length > 0 ? filtered : FISH_KINDS;
+}
 
 /** Densità indicative: pasta/riso/farro in g a crudo; patate e pesce cotti al consumo. */
 const FISH: Record<FishKind, { labelIt: string; kcalPerG: number; protPerG: number; fatPerG: number }> = {
@@ -319,15 +479,22 @@ function weekCountFor(key: string, week?: Record<string, number>): number {
   return week?.[key] ?? 0;
 }
 
-function pickCarbKey(seed: number, offset: number, used: Set<string>, weekCounts?: Record<string, number>): CarbKey {
-  const sameDayOk = CARB_ORDER.filter((k) => !used.has(stapleCarb(k)));
-  const base = sameDayOk.length ? sameDayOk : CARB_ORDER;
+function pickCarbKey(
+  seed: number,
+  offset: number,
+  used: Set<string>,
+  weekCounts?: Record<string, number>,
+  ctx?: MediterraneanDayContext,
+): CarbKey {
+  const order = allowedCarbOrder(ctx);
+  const sameDayOk = order.filter((k) => !used.has(stapleCarb(k)));
+  const base = sameDayOk.length ? sameDayOk : order;
   const weekOk = base.filter((k) => weekCountFor(stapleCarb(k), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
   const pool = weekOk.length ? weekOk : base;
   const idx = Math.abs(seed + offset * 7) % pool.length;
   let k = pool[idx]!;
   if (used.has(stapleCarb(k))) {
-    const esc = CARB_ORDER.find((c) => !used.has(stapleCarb(c)));
+    const esc = order.find((c) => !used.has(stapleCarb(c)));
     if (esc) k = esc;
   }
   return k;
@@ -344,22 +511,26 @@ function pickProtAndFish(
   carbKey: CarbKey,
   used: Set<string>,
   weekCounts?: Record<string, number>,
+  ctx?: MediterraneanDayContext,
 ): { protKey: ProtKey; fishKind: FishKind | null } {
-  const sameDayOk = PROT_ORDER.filter((pk) => protAllowedWithCarb(carbKey, pk) && !used.has(stapleProt(pk)));
-  const base = sameDayOk.length ? sameDayOk : PROT_ORDER.filter((pk) => protAllowedWithCarb(carbKey, pk));
+  const order = allowedProtOrder(ctx);
+  const sameDayOk = order.filter((pk) => protAllowedWithCarb(carbKey, pk) && !used.has(stapleProt(pk)));
+  const base = sameDayOk.length ? sameDayOk : order.filter((pk) => protAllowedWithCarb(carbKey, pk));
   const weekOk = base.filter((pk) => weekCountFor(stapleProt(pk), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
   const pool = weekOk.length ? weekOk : base;
   const idx = Math.abs(seed * 3 + offset * 5) % pool.length;
   let protKey = pool[idx]!;
 
-  /** Mai ripetere la stessa proteina principale nello stesso giorno: se il pool ha sbagliato, cerca una libera. */
+  /** Mai ripetere la stessa proteina principale nello stesso giorno: se il pool ha sbagliato, cerca una libera (rispettando dietType+denyFragments). */
   if (used.has(stapleProt(protKey))) {
-    const escape = PROT_ORDER.find((pk) => protAllowedWithCarb(carbKey, pk) && !used.has(stapleProt(pk)));
-    protKey = escape ?? "pollo";
+    const escape = order.find((pk) => protAllowedWithCarb(carbKey, pk) && !used.has(stapleProt(pk)));
+    /** Fallback: prima famiglia consentita dall'ordine, mai una bandita. */
+    protKey = escape ?? order[0] ?? "legumi";
   }
 
   if (protKey === "pesce") {
-    const fishKind = FISH_KINDS[(seed + offset * 11 + idx * 3) % FISH_KINDS.length]!;
+    const fishOrder = allowedFishKinds(ctx);
+    const fishKind = fishOrder[(seed + offset * 11 + idx * 3) % fishOrder.length]!;
     return { protKey, fishKind };
   }
   return { protKey, fishKind: null };
@@ -471,6 +642,39 @@ function protLine(
         fat: n * 5.3,
       };
     }
+    case "tofu": {
+      /** Tofu compatto: ~144 kcal/100 g, ~17 g prot, ~9 g fat (USDA SR Legacy ord. di grandezza). */
+      const gc = clampStep(g, 130, 220);
+      return {
+        line: `${gc} g tofu compatto (saltato in padella o al forno)`,
+        kcal: gc * 1.44,
+        cho: gc * 0.019,
+        prot: gc * 0.17,
+        fat: gc * 0.09,
+      };
+    }
+    case "tempeh": {
+      /** Tempeh: ~190 kcal/100 g, ~19 g prot, ~11 g fat. */
+      const gc = clampStep(g, 110, 180);
+      return {
+        line: `${gc} g tempeh (a fette, saltato o al forno)`,
+        kcal: gc * 1.93,
+        cho: gc * 0.075,
+        prot: gc * 0.20,
+        fat: gc * 0.11,
+      };
+    }
+    case "seitan": {
+      /** Seitan (glutine di frumento): ~120 kcal/100 g, ~25 g prot, pochissimi grassi. */
+      const gc = clampStep(g, 80, 150);
+      return {
+        line: `${gc} g seitan (a fette, saltato)`,
+        kcal: gc * 1.20,
+        cho: gc * 0.04,
+        prot: gc * 0.25,
+        fat: gc * 0.02,
+      };
+    }
     default:
       return protLine("pollo", g, eggs, null);
   }
@@ -494,25 +698,37 @@ function composeMainMeal(
 
   const weekCounts = ctx?.weekStapleCounts;
 
+  const carbOrder = allowedCarbOrder(ctx);
+  const protOrder = allowedProtOrder(ctx);
+  const fishOrder = allowedFishKinds(ctx);
+
   if (used && (slot === "lunch" || slot === "dinner")) {
-    carbKey = pickCarbKey(seed, offset, used, weekCounts);
-    const picked = pickProtAndFish(seed, offset, carbKey, used, weekCounts);
+    carbKey = pickCarbKey(seed, offset, used, weekCounts, ctx);
+    const picked = pickProtAndFish(seed, offset, carbKey, used, weekCounts, ctx);
     protKey = picked.protKey;
     fishKind = picked.fishKind;
   } else {
-    carbKey = CARB_ORDER[(seed + offset) % CARB_ORDER.length];
-    protKey = PROT_ORDER[(seed * 3 + offset) % PROT_ORDER.length];
-    if (carbKey === "patate" && protKey === "legumi") protKey = "pollo";
-    fishKind = protKey === "pesce" ? FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]! : null;
+    carbKey = carbOrder[(seed + offset) % carbOrder.length] ?? "pasta";
+    protKey = protOrder[(seed * 3 + offset) % protOrder.length] ?? (protOrder[0] ?? "legumi");
+    /** Patate+legumi sbilancia il pasto su CHO+CHO ad alto volume: in onnivoro risolvi su pollo, in vegan/vegetariano pivota a tofu/uova. */
+    if (carbKey === "patate" && protKey === "legumi") {
+      const fallback = protOrder.find((p) => p !== "legumi") ?? "legumi";
+      protKey = fallback;
+    }
+    fishKind = protKey === "pesce" ? (fishOrder[(seed + offset * 2) % fishOrder.length] ?? null) : null;
   }
 
   const postWorkout = Boolean(ctx?.postWorkoutMealBySlot?.[slot]);
   if (postWorkout && (slot === "lunch" || slot === "dinner") && used) {
     if (carbKey === "pasta" || carbKey === "farro") {
       const canRiso =
-        !used.has(stapleCarb("riso")) && weekCountFor(stapleCarb("riso"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+        carbOrder.includes("riso") &&
+        !used.has(stapleCarb("riso")) &&
+        weekCountFor(stapleCarb("riso"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
       const canPatate =
-        !used.has(stapleCarb("patate")) && weekCountFor(stapleCarb("patate"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+        carbOrder.includes("patate") &&
+        !used.has(stapleCarb("patate")) &&
+        weekCountFor(stapleCarb("patate"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
       if (canRiso && (seed % 2 !== 0 || !canPatate)) {
         carbKey = "riso";
       } else if (canPatate) {
@@ -521,24 +737,18 @@ function composeMainMeal(
         carbKey = "riso";
       }
     }
+    /** Risoluzioni post-WO che NON violano dietType: si scelgono solo proteine consentite. */
     if (carbKey === "patate" && protKey === "legumi") {
-      if (!used.has(stapleProt("pollo"))) {
-        protKey = "pollo";
-        fishKind = null;
-      } else {
-        protKey = "pesce";
-        fishKind = FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]!;
+      const swap = protOrder.find((p) => p !== "legumi" && !used.has(stapleProt(p)));
+      if (swap) {
+        protKey = swap;
+        fishKind = swap === "pesce" ? (fishOrder[(seed + offset * 2) % fishOrder.length] ?? null) : null;
       }
-    } else if (protKey === "legumi") {
-      if (!used.has(stapleProt("pollo"))) {
-        protKey = "pollo";
-        fishKind = null;
-      } else if (!used.has(stapleProt("pesce"))) {
-        protKey = "pesce";
-        fishKind = FISH_KINDS[(seed + offset * 2) % FISH_KINDS.length]!;
-      } else {
-        protKey = "manzo";
-        fishKind = null;
+    } else if (protKey === "legumi" && protOrder.length > 1) {
+      const swap = protOrder.find((p) => p !== "legumi" && !used.has(stapleProt(p)));
+      if (swap) {
+        protKey = swap;
+        fishKind = swap === "pesce" ? (fishOrder[(seed + offset * 2) % fishOrder.length] ?? null) : null;
       }
     }
   }
@@ -556,12 +766,21 @@ function composeMainMeal(
         : carbKey === "farro"
           ? clamp(K * 0.38 / D.farroDryKcalPerG, 50, 130)
           : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
-  let protG =
-    protKey === "uova"
-      ? 0
-      : protKey === "legumi"
-        ? clamp(P * 0.72 / D.legumeProtPerG, 130, 210)
-        : clamp(P * 0.72 / fishProtDen, 90, 280);
+  let protG: number;
+  if (protKey === "uova") {
+    protG = 0;
+  } else if (protKey === "legumi") {
+    protG = clamp(P * 0.72 / D.legumeProtPerG, 130, 210);
+  } else if (protKey === "tofu") {
+    /** Densità proteica tofu ~0.17 g/g → grammatura attesa 130–220 g per centrare ~50–60 g prot al pasto principale. */
+    protG = clamp(P * 0.72 / 0.17, 130, 220);
+  } else if (protKey === "tempeh") {
+    protG = clamp(P * 0.72 / 0.20, 110, 180);
+  } else if (protKey === "seitan") {
+    protG = clamp(P * 0.72 / 0.25, 80, 150);
+  } else {
+    protG = clamp(P * 0.72 / fishProtDen, 90, 280);
+  }
 
   let vegG = clamp(160 + (seed % 3) * 25, 150, 250);
   let oilMl = clamp(F * 0.55 / D.oilFatPerMl, 8, 22);
@@ -571,7 +790,11 @@ function composeMainMeal(
       : carbKey === "patate" || carbKey === "riso"
         ? clamp(32 + (seed % 2) * 12, 28, 65)
         : clamp(28 + (seed % 2) * 10, 25, 55);
-  const granaG = seed % 5 === 0 ? clamp(15 + (seed % 3) * 6, 15, 35) : 0;
+  /** Grana/formaggio: aggiungi solo se onnivoro/pescatariano e non in deny lattosio. Vegan/vegetarian-strict no. */
+  const cheeseAllowed =
+    ctx?.dietType !== "vegan" &&
+    !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
+  const granaG = cheeseAllowed && seed % 5 === 0 ? clamp(15 + (seed % 3) * 6, 15, 35) : 0;
 
   const totalKcal = () => {
     const c = carbLine(carbKey, carbG);
@@ -593,13 +816,25 @@ function composeMainMeal(
     return { lo: 42, hi: 145 };
   };
 
+  /** Bracket grammatura prot per famiglia (plant prot hanno volumi diversi: tofu/seitan compatti, tempeh denso). */
+  const protGBracket = (): { lo: number; hi: number } => {
+    if (protKey === "legumi") return { lo: 110, hi: 230 };
+    if (protKey === "tofu") return { lo: 110, hi: 240 };
+    if (protKey === "tempeh") return { lo: 90, hi: 200 };
+    if (protKey === "seitan") return { lo: 70, hi: 170 };
+    return { lo: 95, hi: 260 };
+  };
+
   for (let i = 0; i < 12; i++) {
     const t = totalKcal();
     const f = K / Math.max(180, t);
     if (Math.abs(f - 1) < 0.04) break;
     const { lo, hi } = carbGClamp();
     carbG = clamp(carbG * Math.pow(f, 0.55), lo, hi);
-    if (protKey !== "uova") protG = clamp(protG * Math.pow(f, 0.45), 95, 260);
+    if (protKey !== "uova") {
+      const pb = protGBracket();
+      protG = clamp(protG * Math.pow(f, 0.45), pb.lo, pb.hi);
+    }
     vegG = clamp(vegG * Math.pow(f, 0.15), 130, 280);
     oilMl = clamp(oilMl * Math.pow(f, 0.2), 6, 26);
   }
@@ -632,18 +867,28 @@ function composeMainMeal(
   );
   lines.push(carbFinal.line);
 
-  const protName =
-    protKey === "pollo"
-      ? "Proteina: pollo/tacchino"
-      : protKey === "pesce"
-        ? fishKind
-          ? `Proteina: ${FISH[fishKind].labelIt}`
-          : "Proteina: pesce"
-        : protKey === "legumi"
-          ? "Proteina: legumi"
-          : protKey === "manzo"
-            ? "Proteina: carne magra"
-            : "Proteina: uova";
+  const protName = (() => {
+    switch (protKey) {
+      case "pollo":
+        return "Proteina: pollo/tacchino";
+      case "pesce":
+        return fishKind ? `Proteina: ${FISH[fishKind].labelIt}` : "Proteina: pesce";
+      case "legumi":
+        return "Proteina vegetale: legumi";
+      case "manzo":
+        return "Proteina: carne magra";
+      case "uova":
+        return "Proteina: uova";
+      case "tofu":
+        return "Proteina vegetale: tofu";
+      case "tempeh":
+        return "Proteina vegetale: tempeh";
+      case "seitan":
+        return "Proteina vegetale: seitan";
+      default:
+        return "Proteina";
+    }
+  })();
 
   items.push(
     item(protName, protFinal.line, protFinal.kcal, "protein", "Una sola famiglia proteica principale (no pollo + pesce + uova nello stesso pasto)."),
@@ -722,14 +967,29 @@ function composeSnack(
   const postSlot = Boolean(ctx?.postWorkoutMealBySlot?.[variant]);
   if (postSlot) sweet = true;
 
+  const isVegan = ctx?.dietType === "vegan";
+  const isVegetarian = ctx?.dietType === "vegetarian";
+  const denyMeat = denyHit(["carne", "pollo", "tacchino", "manzo", "maiale", "bresaola", "prosciutto", "salame", "salsicc"], ctx?.denyFragments);
+  /** Affettato fuori se vegan/vegetarian o deny carne: forziamo variante dolce con yogurt vegetale o gallette+hummus. */
+  if (isVegan || isVegetarian || denyMeat) sweet = true;
+
+  const denyDairy = denyHit(["latte", "lattosio", "latticino", "yogurt"], ctx?.denyFragments);
+  const skipDairyYogurt = isVegan || denyDairy;
+
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
 
   if (sweet) {
     const yg = clamp(120 + K * 0.08, 125, 220);
     const yk = yg * D.yogurtKcalPerG;
-    items.push(item("Yogurt", `${clamp(yg, 125, 220)} g yogurt`, yk, "protein", "Spuntino dolce: latticino + frutta."));
-    lines.push(`${clamp(yg, 125, 220)} g yogurt`);
+    if (skipDairyYogurt) {
+      const ygLabel = `${clamp(yg, 125, 220)} g yogurt vegetale (soia o cocco) non zuccherato`;
+      items.push(item("Yogurt vegetale", ygLabel, yk, "protein", "Spuntino dolce: yogurt vegetale + frutta + cereali."));
+      lines.push(ygLabel);
+    } else {
+      items.push(item("Yogurt", `${clamp(yg, 125, 220)} g yogurt`, yk, "protein", "Spuntino dolce: latticino + frutta."));
+      lines.push(`${clamp(yg, 125, 220)} g yogurt`);
+    }
 
     const fruit = seed % 3 === 0 ? "1 frutto medio" : `${clamp(40 + (seed % 5) * 12, 40, 100)} g frutta fresca o frutti di bosco`;
     const fk = seed % 3 === 0 ? 80 : 55;
@@ -771,8 +1031,10 @@ function composeSnack(
     items.push(item("Affettato", cold, pk, "protein", postSlot ? "Proteina magra; variante meno grassa dopo spostamento orari." : "Proteina magra in spuntino salato."));
     lines.push(cold);
 
+    /** Grasso aggiunto: avocado per tutti, grana solo se cheeseAllowed. */
+    const cheeseAllowed = !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
     const fatPick =
-      seed % 2 === 0
+      seed % 2 === 0 || !cheeseAllowed
         ? { line: "15 g avocado", kcal: 15 * D.avocadoKcalPerG, role: "fat" as const }
         : { line: "20 g grana grattugiato", kcal: 20 * D.granaKcalPerG, role: "fat" as const };
     items.push(item("Grasso spuntino", fatPick.line, fatPick.kcal, fatPick.role, "Una sola fonte di grasso aggiunto oltre all’affettato."));
