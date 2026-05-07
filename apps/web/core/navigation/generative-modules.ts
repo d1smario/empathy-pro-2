@@ -31,6 +31,7 @@ export function isGenerativePath(pathname: string): boolean {
     normalized.startsWith("/training/analytics/") ||
     normalized === "/training/analyzer" ||
     normalized.startsWith("/training/analyzer/") ||
+    normalized === "/training/session" ||
     normalized.startsWith("/training/session/")
   ) {
     return false;

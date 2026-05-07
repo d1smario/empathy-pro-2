@@ -4,7 +4,7 @@ import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
-import { BarChart3, CalendarDays, CalendarRange, Sparkles } from "lucide-react";
+import { BarChart3, CalendarClock, CalendarDays, CalendarRange, HeartPulse, Sparkles } from "lucide-react";
 
 /** Hub training: shell e sezioni canone Pro 2 (allineato a Builder). */
 export default function TrainingHubPageView() {
@@ -52,6 +52,22 @@ export default function TrainingHubPageView() {
           >
             <CalendarDays className="mr-2 h-4 w-4 shrink-0 text-sky-300 drop-shadow-[0_0_8px_rgba(56,189,248,0.45)]" aria-hidden />
             Calendar
+          </Pro2Link>
+          <Pro2Link
+            href="/training/session"
+            variant="secondary"
+            className="justify-center border border-orange-500/40 bg-orange-500/10 py-4 hover:bg-orange-500/15"
+          >
+            <CalendarClock className="mr-2 h-4 w-4 shrink-0 text-orange-300 drop-shadow-[0_0_8px_rgba(251,146,60,0.45)]" aria-hidden />
+            Giornata training
+          </Pro2Link>
+          <Pro2Link
+            href="/physiology/daily"
+            variant="secondary"
+            className="justify-center border border-emerald-500/40 bg-emerald-500/10 py-4 hover:bg-emerald-500/15"
+          >
+            <HeartPulse className="mr-2 h-4 w-4 shrink-0 text-emerald-300 drop-shadow-[0_0_8px_rgba(52,211,153,0.45)]" aria-hidden />
+            Wellness giornaliero
           </Pro2Link>
           <Pro2Link
             href="/training/analytics"

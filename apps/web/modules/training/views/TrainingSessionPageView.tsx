@@ -10,6 +10,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
 import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
+import { OperationalDayNavigator } from "@/components/navigation/OperationalDayNavigator";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
@@ -402,6 +403,13 @@ export default function TrainingSessionPageView() {
       headerActions={
         <>
           <Pro2Link
+            href={dateValid ? `/physiology/daily/${encodeURIComponent(date)}` : "/physiology/daily"}
+            variant="secondary"
+            className="justify-center border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15"
+          >
+            Wellness
+          </Pro2Link>
+          <Pro2Link
             href={dateValid ? `/training/calendar?date=${encodeURIComponent(date)}` : "/training/calendar"}
             variant="secondary"
             className="justify-center border border-sky-500/35 bg-sky-500/10 hover:bg-sky-500/15"
@@ -435,6 +443,12 @@ export default function TrainingSessionPageView() {
       <div className="scroll-mt-28">
         <TrainingSubnav />
       </div>
+
+      {dateValid ? (
+        <div className="mb-5">
+          <OperationalDayNavigator dateIso={date} hrefPrefix="/training/session" />
+        </div>
+      ) : null}
 
       {dateValid && readSpineCoverage && athleteId ? (
         <TrainingPlannedWindowContextStrip

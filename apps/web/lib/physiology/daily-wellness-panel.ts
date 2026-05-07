@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
+import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
 
 export type PhysiologyDailyPanelOk = {
@@ -93,12 +93,10 @@ function mergedPayloadFromExportRow(row: Record<string, unknown>): Record<string
   return { ...payload, ...(source ?? {}), ...(preview ?? {}) };
 }
 
-function collectCandidateRecords(payload: Record<string, unknown> | null): Array<Record<string, unknown>> {
-  if (!payload) return [];
-  const directChildren = Object.values(payload)
-    .map((value) => asRecord(value))
-    .filter((value): value is Record<string, unknown> => value != null);
-  return [payload, ...directChildren];
+function hoursFromSleepMilli(record: Record<string, unknown>, keys: string[]): number | null {
+  const milli = pickNumber(record, keys);
+  if (milli == null || milli <= 0) return null;
+  return Number((milli / 3_600_000).toFixed(2));
 }
 
 /**
@@ -127,8 +125,10 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
     "recovery_date",
     "start",
     "start_time",
+    "end",
+    "end_time",
   ];
-  for (const rec of collectCandidateRecords(merged)) {
+  for (const rec of expandDevicePayloadMetricRecords(merged)) {
     for (const key of keys) {
       const raw = rec[key];
       if (typeof raw === "string") {
@@ -167,7 +167,7 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
     ecgCaptured: null as boolean | null,
   };
   if (!payload) return out;
-  for (const rec of collectCandidateRecords(payload)) {
+  for (const rec of expandDevicePayloadMetricRecords(payload)) {
     out.steps ??= pickNumber(rec, ["steps", "step_count", "total_steps", "steps_count"]);
     out.activeCaloriesKcal ??= pickNumber(rec, [
       "active_energy_kcal",
@@ -187,7 +187,13 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
       "avg_respiratory_rate",
       "respiration_rate",
     ]);
-    out.skinTempC ??= pickNumber(rec, ["skin_temperature_c", "skin_temp_c", "skin_temp"]);
+    out.skinTempC ??= pickNumber(rec, [
+      "skin_temperature_c",
+      "skin_temp_c",
+      "skin_temp",
+      "skin_temp_celsius",
+      "skin_temperature_celsius",
+    ]);
     out.bodyTempC ??= pickNumber(rec, [
       "body_temperature_c",
       "wrist_temperature_c",
@@ -195,7 +201,7 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
       "temperature_c",
       "avg_skin_temp_c",
     ]);
-    out.spo2Pct ??= pickNumber(rec, ["spo2", "average_spo2", "blood_oxygen", "avg_spo2"]);
+    out.spo2Pct ??= pickNumber(rec, ["spo2", "spo2_percentage", "average_spo2", "blood_oxygen", "avg_spo2"]);
     if (out.ecgCaptured == null) {
       const ecg = rec.has_ecg ?? rec.ecg_status ?? rec.ecg_capture;
       if (typeof ecg === "boolean") out.ecgCaptured = ecg;
@@ -217,39 +223,47 @@ function extractSleepStages(payload: Record<string, unknown> | null): Physiology
     summaryLabel: null,
   };
   if (!payload) return empty;
-  for (const rec of collectCandidateRecords(payload)) {
+  for (const rec of expandDevicePayloadMetricRecords(payload)) {
     const deep =
       pickNumber(rec, ["deep_sleep_duration_hours", "deep_sleep_hours", "deep_sleep_duration"]) ??
       (() => {
         const min = pickNumber(rec, ["deep_sleep_duration_min", "deep_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
-      })();
+      })() ??
+      hoursFromSleepMilli(rec, ["slow_wave_sleep_time_milli", "deep_sleep_duration_milli"]);
     const light =
       pickNumber(rec, ["light_sleep_duration_hours", "light_sleep_hours"]) ??
       (() => {
         const min = pickNumber(rec, ["light_sleep_duration_min", "light_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
-      })();
+      })() ??
+      hoursFromSleepMilli(rec, ["light_sleep_time_milli"]);
     const rem =
       pickNumber(rec, ["rem_duration_hours", "rem_sleep_hours", "rem_sleep_duration_hours"]) ??
       (() => {
         const min = pickNumber(rec, ["rem_duration_min", "rem_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
-      })();
+      })() ??
+      hoursFromSleepMilli(rec, ["rem_sleep_time_milli"]);
     const awake =
       pickNumber(rec, ["awake_duration_hours", "awake_time_hours"]) ??
       (() => {
         const min = pickNumber(rec, ["awake_duration_min", "awake_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
-      })();
-    const label = typeof rec.sleep_performance === "string" ? rec.sleep_performance : null;
-    if (deep != null || light != null || rem != null || awake != null || label) {
+      })() ??
+      hoursFromSleepMilli(rec, ["wake_duration_milli", "awake_time_milli"]);
+    const perfPct = pickNumber(rec, ["sleep_performance_percentage"]);
+    const labelStr = typeof rec.sleep_performance === "string" ? rec.sleep_performance.trim() : "";
+    const summaryLabel =
+      labelStr ||
+      (perfPct != null ? `${Math.round(perfPct)}% sleep` : null);
+    if (deep != null || light != null || rem != null || awake != null || summaryLabel) {
       return {
         deepHours: deep,
         lightHours: light,
         remHours: rem,
         awakeHours: awake,
-        summaryLabel: typeof label === "string" ? label : null,
+        summaryLabel,
       };
     }
   }
@@ -258,7 +272,7 @@ function extractSleepStages(payload: Record<string, unknown> | null): Physiology
 
 function tryBuildHypnogram(payload: Record<string, unknown> | null): Array<{ t: number; stage: number }> {
   if (!payload) return [];
-  const merged = collectCandidateRecords(payload);
+  const merged = expandDevicePayloadMetricRecords(payload);
   for (const rec of merged) {
     const phases = rec.sleep_phase_minutes ?? rec.phases_minutes ?? rec.sleep_phases;
     if (Array.isArray(phases) && phases.length > 0) {

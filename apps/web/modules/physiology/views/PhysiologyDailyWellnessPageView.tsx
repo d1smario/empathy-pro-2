@@ -1,5 +1,6 @@
 "use client";
 
+import { OperationalDayNavigator } from "@/components/navigation/OperationalDayNavigator";
 import { Activity, Beaker, CalendarDays, Heart, LineChart, Moon } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -336,8 +337,9 @@ export default function PhysiologyDailyWellnessPageView() {
         </>
       }
     >
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-4">
-        <div>
+      <div className="mb-6 space-y-3">
+        <OperationalDayNavigator dateIso={date} hrefPrefix="/physiology/daily" />
+        <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3">
           <p className="font-mono text-xs text-gray-500">{date}</p>
           <p className="mt-1 text-lg font-bold capitalize text-white">{dayLabel}</p>
         </div>

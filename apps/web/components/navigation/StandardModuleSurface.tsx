@@ -1,5 +1,5 @@
 import { EMPATHY_PLATFORM_VERSION, type ProductModuleId } from "@empathy/contracts";
-import { BookOpen, LayoutDashboard, Settings2 } from "lucide-react";
+import { BookOpen, CalendarDays, HeartPulse, LayoutDashboard, Settings2 } from "lucide-react";
 import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
@@ -104,6 +104,39 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             trialDaysConfigured={dashboardTrialDays}
           />
           <DashboardLoadAnalysisSummary />
+          <section id="dash-day-views" className="scroll-mt-28">
+            <Pro2SectionCard
+              accent="cyan"
+              title="Viste giornata"
+              subtitle="Stessa data ISO tra Training · giornata e Physiology · wellness (device + twin)"
+              icon={CalendarDays}
+            >
+              <ActionBar className="border-0 pt-0 flex-wrap justify-start gap-2" aria-label="Apri giornata operativa">
+                <Pro2Link
+                  href="/training/session"
+                  variant="secondary"
+                  className="justify-center border border-orange-500/35 bg-orange-500/10 hover:bg-orange-500/15"
+                >
+                  Training · giornata
+                </Pro2Link>
+                <Pro2Link
+                  href="/physiology/daily"
+                  variant="secondary"
+                  className="justify-center border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15"
+                >
+                  <HeartPulse className="mr-1 inline h-4 w-4" aria-hidden />
+                  Wellness giornaliero
+                </Pro2Link>
+                <Pro2Link
+                  href="/training/calendar"
+                  variant="ghost"
+                  className="justify-center border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/15"
+                >
+                  Calendar
+                </Pro2Link>
+              </ActionBar>
+            </Pro2SectionCard>
+          </section>
           <section id="dash-operational" className="scroll-mt-28 grid gap-6 xl:grid-cols-2">
             <div className="flex justify-center">
               <DashboardAthleteHubCard />

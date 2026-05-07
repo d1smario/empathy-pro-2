@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
  * - **Sessione atleta**: `POST` JSON `{ "athleteId": "<uuid>", "limit"?: number, "maxCollectionPages"?: number, "streams"?: … }` (cookie auth).
  * - **Server-to-server** (opzionale): `Authorization: Bearer $WHOOP_PULL_RUN_SECRET` + stesso body
  *   (es. cron senza browser); richiede `WHOOP_PULL_RUN_SECRET` configurato.
+ * - **Vercel Cron**: `GET /api/integrations/whoop/pull/cron` con `Authorization: Bearer $CRON_SECRET`
+ *   oppure lo stesso Bearer di `WHOOP_PULL_RUN_SECRET` (vedi Garmin cron pattern).
  */
 export async function POST(req: NextRequest) {
   let athleteId = "";

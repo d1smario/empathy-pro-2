@@ -16,6 +16,7 @@ import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-d
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 import { getMergedIngestStreams } from "@/lib/integrations/ingest-stream-policy";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -414,4 +415,66 @@ export async function runWhoopPullForAthlete(input: {
   ]);
 
   return { inserted, skipped, errors };
+}
+
+/**
+ * Elabora fino a `limit` atleti con WHOOP collegato (`vendor_oauth_links`), in ordine di `updated_at` ascendente.
+ * Da invocare da `GET /api/integrations/whoop/pull/cron` (Vercel Cron) con Bearer segreto.
+ */
+export async function runWhoopPullCronBatch(limit: number): Promise<{
+  processed: number;
+  completed: number;
+  failed: number;
+  errors: string[];
+  inserted: number;
+  skipped: number;
+}> {
+  if (!readOptionalServiceRoleKey()) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per cron WHOOP.");
+  }
+
+  const supabase = createServerSupabaseClient();
+  const cap = Math.min(25, Math.max(1, Math.floor(limit)));
+
+  const { data: rows, error } = await supabase
+    .from("vendor_oauth_links")
+    .select("athlete_id, oauth_access_token, oauth_refresh_token")
+    .eq("vendor", "whoop")
+    .order("updated_at", { ascending: true })
+    .limit(cap);
+
+  if (error) throw new Error(error.message);
+
+  const candidates = (rows ?? []).filter((r) => {
+    const a = typeof r.oauth_access_token === "string" ? r.oauth_access_token.trim() : "";
+    const rf = typeof r.oauth_refresh_token === "string" ? r.oauth_refresh_token.trim() : "";
+    return a.length > 0 || rf.length > 0;
+  });
+
+  let processed = 0;
+  let completed = 0;
+  let failed = 0;
+  let inserted = 0;
+  let skipped = 0;
+  const errors: string[] = [];
+
+  for (const row of candidates) {
+    const athleteId = typeof row.athlete_id === "string" ? row.athlete_id : "";
+    if (!athleteId) continue;
+    processed += 1;
+    try {
+      const result = await runWhoopPullForAthlete({ athleteId });
+      inserted += result.inserted;
+      skipped += result.skipped;
+      if (result.errors.length > 0) {
+        errors.push(`${athleteId}: ${result.errors.slice(0, 5).join("; ")}`);
+      }
+      completed += 1;
+    } catch (e) {
+      failed += 1;
+      errors.push(`${athleteId}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  return { processed, completed, failed, errors, inserted, skipped };
 }

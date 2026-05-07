@@ -1991,8 +1991,11 @@ export default function ProfilePage() {
                         <p className="muted-copy mt-2 text-xs text-white/80">{whoopPullNotice}</p>
                       ) : null}
                       <p className="muted-copy mt-2 text-xs">
-                        Pull manuale: <code className="text-white/70">POST /api/integrations/whoop/pull/run</code> con
-                        sessione; oppure Bearer <code className="text-white/70">WHOOP_PULL_RUN_SECRET</code> da cron.
+                        Aggiornamento automatico: cron Vercel su{" "}
+                        <code className="text-white/70">GET /api/integrations/whoop/pull/cron</code> (
+                        <code className="text-white/70">CRON_SECRET</code>
+                        {" "}o <code className="text-white/70">WHOOP_PULL_RUN_SECRET</code>). Pull manuale:{" "}
+                        <code className="text-white/70">POST …/whoop/pull/run</code> con sessione o stesso Bearer.
                       </p>
                     </div>
 

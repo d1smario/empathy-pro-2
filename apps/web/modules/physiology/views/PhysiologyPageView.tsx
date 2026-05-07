@@ -1680,14 +1680,11 @@ export default function MetabolicLabPage() {
       headerActions={
         <>
           <Pro2Link
-            href={`/physiology/daily/${(() => {
-              const d = new Date();
-              return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-            })()}`}
+            href="/physiology/daily"
             variant="secondary"
             className="justify-center border border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15"
           >
-            Giornata
+            Wellness giornaliero
           </Pro2Link>
           <Pro2Link
             href="/profile"

@@ -50,6 +50,36 @@ function collectCandidateRecords(payload: Record<string, unknown> | null): Array
   return [payload, ...directChildren];
 }
 
+/**
+ * WHOOP v2 (e vendor simili) annidano metriche in `score` / `score.stage_summary`.
+ * Espande ricorsivamente così `extractSleepRecoverySignal` legge le stesse chiavi del matrix docs.
+ */
+function flattenVendorMetricRecords(record: Record<string, unknown>): Record<string, unknown>[] {
+  const list: Record<string, unknown>[] = [record];
+  const score = asRecord(record.score);
+  if (score) {
+    list.push(score, { ...record, ...score });
+    const stage = asRecord(score.stage_summary);
+    if (stage) list.push(stage, { ...record, ...score, ...stage });
+  }
+  const stageTop = asRecord(record.stage_summary);
+  if (stageTop) {
+    list.push(stageTop, { ...record, ...stageTop });
+  }
+  return list;
+}
+
+/** Espande payload device (incluso annidamento WHOOP `score` / `stage_summary`) per KPI wellness. */
+export function expandDevicePayloadMetricRecords(payload: Record<string, unknown> | null): Record<string, unknown>[] {
+  if (!payload) return [];
+  const bases = collectCandidateRecords(payload);
+  const out: Record<string, unknown>[] = [];
+  for (const b of bases) {
+    out.push(...flattenVendorMetricRecords(b));
+  }
+  return out;
+}
+
 function normalizeSleepDurationHours(record: Record<string, unknown> | null): number | null {
   const hours = pickNumber(record, ["sleep_duration_hours", "sleepHours", "sleep_hours", "total_sleep_hours"]);
   if (hours != null) return hours;
@@ -66,29 +96,72 @@ function normalizeSleepDurationHours(record: Record<string, unknown> | null): nu
   const seconds = pickNumber(record, ["total_sleep_duration", "sleep_duration_seconds", "total_sleep_seconds"]);
   if (seconds != null) return Number((seconds / 3600).toFixed(2));
 
+  const milli = pickNumber(record, [
+    "total_in_bed_time_milli",
+    "total_sleep_time_milli",
+    "sleep_duration_milli",
+    "in_bed_duration_milli",
+  ]);
+  if (milli != null && milli > 0) return Number((milli / 3_600_000).toFixed(2));
+
   return null;
 }
 
 export function extractSleepRecoverySignal(payload: Record<string, unknown> | null): SleepRecoverySignal {
-  const records = collectCandidateRecords(payload);
   const merged: SleepRecoverySignal = {};
 
-  for (const record of records) {
-    merged.sleepScore ??=
-      pickNumber(record, ["sleep_score", "sleepScore", "sleep_quality_score", "sleepQualityScore"]);
-    merged.readinessScore ??=
-      pickNumber(record, ["readiness_score", "readinessScore", "readiness", "recovery_index"]);
-    merged.recoveryScore ??=
-      pickNumber(record, ["recovery_score", "recoveryScore", "recovery", "recovery_index"]);
-    merged.hrvMs ??=
-      pickNumber(record, ["hrv_ms", "hrv", "avg_hrv_ms", "average_hrv", "rmssd", "rmssd_ms"]);
-    merged.restingHrBpm ??=
-      pickNumber(record, ["resting_hr_bpm", "resting_hr", "rhr", "lowest_hr_bpm", "lowest_heart_rate"]);
+  for (const record of expandDevicePayloadMetricRecords(payload)) {
+    merged.sleepScore ??= pickNumber(record, [
+      "sleep_performance_percentage",
+      "sleep_score",
+      "sleepScore",
+      "sleep_quality_score",
+      "sleepQualityScore",
+    ]);
+    merged.readinessScore ??= pickNumber(record, [
+      "readiness_score",
+      "readinessScore",
+      "readiness",
+      "recovery_index",
+    ]);
+    merged.recoveryScore ??= pickNumber(record, [
+      "recovery_score",
+      "recoveryScore",
+      "recovery",
+      "recovery_index",
+    ]);
+    merged.hrvMs ??= pickNumber(record, [
+      "hrv_rmssd_milli",
+      "hrv_rmssd_ms",
+      "hrv_ms",
+      "hrv",
+      "avg_hrv_ms",
+      "average_hrv",
+      "rmssd",
+      "rmssd_ms",
+    ]);
+    merged.restingHrBpm ??= pickNumber(record, [
+      "resting_heart_rate",
+      "resting_hr_bpm",
+      "resting_hr",
+      "rhr",
+      "lowest_hr_bpm",
+      "lowest_heart_rate",
+    ]);
     merged.sleepDurationHours ??= normalizeSleepDurationHours(record);
-    merged.strainScore ??=
-      pickNumber(record, ["strain_score", "strainScore", "day_strain", "recovery_strain"]);
-    merged.sourceDate ??=
-      pickString(record, ["date", "day", "summary_date", "sleep_date", "recovery_date", "timestamp"]);
+    merged.strainScore ??= pickNumber(record, ["strain_score", "strainScore", "day_strain", "recovery_strain", "strain"]);
+    merged.sourceDate ??= pickString(record, [
+      "date",
+      "day",
+      "summary_date",
+      "sleep_date",
+      "recovery_date",
+      "timestamp",
+    ]);
+  }
+
+  if (merged.readinessScore == null && merged.recoveryScore != null) {
+    merged.readinessScore = merged.recoveryScore;
   }
 
   return merged;
