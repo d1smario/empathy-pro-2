@@ -73,36 +73,52 @@ export async function buildDeterministicMealPlanFromRequest(
   /** dietType + denyFragments dal request (allergie/intolleranze/esclusioni + dieta) → vincoli MANDATORY sul composer. */
   const dietType = normalizeDietTypeForComposer(req.dietType);
   const denyFragments = buildMealPlanFoodDenyFragments(req);
+  const suppressed = req.suppressedSlots ?? [];
   const dayCtx = createMediterraneanDayContext(
     req.planDate,
     req.weeklyStapleCounts,
     req.postWorkoutMealBySlot,
     dietType,
     denyFragments,
+    suppressed,
   );
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const items = pickItemsForSlot(slot, dayCtx);
     const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
-    const timing =
-      slot.functionalFoodGroups.find((g) => g.timingHalfLifeHint.trim())?.timingHalfLifeHint ??
-      req.pathwayTimingLines[0] ??
-      `Orario pasto ${slot.scheduledTimeLocal || "—"}; allinea al carico del giorno.`;
+    const isSuppressed = suppressed.includes(slot.slot);
+    const timing = isSuppressed
+      ? `Slot ${slot.slot} (${slot.scheduledTimeLocal || "—"}) cade nella finestra di allenamento: rifornimento in seduta gestito dal modulo Fueling (no spuntino convenzionale).`
+      : (slot.functionalFoodGroups.find((g) => g.timingHalfLifeHint.trim())?.timingHalfLifeHint ??
+          req.pathwayTimingLines[0] ??
+          `Orario pasto ${slot.scheduledTimeLocal || "—"}; allinea al carico del giorno.`);
+
+    const slotCoherenceText = isSuppressed
+      ? `Spuntino convenzionale soppresso: lo slot ${slot.slot} (${slot.scheduledTimeLocal || "—"}) ricade nella finestra di allenamento. Le kcal/CHO/elettroliti necessari sono coperti dal piano Fueling (gel + sport drink + idratazione).`
+      : groupTitles
+        ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
+        : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`;
 
     const row: IntelligentMealPlanSlotOut = {
       slot: slot.slot,
-      targetKcalEcho: slot.targetKcal,
+      /** Per slot soppressi, l'eco kcal mostra il placeholder ridotto (≤ 60 kcal): la UI evidenzia "in-ride fueling". */
+      targetKcalEcho: isSuppressed
+        ? Math.max(15, items.reduce((a, i) => a + i.approxKcal, 0))
+        : slot.targetKcal,
       items,
-      slotCoherence: groupTitles
-        ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
-        : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`,
+      slotCoherence: slotCoherenceText,
       slotTimingRationale: timing.slice(0, 400),
     };
     return row;
   });
 
+  const suppressedNote = suppressed.length > 0
+    ? `Spuntini soppressi (cadono dentro la finestra di allenamento): ${suppressed.join(", ")} → vedi modulo Fueling per gel/idratazione/elettroliti in seduta.`
+    : null;
+
   const dayBits = [
     `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (cinque slot)`,
+    suppressedNote,
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),
     ...req.pathwayTimingLines.slice(0, 4),
     ...req.trainingDayLines.slice(0, 3),

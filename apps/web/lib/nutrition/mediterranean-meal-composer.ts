@@ -32,6 +32,12 @@ export type MediterraneanDayContext = {
   dietType?: MediterraneanDietType;
   /** Sottostringhe da escludere per allergie/intolleranze/esclusioni (lowercase, già normalizzate dal request builder). */
   denyFragments?: string[];
+  /**
+   * Slot soppressi perché cadono dentro la finestra di allenamento (es. snack_am 10:30 in long ride 9–13:30):
+   * il composer ritorna un placeholder che rimanda al modulo Fueling per gel/idratazione/elettroliti in seduta,
+   * preservando la simmetria dei 5 slot per UI e rollup.
+   */
+  suppressedSlots?: MealSlotKey[];
 };
 
 /** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
@@ -43,6 +49,7 @@ export function createMediterraneanDayContext(
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>,
   dietType?: MediterraneanDietType,
   denyFragments?: string[],
+  suppressedSlots?: MealSlotKey[],
 ): MediterraneanDayContext {
   const w =
     weekStapleCounts && Object.keys(weekStapleCounts).length
@@ -56,6 +63,8 @@ export function createMediterraneanDayContext(
     denyFragments && denyFragments.length > 0
       ? denyFragments.map((s) => s.toLowerCase()).filter((s) => s.length >= 2)
       : undefined;
+  const supp =
+    suppressedSlots && suppressedSlots.length > 0 ? [...suppressedSlots] : undefined;
   return {
     planDate,
     usedStaples: new Set(),
@@ -63,6 +72,7 @@ export function createMediterraneanDayContext(
     postWorkoutMealBySlot: pw,
     dietType,
     denyFragments: deny,
+    suppressedSlots: supp,
   };
 }
 
@@ -1045,12 +1055,43 @@ function composeSnack(
   return { lines, items, totalApproxKcal: s };
 }
 
+/**
+ * Placeholder per slot snack soppresso da long-ride / lungo training: la finestra carburante in seduta
+ * è gestita dal modulo `Fueling` (gel, sport drink, elettroliti). Manteniamo lo slot nel piano per non
+ * sballare la simmetria UI (5 card), ma con kcal contenute (coperte effettivamente dalla seduta) e
+ * `compositionStatus` non risolto (no contributo al rollup nutrienti).
+ */
+function composeInRideFuelingPlaceholder(
+  slot: MealSlotKey,
+  macros: MealMacroTargets,
+): MediterraneanComposedMeal {
+  /** Quota minima visiva (≤ 60 kcal): hint operativo, non un pasto. */
+  const placeholderKcal = Math.min(60, Math.max(15, Math.round(macros.kcal * 0.05)));
+  const item: IntelligentMealPlanItemOut = {
+    name: "In-ride fueling (vedi Fueling)",
+    portionHint: "Carburante in seduta: gel/sport drink + idratazione, elettroliti come da modulo Fueling",
+    approxKcal: placeholderKcal,
+    macroRole: "cho_heavy",
+    functionalBridge:
+      "Slot soppresso: cade dentro la finestra di allenamento. Il rifornimento avviene in seduta (gel + sport drink + sale) ed è dimensionato in `Fueling` su durata/intensità — non si raddoppia con uno spuntino convenzionale.",
+  };
+  return {
+    items: [item],
+    lines: [`Spuntino convenzionale soppresso (${slot}): finestra di allenamento — usa il piano Fueling.`],
+    totalApproxKcal: placeholderKcal,
+  };
+}
+
 /** Piano mediterraneo: porzioni e kcal coerenti con il target dello slot. */
 export function composeMediterraneanMeal(
   slot: MealSlotKey,
   macros: MealMacroTargets,
   ctx?: MediterraneanDayContext,
 ): MediterraneanComposedMeal {
+  /** Slot soppressi (snack durante long ride): placeholder che rimanda al modulo Fueling. */
+  if (ctx?.suppressedSlots && ctx.suppressedSlots.includes(slot)) {
+    return composeInRideFuelingPlaceholder(slot, macros);
+  }
   const seed = hashSeed(slot, macros.kcal);
   const breakfastCtx = ctx ?? createMediterraneanDayContext("");
   if (slot === "breakfast") return composeBreakfast(macros, seed, breakfastCtx);

@@ -116,6 +116,12 @@ export type IntelligentMealPlanRequest = {
    * a pranzo/cena, spuntino più “refeed” (dolce / più cereali o salato più magro e croccante).
    */
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
+  /**
+   * Slot soppressi perché cadono DENTRO la finestra di allenamento (es. snack_am 10:30 in long ride 9:00–13:30).
+   * Il composer rimpiazza il pasto convenzionale con un placeholder che rimanda al modulo Fueling
+   * per gel/elettroliti/idratazione in seduta.
+   */
+  suppressedSlots?: MealSlotKey[];
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */
@@ -132,6 +138,8 @@ export type IntelligentMealPlanSolverBasis = {
   aggregateInhibitors: string[] | null;
   /** Eco dei flag orario-spostato / post-seduta passati al composer (se presenti). */
   postWorkoutMealBySlot?: Partial<Record<MealSlotKey, boolean>>;
+  /** Eco degli slot soppressi (cadono nella finestra training): la UI può evidenziarli come "in-ride fueling". */
+  suppressedSlots?: MealSlotKey[];
   slots: Array<{
     slot: MealSlotKey;
     labelIt: string;

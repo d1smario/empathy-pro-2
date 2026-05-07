@@ -70,10 +70,10 @@ function minutesToFlat(mins: Record<keyof FlatMealTimes, number>): FlatMealTimes
 }
 
 /**
- * Minuto di fine allenamento (stesso giorno): `training1_start_time` + max(durata somma pianificata, durata routine).
- * Ritorna `null` se non c’è né flag allenamento né sedute con durata.
+ * Inizio allenamento (minuti da mezzanotte) per il `planDate` corrente, leggendo prima il week_day specifico
+ * poi il root della routine. Ritorna `null` se non si può inferire (no flag allenamento e nessuna seduta utile).
  */
-export function inferTrainingEndMinutesFromRoutineAndPlanned(
+export function inferTrainingStartMinutesFromRoutine(
   routineWeekDay: Record<string, unknown>,
   routineRoot: Record<string, unknown>,
   plannedDurationsMinutes: number[],
@@ -89,7 +89,27 @@ export function inferTrainingEndMinutesFromRoutineAndPlanned(
     nonEmptyTime(routineWeekDay.training1_start_time) ??
     nonEmptyTime(routineRoot.training1_start_time) ??
     "07:00";
-  const startMin = parseLocalTimeToMinutes(startStr) ?? 7 * 60;
+  return parseLocalTimeToMinutes(startStr) ?? 7 * 60;
+}
+
+/**
+ * Minuto di fine allenamento (stesso giorno): `training1_start_time` + max(durata somma pianificata, durata routine).
+ * Ritorna `null` se non c’è né flag allenamento né sedute con durata.
+ */
+export function inferTrainingEndMinutesFromRoutineAndPlanned(
+  routineWeekDay: Record<string, unknown>,
+  routineRoot: Record<string, unknown>,
+  plannedDurationsMinutes: number[],
+): number | null {
+  const sumPlanned = plannedDurationsMinutes.reduce((s, n) => s + (Number.isFinite(n) && n > 0 ? n : 0), 0);
+  const hasPlanned = sumPlanned >= 25;
+  const hr = routineWeekDay.has_training;
+  const hasRoutineTraining =
+    hr === true || hr === 1 || String(hr).toLowerCase() === "true" || String(hr) === "1";
+  if (!hasPlanned && !hasRoutineTraining) return null;
+
+  const startMin = inferTrainingStartMinutesFromRoutine(routineWeekDay, routineRoot, plannedDurationsMinutes);
+  if (startMin == null) return null;
 
   const routineDur = numFromUnknown(routineWeekDay.training1_duration_minutes, 0);
   const dur = Math.max(hasPlanned ? sumPlanned : 0, hasRoutineTraining ? routineDur : 0);
@@ -175,6 +195,50 @@ export function buildRoutineDigestForMealPlan(
   );
 
   return bits.length ? bits.join(" · ") : null;
+}
+
+/**
+ * Slot snack (snack_am / snack_pm) il cui orario base cade DENTRO la finestra di allenamento
+ * (es. long ride 09:00→13:30 sopprime snack_am 10:30). Tali slot vengono soppressi nel piano pasti
+ * convenzionale: l’apporto di carburante in seduta è gestito dal modulo `Fueling` (gel/idro/elettroliti),
+ * non da uno spuntino extra.
+ *
+ * Buffer di sicurezza: 15 minuti su ciascun lato della finestra (per evitare di sopprimere uno snack
+ * subito prima/dopo). Lunch e dinner non sono mai soppressi qui — il pranzo viene già spostato in avanti
+ * dalla `applyTrainingEndToMealTimes`.
+ */
+export function computeSnackSlotsSuppressedByTrainingWindow(input: {
+  routineConfig: Record<string, unknown> | null | undefined;
+  planDate: string;
+  mealTimesFlatFromRoot: FlatMealTimes;
+  plannedSessions: Array<{ duration_minutes?: unknown }>;
+  bufferMinutes?: number;
+}): MealSlotKey[] {
+  const rc = input.routineConfig;
+  if (!rc) return [];
+  const wd = profileWeekDayKeyFromIsoLocal(input.planDate);
+  const weekPlan = asRecord(rc.week_plan);
+  const day = asRecord(weekPlan[wd]);
+  const plannedMins = input.plannedSessions.map((s) => numFromUnknown(s.duration_minutes, 0));
+  const startMin = inferTrainingStartMinutesFromRoutine(day, rc, plannedMins);
+  const endMin = inferTrainingEndMinutesFromRoutineAndPlanned(day, rc, plannedMins);
+  if (startMin == null || endMin == null) return [];
+
+  /** Allenamenti molto brevi (< 50 min) non sopprimono spuntini: lascia il piano standard. */
+  if (endMin - startMin < 50) return [];
+
+  const buf = input.bufferMinutes ?? 15;
+  const winStart = startMin - buf;
+  const winEnd = endMin + buf;
+
+  const base = mealTimesFromRoutineWeekPlanForDate(input.routineConfig, input.planDate, input.mealTimesFlatFromRoot);
+  const out: MealSlotKey[] = [];
+  for (const slot of ["snack_am", "snack_pm"] as MealSlotKey[]) {
+    const m = parseLocalTimeToMinutes(base[slot]);
+    if (m == null) continue;
+    if (m >= winStart && m <= winEnd) out.push(slot);
+  }
+  return out;
 }
 
 /**

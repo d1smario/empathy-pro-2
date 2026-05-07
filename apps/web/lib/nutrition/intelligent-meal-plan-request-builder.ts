@@ -11,7 +11,11 @@ import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/
 import { buildPathwayTimingLinesForMealPlan } from "@/lib/nutrition/meal-plan-pathway-timing-lines";
 import { shortFoodLabelFromUsda } from "@/lib/nutrition/usda-food-label";
 import type { FlatMealTimes } from "@/lib/nutrition/routine-week-plan-meal-times";
-import { buildRoutineDigestForMealPlan, computePostWorkoutMealFlags } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
+import {
+  buildRoutineDigestForMealPlan,
+  computePostWorkoutMealFlags,
+  computeSnackSlotsSuppressedByTrainingWindow,
+} from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 
 export type PathwaySlotBundleInput = {
   pathwayTargets?: FunctionalFoodTargetViewModel[];
@@ -70,10 +74,17 @@ export function buildIntelligentMealPlanRequest(input: {
   const routineDigest = buildRoutineDigestForMealPlan(input.profile?.routine_config ?? null, input.planDate, {
     plannedSessions: plannedForDay,
   });
+  const mealTimesFlat = routineMealTimesFlat(input.profile?.routine_config ?? null);
   const postWorkoutMealBySlot = computePostWorkoutMealFlags({
     routineConfig: input.profile?.routine_config ?? null,
     planDate: input.planDate,
-    mealTimesFlatFromRoot: routineMealTimesFlat(input.profile?.routine_config ?? null),
+    mealTimesFlatFromRoot: mealTimesFlat,
+    plannedSessions: plannedForDay,
+  });
+  const suppressedSlots = computeSnackSlotsSuppressedByTrainingWindow({
+    routineConfig: input.profile?.routine_config ?? null,
+    planDate: input.planDate,
+    mealTimesFlatFromRoot: mealTimesFlat,
     plannedSessions: plannedForDay,
   });
 
@@ -129,6 +140,7 @@ export function buildIntelligentMealPlanRequest(input: {
       athleteId: input.athleteId,
       planDate: input.planDate,
       postWorkoutMealBySlot: Object.keys(postWorkoutMealBySlot).length ? postWorkoutMealBySlot : undefined,
+      suppressedSlots: suppressedSlots.length > 0 ? suppressedSlots : undefined,
       mealPlanSolverMeta: {
         dailyMealsKcalTotal,
         integrationLeverLines: (input.integrationLeverLines ?? []).slice(0, 16),
