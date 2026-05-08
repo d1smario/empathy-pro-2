@@ -5,7 +5,10 @@
 -- nel mese indicato per l’athlete risolto da app_user_profiles → athlete_profiles.
 -- `executed_workout_series` viene rimossa in cascade su delete executed_workouts.
 --
--- Esegui nel SQL Editor del progetto Supabase corretto (stesso host delle env Pro 2).
+-- Esegui nel SQL Editor del progetto Supabase corretto.
+-- Verifica che l’host (Settings → API → Project URL) sia lo STESSO di
+-- `NEXT_PUBLIC_SUPABASE_URL` su Vercel **Production** — altrimenti cancelli un altro DB
+-- e in prod non cambia nulla.
 -- =============================================================================
 
 DO $$
