@@ -41,6 +41,7 @@ export async function GET(req: NextRequest) {
       failed: result.failed,
       errors: result.errors,
       activitiesUpserted: result.activitiesUpserted,
+      activityBlobsStored: result.activityBlobsStored,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Esecuzione pull fallita.";

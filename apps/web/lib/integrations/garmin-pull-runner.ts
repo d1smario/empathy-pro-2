@@ -3,6 +3,10 @@ import "server-only";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
+import {
+  persistGarminPullBinaryToStorage,
+  shouldTreatGarminPullResponseAsBinary,
+} from "./garmin-activity-blob-storage";
 import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
@@ -40,6 +44,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   failed: number;
   errors: string[];
   activitiesUpserted: number;
+  activityBlobsStored: number;
 }> {
   if (!readOptionalServiceRoleKey()) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per la coda pull Garmin.");
@@ -59,6 +64,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   let completed = 0;
   let failed = 0;
   let activitiesUpserted = 0;
+  let activityBlobsStored = 0;
   const errors: string[] = [];
 
   for (const job of list) {
@@ -71,14 +77,14 @@ export async function runGarminPullJobs(limit: number): Promise<{
       if (userTok) {
         fetchHeaders = {
           ...buildGarminSignedGetHeaders({ url: job.callback_url, userAccessToken: userTok }),
-          Accept: "application/json",
+          Accept: "*/*",
         };
       } else if (job.athlete_id) {
         const tok = await ensureFreshGarminAccessTokenForAthlete(supabase, job.athlete_id);
         if ("error" in tok) {
           throw new Error(`oauth2_pull: ${tok.error}`);
         }
-        fetchHeaders = { Authorization: `Bearer ${tok.accessToken}`, Accept: "application/json" };
+        fetchHeaders = { Authorization: `Bearer ${tok.accessToken}`, Accept: "*/*" };
       } else {
         throw new Error("pull_job_senza_user_access_token né athlete_id");
       }
@@ -89,23 +95,52 @@ export async function runGarminPullJobs(limit: number): Promise<{
         cache: "no-store",
         signal: AbortSignal.timeout(90_000),
       });
-      const text = await res.text();
-      const ct = (res.headers.get("content-type") ?? "").toLowerCase();
-      /** Garmin: es. GET `/rest/activityFile` → 200 `application/octet-stream` (FIT/TCX/GPX), non JSON summary. */
-      const binaryOk =
-        res.ok && (ct.includes("octet-stream") || ct.includes("application/vnd.garmin"));
-      const body: unknown = binaryOk
-        ? {
-            garminWellnessBinaryResponse: true as const,
-            contentType: res.headers.get("content-type"),
-            byteLength: text.length,
-          }
-        : await safeJsonBody(text);
+      const ab = await res.arrayBuffer();
+      const buf = Buffer.from(ab);
+      const hdrCtRaw = res.headers.get("content-type");
+      const contentDispositionRaw = res.headers.get("content-disposition");
       const ok = res.ok;
+
+      /** Evita `.toString('utf8')` su blob multi‑MB (FIT) se archiviamo come binario. */
+      let responseTextCache: string | undefined;
+      const responseText = () => (responseTextCache ??= buf.toString("utf8"));
+
+      let body: unknown;
+      const binaryPersist = shouldTreatGarminPullResponseAsBinary(ok, hdrCtRaw, buf);
+      if (binaryPersist && ok) {
+        const persisted = await persistGarminPullBinaryToStorage({
+          supabase,
+          pullJobId: job.id,
+          athleteId: job.athlete_id,
+          endpointKind: job.endpoint_kind,
+          callbackUrl: job.callback_url,
+          buffer: buf,
+          contentType: hdrCtRaw,
+          contentDispositionHeader: contentDispositionRaw,
+        });
+        if (!persisted.stored) {
+          throw new Error(`garmin_pull_binary_archive: ${persisted.reason}`);
+        }
+        activityBlobsStored += 1;
+        body = {
+          garminWellnessBinaryResponse: true as const,
+          stored: true as const,
+          storage_bucket: persisted.bucket,
+          storage_path: persisted.path,
+          sha256_hex: persisted.sha256_hex,
+          byteLength: persisted.byte_length,
+          contentType: persisted.upload_content_type,
+          extension: persisted.extension,
+          fit_extract_summary: persisted.fit_extract,
+          blob_row_id: persisted.row_id ?? null,
+        };
+      } else {
+        body = await safeJsonBody(responseText());
+      }
       if (ok) completed += 1;
       else failed += 1;
 
-      const errDetail = !ok ? tryParseGarminApiErrorMessage(text) ?? text.slice(0, 4000) : null;
+      const errDetail = !ok ? tryParseGarminApiErrorMessage(responseText()) ?? responseText().slice(0, 4000) : null;
 
       await supabase
         .from("garmin_pull_jobs")
@@ -146,5 +181,5 @@ export async function runGarminPullJobs(limit: number): Promise<{
     }
   }
 
-  return { processed: list.length, completed, failed, errors, activitiesUpserted };
+  return { processed: list.length, completed, failed, errors, activitiesUpserted, activityBlobsStored };
 }

@@ -42,3 +42,11 @@ export function readOptionalHealthUploadsBucket(): string | null {
   const name = normalizeSupabaseEnvValue(raw);
   return name.length > 0 ? name : null;
 }
+
+/** Bucket Storage per FIT/XML da pull Garmin (migrazione 046); opzionale finché non serve archiviazione blob. */
+export function readOptionalGarminActivityBlobsBucket(): string | null {
+  const raw = process.env.GARMIN_ACTIVITY_BLOBS_BUCKET;
+  if (!raw?.trim()) return null;
+  const name = normalizeSupabaseEnvValue(raw);
+  return name.length > 0 ? name : null;
+}
