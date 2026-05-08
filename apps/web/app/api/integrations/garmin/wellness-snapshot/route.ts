@@ -1,40 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import {
-  garminWellnessSnapshotAllowedKeys,
-  runGarminWellnessSnapshotPull,
-  type GarminWellnessSnapshotStream,
-} from "@/lib/integrations/garmin-wellness-snapshot-pull";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
 
-function parseStreams(body: unknown): GarminWellnessSnapshotStream[] | null {
-  if (!body || typeof body !== "object") return null;
-  const streams = (body as { streams?: unknown }).streams;
-  if (!Array.isArray(streams)) return null;
-  const set = garminWellnessSnapshotAllowedKeys();
-  const out: GarminWellnessSnapshotStream[] = [];
-  for (const s of streams) {
-    const key = typeof s === "string" ? s.trim() : "";
-    if (set.has(key)) out.push(key as GarminWellnessSnapshotStream);
-  }
-  return out.length > 0 ? out : null;
-}
-
-function parseHoursBack(raw: unknown): number | undefined {
-  if (typeof raw !== "number" || !Number.isFinite(raw)) return undefined;
-  return Math.floor(raw);
-}
+const BODY = {
+  ok: false as const,
+  /** Allineamento Health API Garmin: OAuth2 vale per utente/consenso; molti GET `/rest/dailies` ecc. richiedono `token` sulla URL di pull (notifica Ping/Push), non Bearer da solo → `InvalidPullTokenException`. */
+  code: "garmin_wellness_pull_requires_notification_token" as const,
+  hint: `I riepiloghi wellness (dailies, sleeps, stress…) su apis.garmin.com vanno di norma scaricati usando l’URL ricevuto dalla notifica Push/Ping, con il parametro token (pull token) e la firma OAuth1 del partner (come fa già garmin-pull-runner sui garmin_pull_jobs). L’OAuth2 PKCE serve per collegare l’utente, refresh e chiamate tipo GET /rest/user/id e /rest/user/permissions (Elena Garmin).`,
+  supportedPath: [
+    "Portale Garmin: endpoint Push abilitati → POST /api/integrations/garmin/push/…",
+    "Cron / POST …/garmin/pull/run → esegue GET su callbackURL dalla coda con OAuth1 o Bearer+athlete",
+    "Summary Backfill (se abilitato sul contratto) → GET /rest/backfill/<stream> …",
+  ],
+} as const;
 
 /**
- * Pull **diretto** summary Garmin (GET `/rest/dailies` ecc.) nell’intervallo upload UTC — senza Summary Backfill.
- * Salva righe `device_sync_exports` per merge nel pannello giornaliero.
+ * Riservato per chiarire il modello dati Garmin. **Non** implementa un pull “sintetico”: senza `token`
+ * dalla Ping/Push la Wellness API risponde `InvalidPullTokenException` (HTTP 400).
  */
+export async function GET() {
+  return NextResponse.json(BODY, { status: 422, headers: NO_STORE });
+}
+
 export async function POST(req: NextRequest) {
   try {
     let bodyJson: Record<string, unknown> = {};
@@ -51,47 +43,11 @@ export async function POST(req: NextRequest) {
 
     await requireAthleteReadContext(req, athleteId);
 
-    const admin = createSupabaseAdminClient();
-    if (!admin) {
-      return NextResponse.json({ error: "service_role_unconfigured" }, { status: 503, headers: NO_STORE });
-    }
-
-    const streams = parseStreams(bodyJson);
-    const hoursBack = parseHoursBack(bodyJson.hoursBack);
-
-    const pulled = await runGarminWellnessSnapshotPull({
-      supabase: admin,
-      athleteId,
-      ...(hoursBack != null ? { hoursBack } : {}),
-      ...(streams ? { streams } : {}),
-    });
-
-    const inserted = pulled.results.reduce((a, r) => a + r.inserted, 0);
-    const fetched = pulled.results.reduce((a, r) => a + r.fetched, 0);
-    const skipped = pulled.results.reduce((a, r) => a + r.skipped, 0);
-    const allOk = pulled.results.every((r) => r.ok);
-
-    return NextResponse.json(
-      {
-        ok: allOk,
-        message: `Snapshot wellness: scaricati ${fetched} record, salvati ${inserted}, già presenti ${skipped}.`,
-        uploadStartTimeInSeconds: pulled.uploadStart,
-        uploadEndTimeInSeconds: pulled.uploadEnd,
-        results: pulled.results,
-      },
-      { headers: NO_STORE },
-    );
+    return NextResponse.json(BODY, { status: 422, headers: NO_STORE });
   } catch (e) {
     if (e instanceof AthleteReadContextError) {
       return NextResponse.json({ error: e.message }, { status: e.status, headers: NO_STORE });
     }
-    const msg = e instanceof Error ? e.message : "wellness_snapshot_failed";
-    const status =
-      msg === "oauth2_env_missing" || msg === "no_garmin_link"
-        ? 400
-        : msg === "service_role_unconfigured"
-          ? 503
-          : 500;
-    return NextResponse.json({ error: msg }, { status, headers: NO_STORE });
+    throw e;
   }
 }

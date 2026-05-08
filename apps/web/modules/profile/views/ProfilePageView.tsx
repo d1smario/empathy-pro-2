@@ -411,8 +411,6 @@ export default function ProfilePage() {
   const [garminBackfillDays, setGarminBackfillDays] = useState(14);
   const [garminBackfillBusy, setGarminBackfillBusy] = useState(false);
   const [garminBackfillNotice, setGarminBackfillNotice] = useState<string | null>(null);
-  const [garminSnapshotBusy, setGarminSnapshotBusy] = useState(false);
-  const [garminSnapshotNotice, setGarminSnapshotNotice] = useState<string | null>(null);
   const [whoopLink, setWhoopLink] = useState<{
     linked: boolean;
     whoopUserIdMasked?: string;
@@ -884,55 +882,6 @@ export default function ProfilePage() {
       setGarminBackfillNotice("Errore di rete.");
     } finally {
       setGarminBackfillBusy(false);
-    }
-  }
-
-  async function runGarminWellnessSnapshotPull() {
-    if (!activeAthleteId || !garminLink?.linked || garminSnapshotBusy) return;
-    setGarminSnapshotBusy(true);
-    setGarminSnapshotNotice(null);
-    try {
-      const r = await fetch("/api/integrations/garmin/wellness-snapshot", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ athleteId: activeAthleteId, hoursBack: 72 }),
-      });
-      const j = (await r.json()) as {
-        ok?: boolean;
-        message?: string;
-        error?: string;
-        results?: Array<{
-          stream: string;
-          ok: boolean;
-          httpStatus: number;
-          fetched: number;
-          inserted: number;
-          skipped: number;
-          queryStrategy?: string;
-          errorMessage?: string;
-        }>;
-      };
-      if (Array.isArray(j.results)) {
-        const bits = j.results.map((row) => {
-          if (row.ok) {
-            const strat = row.queryStrategy ? `[${row.queryStrategy.slice(0, 52)}]` : "";
-            return `${row.stream}:ok(${row.inserted}/${row.fetched})${strat}`;
-          }
-          const err = row.errorMessage ? ` (${row.errorMessage.slice(0, 100)})` : "";
-          return `${row.stream}:FAIL:${row.httpStatus}${err}`;
-        });
-        const prefix = j.ok === false ? "(parziale) " : "";
-        setGarminSnapshotNotice(`${prefix}${j.message ?? ""} ${bits.join(" · ")}`.trim());
-      } else if (j.error) {
-        setGarminSnapshotNotice(j.error);
-      } else {
-        setGarminSnapshotNotice("Risposta imprevista dal server.");
-      }
-    } catch {
-      setGarminSnapshotNotice("Errore di rete.");
-    } finally {
-      setGarminSnapshotBusy(false);
     }
   }
 
@@ -2017,27 +1966,18 @@ export default function ProfilePage() {
                             {garminBackfillBusy ? "Invio…" : "Wellness batch"}
                           </Pro2Button>
                         </div>
-                        <p className="muted-copy text-xs" style={{ marginTop: 10, marginBottom: 6 }}>
-                          Pull diretto giornaliero (senza Summary Backfill): GET <code className="text-white/65">/rest/dailies</code>
-                          , sonno, stress, HRV ecc. · ultimi 72h UTC salvati in <code className="text-white/65">device_sync_exports</code>{" "}
-                          per il pannello physiology.
+                        <p className="muted-copy text-xs" style={{ marginTop: 10, marginBottom: 4 }}>
+                          Dati wellness (passi, sonno, stress, HRV): Garmin non espone un “download del giorno” con il solo token
+                          OAuth2. Le GET <code className="text-white/65">/rest/dailies</code> ecc. usano il{" "}
+                          <strong className="text-white/85">pull token</strong> (<code className="text-white/65">token=</code>)
+                          presente nella URL inviata dalla <strong className="text-white/85">notifica Push/Ping</strong>; senza
+                          quello il server risponde <code className="text-white/65">InvalidPullTokenException</code>. OAuth2
+                          serve per collegare l’utente e per <code className="text-white/65">GET /rest/user/permissions</code> (come
+                          indica Garmin). Flusso Empathy: push nel portale Garmin Connect Developer → POST{" "}
+                          <code className="text-white/65">/push/…</code> → coda pull → elaborazione quasi subito in background (e
+                          cron ogni pochi minuti come riserva). I dati nuovi non richiedono un tasto: sincronizza il dispositivo
+                          con Garmin Connect.
                         </p>
-                        <div className="flex flex-wrap gap-2">
-                          <Pro2Button
-                            type="button"
-                            variant="secondary"
-                            disabled={garminBackfillBusy || garminSnapshotBusy}
-                            className="border border-emerald-500/35 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/18"
-                            onClick={() => void runGarminWellnessSnapshotPull()}
-                          >
-                            {garminSnapshotBusy ? "Scarico…" : "Aggiorna wellness ora"}
-                          </Pro2Button>
-                        </div>
-                        {garminSnapshotNotice ? (
-                          <p className="text-xs text-emerald-100/85" style={{ marginTop: 8 }}>
-                            {garminSnapshotNotice}
-                          </p>
-                        ) : null}
                         {garminBackfillNotice ? (
                           <p className="text-xs text-white/80" style={{ marginTop: 8 }}>
                             {garminBackfillNotice}
@@ -2046,10 +1986,20 @@ export default function ProfilePage() {
                       </div>
                     ) : null}
                     <p className="muted-copy text-xs">
-                      Worker pull: cron Vercel su <code className="text-white/70">/api/integrations/garmin/pull/cron</code>{" "}
-                      (<code className="text-white/70">CRON_SECRET</code>) oppure{" "}
+                      Worker pull: dopo ogni notifica push parte un run in background; cron Vercel su{" "}
+                      <code className="text-white/70">/api/integrations/garmin/pull/cron</code> (
+                      <code className="text-white/70">CRON_SECRET</code>) oppure{" "}
                       <code className="text-white/70">POST …/pull/run</code> con{" "}
-                      <code className="text-white/70">GARMIN_PULL_RUN_SECRET</code>.
+                      <code className="text-white/70">GARMIN_PULL_RUN_SECRET</code>. Riferimenti portale:{" "}
+                      <a
+                        className="text-cyan-200/90 underline underline-offset-2 hover:text-cyan-100"
+                        href="https://apis.garmin.com/tools/apiDocs"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        apis.garmin.com/tools/apiDocs
+                      </a>
+                      .
                     </p>
 
                     <div

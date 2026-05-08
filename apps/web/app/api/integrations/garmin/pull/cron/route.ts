@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * **Vercel Cron** invoca solo **GET** con `Authorization: Bearer <CRON_SECRET>` (variabile `CRON_SECRET` nel progetto Vercel).
+ * Rete di sicurezza sulla coda: le push avviano anche un pull immediato in background (vedi push route + `waitUntil`).
  * Stessa logica di `POST …/pull/run`: accetta anche `Bearer <GARMIN_PULL_RUN_SECRET>` per test manuali.
  */
 function authorizeCron(req: NextRequest): boolean {

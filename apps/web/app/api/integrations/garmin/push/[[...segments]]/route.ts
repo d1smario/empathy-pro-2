@@ -3,6 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { runGarminPartnerAdminEffects } from "@/lib/integrations/garmin-admin-webhooks";
 import { verifyGarminPushWebhookAuth } from "@/lib/integrations/garmin-push-webhook-auth";
 import { persistGarminPushReceipt } from "@/lib/integrations/garmin-push-persist";
+import { scheduleGarminImmediatePullAfterPush } from "@/lib/integrations/garmin-push-schedule-immediate-pull";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,6 +51,8 @@ export async function HEAD() {
 
 /**
  * POST: riceve notifiche push Garmin (metadata + callbackURL per pull).
+ * Dopo l’inserimento in coda, avvia automaticamente `runGarminPullJobs` in background (Vercel `waitUntil`), senza attendere il cron.
+ *
  * Esempio URL per riga nel portale:
  *   https://<host>/api/integrations/garmin/push/dailies
  *   https://<host>/api/integrations/garmin/push/activities
@@ -87,6 +90,7 @@ export async function POST(
       contentType,
       parsedJson: parsed,
     });
+    scheduleGarminImmediatePullAfterPush(pullJobsQueued);
     return NextResponse.json(
       {
         ok: true as const,

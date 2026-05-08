@@ -33,6 +33,7 @@
     "@empathy/integrations-stripe": "0.1.0",
     "@empathy/integrations-supabase": "0.1.0",
     "@supabase/ssr": "^0.5.2",
+    "@vercel/functions": "^1.5.0",
     "fit-file-parser": "^2.3.3",
     "lucide-react": "^0.468.0",
     "motion": "^11.15.0",

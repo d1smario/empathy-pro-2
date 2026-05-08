@@ -50,13 +50,25 @@ function readGarminUserId(rec: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
+/** Pull token spesso solo nella query `callbackURL` (OAuth1 user token per la firma GET). */
+function readPullTokenFromCallbackUrl(callbackUrl: string): string {
+  try {
+    const u = new URL(callbackUrl);
+    return u.searchParams.get("token")?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
 function pushItem(streamKey: string, rec: Record<string, unknown>, sink: GarminPullItem[]): void {
   const tokenRaw = rec.userAccessToken ?? rec.user_access_token;
   const urlCandidate = rec.callbackURL ?? rec.callbackUrl ?? rec.callback_url ?? (rec as { CallbackURL?: unknown }).CallbackURL;
   const urlRaw = typeof urlCandidate === "string" ? urlCandidate : "";
   const url = urlRaw.trim();
   if (!url) return;
-  const token = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+  const tokenBody = typeof tokenRaw === "string" ? tokenRaw.trim() : "";
+  const tokenFromUrl = readPullTokenFromCallbackUrl(url);
+  const token = tokenBody || tokenFromUrl;
   const garminUserId = readGarminUserId(rec);
   if (!token && !garminUserId) return;
   sink.push({

@@ -11,6 +11,10 @@ import "server-only";
  *   `uploadStartTimeInSeconds` + `uploadEndTimeInSeconds` (se usati, **sempre in coppia**).
  * - **GET `/rest/activityFile`** → query `id`, `token`; **200** spesso `application/octet-stream` (FIT/TCX/GPX).
  *   Garmin: i file **non** arrivano via Push; solo in risposta a **Ping** chiamando il `callbackURL` indicato.
+ * - **GET `/rest/dailies` (e molti altri summary)** → la URL operativa arriva dalla **Ping/Push** con **`token=`** (pull token)
+ *   nell’query string; il solo `Authorization: Bearer` dell’OAuth2 utente **non** sostituisce quel token →
+ *   errore tipico `InvalidPullTokenException`. OAuth2 serve a collegare l’utente e a `user/id`, `user/permissions`; il pull verso
+ *   `callbackURL` usa consumer key/secret partner + `token` (e spesso OAuth1), vedi `garmin-pull-runner.ts`.
  * - Errori HTTP: corpo JSON tipico `{ "errorMessage": "..." }` (vedi `tryParseGarminApiErrorMessage`).
  * - **Summary Backfill**: `GET /rest/backfill/<stream>` con query `summaryStartTimeInSeconds` +
  *   `summaryEndTimeInSeconds` (obbligatorie); successo spesso **202**. Implementazione: `garmin-wellness-backfill.ts`.

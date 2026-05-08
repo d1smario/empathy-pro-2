@@ -111,6 +111,11 @@ export async function GET(req: NextRequest) {
     authorize.searchParams.set("code_challenge_method", "S256");
     authorize.searchParams.set("state", state);
 
+    const scope = process.env.GARMIN_OAUTH2_SCOPE?.trim();
+    if (scope) {
+      authorize.searchParams.set("scope", scope);
+    }
+
     const res = NextResponse.redirect(authorize.toString(), 302);
     // Consenso Garmin può richiedere >10 min; mantieni allineati cookie browser e payload firmato.
     res.cookies.set(GARMIN_PKCE_COOKIE, cookieVal, {
