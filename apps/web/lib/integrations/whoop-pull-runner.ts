@@ -15,6 +15,7 @@ import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
+import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 import { getMergedIngestStreams } from "@/lib/integrations/ingest-stream-policy";
@@ -248,21 +249,7 @@ async function upsertExecutedWorkoutFromWhoopWorkout(input: {
     trace_summary: traceSummary,
     subjective_notes: null as string | null,
   };
-  const existing = await supabase
-    .from("executed_workouts")
-    .select("id")
-    .eq("athlete_id", input.athleteId)
-    .eq("external_id", externalId)
-    .limit(1)
-    .maybeSingle();
-  if (existing.error) throw new Error(existing.error.message);
-  if (existing.data?.id) {
-    const upd = await supabase.from("executed_workouts").update(payload).eq("id", existing.data.id);
-    if (upd.error) throw new Error(upd.error.message);
-    return;
-  }
-  const ins = await supabase.from("executed_workouts").insert(payload);
-  if (ins.error) throw new Error(ins.error.message);
+  await upsertExecutedWorkoutByExternalId(supabase, payload);
 }
 
 async function persistWhoopRecords(input: {

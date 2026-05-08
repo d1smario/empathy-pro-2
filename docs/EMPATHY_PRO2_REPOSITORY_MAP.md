@@ -916,6 +916,8 @@ Scope of this inventory:
 - Multiple integration writers can produce same logical session with different external keys.
 - Upsert strategy differs by writer (some update-if-found, some insert-first), increasing duplicate risk.
 - Date bucket drift (timezone) remains top visibility failure mode.
+- Strava/Wahoo/Whoop now share a canonical helper:
+  - `apps/web/lib/training/executed/upsert-executed-workout.ts`
 
 ## 13.3 `training_import_jobs`
 

@@ -6,6 +6,7 @@ import { updateVendorOauthTokens } from "@/lib/integrations/vendor-oauth-persist
 import { exchangeStravaRefreshToken } from "@/lib/integrations/strava-oauth2-api";
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
+import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
 
 function stravaActivitiesUrl(): string {
   return process.env.STRAVA_API_ACTIVITIES_URL?.trim() || "https://www.strava.com/api/v3/athlete/activities";
@@ -136,21 +137,7 @@ async function upsertExecutedFromStrava(input: {
     subjective_notes: null as string | null,
   };
   const supabase = createServerSupabaseClient();
-  const existing = await supabase
-    .from("executed_workouts")
-    .select("id")
-    .eq("athlete_id", input.athleteId)
-    .eq("external_id", input.extId)
-    .limit(1)
-    .maybeSingle();
-  if (existing.error) throw new Error(existing.error.message);
-  if (existing.data?.id) {
-    const upd = await supabase.from("executed_workouts").update(payload).eq("id", existing.data.id);
-    if (upd.error) throw new Error(upd.error.message);
-    return;
-  }
-  const ins = await supabase.from("executed_workouts").insert(payload);
-  if (ins.error) throw new Error(ins.error.message);
+  await upsertExecutedWorkoutByExternalId(supabase, payload);
 }
 
 export async function runStravaPullForAthlete(input: {
