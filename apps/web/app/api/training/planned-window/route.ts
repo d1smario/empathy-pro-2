@@ -8,6 +8,7 @@ import {
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
@@ -100,6 +101,7 @@ export async function GET(req: NextRequest) {
     let executedRes: { data: unknown[] | null; error: { message: string } | null };
     let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
     let wellnessByDate: WellnessByDateMap | undefined;
+    let executedAdminFallbackUsed = false;
 
     if (includeAthleteContext) {
       const batch = await Promise.all([
@@ -126,6 +128,30 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    /**
+     * Fallback robustezza: se l'eseguito torna vuoto ma l'atleta ha dati,
+     * prova la stessa finestra con service-role (se disponibile) per evitare
+     * mismatch RLS/session tra route e UI calendar.
+     */
+    if ((executedRes.data?.length ?? 0) === 0) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const forcedExecuted = await admin
+          .from("executed_workouts")
+          .select(
+            "id, athlete_id, date, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id",
+          )
+          .eq("athlete_id", athleteId)
+          .gte("date", from)
+          .lte("date", to)
+          .order("date", { ascending: true });
+        if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
+          executedRes = { data: forcedExecuted.data as unknown[], error: null };
+          executedAdminFallbackUsed = true;
+        }
+      }
+    }
+
     const planned = ((plannedRes.data ?? []) as PlannedWorkoutDbRow[]).map((row) => {
       const p = plannedWorkoutFromDbRow(row);
       return { ...p, provenance: inferPlannedProvenance(row) };
@@ -148,6 +174,7 @@ export async function GET(req: NextRequest) {
         readSpineCoverage,
         twinContextStrip,
         physiologyState,
+        executedAdminFallbackUsed,
         ...(includeWellness ? { wellnessByDate: wellnessByDate ?? {} } : {}),
       },
       { headers: NO_STORE },
