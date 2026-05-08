@@ -863,7 +863,7 @@ Scope of this inventory:
 - `apps/web/app/api/training/planned/route.ts` (`canonical`)
   - CRUD + recurrence-aware operations.
 - `apps/web/app/api/training/planned/insert/route.ts` (`compat`)
-  - direct insert endpoint; candidate merge into primary planned route.
+  - direct insert endpoint; now reuses shared canonical insert helper (`lib/training/planned/insert-planned-workout.ts`).
 - `apps/web/lib/training/training-planned-import-service.ts` (`canonical` for planned-file import)
 
 ### Readers

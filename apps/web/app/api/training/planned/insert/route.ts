@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
-import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import type { PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
+import { insertSinglePlannedWorkout } from "@/lib/training/planned/insert-planned-workout";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -11,7 +11,7 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 /**
  * Scrittura singola su `planned_workouts` — stesso percorso che userà Vyria dopo aver orchestrato le date.
  * Builder genera la sessione; questo endpoint la materializza sul calendario operativo.
- * Insert via service role dopo verifica accesso atleta (RLS su `planned_workouts` spesso senza policy INSERT utente).
+ * Insert via contesto write canonico dopo verifica accesso atleta.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -22,14 +22,8 @@ export async function POST(req: NextRequest) {
     }
 
     const athleteId = String(raw.athlete_id).trim();
-    await requireAthleteWriteContext(req, athleteId);
-
-    const admin = createSupabaseAdminClient();
-    if (!admin) {
-      return NextResponse.json({ ok: false as const, error: "service_role_unconfigured" }, { status: 503, headers: NO_STORE });
-    }
-
-    const row = clampPlannedWorkoutRow({
+    const { db } = await requireAthleteWriteContext(req, athleteId);
+    const row: PlannedWorkoutInsertPayload = {
       athlete_id: athleteId,
       date: String(raw.date),
       type: String(raw.type),
@@ -38,28 +32,8 @@ export async function POST(req: NextRequest) {
       kcal_target: raw.kcal_target == null ? null : Number(raw.kcal_target),
       kj_target: raw.kj_target == null ? null : Number(raw.kj_target),
       notes: raw.notes == null ? null : String(raw.notes),
-    });
-
-    const insertPayload: Record<string, unknown> = {
-      athlete_id: row.athlete_id,
-      date: row.date,
-      type: row.type,
-      duration_minutes: row.duration_minutes,
-      tss_target: row.tss_target,
-      kcal_target: row.kcal_target,
-      notes: row.notes,
     };
-    if (row.kj_target != null) {
-      insertPayload.kj_target = row.kj_target;
-    }
-
-    const { data: inserted, error } = await admin.from("planned_workouts").insert(insertPayload).select("id").maybeSingle();
-
-    if (error) {
-      return NextResponse.json({ ok: false as const, error: error.message }, { status: 500, headers: NO_STORE });
-    }
-
-    const id = inserted && typeof (inserted as { id?: string }).id === "string" ? (inserted as { id: string }).id : null;
+    const { id } = await insertSinglePlannedWorkout(db, row);
 
     return NextResponse.json({ ok: true as const, athleteId, plannedWorkoutId: id }, { headers: NO_STORE });
   } catch (err) {

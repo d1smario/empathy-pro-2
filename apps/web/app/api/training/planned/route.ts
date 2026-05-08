@@ -11,6 +11,7 @@ import {
 } from "@/lib/auth/training-route-auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
+import { insertSinglePlannedWorkout, toPlannedWorkoutInsertRecord } from "@/lib/training/planned/insert-planned-workout";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,18 +57,7 @@ function calendarAuditSuffix(
 }
 
 function toInsertRecord(row: PlannedWorkoutInsertPayload): Record<string, unknown> {
-  const r = clampPlannedWorkoutRow(row);
-  const p: Record<string, unknown> = {
-    athlete_id: r.athlete_id,
-    date: r.date,
-    type: r.type,
-    duration_minutes: r.duration_minutes,
-    tss_target: r.tss_target,
-    kcal_target: r.kcal_target,
-    notes: r.notes,
-  };
-  if (r.kj_target != null) p.kj_target = r.kj_target;
-  return p;
+  return toPlannedWorkoutInsertRecord(row);
 }
 
 async function memoryOrNull(athleteId: string) {
@@ -157,11 +147,7 @@ export async function POST(req: NextRequest) {
       auditSuffix && body.row
         ? { ...body.row, notes: `${body.row.notes ?? ""}${auditSuffix}`.trim() || null }
         : body.row;
-    const insertPayload = toInsertRecord(rowForInsert);
-    const { error } = await db.from("planned_workouts").insert(insertPayload);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
-    }
+    await insertSinglePlannedWorkout(db, rowForInsert);
     return NextResponse.json(
       { status: "ok" as const, athleteMemory: await memoryOrNull(aid) },
       { headers: NO_STORE },
