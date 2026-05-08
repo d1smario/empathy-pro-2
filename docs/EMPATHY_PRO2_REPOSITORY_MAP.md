@@ -89,7 +89,6 @@ flowchart TB
   - `apps/web/modules/training/views/TrainingAnalyticsPageView.tsx`
   - `apps/web/modules/training/views/TrainingSessionPageView.tsx`
   - `apps/web/modules/training/views/TrainingViryaPageView.tsx`
-  - `apps/web/modules/training/views/TrainingVyriaPlaceholderView.tsx` (`candidate`, `legacy`)
 - API routes:
   - `apps/web/app/api/training/planned-window/route.ts` (`GET`)
   - `apps/web/app/api/training/planned/route.ts` (`POST`, `PATCH`, `DELETE`)
@@ -487,7 +486,6 @@ flowchart TB
 
 ## 6) Candidate Dead/Legacy Areas
 
-- `apps/web/modules/training/views/TrainingVyriaPlaceholderView.tsx` (`candidate`, `legacy`)
 - `apps/web/app/(shell)/training/virya/page.tsx` alias redirect (`legacy`)
 - `apps/web/modules/training/services/training-write-api.ts` exports not clearly used (`candidate`)
 - Tables with little/no direct app ownership in matrix (`candidate`, verify before any migration cleanup)
@@ -709,7 +707,6 @@ Exit criteria:
 ## Wave D - Legacy Candidates Review
 
 - Validate real usage for:
-  - `apps/web/modules/training/views/TrainingVyriaPlaceholderView.tsx`
   - `apps/web/modules/training/services/training-write-api.ts` exports
   - `apps/web/lib/auth/request-auth.ts`.
 - Confirm redirects and aliases still required:
@@ -1053,8 +1050,8 @@ This section upgrades candidate list with evidence hints from code references.
 
 - File: `apps/web/modules/training/views/TrainingVyriaPlaceholderView.tsx`
 - Evidence:
-  - symbol appears only in its own file (no runtime references found).
-- Status: `candidate-remove` after route/view graph confirmation.
+  - symbol appeared only in its own file (no runtime references found).
+- Status: `removed` (cleanup step completed).
 
 ## 15.2 `training-write-api.ts` export surface
 
