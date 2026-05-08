@@ -909,13 +909,19 @@ export default function ProfilePage() {
           fetched: number;
           inserted: number;
           skipped: number;
+          queryStrategy?: string;
           errorMessage?: string;
         }>;
       };
       if (Array.isArray(j.results)) {
-        const bits = j.results.map((row) =>
-          row.ok ? `${row.stream}:ok(${row.inserted}/${row.fetched})` : `${row.stream}:FAIL:${row.httpStatus}`,
-        );
+        const bits = j.results.map((row) => {
+          if (row.ok) {
+            const strat = row.queryStrategy ? `[${row.queryStrategy.slice(0, 52)}]` : "";
+            return `${row.stream}:ok(${row.inserted}/${row.fetched})${strat}`;
+          }
+          const err = row.errorMessage ? ` (${row.errorMessage.slice(0, 100)})` : "";
+          return `${row.stream}:FAIL:${row.httpStatus}${err}`;
+        });
         const prefix = j.ok === false ? "(parziale) " : "";
         setGarminSnapshotNotice(`${prefix}${j.message ?? ""} ${bits.join(" · ")}`.trim());
       } else if (j.error) {

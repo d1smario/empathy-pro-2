@@ -12,7 +12,7 @@ import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-d
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 
-/** Stream GET compatibili (apiDocs Wellness) senza ping: usiamo coppia uploadStart/End. */
+/** Stream GET — query time variano per endpoint (upload vs summary vs calendarDate): vedi `fetchGarminWellnessSnapshotForStream`. */
 export const GARMIN_WELLNESS_SNAPSHOT_PULL_STREAMS = [
   "dailies",
   "sleeps",
@@ -32,7 +32,7 @@ function streamAllowedSet(): Set<string> {
   return garminWellnessSnapshotAllowedKeys();
 }
 
-/** Path REST `/rest/...` — allineamento `garmin-wellness-api.ts` (camelCase). */
+/** Path REST primario — camelCase Wellness API prod. */
 export function garminSnapshotRestPath(stream: GarminWellnessSnapshotStream): string {
   const paths: Record<string, string> = {
     dailies: "/rest/dailies",
@@ -43,6 +43,77 @@ export function garminSnapshotRestPath(stream: GarminWellnessSnapshotStream): st
     respiration: "/rest/respiration",
   };
   return paths[stream] ?? `/rest/${stream}`;
+}
+
+/** Path alternativi se il primario risponde 400/404 (portale usa spesso `hrvSummary` per push). */
+function garminSnapshotRestPathsToTry(stream: GarminWellnessSnapshotStream): string[] {
+  const primary = garminSnapshotRestPath(stream);
+  const extras: Partial<Record<GarminWellnessSnapshotStream, string[]>> = {
+    hrv: ["/rest/hrvSummary"],
+    respiration: ["/rest/allDayRespiration"],
+  };
+  const tail = extras[stream] ?? [];
+  return [primary, ...tail.filter((p) => p !== primary)];
+}
+
+/** Date UTC ISO (YYYY-MM-DD) che intersecano [startSec, endSec]. */
+function utcCalendarDatesInRange(startSec: number, endSec: number, maxDays: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const startMs = Math.min(startSec, endSec) * 1000;
+  const endMs = Math.max(startSec, endSec) * 1000;
+  let t = Date.UTC(
+    new Date(startMs).getUTCFullYear(),
+    new Date(startMs).getUTCMonth(),
+    new Date(startMs).getUTCDate(),
+    0,
+    0,
+    0,
+  );
+  const endDay = Date.UTC(new Date(endMs).getUTCFullYear(), new Date(endMs).getUTCMonth(), new Date(endMs).getUTCDate(), 0, 0, 0);
+  while (t <= endDay + 86400000 && out.length < maxDays) {
+    const s = new Date(t).toISOString().slice(0, 10);
+    if (!seen.has(s)) {
+      seen.add(s);
+      out.push(s);
+    }
+    t += 86400000;
+  }
+  return out;
+}
+
+function snapshotQueryUrl(path: string, query: Record<string, string>): string {
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const u = new URL(garminWellnessAbsoluteUrl(p));
+  for (const [k, v] of Object.entries(query)) {
+    u.searchParams.set(k, v);
+  }
+  return u.toString();
+}
+
+function dedupeGarminSummaries(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const r of rows) {
+    const sid = typeof r.summaryId === "string" ? r.summaryId : typeof r.summaryId === "number" ? String(r.summaryId) : "";
+    const cd =
+      typeof r.calendarDate === "string"
+        ? r.calendarDate.slice(0, 10)
+        : typeof r.calendar_date === "string"
+          ? r.calendar_date.slice(0, 10)
+          : "";
+    const key = sid && cd ? `${sid}|${cd}` : sid || `${cd}|${r.startTimeInSeconds ?? r.endTimeInSeconds ?? ""}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out;
+}
+
+function utcDateMinusDays(isoYmd: string, delta: number): string {
+  const d = new Date(`${isoYmd}T12:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
 }
 
 function domainForStream(stream: GarminWellnessSnapshotStream): RealityDomain {
@@ -140,41 +211,142 @@ function duplicateExportMessage(msg: string): boolean {
 export async function fetchGarminWellnessSnapshotForStream(params: {
   accessToken: string;
   stream: GarminWellnessSnapshotStream;
-  summaryStartTimeInSeconds: number;
-  summaryEndTimeInSeconds: number;
-}): Promise<{ ok: true; httpStatus: number; items: Record<string, unknown>[] } | { ok: false; httpStatus: number; errorMessage: string }> {
-  const start = Math.trunc(params.summaryStartTimeInSeconds);
-  const end = Math.trunc(params.summaryEndTimeInSeconds);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end) {
-    return { ok: false, httpStatus: 400, errorMessage: "invalid_upload_window" };
+  /** Finestra richiesta (UTC, secondi UNIX). */
+  windowStartSec: number;
+  windowEndSec: number;
+}): Promise<
+  | { ok: true; httpStatus: number; items: Record<string, unknown>[]; queryStrategy?: string }
+  | { ok: false; httpStatus: number; errorMessage: string }
+> {
+  const winStart = Math.trunc(params.windowStartSec);
+  const winEnd = Math.trunc(params.windowEndSec);
+  if (!Number.isFinite(winStart) || !Number.isFinite(winEnd) || winStart >= winEnd) {
+    return { ok: false, httpStatus: 400, errorMessage: "invalid_time_window" };
   }
-  const path = garminSnapshotRestPath(params.stream);
-  const u = new URL(garminWellnessAbsoluteUrl(path));
-  u.searchParams.set("uploadStartTimeInSeconds", String(start));
-  u.searchParams.set("uploadEndTimeInSeconds", String(end));
 
-  const res = await fetch(u.toString(), {
-    method: "GET",
-    headers: { Authorization: `Bearer ${params.accessToken.trim()}`, Accept: "application/json" },
-    cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
-  });
-  const text = await res.text();
-  if (!res.ok) {
+  const shortStart = Math.max(winStart, winEnd - 86400);
+  const paths = garminSnapshotRestPathsToTry(params.stream);
+  const rangeCal = utcCalendarDatesInRange(winStart, winEnd, 6);
+  const endIso = new Date(winEnd * 1000).toISOString().slice(0, 10);
+  const calPriority = [endIso, utcDateMinusDays(endIso, -1), utcDateMinusDays(endIso, -2)];
+  const calOrdered: string[] = [];
+  const seenCal = new Set<string>();
+  for (const d of [...calPriority, ...rangeCal]) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(d) && !seenCal.has(d)) {
+      seenCal.add(d);
+      calOrdered.push(d);
+    }
+  }
+
+  const attemptSpecs: Array<{ label: string; url: string }> = [];
+  for (const path of paths) {
+    for (const cal of calOrdered.slice(0, 7)) {
+      attemptSpecs.push({
+        label: `${path}|calendarDate:${cal}`,
+        url: snapshotQueryUrl(path, { calendarDate: cal }),
+      });
+    }
+    attemptSpecs.push(
+      {
+        label: `${path}|summary:${winStart}-${winEnd}`,
+        url: snapshotQueryUrl(path, {
+          summaryStartTimeInSeconds: String(winStart),
+          summaryEndTimeInSeconds: String(winEnd),
+        }),
+      },
+      {
+        label: `${path}|upload:${winStart}-${winEnd}`,
+        url: snapshotQueryUrl(path, {
+          uploadStartTimeInSeconds: String(winStart),
+          uploadEndTimeInSeconds: String(winEnd),
+        }),
+      },
+      {
+        label: `${path}|summary24h`,
+        url: snapshotQueryUrl(path, {
+          summaryStartTimeInSeconds: String(shortStart),
+          summaryEndTimeInSeconds: String(winEnd),
+        }),
+      },
+      {
+        label: `${path}|upload24h`,
+        url: snapshotQueryUrl(path, {
+          uploadStartTimeInSeconds: String(shortStart),
+          uploadEndTimeInSeconds: String(winEnd),
+        }),
+      },
+    );
+  }
+
+  let lastFail: { httpStatus: number; errorMessage: string } | null = null;
+  let lastOkEmpty: { httpStatus: number; queryStrategy: string } | null = null;
+
+  for (const spec of attemptSpecs) {
+    const res = await fetch(spec.url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${params.accessToken.trim()}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
+    const text = await res.text();
+
+    if (res.status === 401 || res.status === 403) {
+      return {
+        ok: false,
+        httpStatus: res.status,
+        errorMessage: tryParseGarminApiErrorMessage(text) ?? text.slice(0, 900),
+      };
+    }
+
+    if (!res.ok) {
+      lastFail = {
+        httpStatus: res.status,
+        errorMessage: tryParseGarminApiErrorMessage(text) ?? text.slice(0, 320),
+      };
+      if (res.status !== 400 && res.status !== 404) {
+        break;
+      }
+      continue;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text) as unknown;
+    } catch {
+      lastFail = { httpStatus: 502, errorMessage: "invalid_json_snapshot" };
+      continue;
+    }
+
+    const slice = dedupeGarminSummaries(extractGarminWellnessSummaryList(parsed, params.stream));
+    const label = spec.label.slice(0, 240);
+    if (slice.length > 0) {
+      return {
+        ok: true,
+        httpStatus: res.status,
+        items: slice,
+        queryStrategy: label,
+      };
+    }
+    lastOkEmpty ??= { httpStatus: res.status, queryStrategy: label };
+  }
+
+  if (lastOkEmpty) {
     return {
-      ok: false,
-      httpStatus: res.status,
-      errorMessage: tryParseGarminApiErrorMessage(text) ?? text.slice(0, 900),
+      ok: true,
+      httpStatus: lastOkEmpty.httpStatus,
+      items: [],
+      queryStrategy: lastOkEmpty.queryStrategy,
     };
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text) as unknown;
-  } catch {
-    return { ok: false, httpStatus: 502, errorMessage: "invalid_json_snapshot" };
-  }
-  const items = extractGarminWellnessSummaryList(parsed, params.stream);
-  return { ok: true, httpStatus: res.status, items };
+
+  return {
+    ok: false,
+    httpStatus: lastFail?.httpStatus ?? 502,
+    errorMessage: lastFail?.errorMessage ?? "garmin_wellness_snapshot_exhausted",
+  };
 }
 
 /** Legge stream da env `GARMIN_WELLNESS_SNAPSHOT_STREAMS` (comma-separated) o default. */
@@ -197,6 +369,8 @@ export type GarminWellnessSnapshotPullResult = {
   fetched: number;
   inserted: number;
   skipped: number;
+  /** Ultima query Garmin che ha prodotto 200 / errore parsabile. */
+  queryStrategy?: string;
   errorMessage?: string;
 };
 
@@ -228,8 +402,8 @@ export async function runGarminWellnessSnapshotPull(input: {
     const fr = await fetchGarminWellnessSnapshotForStream({
       accessToken: tok.accessToken,
       stream,
-      summaryStartTimeInSeconds: start,
-      summaryEndTimeInSeconds: end,
+      windowStartSec: start,
+      windowEndSec: end,
     });
 
     if (!fr.ok) {
@@ -258,10 +432,14 @@ export async function runGarminWellnessSnapshotPull(input: {
               ...item,
               garmin_wellness_snapshot_pull: true as const,
               garmin_stream: stream,
-              snapshot_upload_window: { uploadStartTimeInSeconds: start, uploadEndTimeInSeconds: end },
+              snapshot_time_window_utc: {
+                windowStartTimeInSeconds: start,
+                windowEndTimeInSeconds: end,
+              },
+              garmin_query_strategy: fr.queryStrategy ?? null,
             },
             parserEngine: "garmin_wellness_rest_snapshot",
-            parserVersion: "1",
+            parserVersion: "2",
             observation: buildObservation(stream, item),
           });
           inserted += 1;
@@ -278,11 +456,12 @@ export async function runGarminWellnessSnapshotPull(input: {
         fetched: fr.items.length,
         inserted,
         skipped,
+        queryStrategy: fr.queryStrategy,
       });
     }
 
     if (i < streams.length - 1) {
-      await new Promise((r) => setTimeout(r, 180));
+      await new Promise((r) => setTimeout(r, 220));
     }
   }
 
