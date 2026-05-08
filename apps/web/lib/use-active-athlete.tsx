@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { dedupeAthletesByEmail, pickCanonicalAthlete, type CanonicalAthleteRow } from "@/lib/athletes/canonical-profile";
+import { dedupeAthletesByEmail, type CanonicalAthleteRow } from "@/lib/athletes/canonical-profile";
 import {
   AppRole,
   clearActiveAthleteId,
@@ -275,7 +275,8 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
         if (!active) return;
         setAthletes(list);
 
-        let resolvedAthleteId = profile?.athlete_id ?? null;
+        const storedActiveAthleteId = readActiveAthleteId();
+        let resolvedAthleteId = storedActiveAthleteId ?? profile?.athlete_id ?? null;
         const guessedFirstName =
           typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name : null;
         const guessedLastName =
@@ -302,20 +303,11 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
         if (!active) return;
         resolvedAthleteId = bootstrap?.athleteId ?? resolvedAthleteId;
 
-        if (user.email) {
-          const { data: matchedAthletes } = await supabase
-            .from("athlete_profiles")
-            .select(ATHLETE_SELECT)
-            .eq("email", user.email)
-            .order("created_at", { ascending: false })
-            .limit(20);
-          if (!active) return;
-          const emailMatches = (matchedAthletes as AthleteOption[]) ?? [];
-          const emailCanonical = pickCanonicalAthlete(emailMatches, resolvedAthleteId);
-          if (emailMatches.length > 1 && emailCanonical) {
-            resolvedAthleteId = emailCanonical.id;
-          }
-        }
+        /**
+         * Identità canonica: non ricalcolare l'atleta attivo scansionando athlete_profiles per email.
+         * La sorgente unica è `app_user_profiles.athlete_id` (eventualmente riallineata da ensure-profile).
+         * Evita switch silenziosi di contesto al reload quando esistono duplicati storici.
+         */
 
         if (resolvedAthleteId) {
           await supabase.from("app_user_profiles").upsert(

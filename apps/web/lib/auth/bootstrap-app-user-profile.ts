@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
 
-async function athleteIdByNormalizedEmail(supabase: SupabaseClient, email: string): Promise<string | null> {
+export async function athleteIdByNormalizedEmail(
+  supabase: SupabaseClient,
+  email: string,
+): Promise<string | null> {
   const { data, error } = await supabase.rpc("athlete_profile_id_by_normalized_email", { p_email: email });
   if (error) {
     const { data: row } = await supabase

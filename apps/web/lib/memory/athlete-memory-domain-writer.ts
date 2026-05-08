@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { athleteIdByNormalizedEmail } from "@/lib/auth/bootstrap-app-user-profile";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 
 type ProfileUpsertPatch = {
@@ -107,24 +108,17 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       if (patch.action === "upsert") {
         const email = normalizeEmail(patch.payload.email);
         if (email) {
-          const { data: existing, error: existingError } = await supabase
-            .from("athlete_profiles")
-            .select("id")
-            .eq("email", email)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          if (existingError) throw new Error(existingError.message);
-          if (existing?.id) {
+          const canonicalId = await athleteIdByNormalizedEmail(supabase, email);
+          if (canonicalId) {
             const { error: updateError } = await supabase
               .from("athlete_profiles")
               .update(patch.payload)
-              .eq("id", existing.id);
+              .eq("id", canonicalId);
             if (updateError) throw new Error(updateError.message);
             return {
-              athleteId: existing.id,
+              athleteId: canonicalId,
               status: "updated_existing" as const,
-              athleteMemory: await resolveAthleteMemory(existing.id),
+              athleteMemory: await resolveAthleteMemory(canonicalId),
             };
           }
         }
