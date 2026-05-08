@@ -411,6 +411,8 @@ export default function ProfilePage() {
   const [garminBackfillDays, setGarminBackfillDays] = useState(14);
   const [garminBackfillBusy, setGarminBackfillBusy] = useState(false);
   const [garminBackfillNotice, setGarminBackfillNotice] = useState<string | null>(null);
+  const [garminSnapshotBusy, setGarminSnapshotBusy] = useState(false);
+  const [garminSnapshotNotice, setGarminSnapshotNotice] = useState<string | null>(null);
   const [whoopLink, setWhoopLink] = useState<{
     linked: boolean;
     whoopUserIdMasked?: string;
@@ -882,6 +884,49 @@ export default function ProfilePage() {
       setGarminBackfillNotice("Errore di rete.");
     } finally {
       setGarminBackfillBusy(false);
+    }
+  }
+
+  async function runGarminWellnessSnapshotPull() {
+    if (!activeAthleteId || !garminLink?.linked || garminSnapshotBusy) return;
+    setGarminSnapshotBusy(true);
+    setGarminSnapshotNotice(null);
+    try {
+      const r = await fetch("/api/integrations/garmin/wellness-snapshot", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId, hoursBack: 72 }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+        results?: Array<{
+          stream: string;
+          ok: boolean;
+          httpStatus: number;
+          fetched: number;
+          inserted: number;
+          skipped: number;
+          errorMessage?: string;
+        }>;
+      };
+      if (Array.isArray(j.results)) {
+        const bits = j.results.map((row) =>
+          row.ok ? `${row.stream}:ok(${row.inserted}/${row.fetched})` : `${row.stream}:FAIL:${row.httpStatus}`,
+        );
+        const prefix = j.ok === false ? "(parziale) " : "";
+        setGarminSnapshotNotice(`${prefix}${j.message ?? ""} ${bits.join(" · ")}`.trim());
+      } else if (j.error) {
+        setGarminSnapshotNotice(j.error);
+      } else {
+        setGarminSnapshotNotice("Risposta imprevista dal server.");
+      }
+    } catch {
+      setGarminSnapshotNotice("Errore di rete.");
+    } finally {
+      setGarminSnapshotBusy(false);
     }
   }
 
@@ -1966,6 +2011,27 @@ export default function ProfilePage() {
                             {garminBackfillBusy ? "Invio…" : "Wellness batch"}
                           </Pro2Button>
                         </div>
+                        <p className="muted-copy text-xs" style={{ marginTop: 10, marginBottom: 6 }}>
+                          Pull diretto giornaliero (senza Summary Backfill): GET <code className="text-white/65">/rest/dailies</code>
+                          , sonno, stress, HRV ecc. · ultimi 72h UTC salvati in <code className="text-white/65">device_sync_exports</code>{" "}
+                          per il pannello physiology.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={garminBackfillBusy || garminSnapshotBusy}
+                            className="border border-emerald-500/35 bg-emerald-500/10 text-emerald-50 hover:bg-emerald-500/18"
+                            onClick={() => void runGarminWellnessSnapshotPull()}
+                          >
+                            {garminSnapshotBusy ? "Scarico…" : "Aggiorna wellness ora"}
+                          </Pro2Button>
+                        </div>
+                        {garminSnapshotNotice ? (
+                          <p className="text-xs text-emerald-100/85" style={{ marginTop: 8 }}>
+                            {garminSnapshotNotice}
+                          </p>
+                        ) : null}
                         {garminBackfillNotice ? (
                           <p className="text-xs text-white/80" style={{ marginTop: 8 }}>
                             {garminBackfillNotice}
