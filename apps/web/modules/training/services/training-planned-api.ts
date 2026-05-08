@@ -1,6 +1,7 @@
 import type { GeneratedSession } from "@/lib/training/engine";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { mapEngineSessionToPlannedRow } from "@/lib/training/planned/map-engine-session-to-planned";
+import type { TrainingPlannerCalendarReplaceInput, TrainingPlannerCalendarReplaceResult } from "@/api/training/contracts";
 
 /** Persistenza sul calendario operativo: ogni insert finisce in `planned_workouts` (stessa sorgente letta da `GET /api/training/planned-window`). */
 
@@ -76,4 +77,24 @@ export async function deletePlannedWorkout(input: { id: string; athleteId: strin
     const extra = [json.errorCode, probe, hints].filter(Boolean).join(" · ");
     throw new Error([json.error ?? "Eliminazione seduta pianificata non riuscita", extra].filter(Boolean).join(" — "));
   }
+}
+
+export async function replaceTrainingPlannerCalendar(
+  input: TrainingPlannerCalendarReplaceInput,
+): Promise<TrainingPlannerCalendarReplaceResult> {
+  const response = await fetch("/api/training/planned", {
+    method: "POST",
+    headers: await buildSupabaseAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({
+      athleteId: input.athleteId,
+      replaceTag: input.replaceTag,
+      rows: input.rows,
+      generationAudit: input.generationAudit,
+    }),
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error ?? "Replace VIRYA planned workouts failed");
+  }
+  return (await response.json()) as TrainingPlannerCalendarReplaceResult;
 }

@@ -42,7 +42,7 @@ import type { BuilderSessionOperationalScalingViewModel } from "@/api/training/c
 import { materializePro2BlocksFromEngine } from "@/lib/training/virya/materialize-pro2-blocks-from-engine";
 import { resolveAerobicViryaPrescription } from "@/lib/training/engine/aerobic-virya-prescription";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
-import { replaceTrainingPlannerCalendar } from "@/modules/training/services/training-write-api";
+import { replaceTrainingPlannerCalendar } from "@/modules/training/services/training-planned-api";
 
 type PhaseType = "base" | "build" | "refine" | "peak" | "deload" | "second_peak";
 type RaceType = "warmup" | "test" | "goal" | "milestone";

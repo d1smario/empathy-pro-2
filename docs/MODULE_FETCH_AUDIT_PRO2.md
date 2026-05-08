@@ -21,7 +21,7 @@
 | `components/training/ReplicateStatusStrip.tsx` | `/api/training/builder/replicate-status` |
 | `modules/training/views/TrainingCalendarPageView.tsx` | `/api/training/planned-window` |
 | `modules/nutrition/components/FoodDiaryPanel.tsx` | `/api/nutrition/diary/micronutrients`, `/api/nutrition/food-lookup`, `/api/nutrition/food-photo-estimate` |
-| `modules/training/services/training-write-api.ts` | `/api/training/planned`, `/api/training/executed`, `/api/training/import` |
+| `modules/training/services/training-planned-api.ts` | `/api/training/planned/insert`, `/api/training/planned` (DELETE/replace) |
 | `modules/training/services/training-virya-api.ts` | `/api/training/virya-context` |
 | `modules/training/services/training-import-api.ts` | `/api/training/import`, `/api/training/import-planned` |
 | `modules/training/services/training-executed-api.ts` | `/api/training/executed` |

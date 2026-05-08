@@ -485,7 +485,7 @@ flowchart TB
 ## 6) Candidate Dead/Legacy Areas
 
 - `/training/virya` alias handled in `apps/web/next.config.mjs` redirects (`legacy compat`)
-- `apps/web/modules/training/services/training-write-api.ts` reduced to active export only (`replaceTrainingPlannerCalendar`)
+- `apps/web/modules/training/services/training-planned-api.ts` is canonical FE wrapper for planned writes (insert/delete/replace)
 - Tables with little/no direct app ownership in matrix (`candidate`, verify before any migration cleanup)
 - `apps/web/lib/auth/athlete-read-context.ts` is canonical auth entrypoint
 
@@ -704,7 +704,7 @@ Exit criteria:
 ## Wave D - Legacy Candidates Review
 
 - Validate real usage for:
-  - `apps/web/modules/training/services/training-write-api.ts` exports
+  - `apps/web/modules/training/services/training-planned-api.ts` wrapper surface
   - legacy auth wrappers (none remaining in app runtime).
 - Confirm redirects and aliases still required:
   - `apps/web/next.config.mjs` entries for `/training/virya*`.
@@ -1049,14 +1049,16 @@ This section upgrades candidate list with evidence hints from code references.
   - symbol appeared only in its own file (no runtime references found).
 - Status: `removed` (cleanup step completed).
 
-## 15.2 `training-write-api.ts` export surface
+## 15.2 training write wrapper consolidation
 
-- File: `apps/web/modules/training/services/training-write-api.ts`
+- Files:
+  - removed `apps/web/modules/training/services/training-write-api.ts`
+  - canonical `apps/web/modules/training/services/training-planned-api.ts`
 - Evidence:
-  - currently referenced by `apps/web/modules/training/components/ViryaAnnualPlanOrchestrator.tsx`.
-- Status: `cleaned`: kept active export only, removed unreferenced wrappers.
+  - `ViryaAnnualPlanOrchestrator` now imports `replaceTrainingPlannerCalendar` from `training-planned-api`.
+- Status: `cleaned`: single planned-write wrapper surface.
 - Action:
-  - if new callers appear, prefer dedicated service modules instead of re-growing a generic wrapper bucket.
+  - keep planned write calls in `training-planned-api` and avoid reintroducing generic catch-all wrapper files.
 
 ## 15.3 `request-auth.ts` legacy overlap
 
