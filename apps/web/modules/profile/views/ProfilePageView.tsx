@@ -813,7 +813,7 @@ export default function ProfilePage() {
     setGarminBackfillBusy(true);
     setGarminBackfillNotice(null);
     try {
-      const days = Math.min(180, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
       const r = await fetch("/api/integrations/garmin/backfill", {
         method: "POST",
         credentials: "include",
@@ -831,12 +831,14 @@ export default function ProfilePage() {
         error?: string;
         errorMessage?: string | null;
         httpStatus?: number;
+        hint?: string;
         results?: Array<{ stream: string; ok: boolean; httpStatus: number; errorMessage?: string | null }>;
       };
       if (j.ok) {
         setGarminBackfillNotice(j.message ?? "Richiesta inviata a Garmin.");
       } else {
-        setGarminBackfillNotice(j.errorMessage ?? j.error ?? `Errore HTTP ${j.httpStatus ?? r.status}`);
+        const core = j.errorMessage ?? j.error ?? `Errore HTTP ${j.httpStatus ?? r.status}`;
+        setGarminBackfillNotice(j.hint ? `${core} — ${j.hint}` : core);
       }
     } catch {
       setGarminBackfillNotice("Errore di rete.");
@@ -850,7 +852,7 @@ export default function ProfilePage() {
     setGarminBackfillBusy(true);
     setGarminBackfillNotice(null);
     try {
-      const days = Math.min(180, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
       const r = await fetch("/api/integrations/garmin/backfill", {
         method: "POST",
         credentials: "include",
@@ -866,13 +868,15 @@ export default function ProfilePage() {
         allOk?: boolean;
         message?: string;
         error?: string;
+        hint?: string;
         results?: Array<{ stream: string; ok: boolean; httpStatus: number; errorMessage?: string | null }>;
       };
       if (j.batch && j.results && j.results.length > 0) {
         const bits = j.results.map((row) =>
           row.ok ? `${row.stream}:${row.httpStatus}` : `${row.stream}:FAIL:${row.httpStatus}`,
         );
-        setGarminBackfillNotice(`${j.message ?? ""} ${bits.join(" · ")}`.trim());
+        const suffix = j.hint ? ` — ${j.hint}` : "";
+        setGarminBackfillNotice(`${j.message ?? ""} ${bits.join(" · ")}`.trim() + suffix);
       } else if (j.error) {
         setGarminBackfillNotice(j.error);
       } else {
@@ -1918,8 +1922,9 @@ export default function ProfilePage() {
                         style={{ marginTop: 10 }}
                       >
                         <p className="muted-copy text-xs" style={{ marginBottom: 8 }}>
-                          Storico Garmin (Summary Backfill): intervallo ultimi N giorni UTC (max 180); risposta tipica
-                          202, poi notifiche + pull.
+                          Storico Garmin (Summary Backfill): intervallo ultimi N giorni UTC (consigliato max 90 giorni per richiesta
+                          Garmin); oltre i 90 giorni il server usa solo la parte più recente salvo richieste successive. Risposta
+                          tipica 202, poi notifiche + pull.
                         </p>
                         <div className="flex flex-wrap items-end gap-2">
                           <div className="form-group" style={{ minWidth: 160 }}>
@@ -1941,7 +1946,7 @@ export default function ProfilePage() {
                             <input
                               type="number"
                               min={1}
-                              max={180}
+                              max={90}
                               className="form-input text-sm"
                               value={garminBackfillDays}
                               onChange={(e) => setGarminBackfillDays(Number(e.target.value))}
@@ -1976,7 +1981,13 @@ export default function ProfilePage() {
                           indica Garmin). Flusso Empathy: push nel portale Garmin Connect Developer → POST{" "}
                           <code className="text-white/65">/push/…</code> → coda pull → elaborazione quasi subito in background (e
                           cron ogni pochi minuti come riserva). I dati nuovi non richiedono un tasto: sincronizza il dispositivo
-                          con Garmin Connect.
+                          con Garmin Connect. Le azioni sotto «Richiedi storico» / «Wellness batch» usano invece{" "}
+                          <strong className="text-white/85">Summary Backfill</strong> (<code className="text-white/65">
+                            GET /rest/backfill/&lt;stream&gt;
+                          </code>
+                          , solo Bearer): se Garmin risponde <code className="text-white/65">412</code>, è un problema di
+                          permessi/programma o finestra storica sul <em>backfill</em>, non del pull automatico con token dalle
+                          notifiche.
                         </p>
                         {garminBackfillNotice ? (
                           <p className="text-xs text-white/80" style={{ marginTop: 8 }}>

@@ -17,7 +17,8 @@ import "server-only";
  *   `callbackURL` usa consumer key/secret partner + `token` (e spesso OAuth1), vedi `garmin-pull-runner.ts`.
  * - Errori HTTP: corpo JSON tipico `{ "errorMessage": "..." }` (vedi `tryParseGarminApiErrorMessage`).
  * - **Summary Backfill**: `GET /rest/backfill/<stream>` con query `summaryStartTimeInSeconds` +
- *   `summaryEndTimeInSeconds` (obbligatorie); successo spesso **202**. Implementazione: `garmin-wellness-backfill.ts`.
+ *   `summaryEndTimeInSeconds` (obbligatorie); successo spesso **202**. Una singola richiesta non deve eccedere circa **90 giorni**
+ *   di intervallo (spec Health API); Empathy taglia l’arco alle ultime ~90 giorni se necessario. Implementazione: `garmin-wellness-backfill.ts`.
  */
 export const GARMIN_WELLNESS_API_PROD_BASE_URL = "https://apis.garmin.com/wellness-api" as const;
 
