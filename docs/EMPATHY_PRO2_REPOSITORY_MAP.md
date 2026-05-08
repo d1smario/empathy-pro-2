@@ -1030,7 +1030,8 @@ All three write into `executed_workouts` with provider-specific dedupe logic.
 
 Risk notes:
 
-- Dedupe semantics are not fully centralized with Garmin materialization logic.
+- Dedupe semantics are centralized across Garmin/Strava/Wahoo/Whoop on shared helper:
+  - `apps/web/lib/training/executed/upsert-executed-workout.ts`
 - Same athlete activity imported from file + vendor can collide or duplicate without strong precedence policy.
 
 ## 14.4 Wave C Done Criteria (Executable)

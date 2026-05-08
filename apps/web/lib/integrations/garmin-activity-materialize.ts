@@ -8,6 +8,7 @@ import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-d
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
+import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -341,47 +342,24 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       external_id: externalId,
     };
 
-    const existing = await supabase
-      .from("executed_workouts")
-      .select("id")
-      .eq("athlete_id", input.athleteId)
-      .eq("external_id", externalId)
-      .limit(1)
-      .maybeSingle();
-
-    if (existing.error) continue;
-
     let executedWorkoutId: string | null = null;
     let traceFinal: Record<string, unknown> | null = null;
-
-    if (existing.data?.id) {
-      const obsWithId = buildGarminObservationForRow(r, date, existing.data.id);
-      traceFinal = { ...traceSummary, observation: obsWithId };
-      const up = await supabase
-        .from("executed_workouts")
-        .update({
-          ...payload,
-          trace_summary: traceFinal,
-        })
-        .eq("id", existing.data.id);
-      if (!up.error) {
-        upserted += 1;
-        executedWorkoutId = existing.data.id;
-      }
-    } else {
-      const ins = await supabase.from("executed_workouts").insert(payload).select("id").maybeSingle();
-      if (!ins.error && ins.data?.id) {
-        const obsWithId = buildGarminObservationForRow(r, date, ins.data.id);
+    try {
+      const upsert = await upsertExecutedWorkoutByExternalId(supabase, payload);
+      executedWorkoutId = upsert.id;
+      if (executedWorkoutId) {
+        const obsWithId = buildGarminObservationForRow(r, date, executedWorkoutId);
         traceFinal = { ...traceSummary, observation: obsWithId };
         const patch = await supabase
           .from("executed_workouts")
           .update({ trace_summary: traceFinal })
-          .eq("id", ins.data.id);
+          .eq("id", executedWorkoutId);
         if (!patch.error) {
           upserted += 1;
-          executedWorkoutId = ins.data.id;
         }
       }
+    } catch {
+      continue;
     }
 
     /** Fase 3 device → UI: persistenza HD su `executed_workout_series` quando samples[] presenti. */
