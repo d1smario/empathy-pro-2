@@ -1,9 +1,9 @@
 "use client";
 
 import { Heart, Moon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
-import { TrainingSingleTraceChart } from "@/components/training/TrainingSingleTraceChart";
+import { SleepHypnogramChart } from "@/components/physiology/SleepHypnogramChart";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { cn } from "@/lib/cn";
 import type { PhysiologyDailyPanelOk } from "@/lib/physiology/daily-wellness-panel";
@@ -75,14 +75,6 @@ export function CalendarDayWellnessDetail({ athleteId, selectedDate }: CalendarD
   const [state, setState] = useState<LoadState>({ kind: "idle" });
 
   const panel = state.kind === "ok" ? state.panel : null;
-  const hypno = useMemo(
-    () =>
-      panel && Array.isArray(panel.sleepHypnogram) && panel.sleepHypnogram.length > 1
-        ? panel.sleepHypnogram.map((p) => p.stage)
-        : [],
-    [panel],
-  );
-  const hypnoLabels = useMemo(() => hypno.map((_, i) => `s${i + 1}`), [hypno]);
 
   useEffect(() => {
     if (!athleteId || !/^\d{4}-\d{2}-\d{2}$/.test(selectedDate)) {
@@ -243,16 +235,16 @@ export function CalendarDayWellnessDetail({ athleteId, selectedDate }: CalendarD
               </div>
             </div>
 
-            {hypno.length > 1 ? (
+            {panel.sleepHypnogram.length > 0 ? (
               <div className="rounded-2xl border border-white/10 bg-black/40 p-3">
                 <p className="mb-2 flex items-center gap-2 font-mono text-[0.65rem] font-bold uppercase tracking-wider text-emerald-300">
-                  <Heart className="h-3.5 w-3.5" aria-hidden /> Ipnogramma
+                  <Heart className="h-3.5 w-3.5" aria-hidden /> Fasi · linea notte
                 </p>
-                <TrainingSingleTraceChart
-                  label="Stage"
-                  color="#34d399"
-                  values={hypno}
-                  labels={hypnoLabels}
+                <SleepHypnogramChart
+                  segments={panel.sleepHypnogram}
+                  approximated={panel.sleepHypnogramApproximated}
+                  sleepStartUtc={panel.sleepHypnogramWindowUtc?.sleepStartUtc}
+                  sleepEndUtc={panel.sleepHypnogramWindowUtc?.sleepEndUtc}
                 />
               </div>
             ) : null}

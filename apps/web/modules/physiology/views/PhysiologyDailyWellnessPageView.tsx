@@ -12,6 +12,8 @@ import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { PhysiologyDailyPanelOk } from "@/lib/physiology/daily-wellness-panel";
 
+import { SleepHypnogramChart } from "@/components/physiology/SleepHypnogramChart";
+
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function fmtNum(n: number | null | undefined, digits = 0): string {
@@ -157,39 +159,6 @@ function AdvancedPhysiologyChannelsStrip({ panel }: { panel: PhysiologyDailyPane
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-function HypnogramChart({ points }: { points: Array<{ t: number; stage: number }> }) {
-  if (!points.length) {
-    return (
-      <TimeSeriesPlaceholder
-        title="Sonno · fasi"
-        subtitle="Nessuna serie fasi nel payload: quando il vendor espone segmenti o minuti per stadio, comparirà qui."
-        unitHint="stadio · h"
-      />
-    );
-  }
-  const maxT = Math.max(...points.map((p) => p.t), 0.01);
-  const maxS = Math.max(...points.map((p) => p.stage), 1);
-  const w = 400;
-  const h = 120;
-  const poly = points
-    .map((p, i) => {
-      const x = (p.t / maxT) * w;
-      const y = h - (p.stage / maxS) * (h - 16) - 8;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <div className="rounded-xl border border-violet-500/25 bg-violet-950/10 p-4">
-      <p className="text-sm font-bold text-white">Sonno · ipnogramma (semplificato)</p>
-      <p className="text-xs text-gray-500">Costruito da segmenti/minuti nel payload device quando presenti.</p>
-      <svg viewBox={`0 0 ${w} ${h}`} className="mt-3 h-36 w-full text-violet-300" role="img" aria-label="Ipnotogramma sonno">
-        <rect width={w} height={h} fill="rgba(0,0,0,0.25)" rx="6" />
-        <path d={poly} fill="none" stroke="currentColor" strokeWidth="1.5" />
-      </svg>
     </div>
   );
 }
@@ -395,7 +364,12 @@ export default function PhysiologyDailyWellnessPageView() {
           <MetricCell label="Stato sintetico" value={r?.status === "unknown" || !r ? "—" : r.status} hint={r?.guidance} />
         </div>
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
-          <HypnogramChart points={panel?.sleepHypnogram ?? []} />
+          <SleepHypnogramChart
+            segments={panel?.sleepHypnogram ?? []}
+            approximated={panel?.sleepHypnogramApproximated ?? false}
+            sleepStartUtc={panel?.sleepHypnogramWindowUtc?.sleepStartUtc}
+            sleepEndUtc={panel?.sleepHypnogramWindowUtc?.sleepEndUtc}
+          />
           <div className="space-y-3 rounded-xl border border-white/10 bg-black/30 p-4">
             <p className="text-sm font-bold text-white">Fasi sonno (ore)</p>
             <div className="grid grid-cols-2 gap-2 text-sm">

@@ -5,8 +5,11 @@ import {
   wellnessExportMatchesPanelDate,
 } from "@/lib/physiology/wellness-day-key-from-device-export";
 import {
+  type HypnogramExtraction,
+  mergeSleepStageCandidates,
   extractSleepStagesFromDevicePayload,
-  tryBuildSleepHypnogramFromDevicePayload,
+  extractSleepHypnogramFromDevicePayload,
+  extractSleepHypnogramWindowUtc,
 } from "@/lib/physiology/sleep-stages-from-device-payload";
 import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
@@ -37,8 +40,10 @@ export type PhysiologyDailyPanelOk = {
     awakeHours: number | null;
     summaryLabel: string | null;
   };
-  /** Serie leggera per grafico notte (0–24 ore frazione o indice campione); opzionale. */
-  sleepHypnogram: Array<{ t: number; stage: number }>;
+  /** Segmenti sonno lungo finestra temporale · t₀,t₁ normalizzati in [0,1]. */
+  sleepHypnogram: Array<{ t0: number; t1: number; stage: number }>;
+  sleepHypnogramApproximated: boolean;
+  sleepHypnogramWindowUtc: { sleepStartUtc: string | null; sleepEndUtc: string | null };
   biomarkers: {
     panelCount: number;
     glucoseMmolL: number | null;
@@ -265,19 +270,47 @@ export async function buildPhysiologyDailyPanel(input: {
   const recovery = recoveryRows.length ? buildRecoverySummaryFromRows(recoveryRows) : null;
   const activity = mergeActivityFromRows(rows);
 
-  let sleepStages: PhysiologyDailyPanelOk["sleepStages"] = {
+  const sleepStagesEmpty: PhysiologyDailyPanelOk["sleepStages"] = {
     deepHours: null,
     lightHours: null,
     remHours: null,
     awakeHours: null,
     summaryLabel: null,
   };
-  let sleepHypnogram: Array<{ t: number; stage: number }> = [];
+
+  let sleepStages: PhysiologyDailyPanelOk["sleepStages"] = { ...sleepStagesEmpty };
   for (const row of rows) {
     const p = mergedPayloadFromExportRow(row);
-    sleepStages = extractSleepStagesFromDevicePayload(p);
-    sleepHypnogram = tryBuildSleepHypnogramFromDevicePayload(p);
-    if (sleepStages.deepHours != null || sleepHypnogram.length) break;
+    sleepStages = mergeSleepStageCandidates(sleepStages, extractSleepStagesFromDevicePayload(p));
+  }
+
+  let sleepHypnogram: PhysiologyDailyPanelOk["sleepHypnogram"] = [];
+  let sleepHypnogramApproximated = false;
+  let sleepHypnogramWindowUtc: PhysiologyDailyPanelOk["sleepHypnogramWindowUtc"] = {
+    sleepStartUtc: null,
+    sleepEndUtc: null,
+  };
+
+  let bestHyp: HypnogramExtraction | null = null;
+  for (const row of rows) {
+    const p = mergedPayloadFromExportRow(row);
+    if (!p) continue;
+    const ex = extractSleepHypnogramFromDevicePayload(p, sleepStages);
+    if (!ex.segments.length) continue;
+    const win = extractSleepHypnogramWindowUtc(p);
+    if (ex.kind === "phases") {
+      bestHyp = ex;
+      sleepHypnogramWindowUtc = win;
+      break;
+    }
+    if (!bestHyp || bestHyp.kind === "approximated") {
+      bestHyp = ex;
+      sleepHypnogramWindowUtc = win;
+    }
+  }
+  if (bestHyp) {
+    sleepHypnogram = bestHyp.segments;
+    sleepHypnogramApproximated = bestHyp.kind === "approximated";
   }
 
   const { data: bioRows, error: bioErr } = await db
@@ -348,6 +381,8 @@ export async function buildPhysiologyDailyPanel(input: {
     activity,
     sleepStages,
     sleepHypnogram,
+    sleepHypnogramApproximated,
+    sleepHypnogramWindowUtc,
     biomarkers: {
       panelCount: panels.length,
       glucoseMmolL,
