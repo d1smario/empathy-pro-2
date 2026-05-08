@@ -487,7 +487,7 @@ flowchart TB
 ## 6) Candidate Dead/Legacy Areas
 
 - `apps/web/app/(shell)/training/virya/page.tsx` alias redirect (`legacy`)
-- `apps/web/modules/training/services/training-write-api.ts` exports not clearly used (`candidate`)
+- `apps/web/modules/training/services/training-write-api.ts` reduced to active export only (`replaceTrainingPlannerCalendar`)
 - Tables with little/no direct app ownership in matrix (`candidate`, verify before any migration cleanup)
 - `apps/web/lib/auth/request-auth.ts` (`legacy`) vs `apps/web/lib/auth/athlete-read-context.ts` (`canonical`)
 
@@ -1058,9 +1058,9 @@ This section upgrades candidate list with evidence hints from code references.
 - File: `apps/web/modules/training/services/training-write-api.ts`
 - Evidence:
   - currently referenced by `apps/web/modules/training/components/ViryaAnnualPlanOrchestrator.tsx`.
-- Status: `candidate-merge`, not dead.
+- Status: `cleaned`: kept active export only, removed unreferenced wrappers.
 - Action:
-  - map each export to active caller before removing any function.
+  - if new callers appear, prefer dedicated service modules instead of re-growing a generic wrapper bucket.
 
 ## 15.3 `request-auth.ts` legacy overlap
 
