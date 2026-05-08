@@ -1,8 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
-import { coachOrgIdForDb } from "@/lib/coach-org-id";
-import { createRequestSupabaseClient } from "@/lib/supabase-server";
-import { readSupabaseAnonKey, readSupabasePublicUrl } from "@/lib/supabase-env";
+import { requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import { TrainingRouteAuthError, requireAuthenticatedTrainingUser } from "@/lib/auth/training-route-auth";
 
 export class RequestAuthError extends Error {
   status: number;
@@ -27,21 +25,18 @@ export function readRequestBearerToken(req: NextRequest): string | null {
 }
 
 async function resolveRequestUserId(req: NextRequest): Promise<string> {
-  const token = readBearerToken(req);
-  if (!token) {
-    throw new RequestAuthError(401, "Missing bearer token");
+  try {
+    const { userId } = await requireAuthenticatedTrainingUser(req);
+    return userId;
+  } catch (error) {
+    if (error instanceof TrainingRouteAuthError) {
+      throw new RequestAuthError(error.status, error.message);
+    }
+    if (error instanceof RequestAuthError) {
+      throw error;
+    }
+    throw new RequestAuthError(500, "Unable to resolve request user");
   }
-
-  const supabaseUrl = readSupabasePublicUrl();
-  const anonKey = readSupabaseAnonKey();
-  const verifier = createClient(supabaseUrl, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const { data, error } = await verifier.auth.getUser(token);
-  if (error || !data.user?.id) {
-    throw new RequestAuthError(401, "Invalid bearer token");
-  }
-  return data.user.id;
 }
 
 export async function requireRequestUser(req: NextRequest): Promise<string> {
@@ -60,43 +55,16 @@ export async function requireRequestAthleteAccess(req: NextRequest, athleteId: s
     throw new RequestAuthError(400, "Missing athleteId");
   }
 
-  const token = readBearerToken(req);
-  if (!token) {
-    throw new RequestAuthError(401, "Missing bearer token");
-  }
-  const userId = await resolveRequestUserId(req);
-  const supabase = createRequestSupabaseClient(token);
-  const { data: profile, error: profileError } = await supabase
-    .from("app_user_profiles")
-    .select("role, athlete_id")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (profileError) {
-    throw new RequestAuthError(500, profileError.message);
-  }
-
-  const role = String(profile?.role ?? "private");
-  const linkedAthleteId = typeof profile?.athlete_id === "string" ? profile.athlete_id : null;
-  if (linkedAthleteId === targetAthleteId) {
+  try {
+    const { userId } = await requireAthleteReadContext(req, targetAthleteId);
     return userId;
-  }
-
-  if (role === "coach") {
-    const { data: coachLink, error: coachLinkError } = await supabase
-      .from("coach_athletes")
-      .select("athlete_id")
-      .eq("coach_user_id", userId)
-      .eq("athlete_id", targetAthleteId)
-      .eq("org_id", coachOrgIdForDb())
-      .maybeSingle();
-    if (coachLinkError) {
-      throw new RequestAuthError(500, coachLinkError.message);
+  } catch (error) {
+    if (error instanceof TrainingRouteAuthError) {
+      throw new RequestAuthError(error.status, error.message);
     }
-    if (coachLink?.athlete_id === targetAthleteId) {
-      return userId;
+    if (error instanceof RequestAuthError) {
+      throw error;
     }
+    throw new RequestAuthError(500, "Athlete access check failed");
   }
-
-  throw new RequestAuthError(403, "Athlete access denied");
 }

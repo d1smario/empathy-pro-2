@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 
 export const runtime = "nodejs";
 
@@ -32,10 +31,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing athleteId or vo2max_ml_min_kg" }, { status: 400 });
     }
     const clamped = Math.round(Math.max(15, Math.min(95, vo2)) * 100) / 100;
-    await requireRequestAthleteAccess(req, athleteId);
-
-    const supabase = createServerSupabaseClient();
-    const { data: existing, error: selErr } = await supabase
+    const { db } = await requireAthleteWriteContext(req, athleteId);
+    const { data: existing, error: selErr } = await db
       .from("physiological_profiles")
       .select("athlete_id")
       .eq("athlete_id", athleteId)
@@ -43,13 +40,13 @@ export async function POST(req: NextRequest) {
     if (selErr) return NextResponse.json({ error: selErr.message }, { status: 500 });
 
     if (existing) {
-      const { error: upErr } = await supabase
+      const { error: upErr } = await db
         .from("physiological_profiles")
         .update({ vo2max_ml_min_kg: clamped, updated_at: new Date().toISOString() })
         .eq("athlete_id", athleteId);
       if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
     } else {
-      const { error: insErr } = await supabase.from("physiological_profiles").insert({
+      const { error: insErr } = await db.from("physiological_profiles").insert({
         athlete_id: athleteId,
         vo2max_ml_min_kg: clamped,
       });
@@ -66,7 +63,7 @@ export async function POST(req: NextRequest) {
       saved_at: new Date().toISOString(),
     };
 
-    const { error: runErr } = await supabase.from("metabolic_lab_runs").insert({
+    const { error: runErr } = await db.from("metabolic_lab_runs").insert({
       athlete_id: athleteId,
       section: "vo2max_lab",
       model_version: "vo2max-lab-v1",
@@ -80,7 +77,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ status: "ok", vo2max_ml_min_kg: clamped });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "VO2max lab save failed";
@@ -94,10 +91,8 @@ export async function DELETE(req: NextRequest) {
     const body = (await req.json()) as { athleteId?: string };
     const athleteId = (body.athleteId ?? "").trim();
     if (!athleteId) return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
-    await requireRequestAthleteAccess(req, athleteId);
-
-    const supabase = createServerSupabaseClient();
-    const { error: upErr } = await supabase
+    const { db } = await requireAthleteWriteContext(req, athleteId);
+    const { error: upErr } = await db
       .from("physiological_profiles")
       .update({ vo2max_ml_min_kg: null, updated_at: new Date().toISOString() })
       .eq("athlete_id", athleteId);
@@ -105,7 +100,7 @@ export async function DELETE(req: NextRequest) {
 
     return NextResponse.json({ status: "ok" });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "VO2max lab clear failed";

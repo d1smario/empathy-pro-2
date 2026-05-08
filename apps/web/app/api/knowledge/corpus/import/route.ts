@@ -1,5 +1,5 @@
 import type { KnowledgeCorpusImportInput, KnowledgeCorpusImportResult } from "@/api/knowledge/contracts";
-import { RequestAuthError, requireRequestUser } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAuthenticatedTrainingUser } from "@/lib/auth/athlete-read-context";
 import { ingestKnowledgeCorpus } from "@/lib/knowledge/knowledge-corpus-importer";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -26,7 +26,7 @@ function parseBody(body: unknown): KnowledgeCorpusImportInput | null {
  */
 export async function POST(req: NextRequest) {
   try {
-    await requireRequestUser(req);
+    await requireAuthenticatedTrainingUser(req);
     const body = (await req.json().catch(() => null)) as unknown;
     const input = parseBody(body);
     if (!input) {
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const status = result.error ? 500 : 200;
     return NextResponse.json<KnowledgeCorpusImportResult>(result, { status });
   } catch (error) {
-    if (error instanceof RequestAuthError) {
+    if (error instanceof AthleteReadContextError) {
       return NextResponse.json<KnowledgeCorpusImportResult>(
         {
           source: "pubmed",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
-import { RequestAuthError, requireRequestUser } from "@/lib/auth/request-auth";
+import { requireAuthenticatedTrainingUser } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { writeAthleteMemoryDomainPatch } from "@/lib/memory/athlete-memory-domain-writer";
 
@@ -175,7 +175,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRequestUser(req);
+    await requireAuthenticatedTrainingUser(req);
     const body = (await req.json()) as { payload?: Record<string, unknown> };
     if (!body.payload) {
       return NextResponse.json({ error: "Missing payload" }, { status: 400 });
@@ -191,7 +191,7 @@ export async function POST(req: NextRequest) {
       athleteMemory: result.athleteMemory,
     });
   } catch (err) {
-    if (err instanceof RequestAuthError) {
+    if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });
     }
     const message = err instanceof Error ? err.message : "Profile create failed";

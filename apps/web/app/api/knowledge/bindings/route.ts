@@ -1,5 +1,5 @@
 import type { KnowledgeBindingViewModel } from "@/api/knowledge/contracts";
-import { RequestAuthError, requireRequestAthleteAccess } from "@/lib/auth/request-auth";
+import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteKnowledgeMemory } from "@/lib/knowledge/knowledge-memory-resolver";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteReadContext(req, athleteId);
     const knowledge = await resolveAthleteKnowledgeMemory(athleteId);
     return NextResponse.json<KnowledgeBindingViewModel>({
       athleteId,
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       error: null,
     });
   } catch (error) {
-    const status = error instanceof RequestAuthError ? error.status : 500;
+    const status = error instanceof AthleteReadContextError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Unable to resolve athlete knowledge bindings";
     return NextResponse.json<KnowledgeBindingViewModel>(
       {

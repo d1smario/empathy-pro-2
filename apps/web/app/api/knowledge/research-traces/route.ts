@@ -4,10 +4,10 @@ import type {
   KnowledgeResearchTraceViewModel,
 } from "@/api/knowledge/contracts";
 import {
-  RequestAuthError,
-  requireRequestAthleteAccess,
-  requireRequestUser,
-} from "@/lib/auth/request-auth";
+  AthleteReadContextError,
+  requireAthleteReadContext,
+  requireAuthenticatedTrainingUser,
+} from "@/lib/auth/athlete-read-context";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import {
   listKnowledgeExpansionTraceSummaries,
@@ -21,7 +21,7 @@ export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   try {
-    await requireRequestUser(req);
+    await requireAuthenticatedTrainingUser(req);
     const athleteId = req.nextUrl.searchParams.get("athleteId")?.trim() ?? "";
     if (!athleteId) {
       return NextResponse.json<KnowledgeResearchTraceListViewModel>(
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
         { status: 400 },
       );
     }
-    await requireRequestAthleteAccess(req, athleteId);
+    await requireAthleteReadContext(req, athleteId);
     const expand = (req.nextUrl.searchParams.get("expand") ?? "").trim().toLowerCase();
     const limitRaw = req.nextUrl.searchParams.get("limit");
     const limitParsed = limitRaw ? Number(limitRaw) : 12;
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
         error: null,
       });
     }
-    const status = error instanceof RequestAuthError ? error.status : 500;
+    const status = error instanceof AthleteReadContextError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Knowledge research traces failed";
     return NextResponse.json<KnowledgeResearchTraceListViewModel>(
       { athleteId: req.nextUrl.searchParams.get("athleteId")?.trim() ?? "", traces: [], error: message },
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    await requireRequestUser(req);
+    await requireAuthenticatedTrainingUser(req);
     const body = (await req.json().catch(() => null)) as KnowledgeResearchTraceSaveInput | null;
     const plan = body?.plan ?? null;
     if (!plan) {
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
       );
     }
     if (plan.trigger.athleteId) {
-      await requireRequestAthleteAccess(req, plan.trigger.athleteId);
+      await requireAthleteReadContext(req, plan.trigger.athleteId);
     }
     const trace = await persistKnowledgeExpansionTrace(plan);
     return NextResponse.json<KnowledgeResearchTraceViewModel>({
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         error: "Knowledge foundation migration missing",
       });
     }
-    const status = error instanceof RequestAuthError ? error.status : 500;
+    const status = error instanceof AthleteReadContextError ? error.status : 500;
     const message = error instanceof Error ? error.message : "Knowledge research trace save failed";
     return NextResponse.json<KnowledgeResearchTraceViewModel>(
       { trace: null, error: message },
