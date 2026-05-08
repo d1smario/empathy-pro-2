@@ -22,7 +22,7 @@ function endpointKindFromParams(segments: string[] | undefined): string {
 /**
  * Partner Verification Garmin: nel portale servono anche (oltre agli stream dati):
  * - Deregistration → `.../push/deregistration` (rimuove link atleta in DB se `userId` nel body)
- * - User permissions change → `.../push/userPermissions` (solo audit in `garmin_push_receipts`)
+ * - User permissions change → `.../push/userPermissions` (aggiorna `garmin_athlete_links.user_permissions` da payload o GET `/rest/user/permissions`)
  * - Ping → `.../push/ping` se richiesto dal test (“almeno 1 altro endpoint” oltre ai due sopra)
  * Con `GARMIN_PUSH_WEBHOOK_SECRET`: aggiungi `?token=` **oppure** lascia che Garmin invii il client id (vedi `garmin-push-webhook-auth.ts`).
  */
@@ -98,6 +98,7 @@ export async function POST(
         endpointKind: kind,
         pullJobsQueued,
         deregistrationRemoved: admin.deregistrationRemoved,
+        userPermissionsSynced: admin.userPermissionsSynced,
       },
       { status: 200 },
     );

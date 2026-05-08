@@ -4,13 +4,12 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { ensureFreshGarminAccessTokenForAthlete } from "@/lib/integrations/garmin-access-token";
 import {
   GARMIN_SUMMARY_BACKFILL_STREAMS,
+  maxRangeSecondsForGarminSummaryBackfillStream,
   type GarminSummaryBackfillStream,
 } from "@/lib/integrations/garmin-summary-backfill-streams";
 import {
   batchHasGarminSummaryBackfill412,
-  clampGarminSummaryBackfillTimeRange,
   GARMIN_SUMMARY_BACKFILL_412_HINT_IT,
-  GARMIN_SUMMARY_BACKFILL_MAX_RANGE_SECONDS,
   isGarminSummaryBackfillStream,
   requestGarminSummaryBackfill,
 } from "@/lib/integrations/garmin-wellness-backfill";
@@ -29,7 +28,7 @@ type Body = {
   streams?: string[];
   summaryStartTimeInSeconds?: number;
   summaryEndTimeInSeconds?: number;
-  /** Se mancano start/end: ultimi N giorni UTC (clamp 1–365). Oltre ~90 giorni Garmin accetta solo la finestra ridotta per richiesta. */
+  /** Se mancano start/end: ultimi N giorni UTC (clamp 1–365). Oltre il limite per stream (~90g Health, ~30g Activity) il server taglia la finestra. */
   days?: number;
 };
 
@@ -61,13 +60,17 @@ function resolveGarminBackfillWindow(body: Body): { start: number; end: number }
   };
 }
 
-/** Elenco stream + metadati finestra (limite singola richiesta Garmin). */
+/** Elenco stream + metadati finestra (limite singola richiesta Garmin, dipende dallo stream). */
 export async function GET() {
+  const maxRangeSecondsByStream = Object.fromEntries(
+    GARMIN_SUMMARY_BACKFILL_STREAMS.map((s) => [s, maxRangeSecondsForGarminSummaryBackfillStream(s)]),
+  ) as Record<string, number>;
   return NextResponse.json(
     {
       streams: [...GARMIN_SUMMARY_BACKFILL_STREAMS],
-      maxRangeDays: Math.floor(GARMIN_SUMMARY_BACKFILL_MAX_RANGE_SECONDS / 86_400),
-      maxRangeSeconds: GARMIN_SUMMARY_BACKFILL_MAX_RANGE_SECONDS,
+      maxRangeSecondsByStream,
+      maxRangeDaysWellness: 90,
+      maxRangeDaysActivityStreams: 30,
     },
     { headers: NO_STORE },
   );
@@ -102,7 +105,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: window.error }, { status: 400, headers: NO_STORE });
     }
     const { start, end } = window;
-    const rangeEffective = clampGarminSummaryBackfillTimeRange(start, end);
 
     await requireAthleteReadContext(req, athleteId);
 
@@ -155,6 +157,7 @@ export async function POST(req: NextRequest) {
 
     if (streams.length === 1) {
       const stream = streams[0]!;
+      const maxDaysOne = Math.floor(maxRangeSecondsForGarminSummaryBackfillStream(stream) / 86_400);
       const result = await requestGarminSummaryBackfill({
         accessToken: token,
         stream,
@@ -168,7 +171,7 @@ export async function POST(req: NextRequest) {
             ? "Backfill accettato da Garmin (202); i dati possono arrivare in seguito via Push/Ping."
             : "Richiesta completata.";
         const msg = result.windowClamped
-          ? `${baseMsg} Intervallo richiesto superava il limite Garmin per una singola richiesta (~90 giorni): è stata usata solo la parte più recente.`
+          ? `${baseMsg} Intervallo richiesto superava il limite Garmin per questo stream (${maxDaysOne} giorni per richiesta): è stata usata solo la parte più recente.`
           : baseMsg;
         return NextResponse.json(
           {
@@ -178,11 +181,13 @@ export async function POST(req: NextRequest) {
             message: msg,
             summaryStartTimeInSeconds: start,
             summaryEndTimeInSeconds: end,
-            ...(result.windowClamped
+            ...(result.windowClamped &&
+            result.effectiveSummaryStartTimeInSeconds != null &&
+            result.effectiveSummaryEndTimeInSeconds != null
               ? {
                   windowClamped: true as const,
-                  effectiveSummaryStartTimeInSeconds: rangeEffective.start,
-                  effectiveSummaryEndTimeInSeconds: rangeEffective.end,
+                  effectiveSummaryStartTimeInSeconds: result.effectiveSummaryStartTimeInSeconds,
+                  effectiveSummaryEndTimeInSeconds: result.effectiveSummaryEndTimeInSeconds,
                 }
               : {}),
           },
@@ -208,6 +213,9 @@ export async function POST(req: NextRequest) {
       httpStatus: number;
       errorMessage?: string | null;
       message?: string;
+      windowClamped?: boolean;
+      effectiveSummaryStartTimeInSeconds?: number;
+      effectiveSummaryEndTimeInSeconds?: number;
     }> = [];
 
     for (let i = 0; i < streams.length; i += 1) {
@@ -227,6 +235,15 @@ export async function POST(req: NextRequest) {
             result.httpStatus === 202
               ? "Accettato (202); dati possono arrivare via Push/Ping."
               : "OK.",
+          ...(result.windowClamped &&
+          result.effectiveSummaryStartTimeInSeconds != null &&
+          result.effectiveSummaryEndTimeInSeconds != null
+            ? {
+                windowClamped: true as const,
+                effectiveSummaryStartTimeInSeconds: result.effectiveSummaryStartTimeInSeconds,
+                effectiveSummaryEndTimeInSeconds: result.effectiveSummaryEndTimeInSeconds,
+              }
+            : {}),
         });
       } else {
         results.push({
@@ -243,24 +260,18 @@ export async function POST(req: NextRequest) {
 
     const allOk = results.every((r) => r.ok);
     const has412 = batchHasGarminSummaryBackfill412(results);
+    const anyStreamWindowClamped = results.some((r) => r.ok && r.windowClamped);
     return NextResponse.json(
       {
         batch: true as const,
         allOk,
         summaryStartTimeInSeconds: start,
         summaryEndTimeInSeconds: end,
-        ...(rangeEffective.clamped
-          ? {
-              windowClamped: true as const,
-              effectiveSummaryStartTimeInSeconds: rangeEffective.start,
-              effectiveSummaryEndTimeInSeconds: rangeEffective.end,
-            }
-          : {}),
         results,
         message: allOk
           ? `Tutte le richieste di backfill sono state accettate da Garmin (controlla 202 per stream).${
-              rangeEffective.clamped
-                ? " Intervallo richiesto era oltre ~90 giorni: inviata solo la finestra più recente (limite singola richiesta)."
+              anyStreamWindowClamped
+                ? " Per almeno uno stream la finestra è stata ridotta al limite massimo per singola richiesta (es. 30 giorni activityDetails/moveiq, 90 giorni Health)."
                 : ""
             }`
           : "Alcune richieste sono fallite; vedi results[].",

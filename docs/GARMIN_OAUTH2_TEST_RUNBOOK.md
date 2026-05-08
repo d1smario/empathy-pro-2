@@ -74,3 +74,23 @@ flowchart LR
 - `garmin_account_already_linked`: the same Garmin account is already linked to another athlete profile.
 - `callback_state_missing_athlete` (in `detail`): OAuth `error` returned without a parseable `athleteId` in `state`; often a bookmarked callback URL or an interrupted flow — start again from Profile → Collega Garmin.
 
+## Summary Backfill window and HTTP 412
+
+- **Per-request window** depends on the stream (Garmin Health vs Activity API): Empathy clamps to about **90 days** for Health/wellness streams and about **30 days** for Activity-style streams such as **`activityDetails`** and **`moveiq`**. `GET /api/integrations/garmin/backfill` returns `maxRangeSecondsByStream` for each allowed stream name.
+- **HTTP 412** on Summary Backfill (and other summary REST calls): Garmin’s Health API documents **412 Precondition Failed** when the Bearer is valid but the user has **not granted permission for that summary type** in Garmin Connect (toggle off for that data type), not only “bad date range”. Compare portal capabilities, `GET …/rest/user/permissions`, and the user’s Connect sharing settings.
+
+## OAuth 1 → OAuth 2 migration (reference)
+
+- Garmin’s **OAuth 2 Migration Guide** states OAuth 1 support is targeted for retirement around **2026-12-31**; contact `connect-support@developer.garmin.com` to migrate an app.
+- For Ping/Pull integrations, **`callbackURL` must be honored as returned**; after migration an extra **`token`** query parameter may appear on the callback URL.
+- Existing OAuth 1 user tokens can be exchanged via **`POST https://apis.garmin.com/partner-gateway/rest/user/token-exchange`** (request signed with OAuth 1 consumer credentials).
+
+## Diagnostics and Supabase project alignment
+
+- From the repo root, see `apps/web/scripts/garmin-diagnostic-backfill.mjs` (usage and env vars in the script header). Useful to probe `GET …/rest/backfill/<stream>` with a stored link + refresh.
+- **`NEXT_PUBLIC_SUPABASE_URL`** and **`SUPABASE_SERVICE_ROLE_KEY`** must refer to the **same** Supabase project where `garmin_athlete_links` actually has rows; mismatched project keys produce “no links” while the dashboard shows data elsewhere. The script supports `GARMIN_DIAG_SUPERSEDE_ENV` to point at a specific env file (e.g. `.env.vercel.production`).
+
+## `push/userPermissions` webhook
+
+- With **`SUPABASE_SERVICE_ROLE_KEY`** configured on the server, a Garmin **`POST …/api/integrations/garmin/push/userPermissions`** notification updates **`garmin_athlete_links.user_permissions`** when a permission list can be parsed from the JSON, or after a **GET `/wellness-api/rest/user/permissions`** refresh using the linked athlete’s OAuth2 tokens. The push route JSON response includes **`userPermissionsSynced`** (count of rows updated).
+

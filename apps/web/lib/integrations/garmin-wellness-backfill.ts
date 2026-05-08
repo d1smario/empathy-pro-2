@@ -3,6 +3,7 @@ import "server-only";
 import { tryParseGarminApiErrorMessage } from "@/lib/integrations/garmin-api-error-body";
 import {
   GARMIN_SUMMARY_BACKFILL_STREAMS,
+  maxRangeSecondsForGarminSummaryBackfillStream,
   type GarminSummaryBackfillStream,
 } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { garminWellnessAbsoluteUrl } from "@/lib/integrations/garmin-wellness-api";
@@ -21,12 +22,12 @@ export { GARMIN_SUMMARY_BACKFILL_STREAMS, type GarminSummaryBackfillStream };
 const STREAM_SET = new Set<string>(GARMIN_SUMMARY_BACKFILL_STREAMS);
 
 /**
- * Intervallo massimo per **una** richiesta Summary Backfill (spec Health API / documentazione Garmin):
- * oltre questo arco la richiesta può fallire (es. 412). Per più storico, inviare più richieste su finestre consecutive.
+ * Limite “Health/wellness” storico (90 giorni) — usare `maxRangeSecondsForGarminSummaryBackfillStream` per stream Activity (~30g).
  */
 export const GARMIN_SUMMARY_BACKFILL_MAX_RANGE_SECONDS = 90 * 86_400;
 
 export function clampGarminSummaryBackfillTimeRange(
+  stream: GarminSummaryBackfillStream,
   summaryStartTimeInSeconds: number,
   summaryEndTimeInSeconds: number,
 ): { start: number; end: number; clamped: boolean } {
@@ -36,7 +37,7 @@ export function clampGarminSummaryBackfillTimeRange(
     return { start, end, clamped: false };
   }
   const span = end - start;
-  const max = GARMIN_SUMMARY_BACKFILL_MAX_RANGE_SECONDS;
+  const max = maxRangeSecondsForGarminSummaryBackfillStream(stream);
   if (span <= max) {
     return { start, end, clamped: false };
   }
@@ -69,7 +70,13 @@ export async function requestGarminSummaryBackfill(params: {
   summaryStartTimeInSeconds: number;
   summaryEndTimeInSeconds: number;
 }): Promise<
-  | { ok: true; httpStatus: number; windowClamped?: boolean }
+  | {
+      ok: true;
+      httpStatus: number;
+      windowClamped?: boolean;
+      effectiveSummaryStartTimeInSeconds?: number;
+      effectiveSummaryEndTimeInSeconds?: number;
+    }
   | { ok: false; httpStatus: number; errorMessage?: string }
 > {
   const rawStart = Math.trunc(params.summaryStartTimeInSeconds);
@@ -85,7 +92,11 @@ export async function requestGarminSummaryBackfill(params: {
     };
   }
 
-  const { start, end, clamped: windowClamped } = clampGarminSummaryBackfillTimeRange(rawStart, rawEnd);
+  const { start, end, clamped: windowClamped } = clampGarminSummaryBackfillTimeRange(
+    params.stream,
+    rawStart,
+    rawEnd,
+  );
   const url = buildGarminSummaryBackfillRequestUrl(params.stream, start, end);
   const res = await fetch(url, {
     method: "GET",
@@ -98,7 +109,17 @@ export async function requestGarminSummaryBackfill(params: {
   });
   const text = await res.text();
   if (res.ok) {
-    return { ok: true, httpStatus: res.status, ...(windowClamped ? { windowClamped: true } : {}) };
+    return {
+      ok: true,
+      httpStatus: res.status,
+      ...(windowClamped
+        ? {
+            windowClamped: true as const,
+            effectiveSummaryStartTimeInSeconds: start,
+            effectiveSummaryEndTimeInSeconds: end,
+          }
+        : {}),
+    };
   }
   return {
     ok: false,
@@ -107,9 +128,9 @@ export async function requestGarminSummaryBackfill(params: {
   };
 }
 
-/** 412 sul Backfill storico: finestra troppo lunga (oltre ~90 giorni richiede più richieste), programma/consenso, o nome stream non ammesso. Diverso dal Push→Pull con `token=` nelle notifiche. */
+/** 412 sul Backfill storico: finestra troppo lunga, programma/consenso, o nome stream non ammesso. Diverso dal Push→Pull con `token=` nelle notifiche. */
 export const GARMIN_SUMMARY_BACKFILL_412_HINT_IT =
-  "412 su Summary Backfill: verifica nell’Health API/spec che una singola richiesta copra al massimo ~90 giorni (Empathy ora taglia automaticamente oltre 90 giorni). Se già dentro al limite: permessi/prodotti nel portale Garmin, consenso utente Connect, contratto/programma stream — contatta Garmin Developer support. I dati nuovi restano disponibili via Push→pull dopo sync.";
+  "412 su Summary Backfill: finestra massima per richiesta dipende dallo stream (~90 giorni Health/wellness, ~30 giorni Activity come activityDetails/moveiq; Empathy taglia automaticamente oltre il limite dello stream). Se già dentro al limite: permesso per quel tipo di summary in Garmin Connect (Appendix error 412), prodotti nel portale, contratto/programma — contatta Garmin Developer support. I dati nuovi restano disponibili via Push→pull dopo sync.";
 
 export function batchHasGarminSummaryBackfill412(results: readonly { ok: boolean; httpStatus: number }[]): boolean {
   return results.some((r) => !r.ok && r.httpStatus === 412);

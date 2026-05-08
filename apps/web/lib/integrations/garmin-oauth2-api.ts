@@ -134,7 +134,8 @@ export async function fetchGarminApiUserId(accessToken: string): Promise<string>
   return id.trim();
 }
 
-function normalizeGarminUserPermissionsPayload(parsed: unknown): string[] | null {
+/** Estrae un array di permessi stringa da JSON Garmin (root array, o primo array di stringhe in un oggetto). */
+export function extractGarminUserPermissionsFromUnknown(parsed: unknown): string[] | null {
   if (Array.isArray(parsed)) {
     const strings = parsed.filter((x): x is string => typeof x === "string" && x.trim().length > 0);
     return strings.length ? strings : null;
@@ -167,7 +168,7 @@ export async function fetchGarminUserPermissions(accessToken: string): Promise<s
   }
   try {
     const parsed: unknown = JSON.parse(text) as unknown;
-    return normalizeGarminUserPermissionsPayload(parsed);
+    return extractGarminUserPermissionsFromUnknown(parsed);
   } catch {
     return null;
   }

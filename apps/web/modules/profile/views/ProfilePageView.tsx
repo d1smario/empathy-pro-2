@@ -14,7 +14,12 @@ import type { AthleteMemory, PhysiologyState, TwinState } from "@/lib/empathy/sc
 import { cn } from "@/lib/cn";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { garminOAuthReasonGuidance } from "@/lib/integrations/garmin-oauth-reason-copy";
-import { GARMIN_SUMMARY_BACKFILL_STREAMS, GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS } from "@/lib/integrations/garmin-summary-backfill-streams";
+import {
+  GARMIN_SUMMARY_BACKFILL_STREAMS,
+  GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS,
+  maxRangeSecondsForGarminSummaryBackfillStream,
+  type GarminSummaryBackfillStream,
+} from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
@@ -411,6 +416,20 @@ export default function ProfilePage() {
   const [garminBackfillDays, setGarminBackfillDays] = useState(14);
   const [garminBackfillBusy, setGarminBackfillBusy] = useState(false);
   const [garminBackfillNotice, setGarminBackfillNotice] = useState<string | null>(null);
+  const garminSingleBackfillMaxDays = useMemo(() => {
+    return Math.floor(
+      maxRangeSecondsForGarminSummaryBackfillStream(garminBackfillStream as GarminSummaryBackfillStream) / 86_400,
+    );
+  }, [garminBackfillStream]);
+  const garminWellnessBatchMaxDays = useMemo(
+    () =>
+      Math.floor(
+        Math.min(
+          ...GARMIN_WELLNESS_BATCH_BACKFILL_STREAMS.map((s) => maxRangeSecondsForGarminSummaryBackfillStream(s)),
+        ) / 86_400,
+      ),
+    [],
+  );
   const [whoopLink, setWhoopLink] = useState<{
     linked: boolean;
     whoopUserIdMasked?: string;
@@ -813,7 +832,10 @@ export default function ProfilePage() {
     setGarminBackfillBusy(true);
     setGarminBackfillNotice(null);
     try {
-      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const days = Math.min(
+        garminSingleBackfillMaxDays,
+        Math.max(1, Math.floor(Number(garminBackfillDays) || 14)),
+      );
       const r = await fetch("/api/integrations/garmin/backfill", {
         method: "POST",
         credentials: "include",
@@ -852,7 +874,10 @@ export default function ProfilePage() {
     setGarminBackfillBusy(true);
     setGarminBackfillNotice(null);
     try {
-      const days = Math.min(90, Math.max(1, Math.floor(Number(garminBackfillDays) || 14)));
+      const days = Math.min(
+        garminWellnessBatchMaxDays,
+        Math.max(1, Math.floor(Number(garminBackfillDays) || 14)),
+      );
       const r = await fetch("/api/integrations/garmin/backfill", {
         method: "POST",
         credentials: "include",
@@ -1890,7 +1915,8 @@ export default function ProfilePage() {
                         ) : (
                           <p className="text-white/55">
                             Elenco permessi da Garmin non ancora disponibile o vuoto; dopo il collegamento può
-                            popolarsi al prossimo refresh.
+                            popolarsi al prossimo refresh o quando Garmin invia il webhook{" "}
+                            <code className="text-white/65">push/userPermissions</code>.
                           </p>
                         )}
                       </div>
@@ -1922,9 +1948,10 @@ export default function ProfilePage() {
                         style={{ marginTop: 10 }}
                       >
                         <p className="muted-copy text-xs" style={{ marginBottom: 8 }}>
-                          Storico Garmin (Summary Backfill): intervallo ultimi N giorni UTC (consigliato max 90 giorni per richiesta
-                          Garmin); oltre i 90 giorni il server usa solo la parte più recente salvo richieste successive. Risposta
-                          tipica 202, poi notifiche + pull.
+                          Storico Garmin (Summary Backfill): intervallo ultimi N giorni UTC (max{" "}
+                          <strong className="text-white/80">{garminSingleBackfillMaxDays}</strong> giorni per richiesta sullo
+                          stream selezionato; stream Activity tipo activityDetails/moveiq usano 30 giorni, Health/wellness fino a
+                          90). Oltre il limite il server taglia alla finestra più recente. Risposta tipica 202, poi notifiche + pull.
                         </p>
                         <div className="flex flex-wrap items-end gap-2">
                           <div className="form-group" style={{ minWidth: 160 }}>
@@ -1932,7 +1959,16 @@ export default function ProfilePage() {
                             <select
                               className="form-select profile-dark-select text-sm"
                               value={garminBackfillStream}
-                              onChange={(e) => setGarminBackfillStream(e.target.value)}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setGarminBackfillStream(v);
+                                const cap = Math.floor(
+                                  maxRangeSecondsForGarminSummaryBackfillStream(v as GarminSummaryBackfillStream) / 86_400,
+                                );
+                                setGarminBackfillDays((d) =>
+                                  Math.min(Math.max(1, Math.floor(Number(d) || 14)), cap),
+                                );
+                              }}
                             >
                               {GARMIN_SUMMARY_BACKFILL_STREAMS.map((s) => (
                                 <option key={s} value={s}>
@@ -1946,10 +1982,17 @@ export default function ProfilePage() {
                             <input
                               type="number"
                               min={1}
-                              max={90}
+                              max={garminSingleBackfillMaxDays}
                               className="form-input text-sm"
                               value={garminBackfillDays}
-                              onChange={(e) => setGarminBackfillDays(Number(e.target.value))}
+                              onChange={(e) =>
+                                setGarminBackfillDays(
+                                  Math.min(
+                                    garminSingleBackfillMaxDays,
+                                    Math.max(1, Math.floor(Number(e.target.value)) || 1),
+                                  ),
+                                )
+                              }
                             />
                           </div>
                           <Pro2Button

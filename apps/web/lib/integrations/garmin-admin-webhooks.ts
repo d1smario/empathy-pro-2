@@ -1,5 +1,7 @@
 import "server-only";
 
+import { ensureFreshGarminAccessTokenForAthlete } from "@/lib/integrations/garmin-access-token";
+import { extractGarminUserPermissionsFromUnknown, fetchGarminUserPermissions } from "@/lib/integrations/garmin-oauth2-api";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
@@ -28,23 +30,42 @@ function isDeregistrationEndpointKind(kind: string): boolean {
   return k.includes("deregist") || kind.toUpperCase().includes("DEREGISTER");
 }
 
+function isUserPermissionsEndpointKind(kind: string): boolean {
+  const k = kind.toLowerCase();
+  return k.includes("userpermission") || k.includes("user-permission");
+}
+
+export type GarminPartnerAdminEffectsResult = {
+  deregistrationRemoved: number;
+  /** Righe `garmin_athlete_links` aggiornate con `user_permissions` (payload o GET). */
+  userPermissionsSynced: number;
+};
+
 /**
  * Effetti lato server per webhook amministrativi Garmin (Partner Verification).
- * Deregistrazione: rimuove `garmin_athlete_links` per ogni `userId` nel payload.
+ * - Deregistrazione: rimuove `garmin_athlete_links` per ogni `userId` nel payload.
+ * - User permissions: aggiorna `user_permissions` da JSON notifica o GET `/rest/user/permissions` (Bearer refresh).
  */
 export async function runGarminPartnerAdminEffects(input: {
   endpointKind: string;
   parsedJson: unknown;
-}): Promise<{ deregistrationRemoved: number }> {
-  if (!isDeregistrationEndpointKind(input.endpointKind)) {
-    return { deregistrationRemoved: 0 };
-  }
+}): Promise<GarminPartnerAdminEffectsResult> {
+  const empty: GarminPartnerAdminEffectsResult = { deregistrationRemoved: 0, userPermissionsSynced: 0 };
+
   if (!readOptionalServiceRoleKey()) {
-    return { deregistrationRemoved: 0 };
+    return empty;
+  }
+
+  if (isUserPermissionsEndpointKind(input.endpointKind)) {
+    return { ...empty, ...(await syncGarminUserPermissionsFromWebhook(input.parsedJson)) };
+  }
+
+  if (!isDeregistrationEndpointKind(input.endpointKind)) {
+    return empty;
   }
 
   const ids = collectGarminUserIdsDeep(input.parsedJson);
-  if (ids.length === 0) return { deregistrationRemoved: 0 };
+  if (ids.length === 0) return empty;
 
   try {
     const supabase = createServerSupabaseClient();
@@ -57,8 +78,55 @@ export async function runGarminPartnerAdminEffects(input: {
         .select("id");
       if (!error && Array.isArray(data)) removed += data.length;
     }
-    return { deregistrationRemoved: removed };
+    return { deregistrationRemoved: removed, userPermissionsSynced: 0 };
   } catch {
-    return { deregistrationRemoved: 0 };
+    return empty;
+  }
+}
+
+async function syncGarminUserPermissionsFromWebhook(
+  parsedJson: unknown,
+): Promise<{ userPermissionsSynced: number }> {
+  const ids = collectGarminUserIdsDeep(parsedJson);
+  const fromPayload = extractGarminUserPermissionsFromUnknown(parsedJson);
+  const usePayloadForAll =
+    fromPayload != null &&
+    fromPayload.length > 0 &&
+    ids.length === 1;
+
+  try {
+    const supabase = createServerSupabaseClient();
+    let synced = 0;
+    const now = new Date().toISOString();
+
+    for (const garminUserId of ids) {
+      let perms: string[] | null = usePayloadForAll ? fromPayload : null;
+      if (!perms?.length) {
+        const { data: link } = await supabase
+          .from("garmin_athlete_links")
+          .select("athlete_id")
+          .eq("garmin_user_id", garminUserId)
+          .maybeSingle();
+        const athleteId =
+          link && typeof (link as { athlete_id?: string }).athlete_id === "string"
+            ? (link as { athlete_id: string }).athlete_id.trim()
+            : "";
+        if (!athleteId) continue;
+        const tokenRes = await ensureFreshGarminAccessTokenForAthlete(supabase, athleteId);
+        if ("error" in tokenRes) continue;
+        perms = await fetchGarminUserPermissions(tokenRes.accessToken);
+      }
+      if (!perms?.length) continue;
+
+      const { error } = await supabase
+        .from("garmin_athlete_links")
+        .update({ user_permissions: perms, updated_at: now })
+        .eq("garmin_user_id", garminUserId);
+      if (!error) synced += 1;
+    }
+
+    return { userPermissionsSynced: synced };
+  } catch {
+    return { userPermissionsSynced: 0 };
   }
 }
