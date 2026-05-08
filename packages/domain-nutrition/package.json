@@ -9,12 +9,14 @@
     }
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0"
   },
   "devDependencies": {
+    "tsx": "^4.20.6",
     "typescript": "^5.7.0"
   }
 }

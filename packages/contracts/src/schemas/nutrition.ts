@@ -19,8 +19,33 @@ export type NutritionConstraints = {
   preferredFoods?: string[];
   preferredMealCount?: number;
   timingConstraints?: string[];
+  /** Opt-in: include planned-vs-logged adherence in adaptation dials. */
+  adaptationAdherenceOptIn?: boolean;
   /** Adaptive: dipendono da stato (es. low fiber pre-race) — gestiti a runtime */
   updatedAt?: string;
+};
+
+export type AcuteMealMetabolicEstimate = {
+  athleteId: string;
+  algorithmVersion: "acute_metabolic_surrogate_v1";
+  generatedAt: IsoDateTime;
+  context: {
+    intakeAt?: IsoDateTime | null;
+    activityState: "rest" | "easy" | "tempo" | "high_intensity";
+    carbsIngestedG: number;
+    mealSlot?: "breakfast" | "lunch" | "dinner" | "snack" | "other";
+    baselineGlucoseMmol?: number | null;
+  };
+  estimates: {
+    glucoseExcursionMmolBand: { low: number; high: number };
+    peakGlucoseMmolBand: { low: number; high: number };
+    insulinDemandProxyRelative: number;
+    hpaDriveProxyRelative: number;
+    gutStressAdjustment: number;
+  };
+  confidence: "low" | "moderate" | "high";
+  evidenceProfileId: string;
+  rationale: string[];
 };
 
 export type NutritionDailyEnergyModel = {
@@ -83,6 +108,7 @@ export type NutritionDailyEnergyModel = {
       estimatedMaintenanceKcal: number | null;
       confidence: string;
     } | null;
+    acuteMealEstimate?: AcuteMealMetabolicEstimate | null;
   };
   notes: string[];
 };

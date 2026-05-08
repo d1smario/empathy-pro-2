@@ -764,6 +764,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [adherenceOptIn, setAdherenceOptIn] = useState(false);
+  const [adherenceConfigLoading, setAdherenceConfigLoading] = useState(false);
   const [selectedPlanDate, setSelectedPlanDate] = useState<string>(new Date().toISOString().slice(0, 10));
   const lastNutritionHydrationKey = useRef<string>("");
   /** Finestra `from`…`to` dell’ultimo `fetchNutritionModuleContext` completo (per pathwayDate incrementale). */
@@ -818,6 +820,29 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   /** Etichette aggiunte per la prossima rigenerazione (vincolo deterministico sul request). */
   const [coachSessionFoodExclusions, setCoachSessionFoodExclusions] = useState<string[]>([]);
   const [profileFoodExcludeBusy, setProfileFoodExcludeBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!athleteId) return;
+    let cancelled = false;
+    setAdherenceConfigLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/nutrition/adherence-config?athleteId=${encodeURIComponent(athleteId)}`);
+        const payload = (await res.json().catch(() => ({}))) as {
+          adaptationAdherenceOptIn?: boolean;
+        };
+        if (cancelled) return;
+        if (res.ok) {
+          setAdherenceOptIn(payload.adaptationAdherenceOptIn === true);
+        }
+      } finally {
+        if (!cancelled) setAdherenceConfigLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId]);
 
   useEffect(() => {
     if (!athleteId || loading) return;
@@ -2885,6 +2910,18 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         nutrition_config: payloadNutrition,
         routine_config: payloadRoutine,
       });
+      const adherenceRes = await fetch("/api/nutrition/adherence-config", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          athleteId,
+          adaptationAdherenceOptIn: adherenceOptIn,
+        }),
+      });
+      if (!adherenceRes.ok) {
+        const payload = (await adherenceRes.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error ?? "Errore salvataggio toggle aderenza nutrizione");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore salvataggio configurazione nutrizione");
     }
@@ -3091,6 +3128,28 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                   maxOffsetDays={400}
                   className="w-full"
                 />
+              </div>
+            </section>
+          ) : null}
+
+          {subRoute === "meal-plan" && athleteId ? (
+            <section className="viz-card builder-panel border border-fuchsia-500/20 bg-black/20 px-4 py-3 sm:px-5">
+              <div className="flex flex-col gap-2">
+                <span className="text-[0.65rem] font-bold uppercase tracking-wider text-slate-500">
+                  Adattamento da aderenza nutrizione
+                </span>
+                <label className="inline-flex items-center gap-2 text-sm text-slate-200">
+                  <input
+                    type="checkbox"
+                    checked={adherenceOptIn}
+                    disabled={saving || adherenceConfigLoading}
+                    onChange={(event) => setAdherenceOptIn(event.target.checked)}
+                  />
+                  Usa confronto piano vs assunto nel calcolo dell&apos;adattamento.
+                </label>
+                <p className="m-0 text-[0.75rem] leading-relaxed text-slate-400">
+                  Attivalo solo se diario e piano sono compilati in modo preciso: i gap di aderenza influenzano i dial nutrizione.
+                </p>
               </div>
             </section>
           ) : null}

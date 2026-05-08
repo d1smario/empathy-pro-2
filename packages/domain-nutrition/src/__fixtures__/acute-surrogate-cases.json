@@ -1,0 +1,28 @@
+[
+  {
+    "name": "rest_50g_glucose",
+    "input": {
+      "athleteId": "fixture-athlete",
+      "carbsIngestedG": 50,
+      "activityState": "rest",
+      "baselineGlucoseMmol": 5.5
+    },
+    "expect": {
+      "minExcursionHigh": 2.0,
+      "maxExcursionHigh": 3.2
+    }
+  },
+  {
+    "name": "easy_50g_glucose",
+    "input": {
+      "athleteId": "fixture-athlete",
+      "carbsIngestedG": 50,
+      "activityState": "easy",
+      "baselineGlucoseMmol": 5.5
+    },
+    "expect": {
+      "minExcursionHigh": 1.4,
+      "maxExcursionHigh": 2.6
+    }
+  }
+]

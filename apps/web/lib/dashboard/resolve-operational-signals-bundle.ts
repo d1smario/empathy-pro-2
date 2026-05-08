@@ -7,6 +7,7 @@ import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
 import type { AdaptationGuidance } from "@/lib/empathy/schemas/adaptation";
 import type { AthleteMemory } from "@/lib/empathy/schemas/memory";
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
+import { resolveAcuteMealEstimateFromDiary } from "@/lib/nutrition/acute-meal-estimate-from-diary";
 import {
   buildNutritionPerformanceIntegration,
   type NutritionPerformanceIntegrationDials,
@@ -161,6 +162,13 @@ export async function resolveOperationalSignalsBundle(input: {
       : null,
     operationalContext,
     diarySignals,
+    adherenceOptIn: athleteMemory.nutrition.constraints?.adaptationAdherenceOptIn === true,
+    acuteMealEstimate: resolveAcuteMealEstimateFromDiary({
+      athleteId,
+      diaryRows: athleteMemory.nutrition.diary ?? [],
+      physiologyState,
+      operationalContext,
+    }),
   });
 
   const approvedApplicationPatches = await resolveApprovedApplicationPatches(athleteId).catch(() => []);

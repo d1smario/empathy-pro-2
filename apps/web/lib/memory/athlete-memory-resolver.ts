@@ -130,17 +130,28 @@ function toAthleteProfile(row: Record<string, unknown>, athleteId: string): Athl
   };
 }
 
-function toNutritionConstraints(athleteId: string, row: Record<string, unknown>): NutritionConstraints {
+function toNutritionConstraints(
+  athleteId: string,
+  profileRow: Record<string, unknown>,
+  constraintsRow: Record<string, unknown> | null,
+): NutritionConstraints {
+  const source = constraintsRow ?? profileRow;
   return {
     athleteId,
-    dietType: typeof row.diet_type === "string" ? row.diet_type : undefined,
-    intolerances: asStringArray(row.intolerances),
-    allergies: asStringArray(row.allergies),
-    excludedFoods: asStringArray(row.food_exclusions),
-    excludedSupplements: [],
-    preferredFoods: asStringArray(row.food_preferences),
-    preferredMealCount: asNumberFromDb(row.preferred_meal_count),
-    updatedAt: typeof row.updated_at === "string" ? row.updated_at : undefined,
+    dietType:
+      typeof source.diet_type === "string"
+        ? source.diet_type
+        : typeof profileRow.diet_type === "string"
+          ? profileRow.diet_type
+          : undefined,
+    intolerances: asStringArray(source.intolerances ?? profileRow.intolerances),
+    allergies: asStringArray(source.allergies ?? profileRow.allergies),
+    excludedFoods: asStringArray(source.excluded_foods ?? profileRow.food_exclusions),
+    excludedSupplements: asStringArray(source.excluded_supplements),
+    preferredFoods: asStringArray(source.preferred_foods ?? profileRow.food_preferences),
+    preferredMealCount: asNumberFromDb(source.preferred_meal_count ?? profileRow.preferred_meal_count),
+    adaptationAdherenceOptIn: source.adaptation_adherence_opt_in === true,
+    updatedAt: typeof source.updated_at === "string" ? source.updated_at : undefined,
   };
 }
 
@@ -256,6 +267,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     physiology,
     knowledge,
     diaryRes,
+    nutritionConstraintsRes,
   ] =
     await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
@@ -371,6 +383,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .order("entry_date", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(500),
+    supabase.from("nutrition_constraints").select("*").eq("athlete_id", athleteId).maybeSingle(),
   ]);
 
   if (profileRes.error) throw new Error(profileRes.error.message);
@@ -426,6 +439,15 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     diaryRows = (diaryRes.data ?? []) as Array<Record<string, unknown>>;
   }
 
+  let nutritionConstraintsRow: Record<string, unknown> | null = null;
+  if (nutritionConstraintsRes.error) {
+    if (!isMissingRelationError(nutritionConstraintsRes.error)) {
+      throw new Error(nutritionConstraintsRes.error.message);
+    }
+  } else {
+    nutritionConstraintsRow = (nutritionConstraintsRes.data ?? null) as Record<string, unknown> | null;
+  }
+
   const now = new Date().toISOString();
   let memory = createEmptyAthleteMemory(athleteId);
   const profileRow = (profileRes.data ?? null) as Record<string, unknown> | null;
@@ -465,7 +487,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     memory = applyAthleteMemoryPatch(memory, {
       profile,
       nutrition: {
-        constraints: toNutritionConstraints(athleteId, profileRow),
+        constraints: toNutritionConstraints(athleteId, profileRow, nutritionConstraintsRow),
         profileConfig: profileRow.nutrition_config && typeof profileRow.nutrition_config === "object"
           ? (profileRow.nutrition_config as Record<string, unknown>)
           : null,

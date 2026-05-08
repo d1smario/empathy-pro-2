@@ -1,12 +1,20 @@
 /** Pathways, fueling, evidence-backed recommendations — engines + interpretation split. */
-import type { Meal, NutritionConstraints, NutritionDailyEnergyModel, NutritionPlan } from "@empathy/contracts";
+import type {
+  AcuteMealMetabolicEstimate,
+  Meal,
+  NutritionConstraints,
+  NutritionDailyEnergyModel,
+  NutritionPlan,
+} from "@empathy/contracts";
+export { buildAcuteMealMetabolicEstimate } from "./acute-intake-metabolic-surrogate";
+export { EVIDENCE_PROFILE_V1, type ActivityState, type EvidenceProfileV1 } from "./evidence-profiles-v1";
 
 export const DOMAIN = "@empathy/domain-nutrition" as const;
 export const DOMAIN_TITLE = "Nutrition";
 export const DOMAIN_SUMMARY =
   "Vincoli, piano pasti e modello energetico giornaliero — tipi canonici da @empathy/contracts (USDA / diario in pipeline V1).";
 
-export type { Meal, NutritionConstraints, NutritionDailyEnergyModel, NutritionPlan };
+export type { AcuteMealMetabolicEstimate, Meal, NutritionConstraints, NutritionDailyEnergyModel, NutritionPlan };
 
 /** Riga `nutrition_constraints`. */
 export type NutritionConstraintsDbRow = {
@@ -19,6 +27,7 @@ export type NutritionConstraintsDbRow = {
   preferred_foods?: string[] | null;
   preferred_meal_count?: number | string | null;
   timing_constraints?: string[] | null;
+  adaptation_adherence_opt_in?: boolean | null;
   updated_at?: string | null;
 };
 
@@ -35,6 +44,7 @@ export function nutritionConstraintsFromDbRow(row: NutritionConstraintsDbRow): N
       row.preferred_meal_count != null && row.preferred_meal_count !== ""
         ? Number(row.preferred_meal_count)
         : undefined,
+    adaptationAdherenceOptIn: row.adaptation_adherence_opt_in === true,
     timingConstraints: row.timing_constraints ?? undefined,
     updatedAt: row.updated_at ?? undefined,
   };

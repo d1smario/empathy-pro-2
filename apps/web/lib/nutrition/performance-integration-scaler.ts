@@ -2,6 +2,7 @@ import type { AdaptationGuidance } from "@/lib/empathy/schemas/adaptation";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import type { BioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
 import type { DiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
+import type { AcuteMealMetabolicEstimate } from "@/lib/empathy/schemas/nutrition";
 
 type LoopPick = {
   status: "aligned" | "watch" | "regenerate";
@@ -47,6 +48,7 @@ export type NutritionPerformanceIntegrationDials = {
     | "estimatedMaintenanceKcal"
     | "confidence"
   > | null;
+  acuteMealEstimate: AcuteMealMetabolicEstimate | null;
 };
 
 export function buildNutritionPerformanceIntegration(input: {
@@ -55,10 +57,14 @@ export function buildNutritionPerformanceIntegration(input: {
   adaptationLoop: LoopPick;
   operationalContext: TrainingDayOperationalContext | null;
   diarySignals?: DiaryAdaptiveSignals | null;
+  adherenceOptIn?: boolean;
+  acuteMealEstimate?: AcuteMealMetabolicEstimate | null;
 }): NutritionPerformanceIntegrationDials {
   const rationale: string[] = [];
   const bio = input.bioenergeticModulation;
   const diary = input.diarySignals ?? null;
+  const adherenceOptIn = input.adherenceOptIn === true;
+  const acuteMealEstimate = input.acuteMealEstimate ?? null;
   const diaryInsight = diary
     ? {
         windowDays: diary.windowDays,
@@ -89,7 +95,7 @@ export function buildNutritionPerformanceIntegration(input: {
 
   let trainingEnergyScale = combinedLoad;
 
-  if (diary && diary.loggedDays >= 2 && diary.energyAdequacyRatio != null) {
+  if (adherenceOptIn && diary && diary.loggedDays >= 2 && diary.energyAdequacyRatio != null) {
     const ratio = diary.energyAdequacyRatio;
     if (ratio < 0.76) {
       trainingEnergyScale *= 0.93;
@@ -103,11 +109,14 @@ export function buildNutritionPerformanceIntegration(input: {
       trainingEnergyScale *= 1.012;
       rationale.push("Diario alimentare: surplus energetico rispetto al fabbisogno stimato con adattamento verde — margine leggero su carico metabolico.");
     }
-  } else if (diary && diary.loggedDays === 1) {
+  } else if (adherenceOptIn && diary && diary.loggedDays === 1) {
     rationale.push("Diario: un solo giorno con voci nel periodo — uso segnali con cautela.");
   }
+  if (!adherenceOptIn) {
+    rationale.push("Confronto piano-vs-assunto non attivo: nessuna modulazione da aderenza nutrizionale.");
+  }
 
-  if (diary?.proteinGPerKg != null && diary.proteinGPerKg < 1.15 && diary.loggedDays >= 2) {
+  if (adherenceOptIn && diary?.proteinGPerKg != null && diary.proteinGPerKg < 1.15 && diary.loggedDays >= 2) {
     rationale.push("Diario: proteine medie sotto ~1,2 g/kg — bias proteico pasti rafforzato.");
   }
 
@@ -158,7 +167,7 @@ export function buildNutritionPerformanceIntegration(input: {
   } else if (tl === "yellow" || bio?.state === "watch") {
     proteinBiasPctPoints = 2;
   }
-  if (diary?.proteinGPerKg != null && diary.proteinGPerKg < 1.15 && diary.loggedDays >= 2) {
+  if (adherenceOptIn && diary?.proteinGPerKg != null && diary.proteinGPerKg < 1.15 && diary.loggedDays >= 2) {
     proteinBiasPctPoints += 2;
   }
 
@@ -176,6 +185,19 @@ export function buildNutritionPerformanceIntegration(input: {
     rationale.push("Idratazione: pavimento giornaliero e fluido/ora seduta modulati su carico combinato e stress metabolico.");
   }
 
+  if (acuteMealEstimate && acuteMealEstimate.confidence !== "low") {
+    const insulin = acuteMealEstimate.estimates.insulinDemandProxyRelative;
+    const hpa = acuteMealEstimate.estimates.hpaDriveProxyRelative;
+    if (insulin > 1.25 && acuteMealEstimate.context.activityState === "rest") {
+      trainingEnergyScale = round(clamp(trainingEnergyScale * 0.985, 0.35, 1.02), 3);
+      rationale.push("Surrogate acuto: domanda insulinica elevata a riposo — lieve bias conservativo sul carico energetico.");
+    }
+    if (hpa > 1.1 && acuteMealEstimate.context.activityState !== "rest") {
+      hydrationFloorMultiplier = Math.max(hydrationFloorMultiplier, 1.03);
+      rationale.push("Surrogate acuto: drive HPA elevato durante attività — rinforzo minimo idratazione.");
+    }
+  }
+
   return {
     trainingEnergyScale,
     mealTrainingFraction,
@@ -185,5 +207,6 @@ export function buildNutritionPerformanceIntegration(input: {
     sessionFluidMultiplier,
     rationale,
     diaryInsight,
+    acuteMealEstimate,
   };
 }
