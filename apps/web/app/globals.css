@@ -1306,6 +1306,65 @@ body {
   }
 }
 
+/* ═══ Diario alimentare · registro giornata (Pro 2) ═══ */
+.nutrition-diary-log-column {
+  min-width: 0;
+}
+
+.nutrition-diary-expo-shell {
+  padding-top: 0.5rem;
+}
+
+.nutrition-diary-expo-heading {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.92);
+}
+
+.nutrition-diary-expo-lede {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.nutrition-diary-expo-grid {
+  margin-bottom: 0;
+}
+
+.nutrition-diary-expo-card--target-slot {
+  box-shadow:
+    0 0 0 1px rgba(232, 121, 249, 0.38),
+    var(--nutri-expo-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.nutrition-diary-expo-src-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.12rem 0.4rem;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.95);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.nutrition-diary-expo-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.45rem;
+}
+
+.nutrition-diary-expo-foot {
+  margin-bottom: 0;
+}
+
 /* ═══ Fueling (Figma: magenta/orange hero + timeline cards) ═══ */
 .nutrition-fueling-hero {
   border-radius: var(--empathy-radius);

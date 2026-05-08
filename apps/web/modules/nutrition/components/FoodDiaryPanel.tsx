@@ -1,6 +1,18 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Activity,
+  Apple,
+  Droplets,
+  Flame,
+  Moon,
+  ShoppingBag,
+  Sunrise,
+  Sun,
+  Zap,
+} from "lucide-react";
+import { cn } from "@/lib/cn";
 import type { FoodDiaryEntryViewModel } from "@/api/nutrition/contracts";
 import {
   deleteFoodDiaryEntry,
@@ -29,11 +41,53 @@ type LookupHit = {
 
 const MEAL_SLOT_OPTIONS: { value: FoodDiaryEntryViewModel["mealSlot"]; label: string }[] = [
   { value: "breakfast", label: "Colazione" },
+  { value: "snack", label: "Spuntino" },
   { value: "lunch", label: "Pranzo" },
   { value: "dinner", label: "Cena" },
-  { value: "snack", label: "Spuntino" },
   { value: "other", label: "Altro" },
 ];
+
+/** Colonne registro = stessa gerarchia visiva del meal plan (`empathy-meal-expo-card--slot-*`). */
+type DiaryExpoVisualSlot = "breakfast" | "snack_am" | "lunch" | "dinner" | "pre_sleep";
+
+const DIARY_EXPOSITION_COLUMNS: Array<{
+  mealSlot: FoodDiaryEntryViewModel["mealSlot"];
+  labelIt: string;
+  expoVisualSlot: DiaryExpoVisualSlot;
+}> = [
+  { mealSlot: "breakfast", labelIt: "Colazione", expoVisualSlot: "breakfast" },
+  { mealSlot: "snack", labelIt: "Spuntino", expoVisualSlot: "snack_am" },
+  { mealSlot: "lunch", labelIt: "Pranzo", expoVisualSlot: "lunch" },
+  { mealSlot: "dinner", labelIt: "Cena", expoVisualSlot: "dinner" },
+  { mealSlot: "other", labelIt: "Altro", expoVisualSlot: "pre_sleep" },
+];
+
+function diaryExpoIcon(slot: DiaryExpoVisualSlot) {
+  switch (slot) {
+    case "breakfast":
+      return Sunrise;
+    case "snack_am":
+      return Apple;
+    case "lunch":
+      return Sun;
+    case "dinner":
+      return Moon;
+    default:
+      return ShoppingBag;
+  }
+}
+
+function sumEntryTotals(rows: FoodDiaryEntryViewModel[]) {
+  return rows.reduce(
+    (a, r) => ({
+      kcal: a.kcal + r.kcal,
+      carbs: a.carbs + r.carbsG,
+      protein: a.protein + r.proteinG,
+      fat: a.fat + r.fatG,
+    }),
+    { kcal: 0, carbs: 0, protein: 0, fat: 0 },
+  );
+}
 
 function lookupHitSame(a: LookupHit | null, b: LookupHit): boolean {
   if (!a) return false;
@@ -746,7 +800,7 @@ export function FoodDiaryPanel({
                   if (f) void runPhotoEstimate(f);
                 }}
               />
-              {photoLoading ? "Analisi foto…" : "Foto del piatto"}
+              {photoLoading ? "Analisi foto…" : "Foto pasto"}
             </label>
             <button
               type="button"
@@ -756,6 +810,12 @@ export function FoodDiaryPanel({
               Cerca nel database
             </button>
           </div>
+          <p className="muted-copy nutrition-diary-photo-hint" style={{ fontSize: "0.72rem", margin: "0 0 12px", lineHeight: 1.45 }}>
+            Su telefono puoi scattare o scegliere dalla galleria. L’immagine viene analizzata sul server con{" "}
+            <strong>OpenAI Vision</strong> (<code className="font-mono text-[0.7rem] text-white/70">OPENAI_VISION_MODEL</code>
+            , default gpt-4o-mini): ricevi una proposta di nome, porzione e macro. I numeri persistiti nel diario restano da{" "}
+            <strong>USDA FDC</strong> (ricerca) o <strong>scala manuale</strong> dopo che verifichi la porzione.
+          </p>
           {visionNote ? (
             <p className="muted-copy" style={{ fontSize: "0.78rem", marginBottom: 14, lineHeight: 1.45 }}>
               {visionNote}
@@ -1050,62 +1110,147 @@ export function FoodDiaryPanel({
           </button>
         </div>
 
-        <div>
-          <h4 className="section-title" style={{ fontSize: "0.95rem", marginBottom: 12 }}>
-            Diario · {formatDateIt(entryDate)}
-          </h4>
-          {loading ? (
-            <p className="muted-copy">Caricamento…</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {MEAL_SLOT_OPTIONS.map((slotOpt) => {
-                const rows = entriesByMealForDay.get(slotOpt.value) ?? [];
-                const slotK = rows.reduce((s, r) => s + r.kcal, 0);
-                return (
-                  <div key={slotOpt.value} className="nutrition-diary-meal-card">
-                    <div className="nutrition-diary-meal-card-head">
-                      <strong>{slotOpt.label}</strong>
-                      <span className="muted-copy" style={{ fontSize: "0.8rem" }}>
-                        {rows.length ? `~${Math.round(slotK)} kcal` : "vuoto"}
-                      </span>
-                    </div>
-                    {rows.length ? (
-                      <ul className="nutrition-diary-meal-list">
-                        {rows.map((row) => (
-                          <li key={row.id}>
-                            <div>
-                              <span style={{ fontWeight: 600 }}>{row.foodLabel}</span>
-                              <span className="muted-copy" style={{ fontSize: "0.78rem", display: "block", marginTop: 2 }}>
-                                {row.quantityG} g · {Math.round(row.kcal)} kcal · C {row.carbsG.toFixed(0)} / P{" "}
-                                {row.proteinG.toFixed(0)} / F {row.fatG.toFixed(0)} · {provenanceLabel(row.provenance)}
-                              </span>
-                            </div>
-                            <button
-                              type="button"
-                              className="btn-secondary nutrition-diary-meal-remove"
-                              onClick={() => void removeEntry(row.id)}
-                              aria-label={`Elimina ${row.foodLabel}`}
-                            >
-                              Elimina
-                            </button>
-                          </li>
-                        ))}
+        <div className="nutrition-diary-log-column">
+          <div className="empathy-meal-plan-expo-shell nutrition-diary-expo-shell">
+            <h4 className="nutrition-diary-expo-heading">
+              Registro giornaliero · <span className="text-white/90">{formatDateIt(entryDate)}</span>
+            </h4>
+            <p className="nutrition-diary-expo-lede muted-copy">
+              Stessa griglia del piano pasti: colonne per momento della giornata; sotto, le voci che registri. La colonna del pasto
+              selezionato a sinistra è evidenziata.
+            </p>
+            {loading ? (
+              <p className="muted-copy">Caricamento…</p>
+            ) : (
+              <div className="empathy-meal-expo-grid nutrition-diary-expo-grid">
+                {DIARY_EXPOSITION_COLUMNS.map((col) => {
+                  const rows = entriesByMealForDay.get(col.mealSlot) ?? [];
+                  const t = sumEntryTotals(rows);
+                  const Icon = diaryExpoIcon(col.expoVisualSlot);
+                  const kcalDenom = Math.max(1, t.kcal);
+                  const choPct = Math.round(((t.carbs * 4) / kcalDenom) * 100);
+                  const proPct = Math.round(((t.protein * 4) / kcalDenom) * 100);
+                  const fatPct = Math.max(0, 100 - choPct - proPct);
+                  const isActiveColumn = mealSlot === col.mealSlot;
+                  return (
+                    <article
+                      key={col.mealSlot}
+                      className={cn(
+                        "empathy-meal-expo-card",
+                        `empathy-meal-expo-card--slot-${col.expoVisualSlot}`,
+                        isActiveColumn && "nutrition-diary-expo-card--target-slot",
+                      )}
+                    >
+                      <header className="empathy-meal-expo-banner">
+                        <div className="empathy-meal-expo-icon-wrap empathy-meal-expo-icon-wrap--banner" aria-hidden>
+                          <Icon className="empathy-meal-expo-icon" strokeWidth={1.75} />
+                        </div>
+                        <div className="empathy-meal-expo-banner-center">
+                          <h3 className="empathy-meal-expo-title-banner">{col.labelIt}</h3>
+                          <p className="empathy-meal-expo-sub-banner">
+                            {rows.length === 0
+                              ? "Nessun alimento"
+                              : `${rows.length} ${rows.length === 1 ? "voce" : "voci"}`}
+                          </p>
+                        </div>
+                        <div className="empathy-meal-expo-kcal-tile" aria-label={`${Math.round(t.kcal)} chilocalorie`}>
+                          <span className="empathy-meal-expo-kcal-num">{Math.round(t.kcal)}</span>
+                          <span className="empathy-meal-expo-kcal-unit">KCAL</span>
+                        </div>
+                      </header>
+
+                      <div className="empathy-meal-expo-macros">
+                        <div className="empathy-meal-expo-macro empathy-meal-expo-macro--cho">
+                          <Activity className="empathy-meal-expo-macro-ic" strokeWidth={1.6} aria-hidden />
+                          <span className="empathy-meal-expo-macro-label">CARBOIDRATI</span>
+                          <span className="empathy-meal-expo-macro-val">{Math.round(t.carbs)} g</span>
+                        </div>
+                        <div className="empathy-meal-expo-macro empathy-meal-expo-macro--pro">
+                          <Zap className="empathy-meal-expo-macro-ic" strokeWidth={1.6} aria-hidden />
+                          <span className="empathy-meal-expo-macro-label">PROTEINE</span>
+                          <span className="empathy-meal-expo-macro-val">{Math.round(t.protein)} g</span>
+                        </div>
+                        <div className="empathy-meal-expo-macro empathy-meal-expo-macro--fat">
+                          <Droplets className="empathy-meal-expo-macro-ic" strokeWidth={1.6} aria-hidden />
+                          <span className="empathy-meal-expo-macro-label">GRASSI</span>
+                          <span className="empathy-meal-expo-macro-val">{Math.round(t.fat)} g</span>
+                        </div>
+                      </div>
+
+                      <div className="empathy-meal-expo-macro-bar">
+                        <span className="empathy-meal-expo-macro-seg empathy-meal-expo-macro-seg--cho">CHO {choPct}%</span>
+                        <span className="empathy-meal-expo-macro-seg empathy-meal-expo-macro-seg--pro">PRO {proPct}%</span>
+                        <span className="empathy-meal-expo-macro-seg empathy-meal-expo-macro-seg--fat">FAT {fatPct}%</span>
+                      </div>
+
+                      <section className="empathy-meal-expo-detail-head">
+                        <span className="empathy-meal-expo-detail-bar" aria-hidden />
+                        <h4 className="empathy-meal-expo-detail-title">Voci diario</h4>
+                      </section>
+
+                      <ul className="empathy-meal-expo-food-list">
+                        {rows.length === 0 ? (
+                          <li className="empathy-meal-expo-food-empty muted-copy">Nessuna voce per questo pasto.</li>
+                        ) : (
+                          rows.map((row) => (
+                            <li key={row.id} className="empathy-meal-expo-food-card">
+                              <div className="empathy-meal-expo-food-top">
+                                <div className="empathy-meal-expo-food-name-row">
+                                  <span className="empathy-meal-expo-dot" aria-hidden />
+                                  <span className="empathy-meal-expo-food-name">{row.foodLabel}</span>
+                                </div>
+                                <div className="empathy-meal-expo-food-pills">
+                                  <span className="empathy-meal-expo-pill empathy-meal-expo-pill--wt">{row.quantityG} g</span>
+                                  <span className="empathy-meal-expo-pill empathy-meal-expo-pill--kcal">
+                                    <Flame className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                    {Math.round(row.kcal)}
+                                  </span>
+                                  <span className="nutrition-diary-expo-src-pill" title="Fonte numeri">
+                                    {provenanceLabel(row.provenance)}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="empathy-meal-expo-food-macros">
+                                <div className="empathy-meal-expo-pod empathy-meal-expo-pod--cho">
+                                  <span className="empathy-meal-expo-pod-dot" />
+                                  <span className="empathy-meal-expo-pod-lab">CHO</span>
+                                  <span className="empathy-meal-expo-pod-val">{row.carbsG.toFixed(0)}g</span>
+                                </div>
+                                <div className="empathy-meal-expo-pod empathy-meal-expo-pod--pro">
+                                  <span className="empathy-meal-expo-pod-dot" />
+                                  <span className="empathy-meal-expo-pod-lab">PRO</span>
+                                  <span className="empathy-meal-expo-pod-val">{row.proteinG.toFixed(0)}g</span>
+                                </div>
+                                <div className="empathy-meal-expo-pod empathy-meal-expo-pod--fat">
+                                  <span className="empathy-meal-expo-pod-dot" />
+                                  <span className="empathy-meal-expo-pod-lab">FAT</span>
+                                  <span className="empathy-meal-expo-pod-val">{row.fatG.toFixed(0)}g</span>
+                                </div>
+                              </div>
+                              <div className="nutrition-diary-expo-row-actions">
+                                <button
+                                  type="button"
+                                  className="nutrition-ui-chip text-[11px] py-0.5 px-2"
+                                  onClick={() => void removeEntry(row.id)}
+                                >
+                                  Elimina
+                                </button>
+                              </div>
+                            </li>
+                          ))
+                        )}
                       </ul>
-                    ) : (
-                      <p className="muted-copy" style={{ fontSize: "0.8rem", margin: 0 }}>
-                        Nessun alimento per questo pasto.
-                      </p>
-                    )}
-                  </div>
-                );
-              })}
-              {!entries.some((e) => e.entryDate === entryDate) ? (
-                <p className="muted-copy" style={{ fontSize: "0.85rem", margin: 0 }}>
-                  Nessuna voce per questa data. Usa foto, ricerca o inserimento manuale.
-                </p>
-              ) : null}
-            </div>
-          )}
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+            {!loading && !entries.some((e) => e.entryDate === entryDate) ? (
+              <p className="muted-copy nutrition-diary-expo-foot" style={{ fontSize: "0.85rem", marginTop: 12 }}>
+                Nessuna voce per questa data. Usa foto, ricerca o inserimento manuale nella colonna sinistra.
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 
