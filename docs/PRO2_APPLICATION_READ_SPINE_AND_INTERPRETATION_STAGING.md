@@ -35,14 +35,14 @@ Flusso consigliato per una route modulo che legge DB:
 
 ## 3. Convergenza: niente dati “per conto proprio”
 
-**Stato (wave Application):** le route prodotto sotto `apps/web/app/api/` che leggevano/scrivano per `athleteId` con `requireRequestAthleteAccess` sono migrate a `requireAthleteReadContext` (GET / letture) o `requireAthleteWriteContext` (POST/insert/update/delete). La funzione legacy resta in `request-auth.ts` per eventuali script o route speciali; **non** usarla per nuove API modulo.
+**Stato (wave Application):** le route prodotto sotto `apps/web/app/api/` che leggevano/scrivevano per `athleteId` con `requireRequestAthleteAccess` sono migrate a `requireAthleteReadContext` (GET / letture) o `requireAthleteWriteContext` (POST/insert/update/delete). Il wrapper legacy `request-auth.ts` è stato rimosso; `athlete-read-context` resta il gate canonico.
 
 **Restano da vigilare:**
 
 - UI che trattano come verità numeri o sessioni **solo** da stato React se esiste twin / calendario / memoria canonica.
 - Route **non** sotto `app/api` (se aggiunte) o integrazioni webhook senza sessione utente.
 
-**Verifica pratica:** `docs/MODULE_FETCH_AUDIT_PRO2.md`; grep `requireRequestAthleteAccess` dovrebbe colpire solo `lib/auth/request-auth.ts` e commenti.
+**Verifica pratica:** `docs/MODULE_FETCH_AUDIT_PRO2.md`; grep `requireRequestAthleteAccess` non deve colpire route runtime.
 
 ---
 

@@ -267,7 +267,6 @@ flowchart TB
   - `apps/web/app/api/access/ensure-profile/route.ts` (`hot`)
   - `apps/web/app/api/auth/session/route.ts`
 - Lib hubs:
-  - `apps/web/lib/auth/request-auth.ts` (`legacy`)
   - `apps/web/lib/auth/athlete-read-context.ts` (`hot`)
   - `apps/web/lib/auth/bootstrap-app-user-profile.ts` (`hot`)
 
@@ -488,7 +487,7 @@ flowchart TB
 - `/training/virya` alias handled in `apps/web/next.config.mjs` redirects (`legacy compat`)
 - `apps/web/modules/training/services/training-write-api.ts` reduced to active export only (`replaceTrainingPlannerCalendar`)
 - Tables with little/no direct app ownership in matrix (`candidate`, verify before any migration cleanup)
-- `apps/web/lib/auth/request-auth.ts` (`legacy`) vs `apps/web/lib/auth/athlete-read-context.ts` (`canonical`)
+- `apps/web/lib/auth/athlete-read-context.ts` is canonical auth entrypoint
 
 ---
 
@@ -581,7 +580,6 @@ Ingest -> Compute (engines + twin) -> Interpretation (structured evidence) -> Ap
 ## 9.1 Athlete Identity Bootstrap Chain (`hot`)
 
 1. Session/auth context:
-   - `apps/web/lib/auth/request-auth.ts` (legacy entry)
    - `apps/web/lib/auth/athlete-read-context.ts` (canonical read context)
 2. Profile bootstrap:
    - `apps/web/app/api/access/ensure-profile/route.ts`
@@ -707,7 +705,7 @@ Exit criteria:
 
 - Validate real usage for:
   - `apps/web/modules/training/services/training-write-api.ts` exports
-  - `apps/web/lib/auth/request-auth.ts`.
+  - legacy auth wrappers (none remaining in app runtime).
 - Confirm redirects and aliases still required:
   - `apps/web/next.config.mjs` entries for `/training/virya*`.
 - Validate `unused-in-code` DB tables against scripts/cron/edge use before any migration action.
@@ -772,8 +770,7 @@ Scope of this inventory:
   - client active-athlete anchor (must mirror server context).
 - `apps/web/app/api/access/ensure-profile/route.ts` (`canonical`)
   - bootstrap guard.
-- `apps/web/lib/auth/request-auth.ts` (`compat-wrapper`, `legacy`)
-  - now wraps `athlete-read-context` / `training-route-auth` to preserve backward-compatible function names.
+- `apps/web/lib/auth/request-auth.ts` removed (no app runtime imports remained).
 - `apps/web/lib/memory/athlete-memory-resolver.ts` (`compat`)
 - `apps/web/app/api/athletes/roster/route.ts` (`compat`)
 - `apps/web/app/api/admin/coaches/route.ts` (`compat`)
@@ -823,7 +820,7 @@ These are not removals yet; they are the first targets for deterministic unifica
 
 1. Auth read overlap (completed at route-import level):
    - API routes migrated to `athlete-read-context`.
-   - `request-auth.ts` kept as compatibility wrapper only.
+   - legacy wrapper `request-auth.ts` removed.
    - direct imports of `training-route-auth` from app routes removed.
 2. Profile write overlap:
    - `apps/web/lib/auth/bootstrap-app-user-profile.ts` vs `apps/web/lib/memory/athlete-memory-domain-writer.ts`
@@ -1065,11 +1062,10 @@ This section upgrades candidate list with evidence hints from code references.
 
 - File: `apps/web/lib/auth/request-auth.ts`
 - Evidence:
-  - no direct route imports remain.
-  - exports preserved as compatibility wrappers to canonical auth gate.
-- Status: `legacy-wrapper`.
+  - no app runtime imports remained.
+- Status: `removed` (cleanup step completed).
 - Action:
-  - keep wrapper temporarily, then remove once all internal callers migrate to canonical symbols.
+  - keep `athlete-read-context.ts` as single auth gate for new and existing module APIs.
 
 ## 15.4 Alias route `training/virya`
 
