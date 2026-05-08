@@ -1,6 +1,9 @@
 import type { NextRequest } from "next/server";
-import { requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { TrainingRouteAuthError, requireAuthenticatedTrainingUser } from "@/lib/auth/training-route-auth";
+import {
+  AthleteReadContextError,
+  requireAthleteReadContext,
+  requireAuthenticatedTrainingUser,
+} from "@/lib/auth/athlete-read-context";
 
 export class RequestAuthError extends Error {
   status: number;
@@ -29,7 +32,7 @@ async function resolveRequestUserId(req: NextRequest): Promise<string> {
     const { userId } = await requireAuthenticatedTrainingUser(req);
     return userId;
   } catch (error) {
-    if (error instanceof TrainingRouteAuthError) {
+    if (error instanceof AthleteReadContextError) {
       throw new RequestAuthError(error.status, error.message);
     }
     if (error instanceof RequestAuthError) {
@@ -59,7 +62,7 @@ export async function requireRequestAthleteAccess(req: NextRequest, athleteId: s
     const { userId } = await requireAthleteReadContext(req, targetAthleteId);
     return userId;
   } catch (error) {
-    if (error instanceof TrainingRouteAuthError) {
+    if (error instanceof AthleteReadContextError) {
       throw new RequestAuthError(error.status, error.message);
     }
     if (error instanceof RequestAuthError) {

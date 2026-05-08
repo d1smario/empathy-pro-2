@@ -4,11 +4,9 @@ import {
   AthleteReadContextError,
   requireAthleteReadContext,
   requireAthleteWriteContext,
-} from "@/lib/auth/athlete-read-context";
-import {
   requireAuthenticatedTrainingUser,
-  supabaseForTrainingReadAfterAuth,
-} from "@/lib/auth/training-route-auth";
+  supabaseForAthleteTableRead,
+} from "@/lib/auth/athlete-read-context";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 import { insertSinglePlannedWorkout, toPlannedWorkoutInsertRecord } from "@/lib/training/planned/insert-planned-workout";
@@ -290,7 +288,7 @@ export async function DELETE(req: NextRequest) {
           { status: 403, headers: deleteProbeHeaders(deleteProbe) },
         );
       }
-      const probeDb = adminOnce ?? supabaseForTrainingReadAfterAuth(rlsClient);
+      const probeDb = adminOnce ?? supabaseForAthleteTableRead(rlsClient);
       const { data: probeRows, error: readErr } = await probeDb
         .from("planned_workouts")
         .select("id, athlete_id")

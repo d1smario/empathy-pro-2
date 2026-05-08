@@ -828,6 +828,7 @@ These are not removals yet; they are the first targets for deterministic unifica
 1. Auth read overlap (completed at route-import level):
    - API routes migrated to `athlete-read-context`.
    - `request-auth.ts` kept as compatibility wrapper only.
+   - direct imports of `training-route-auth` from app routes removed.
 2. Profile write overlap:
    - `apps/web/lib/auth/bootstrap-app-user-profile.ts` vs `apps/web/lib/memory/athlete-memory-domain-writer.ts`
    - action: ensure all profile upserts call shared canonical athlete resolver and never fork on raw email.
