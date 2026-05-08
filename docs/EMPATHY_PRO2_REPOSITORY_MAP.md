@@ -81,7 +81,6 @@ flowchart TB
   - `apps/web/app/(shell)/training/session/page.tsx`
   - `apps/web/app/(shell)/training/session/[date]/page.tsx`
   - `apps/web/app/(shell)/training/vyria/page.tsx`
-  - `apps/web/app/(shell)/training/virya/page.tsx` (`legacy` alias redirect)
 - Module views:
   - `apps/web/modules/training/views/TrainingHubPageView.tsx`
   - `apps/web/modules/training/views/TrainingBuilderRichPageView.tsx`
@@ -486,7 +485,7 @@ flowchart TB
 
 ## 6) Candidate Dead/Legacy Areas
 
-- `apps/web/app/(shell)/training/virya/page.tsx` alias redirect (`legacy`)
+- `/training/virya` alias handled in `apps/web/next.config.mjs` redirects (`legacy compat`)
 - `apps/web/modules/training/services/training-write-api.ts` reduced to active export only (`replaceTrainingPlannerCalendar`)
 - Tables with little/no direct app ownership in matrix (`candidate`, verify before any migration cleanup)
 - `apps/web/lib/auth/request-auth.ts` (`legacy`) vs `apps/web/lib/auth/athlete-read-context.ts` (`canonical`)
@@ -710,7 +709,7 @@ Exit criteria:
   - `apps/web/modules/training/services/training-write-api.ts` exports
   - `apps/web/lib/auth/request-auth.ts`.
 - Confirm redirects and aliases still required:
-  - `apps/web/app/(shell)/training/virya/page.tsx`.
+  - `apps/web/next.config.mjs` entries for `/training/virya*`.
 - Validate `unused-in-code` DB tables against scripts/cron/edge use before any migration action.
 
 Exit criteria:
@@ -1074,10 +1073,10 @@ This section upgrades candidate list with evidence hints from code references.
 
 ## 15.4 Alias route `training/virya`
 
-- File: `apps/web/app/(shell)/training/virya/page.tsx`
-- Status: `legacy-alias` (redirect compatibility).
+- File removed; alias retained in `apps/web/next.config.mjs` redirect table.
+- Status: `cleaned` (compat retained without duplicate app route).
 - Action:
-  - remove only after navigation/index/search confirms no entry points left.
+  - keep redirect until telemetry/bookmark usage is negligible, then retire alias.
 
 ## 15.5 Wave D Done Criteria (Executable)
 
