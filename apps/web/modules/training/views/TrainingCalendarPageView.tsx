@@ -226,6 +226,8 @@ export default function TrainingCalendarPageView() {
     status: number;
     plannedN: number;
     executedN: number;
+    executedFallback?: boolean;
+    sampleDates?: string[];
     apiError?: string;
     resFrom?: string;
     resTo?: string;
@@ -316,6 +318,8 @@ export default function TrainingCalendarPageView() {
         status: res.status,
         plannedN: p.length,
         executedN: ex.length,
+          executedFallback: json.executedAdminFallbackUsed ?? false,
+          sampleDates: Array.isArray(json.executedSampleDates) ? json.executedSampleDates : [],
         resFrom: json.from,
         resTo: json.to,
       });
@@ -372,6 +376,40 @@ export default function TrainingCalendarPageView() {
     const e = executed.filter((w) => inMonth(normalizeDateKey(workoutDayKey(w)))).length;
     return p + e;
   }, [planned, executed, monthFrom, monthTo]);
+
+  const monthDayKeys = useMemo(() => {
+    return Array.from({ length: daysInMonth }, (_, i) => {
+      const day = i + 1;
+      return `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    });
+  }, [daysInMonth, monthStart]);
+
+  const monthExecutedRows = useMemo(() => {
+    return executed.filter((w) => {
+      const key = normalizeDateKey(workoutDayKey(w));
+      return key >= monthFrom && key <= monthTo;
+    });
+  }, [executed, monthFrom, monthTo]);
+
+  const monthExecutedRenderedCount = useMemo(() => {
+    return monthDayKeys.reduce((acc, key) => acc + (executedByDate.get(key)?.length ?? 0), 0);
+  }, [monthDayKeys, executedByDate]);
+
+  const executedCalendarGap = useMemo(() => {
+    if (monthExecutedRows.length <= 0) return null;
+    if (monthExecutedRenderedCount > 0) return null;
+    const sample = monthExecutedRows.slice(0, 5).map((w) => ({
+      id: w.id,
+      date: normalizeDateKey(w.date),
+      dayKey: normalizeDateKey(workoutDayKey(w)),
+      duration: w.durationMinutes,
+      tss: w.tss,
+    }));
+    return {
+      totalRows: monthExecutedRows.length,
+      sample,
+    };
+  }, [monthExecutedRows, monthExecutedRenderedCount]);
 
   const dayPlanned = plannedByDate.get(selectedDate) ?? [];
   const dayExecuted = executedByDate.get(selectedDate) ?? [];
@@ -660,10 +698,11 @@ export default function TrainingCalendarPageView() {
         </p>
       ) : null}
 
-      {process.env.NODE_ENV === "development" && athleteId && fetchDiag ? (
+      {athleteId && fetchDiag ? (
         <p className="mb-4 rounded-lg border border-white/10 bg-black/40 px-3 py-2 font-mono text-[0.65rem] leading-relaxed text-slate-400">
           <span className="text-slate-500">diag calendario · </span>
           athleteId={athleteId} · HTTP {fetchDiag.status} · planned={fetchDiag.plannedN} · executed={fetchDiag.executedN}
+          {fetchDiag.executedFallback ? <span className="text-amber-300"> · executedAdminFallbackUsed=true</span> : null}
           {fetchDiag.resFrom && fetchDiag.resTo ? (
             <>
               {" "}
@@ -671,8 +710,28 @@ export default function TrainingCalendarPageView() {
               <span className="text-slate-300">{fetchDiag.resTo}</span>
             </>
           ) : null}
+          {fetchDiag.sampleDates?.length ? (
+            <span>
+              {" "}
+              · dates=[<span className="text-slate-300">{fetchDiag.sampleDates.join(", ")}</span>]
+            </span>
+          ) : null}
           {fetchDiag.apiError ? <span className="text-amber-400/90"> · {fetchDiag.apiError}</span> : null}
         </p>
+      ) : null}
+
+      {executedCalendarGap ? (
+        <div className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          <p className="font-mono text-[0.65rem] uppercase tracking-wide text-amber-300">
+            warning · executed presenti ma non renderizzati in griglia
+          </p>
+          <p className="mt-1 text-amber-100/90">
+            Eseguiti nel mese: {executedCalendarGap.totalRows}. Chip EXEC visibili: {monthExecutedRenderedCount}.
+          </p>
+          <pre className="mt-2 overflow-x-auto rounded border border-amber-500/25 bg-black/40 p-2 font-mono text-[0.65rem] leading-relaxed text-amber-200/95">
+            {JSON.stringify(executedCalendarGap.sample, null, 2)}
+          </pre>
+        </div>
       ) : null}
 
       {!ctxLoading && !loading && !err ? (

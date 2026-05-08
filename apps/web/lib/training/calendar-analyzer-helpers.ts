@@ -13,15 +13,26 @@ export function n(v: unknown): number | null {
   return null;
 }
 
+/**
+ * Chiave giorno `YYYY-MM-DD` per UI calendario e raggruppamenti.
+ *
+ * - Se il valore è **solo data** (`YYYY-MM-DD`), la si usa così: è il giorno di calendario
+ *   concordato col persist (import / DB), senza reinterpretarlo nel fuso del browser.
+ * - Se c’è **orario o offset** (ISO completo, `…Z`, ecc.), si converte con `Date` e si usa il
+ *   **giorno locale**: evita che `2026-05-06T22:00:00.000Z` finisca sul 6 mentre l’atleta vede il 7.
+ */
 export function normalizeDateKey(input: string | null | undefined): string {
   const raw = (input ?? "").trim();
   if (!raw) return "";
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    return raw;
+  }
   const d = new Date(raw);
   if (!Number.isNaN(d.getTime())) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
   return raw.slice(0, 10);
 }
 

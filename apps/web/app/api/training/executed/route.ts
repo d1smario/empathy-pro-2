@@ -6,26 +6,12 @@ import {
 } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { normalizeDateKey } from "@/lib/training/calendar-analyzer-helpers";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
-
-function normalizeDateKey(input: string | null | undefined): string {
-  const raw = String(input ?? "").trim();
-  if (!raw) return "";
-  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
-  const d = new Date(raw);
-  if (!Number.isNaN(d.getTime())) {
-    const y = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, "0");
-    const da = String(d.getDate()).padStart(2, "0");
-    return `${y}-${mo}-${da}`;
-  }
-  return raw.slice(0, 10);
-}
 
 function addDays(dateIso: string, days: number): string {
   const d = new Date(`${dateIso}T00:00:00`);

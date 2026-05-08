@@ -276,7 +276,12 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
         setAthletes(list);
 
         const storedActiveAthleteId = readActiveAthleteId();
-        let resolvedAthleteId = storedActiveAthleteId ?? profile?.athlete_id ?? null;
+        /**
+         * Private: il canone è `app_user_profiles.athlete_id`.
+         * Un id locale stale (es. cambio account/browser) non deve sovrascrivere il mapping DB,
+         * altrimenti le API training rispondono `forbidden` per atleta non autorizzato.
+         */
+        let resolvedAthleteId = profile?.athlete_id ?? storedActiveAthleteId ?? null;
         const guessedFirstName =
           typeof user.user_metadata?.first_name === "string" ? user.user_metadata.first_name : null;
         const guessedLastName =

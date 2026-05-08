@@ -158,6 +158,10 @@ export async function GET(req: NextRequest) {
     });
     const plannedProvenanceSummary = summarizeProvenanceCounts(planned);
     const executed = ((executedRes.data ?? []) as ExecutedWorkoutDbRow[]).map(executedWorkoutFromDbRow);
+    const executedSampleDates = Array.from(new Set(executed.map((row) => String(row.date ?? "").slice(0, 10)).filter(Boolean))).slice(
+      0,
+      8,
+    );
     const readSpineCoverage = includeAthleteContext ? summarizeReadSpineCoverage(athleteMemory) : null;
     const twinContextStrip = includeAthleteContext ? twinContextStripFromMemory(athleteMemory?.twin ?? null) : null;
     const physiologyState = includeAthleteContext ? (athleteMemory?.physiology ?? null) : null;
@@ -171,6 +175,7 @@ export async function GET(req: NextRequest) {
         planned,
         plannedProvenanceSummary,
         executed,
+        executedSampleDates,
         readSpineCoverage,
         twinContextStrip,
         physiologyState,

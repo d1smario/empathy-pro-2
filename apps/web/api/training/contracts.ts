@@ -42,6 +42,10 @@ export type TrainingPlannedWindowOkViewModel = {
   athleteId: string;
   planned: PlannedWorkout[];
   executed: ExecutedWorkout[];
+  /** True when executed list was recovered through server admin fallback. */
+  executedAdminFallbackUsed?: boolean;
+  /** Debug aid: first executed day keys returned by API. */
+  executedSampleDates?: string[];
   /** Conteggi per `planned[].provenance` (demo SQL / builder / …). */
   plannedProvenanceSummary?: Partial<Record<string, number>>;
   readSpineCoverage: ReadSpineCoverageSummary | null;
