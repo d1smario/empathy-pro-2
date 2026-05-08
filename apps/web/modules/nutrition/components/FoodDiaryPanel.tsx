@@ -4,9 +4,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   Apple,
+  Camera,
   Droplets,
   Flame,
   Moon,
+  Search,
   ShoppingBag,
   Sunrise,
   Sun,
@@ -166,6 +168,7 @@ export function FoodDiaryPanel({
 }: Props) {
   const complianceCbRef = useRef(onComplianceRowsChange);
   complianceCbRef.current = onComplianceRowsChange;
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [entries, setEntries] = useState<FoodDiaryEntryViewModel[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -684,7 +687,7 @@ export function FoodDiaryPanel({
         </div>
       )}
 
-      <div className="nutrition-diary-summary-grid" style={{ marginBottom: 18 }}>
+      <div className="nutrition-diary-summary-grid">
         <div className="nutrition-diary-tile nutrition-diary-tile--efficiency">
           <div className="nutrition-diary-tile-kicker">Efficienza metabolica</div>
           {metabolicEfficiencyIndex != null && Number.isFinite(metabolicEfficiencyIndex) ? (
@@ -787,26 +790,60 @@ export function FoodDiaryPanel({
         }}
       >
         <div>
+          <div className="nutrition-diary-meal-destination-card">
+            <div className="nutrition-diary-section-label">Pasto di destinazione</div>
+            <p className="nutrition-diary-meal-destination-lede">
+              Seleziona colazione, spuntino, pranzo o cena. Foto, ricerca e salvataggio manuale aggiungono la voce a quel pasto.
+            </p>
+            <div className="nutrition-diary-meal-picker nutrition-diary-meal-picker--primary" role="group" aria-label="Pasto di destinazione">
+              {MEAL_SLOT_OPTIONS.map((o) => {
+                const active = mealSlot === o.value;
+                return (
+                  <button
+                    key={o.value}
+                    type="button"
+                    className={`nutrition-diary-meal-chip${active ? " nutrition-diary-meal-chip--active" : ""}`}
+                    onClick={() => setMealSlot(o.value)}
+                  >
+                    {o.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="nutrition-diary-action-row">
-            <label className="nutrition-diary-big-btn">
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                style={{ display: "none" }}
-                disabled={photoLoading}
-                onChange={(ev) => {
-                  const f = ev.target.files?.[0];
-                  ev.target.value = "";
-                  if (f) void runPhotoEstimate(f);
-                }}
-              />
-              {photoLoading ? "Analisi foto…" : "Foto pasto"}
-            </label>
+            <input
+              ref={photoInputRef}
+              id="food-diary-photo-input"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="physiology-pro2-sr-only"
+              tabIndex={-1}
+              aria-hidden="true"
+              disabled={photoLoading}
+              onChange={(ev) => {
+                const f = ev.target.files?.[0];
+                ev.target.value = "";
+                if (f) void runPhotoEstimate(f);
+              }}
+            />
+            <button
+              type="button"
+              className="btn-nutrition-cta nutrition-diary-photo-cta"
+              disabled={photoLoading}
+              onClick={() => photoInputRef.current?.click()}
+              aria-label="Inserisci foto del pasto dal dispositivo"
+            >
+              <Camera className="h-[1.1rem] w-[1.1rem] shrink-0" aria-hidden />
+              {photoLoading ? "Analisi in corso…" : "Inserisci foto"}
+            </button>
             <button
               type="button"
               className="nutrition-diary-big-btn nutrition-diary-big-btn--ghost"
               onClick={() => document.getElementById("fd-search")?.focus()}
             >
+              <Search className="h-[1.05rem] w-[1.05rem] shrink-0 opacity-90" aria-hidden />
               Cerca nel database
             </button>
           </div>
@@ -824,7 +861,7 @@ export function FoodDiaryPanel({
 
           <div className="nutrition-diary-input-deck">
             <div className="nutrition-diary-mini-tile">
-              <span className="nutrition-diary-mini-tile-label">Quantità</span>
+              <span className="nutrition-diary-mini-tile-label">Quantità (porzione)</span>
               <input
                 id="fd-qty"
                 className="form-input nutrition-diary-qty-input"
@@ -835,21 +872,6 @@ export function FoodDiaryPanel({
                 aria-label="Quantità in grammi o millilitri approssimati"
               />
               <span className="nutrition-diary-mini-tile-hint">g · liquidi: usa ml ≈ g</span>
-            </div>
-            <div className="nutrition-diary-meal-picker" role="group" aria-label="Momento del pasto">
-              {MEAL_SLOT_OPTIONS.map((o) => {
-                const active = mealSlot === o.value;
-                return (
-                  <button
-                    key={o.value}
-                    type="button"
-                    className={`nutrition-diary-meal-chip${active ? " nutrition-diary-meal-chip--active" : ""}`}
-                    onClick={() => setMealSlot(o.value)}
-                  >
-                    {o.label}
-                  </button>
-                );
-              })}
             </div>
           </div>
 

@@ -1365,7 +1365,245 @@ body {
   margin-bottom: 0;
 }
 
-/* ═══ Fueling (Figma: magenta/orange hero + timeline cards) ═══ */
+/* Diario · riepilogo giornata + input (celle allineate a KPI Pro 2 / fueling) */
+.nutrition-diary-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.15rem;
+}
+
+@media (min-width: 900px) {
+  .nutrition-diary-summary-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.nutrition-diary-tile {
+  position: relative;
+  overflow: hidden;
+  min-height: 118px;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background:
+    radial-gradient(circle at top right, var(--nutrition-diary-tile-glow, rgba(244, 114, 182, 0.12)), transparent 52%),
+    rgba(0, 0, 0, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.nutrition-diary-tile--efficiency {
+  --nutrition-diary-tile-glow: rgba(251, 191, 36, 0.22);
+  border-color: rgba(245, 158, 11, 0.32);
+}
+
+.nutrition-diary-tile--target {
+  --nutrition-diary-tile-glow: rgba(168, 85, 247, 0.2);
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.nutrition-diary-tile--actual {
+  --nutrition-diary-tile-glow: rgba(244, 114, 182, 0.2);
+  border-color: rgba(236, 72, 153, 0.28);
+}
+
+.nutrition-diary-tile--delta {
+  --nutrition-diary-tile-glow: rgba(249, 115, 22, 0.18);
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+.nutrition-diary-tile-kicker {
+  margin-bottom: 0.15rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.65);
+}
+
+.nutrition-diary-tile-metric {
+  font-size: clamp(1.65rem, 3.6vw, 2.1rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: rgba(248, 250, 252, 0.98);
+}
+
+.nutrition-diary-tile-unit {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgba(148, 163, 184, 0.95);
+  margin-top: -0.1rem;
+}
+
+.nutrition-diary-tile-foot {
+  margin-top: auto;
+  padding-top: 0.35rem;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: rgba(148, 163, 184, 0.88);
+}
+
+.nutrition-diary-tile-macros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: rgba(203, 213, 225, 0.92);
+}
+
+.nutrition-diary-tile-macros abbr {
+  text-decoration: none;
+  border-bottom: 1px dotted rgba(148, 163, 184, 0.45);
+  cursor: help;
+}
+
+.nutrition-diary-meal-destination-card {
+  margin-bottom: 1rem;
+  padding: 1rem 1.05rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(165deg, rgba(18, 12, 28, 0.92), rgba(6, 4, 10, 0.88));
+  box-shadow:
+    0 0 0 1px rgba(232, 121, 249, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.nutrition-diary-section-label {
+  margin: 0 0 0.35rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(244, 244, 245, 0.88);
+}
+
+.nutrition-diary-meal-destination-lede {
+  margin: 0 0 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(203, 213, 225, 0.82);
+}
+
+.nutrition-diary-meal-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.nutrition-diary-meal-picker--primary .nutrition-diary-meal-chip {
+  padding: 0.45rem 0.9rem;
+  font-size: 0.78rem;
+}
+
+.nutrition-diary-meal-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.38rem 0.75rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.nutrition-diary-meal-chip:hover {
+  border-color: rgba(232, 121, 249, 0.45);
+  box-shadow: 0 0 18px rgba(192, 38, 211, 0.14);
+}
+
+.nutrition-diary-meal-chip--active {
+  border-color: rgba(244, 114, 182, 0.55);
+  background: rgba(168, 85, 247, 0.16);
+  box-shadow: 0 0 22px rgba(236, 72, 153, 0.16);
+  color: #fff;
+}
+
+.nutrition-diary-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: stretch;
+  margin-bottom: 0.65rem;
+}
+
+.nutrition-diary-photo-cta {
+  flex: 1 1 160px;
+  min-height: 2.75rem;
+}
+
+.nutrition-diary-big-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex: 1 1 160px;
+  min-height: 2.75rem;
+  padding: 0.6rem 1rem;
+  border-radius: var(--empathy-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(248, 250, 252, 0.95);
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.nutrition-diary-big-btn:hover:not(:disabled) {
+  border-color: rgba(232, 121, 249, 0.42);
+  box-shadow: 0 0 20px rgba(168, 85, 247, 0.12);
+}
+
+.nutrition-diary-big-btn--ghost {
+  background: rgba(9, 9, 12, 0.65);
+}
+
+.nutrition-diary-input-deck {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.nutrition-diary-mini-tile {
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.28);
+  padding: 0.75rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.nutrition-diary-mini-tile-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.nutrition-diary-mini-tile-hint {
+  font-size: 0.65rem;
+  color: rgba(148, 163, 184, 0.75);
+}
+
 .nutrition-fueling-hero {
   border-radius: var(--empathy-radius);
   border: 1px solid rgba(217, 70, 239, 0.38);
