@@ -16,7 +16,10 @@ import {
   readGarminPostConnectBackfillDays,
   readGarminPostConnectBackfillStreams,
 } from "@/lib/integrations/garmin-post-connect-backfill-config";
-import { requestGarminSummaryBackfill } from "@/lib/integrations/garmin-wellness-backfill";
+import {
+  readGarminBackfillInterRequestDelayMs,
+  requestGarminSummaryBackfill,
+} from "@/lib/integrations/garmin-wellness-backfill";
 import { parseRealityCallbackState, persistRealityProviderCallback } from "@/lib/reality/provider-adapters";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -252,7 +255,7 @@ export async function GET(req: NextRequest) {
             });
           }
           if (i < postStreams.length - 1) {
-            await new Promise((r) => setTimeout(r, 200));
+            await new Promise((r) => setTimeout(r, readGarminBackfillInterRequestDelayMs()));
           }
         }
         logGarminCallbackEvent({

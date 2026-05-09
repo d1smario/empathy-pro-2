@@ -59,10 +59,44 @@ export function buildGarminSummaryBackfillRequestUrl(
   return u.toString();
 }
 
+/** Pausa tra richieste backfill consecutive (stesso token); riduce 429 in batch. Override: `GARMIN_BACKFILL_INTER_REQUEST_DELAY_MS`. */
+export function readGarminBackfillInterRequestDelayMs(): number {
+  const raw = process.env.GARMIN_BACKFILL_INTER_REQUEST_DELAY_MS?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isFinite(n) && n >= 0) return Math.min(60_000, n);
+  return 1100;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function readGarminBackfill429MaxExtraAttempts(): number {
+  const raw = process.env.GARMIN_BACKFILL_429_MAX_EXTRA_ATTEMPTS?.trim();
+  const n = raw ? Number.parseInt(raw, 10) : NaN;
+  if (Number.isFinite(n) && n >= 0) return Math.min(8, n);
+  return 3;
+}
+
+function backoffMsAfter429(attemptIndex: number): number {
+  const steps = [2500, 5000, 10_000, 15_000, 20_000, 25_000, 30_000, 35_000];
+  return steps[Math.min(attemptIndex, steps.length - 1)] ?? 10_000;
+}
+
+/** Garmin può rispondere 409 o testo "duplicate backfill" per finestra già richiesta: idempotenza. */
+export function garminSummaryBackfillDuplicateResponse(httpStatus: number, bodyText: string): boolean {
+  if (httpStatus === 409) return true;
+  const t = bodyText.toLowerCase();
+  return t.includes("duplicate") && t.includes("backfill");
+}
+
 /**
  * Invia una richiesta di backfill storico per lo stream indicato (Bearer utente).
  * In caso di **412 Precondition Failed**, Garmin rifiuta spesso richieste di storico non ammesse
  * per il programme / permessi / finestra: non influenza il Pull su `callbackURL` dopo Push/Ping.
+ *
+ * Retry automatico su 429 con backoff (variabile GARMIN_BACKFILL_429_MAX_EXTRA_ATTEMPTS).
+ * Risposta 409 o testo "duplicate backfill": considerato OK idempotente; HTTP normalizzato a 202 nello snippet UI.
  */
 export async function requestGarminSummaryBackfill(params: {
   accessToken: string;
@@ -76,6 +110,7 @@ export async function requestGarminSummaryBackfill(params: {
       windowClamped?: boolean;
       effectiveSummaryStartTimeInSeconds?: number;
       effectiveSummaryEndTimeInSeconds?: number;
+      garminSoftDuplicate?: boolean;
     }
   | { ok: false; httpStatus: number; errorMessage?: string }
 > {
@@ -98,33 +133,61 @@ export async function requestGarminSummaryBackfill(params: {
     rawEnd,
   );
   const url = buildGarminSummaryBackfillRequestUrl(params.stream, start, end);
-  const res = await fetch(url, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${params.accessToken.trim()}`,
-      Accept: "application/json",
-    },
-    cache: "no-store",
-    signal: AbortSignal.timeout(60_000),
-  });
-  const text = await res.text();
-  if (res.ok) {
+  const windowExtras = windowClamped
+    ? ({
+        windowClamped: true as const,
+        effectiveSummaryStartTimeInSeconds: start,
+        effectiveSummaryEndTimeInSeconds: end,
+      } as const)
+    : {};
+
+  const maxExtra = readGarminBackfill429MaxExtraAttempts();
+
+  for (let attempt = 0; attempt <= maxExtra; attempt += 1) {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${params.accessToken.trim()}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+      signal: AbortSignal.timeout(60_000),
+    });
+    const text = await res.text();
+
+    if (res.ok) {
+      return {
+        ok: true,
+        httpStatus: res.status,
+        ...windowExtras,
+      };
+    }
+
+    if (garminSummaryBackfillDuplicateResponse(res.status, text)) {
+      return {
+        ok: true,
+        httpStatus: 202,
+        garminSoftDuplicate: true,
+        ...windowExtras,
+      };
+    }
+
+    if (res.status === 429 && attempt < maxExtra) {
+      await sleep(backoffMsAfter429(attempt));
+      continue;
+    }
+
     return {
-      ok: true,
+      ok: false,
       httpStatus: res.status,
-      ...(windowClamped
-        ? {
-            windowClamped: true as const,
-            effectiveSummaryStartTimeInSeconds: start,
-            effectiveSummaryEndTimeInSeconds: end,
-          }
-        : {}),
+      errorMessage: tryParseGarminApiErrorMessage(text) ?? text.slice(0, 800),
     };
   }
+
   return {
     ok: false,
-    httpStatus: res.status,
-    errorMessage: tryParseGarminApiErrorMessage(text) ?? text.slice(0, 800),
+    httpStatus: 502,
+    errorMessage: "garmin_backfill_retry_loop_exhausted",
   };
 }
 

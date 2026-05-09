@@ -11,6 +11,7 @@ import {
   batchHasGarminSummaryBackfill412,
   GARMIN_SUMMARY_BACKFILL_412_HINT_IT,
   isGarminSummaryBackfillStream,
+  readGarminBackfillInterRequestDelayMs,
   requestGarminSummaryBackfill,
 } from "@/lib/integrations/garmin-wellness-backfill";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -166,10 +167,11 @@ export async function POST(req: NextRequest) {
       });
 
       if (result.ok) {
+        const dupNote = result.garminSoftDuplicate ? " Finestra già richiesta in precedenza (idempotente)." : "";
         const baseMsg =
           result.httpStatus === 202
-            ? "Backfill accettato da Garmin (202); i dati possono arrivare in seguito via Push/Ping."
-            : "Richiesta completata.";
+            ? `Backfill accettato da Garmin (202); i dati possono arrivare in seguito via Push/Ping.${dupNote}`
+            : `Richiesta completata.${dupNote}`;
         const msg = result.windowClamped
           ? `${baseMsg} Intervallo richiesto superava il limite Garmin per questo stream (${maxDaysOne} giorni per richiesta): è stata usata solo la parte più recente.`
           : baseMsg;
@@ -178,7 +180,8 @@ export async function POST(req: NextRequest) {
             ok: true as const,
             stream,
             httpStatus: result.httpStatus,
-            message: msg,
+            garminSoftDuplicate: Boolean(result.garminSoftDuplicate),
+            message: msg.trim(),
             summaryStartTimeInSeconds: start,
             summaryEndTimeInSeconds: end,
             ...(result.windowClamped &&
@@ -216,6 +219,7 @@ export async function POST(req: NextRequest) {
       windowClamped?: boolean;
       effectiveSummaryStartTimeInSeconds?: number;
       effectiveSummaryEndTimeInSeconds?: number;
+      garminSoftDuplicate?: boolean;
     }> = [];
 
     for (let i = 0; i < streams.length; i += 1) {
@@ -231,8 +235,10 @@ export async function POST(req: NextRequest) {
           stream,
           ok: true,
           httpStatus: result.httpStatus,
-          message:
-            result.httpStatus === 202
+          garminSoftDuplicate: Boolean(result.garminSoftDuplicate),
+          message: result.garminSoftDuplicate
+            ? "Duplicato/idempotente (Garmin); finestra già nota."
+            : result.httpStatus === 202
               ? "Accettato (202); dati possono arrivare via Push/Ping."
               : "OK.",
           ...(result.windowClamped &&
@@ -254,12 +260,13 @@ export async function POST(req: NextRequest) {
         });
       }
       if (i < streams.length - 1) {
-        await new Promise((r) => setTimeout(r, 200));
+        await new Promise((r) => setTimeout(r, readGarminBackfillInterRequestDelayMs()));
       }
     }
 
     const allOk = results.every((r) => r.ok);
     const has412 = batchHasGarminSummaryBackfill412(results);
+    const has429 = results.some((r) => !r.ok && r.httpStatus === 429);
     const anyStreamWindowClamped = results.some((r) => r.ok && r.windowClamped);
     return NextResponse.json(
       {
@@ -276,6 +283,12 @@ export async function POST(req: NextRequest) {
             }`
           : "Alcune richieste sono fallite; vedi results[].",
         ...(has412 && !allOk ? { hint: GARMIN_SUMMARY_BACKFILL_412_HINT_IT } : {}),
+        ...(has429 && !allOk
+          ? {
+              hint429:
+                "Garmin ha restituito 429 (troppo richieste ravvicinate). Riprova tra alcuni minuti; oppure aumenta GARMIN_BACKFILL_INTER_REQUEST_DELAY_MS o GARMIN_BACKFILL_429_MAX_EXTRA_ATTEMPTS sul deploy.",
+            }
+          : {}),
       },
       { status: 200, headers: NO_STORE },
     );

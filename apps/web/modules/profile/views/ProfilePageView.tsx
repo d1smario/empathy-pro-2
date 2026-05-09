@@ -894,13 +894,15 @@ export default function ProfilePage() {
         message?: string;
         error?: string;
         hint?: string;
+        hint429?: string;
         results?: Array<{ stream: string; ok: boolean; httpStatus: number; errorMessage?: string | null }>;
       };
       if (j.batch && j.results && j.results.length > 0) {
         const bits = j.results.map((row) =>
           row.ok ? `${row.stream}:${row.httpStatus}` : `${row.stream}:FAIL:${row.httpStatus}`,
         );
-        const suffix = j.hint ? ` — ${j.hint}` : "";
+        const hints = [j.hint, j.hint429].filter(Boolean).join(" — ");
+        const suffix = hints ? ` — ${hints}` : "";
         setGarminBackfillNotice(`${j.message ?? ""} ${bits.join(" · ")}`.trim() + suffix);
       } else if (j.error) {
         setGarminBackfillNotice(j.error);
