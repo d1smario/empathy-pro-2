@@ -61,6 +61,10 @@ export async function HEAD() {
  * Esempio URL per riga nel portale:
  *   https://<host>/api/integrations/garmin/push/dailies
  *   https://<host>/api/integrations/garmin/push/activities
+ *
+ * **activityDetails** (body molto grande): su Vercel spesso 413; usa ingest dedicato (`npm run garmin-ingest` su Fly/VM)
+ * e nel portale punta solo quello stream a `https://<ingest-host>/api/integrations/garmin/push/activityDetails`
+ * con `GARMIN_PUSH_PUBLIC_BASE_URL` sull’ingest uguale a quell’origine.
  */
 export async function POST(
   req: NextRequest,

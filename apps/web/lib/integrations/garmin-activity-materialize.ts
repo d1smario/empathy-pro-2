@@ -1,7 +1,5 @@
-import "server-only";
-
 import type { ObservationIngestTags } from "@/lib/empathy/schemas";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createNodeSupabaseServicePreferred } from "@/lib/supabase-node-client";
 import { shouldMaterializeGarminActivities } from "@/lib/integrations/garmin-health-api-notification-schema";
 import { observationDomainsFromGarminActivitySummary } from "@/lib/integrations/garmin-observation-from-summary";
 import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-defaults";
@@ -269,7 +267,7 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
   collectActivityRecords(input.responseBody, sink);
   if (sink.length === 0) return { upserted: 0 };
 
-  const supabase = createServerSupabaseClient();
+  const supabase = createNodeSupabaseServicePreferred();
   let upserted = 0;
 
   for (const r of sink) {

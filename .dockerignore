@@ -1,0 +1,9 @@
+# Per immagine Garmin ingest; riduce contesto inviato al daemon Docker.
+
+**/node_modules
+.git
+.next
+**/.next
+apps/web/.empathy-pro*
+coverage
+*.log

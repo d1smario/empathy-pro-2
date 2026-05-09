@@ -1,0 +1,20 @@
+# Build dalla root del clone: docker build -f Dockerfile.garmin-ingest -t empathy-garmin-ingest .
+# Fly: `fly deploy --config fly.garmin-ingest.toml` (o copia come fly.toml dopo launch).
+
+FROM node:20-bookworm-slim
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY patches ./patches
+COPY tsconfig.base.json ./
+COPY tooling ./tooling
+COPY packages ./packages
+COPY apps/web ./apps/web
+
+RUN npm ci
+
+WORKDIR /app/apps/web
+ENV NODE_ENV=production
+EXPOSE 8790
+
+CMD ["npx", "tsx", "scripts/garmin-large-push-ingest.ts"]

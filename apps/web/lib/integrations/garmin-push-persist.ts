@@ -1,8 +1,8 @@
-import "server-only";
-
 import { createHash } from "node:crypto";
 
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { createNodeSupabaseServicePreferred } from "@/lib/supabase-node-client";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
 import { materializeGarminActivitiesFromPullResponse } from "@/lib/integrations/garmin-activity-materialize";
@@ -17,7 +17,7 @@ import {
 } from "./garmin-extract-pull-items";
 
 async function resolveAthleteIdForGarminUser(
-  supabase: ReturnType<typeof createServerSupabaseClient>,
+  supabase: SupabaseClient,
   garminUserId: string | null | undefined,
 ): Promise<string | null> {
   const id = garminUserId?.trim();
@@ -63,8 +63,11 @@ export async function persistGarminPushReceipt(input: {
   endpointKind: string;
   contentType: string | null;
   parsedJson: unknown;
+  /** Override per worker ingest fuori da Next (es. Fly): usa service role. */
+  supabase?: SupabaseClient;
 }): Promise<{ id: string; pullJobsQueued: number }> {
-  if (!readOptionalServiceRoleKey()) {
+  const supabase = input.supabase ?? createNodeSupabaseServicePreferred();
+  if (!input.supabase && !readOptionalServiceRoleKey()) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per salvare le notifiche Garmin (bypass RLS).");
   }
 
@@ -72,7 +75,6 @@ export async function persistGarminPushReceipt(input: {
 
   const fingerprints: string[] = [];
   const payload = redactGarminPushPayload(input.parsedJson, fingerprints);
-  const supabase = createServerSupabaseClient();
 
   const { data, error } = await supabase
     .from("garmin_push_receipts")
