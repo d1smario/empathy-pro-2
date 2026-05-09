@@ -2,19 +2,46 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Activity, LineChart, Timer } from "lucide-react";
-import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
+import type {
+  BioenergeticMetricTile,
+  BioenergeticMetricTileCategory,
+  BioenergeticPathwayImpact,
+  BioenergeticsDayViewModel,
+} from "@/api/bioenergetics/contracts";
 import { GenerativeModuleSubnav } from "@/components/navigation/GenerativeModuleSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+const CATEGORY_LABEL: Record<BioenergeticMetricTileCategory, string> = {
+  metabolic: "Metabolismo & substrati",
+  inflammatory: "Infiammazione (contesto)",
+  hormonal: "Ormonale",
+  neural: "Neuromodulatori",
+  gastro_intestinal: "Gastro-enterico",
+  gonadal: "Asse gonadico",
+};
+
+function impactTileClass(impact: BioenergeticPathwayImpact): string {
+  if (impact === "supportive") return "border-emerald-400/35 bg-emerald-500/[0.07]";
+  if (impact === "inhibitory") return "border-rose-400/35 bg-rose-500/[0.07]";
+  return "border-white/12 bg-white/[0.04]";
+}
+
+function provenanceLabel(p: BioenergeticMetricTile["provenance"]): string {
+  if (p === "measured") return "Misurato";
+  if (p === "estimated") return "Stimato";
+  return "Assente";
 }
 
 export default function BioenergeticsPageView() {
@@ -130,19 +157,77 @@ export default function BioenergeticsPageView() {
         ) : null}
 
         {vm ? (
-          <Pro2SectionCard accent="cyan" title="Kernel v1" subtitle="Contrasto domanda energetica vs esposizione CHO" icon={Activity}>
-            <p className="text-sm text-gray-300">
-              Glucose handling {vm.kernel.glucoseHandlingScore} · Insulin demand {vm.kernel.insulinDemandScore} ·
-              Oxidation drive {vm.kernel.oxidationDriveScore}
-            </p>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {vm.kernel.keyDrivers.map((d) => (
-                <span key={d} className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-gray-300">
-                  {d}
-                </span>
-              ))}
-            </div>
-          </Pro2SectionCard>
+          <>
+            <Pro2SectionCard accent="fuchsia" title="Via metabolica · 24 h" subtitle="Bilancio modello e glucosio; fascia colori = impatto orario" icon={LineChart}>
+              <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
+            </Pro2SectionCard>
+
+            <Pro2SectionCard accent="amber" title="Segnali & biomarker" subtitle="Da lab e canali del giorno; assenza dati non implica valore clinico" icon={LineChart}>
+              {(() => {
+                const tiles = vm.metricTiles ?? [];
+                const byCat = tiles.reduce<Record<string, BioenergeticMetricTile[]>>((acc, t) => {
+                  const k = t.category;
+                  if (!acc[k]) acc[k] = [];
+                  acc[k].push(t);
+                  return acc;
+                }, {});
+                const order: BioenergeticMetricTileCategory[] = [
+                  "metabolic",
+                  "inflammatory",
+                  "hormonal",
+                  "neural",
+                  "gastro_intestinal",
+                  "gonadal",
+                ];
+                return (
+                  <div className="space-y-6">
+                    {order.map((cat) => {
+                      const list = byCat[cat];
+                      if (!list?.length) return null;
+                      return (
+                        <div key={cat}>
+                          <p className="mb-2 font-mono text-[0.65rem] uppercase tracking-wider text-amber-200/90">
+                            {CATEGORY_LABEL[cat]}
+                          </p>
+                          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                            {list.map((t) => (
+                              <div
+                                key={t.id}
+                                className={`rounded-2xl border px-3 py-2.5 ${impactTileClass(t.impact)}`}
+                              >
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="text-xs font-medium leading-snug text-white">{t.labelIt}</p>
+                                  <span className="shrink-0 rounded-md border border-white/10 bg-black/30 px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide text-gray-400">
+                                    {provenanceLabel(t.provenance)}
+                                  </span>
+                                </div>
+                                <p className="mt-1 font-mono text-lg font-semibold text-white">{t.displayValue}</p>
+                                <p className="text-[0.65rem] text-gray-500">{t.unit}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </Pro2SectionCard>
+
+            <Pro2SectionCard accent="cyan" title="Kernel v1" subtitle="Contrasto domanda energetica vs esposizione CHO" icon={Activity}>
+              <p className="text-sm text-gray-300">
+                Glucose handling {vm.kernel.glucoseHandlingScore} · Insulin demand {vm.kernel.insulinDemandScore} ·
+                Oxidation drive {vm.kernel.oxidationDriveScore}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {vm.kernel.keyDrivers.map((d) => (
+                  <span key={d} className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-gray-300">
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </Pro2SectionCard>
+          </>
         ) : null}
       </section>
 

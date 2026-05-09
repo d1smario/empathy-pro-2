@@ -32,6 +32,36 @@ export type BioenergeticInterpretationHint = {
   detail: string;
 };
 
+/** Effetto euristico sulla via metabolica modellata (non giudizio clinico). */
+export type BioenergeticPathwayImpact = "supportive" | "neutral" | "inhibitory";
+
+export type BioenergeticMetricTileCategory =
+  | "metabolic"
+  | "inflammatory"
+  | "hormonal"
+  | "neural"
+  | "gastro_intestinal"
+  | "gonadal";
+
+export type BioenergeticMetricTile = {
+  id: string;
+  labelIt: string;
+  unit: string;
+  displayValue: string;
+  numericValue: number | null;
+  provenance: BioenergeticChannelProvenance;
+  impact: BioenergeticPathwayImpact;
+  category: BioenergeticMetricTileCategory;
+};
+
+export type BioenergeticHour24Point = {
+  hour: number;
+  hourLabel: string;
+  pathwayBalance: number;
+  pathwayImpact: BioenergeticPathwayImpact;
+  glucoseMmol: number | null;
+};
+
 export type BioenergeticsDayViewModel = {
   athleteId: string;
   date: string;
@@ -48,4 +78,6 @@ export type BioenergeticsDayViewModel = {
   kernel: BioenergeticDayKernelOutput;
   interpretationHints: BioenergeticInterpretationHint[];
   disclaimers: string[];
+  metricTiles: BioenergeticMetricTile[];
+  chart24h: BioenergeticHour24Point[];
 };

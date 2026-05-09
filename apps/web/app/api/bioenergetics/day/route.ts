@@ -3,6 +3,7 @@ import { executedWorkoutFromDbRow, plannedWorkoutFromDbRow, type ExecutedWorkout
 import type { BioenergeticSeriesPoint, BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { computeBioenergeticDayKernel } from "@/lib/bioenergetics/day-response-kernel";
+import { buildBioenergeticDayPresentation } from "@/lib/bioenergetics/day-presentation";
 import { buildBioenergeticInterpretationHints } from "@/lib/bioenergetics/interpretation-bridge";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
@@ -35,6 +36,19 @@ function isoDateOrToday(raw: string): string {
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Orari distinti quando il DB non espone ancora l’ora esatta della seduta (evita sovrapposizioni sulla vista 24 h). */
+function staggerSessionTs(date: string, index: number, phaseQuarterHours: number): string {
+  const startMin = 7 * 60 + phaseQuarterHours * 15 + index * 75;
+  const capped = Math.min(Math.max(startMin, 6 * 60), 21 * 60 + 45);
+  const h = Math.floor(capped / 60);
+  const m = capped % 60;
+  return `${date}T${pad2(h)}:${pad2(m)}:00`;
 }
 
 function glucoseFromPayload(payload: Record<string, unknown>, createdAt: string | null): BioenergeticSeriesPoint[] {
@@ -114,24 +128,26 @@ export async function GET(req: NextRequest) {
     const biomarkerRows = (biomarkersRes.data ?? []) as Array<Record<string, unknown>>;
 
     const timeline: BioenergeticTimelineEvent[] = [];
-    for (const row of planned) {
+    planned.forEach((row, i) => {
+      const dk = toDateKey(row.date);
       timeline.push({
         id: `plan-${row.id}`,
-        ts: `${toDateKey(row.date)}T06:00:00`,
+        ts: staggerSessionTs(dk, i, 0),
         type: "planned_session",
         title: row.type ?? "Sessione pianificata",
         payload: { durationMinutes: row.durationMinutes, tssTarget: row.tssTarget, kcalTarget: row.kcalTarget },
       });
-    }
-    for (const row of executed) {
+    });
+    executed.forEach((row, i) => {
+      const dk = toDateKey(row.date);
       timeline.push({
         id: `exec-${row.id}`,
-        ts: `${toDateKey(row.date)}T06:30:00`,
+        ts: staggerSessionTs(dk, i, 2),
         type: "executed_session",
         title: "Sessione eseguita",
         payload: { durationMinutes: row.durationMinutes, tss: row.tss, kcal: row.kcal, source: row.source },
       });
-    }
+    });
     for (const row of diaryRows) {
       const t = typeof row.entry_time === "string" && row.entry_time.trim() ? row.entry_time.slice(0, 8) : "12:00:00";
       timeline.push({
@@ -214,26 +230,41 @@ export async function GET(req: NextRequest) {
         ? null
         : [{ ts: `${date}T12:00:00`, value: Math.round((1.1 + kernel.oxidationDriveScore * 0.01) * 100) / 100, source: "kernel_v1" }];
 
+    const channels = {
+      glucose: glucoseMeasured.length ? glucoseMeasured : glucoseEstimated,
+      lactate: lactateMeasured.length ? lactateMeasured : lactateEstimated,
+    };
+    const provenance = {
+      glucose: glucoseMeasured.length ? "measured" : glucoseEstimated ? "estimated" : "absent",
+      lactate: lactateMeasured.length ? "measured" : lactateEstimated ? "estimated" : "absent",
+    } as const;
+
+    const { metricTiles, chart24h } = buildBioenergeticDayPresentation({
+      date,
+      kernel,
+      provenance,
+      channels,
+      timeline,
+      biomarkerRows,
+    });
+
     return NextResponse.json(
       {
         athleteId,
         date,
         range: { from: `${date}T00:00:00`, to: `${date}T23:59:59` },
         timeline,
-        channels: {
-          glucose: glucoseMeasured.length ? glucoseMeasured : glucoseEstimated,
-          lactate: lactateMeasured.length ? lactateMeasured : lactateEstimated,
-        },
-        provenance: {
-          glucose: glucoseMeasured.length ? "measured" : glucoseEstimated ? "estimated" : "absent",
-          lactate: lactateMeasured.length ? "measured" : lactateEstimated ? "estimated" : "absent",
-        },
+        channels,
+        provenance,
         kernel,
         interpretationHints: buildBioenergeticInterpretationHints(kernel),
         disclaimers: [
           "Le curve stimate sono modellazione deterministica operativa, non diagnosi clinica.",
           "Quando presenti, i dati misurati (CGM/lab/device) hanno priorita sulle stime.",
+          "Colori supportivo/neutro/inibitorio: modello operativo sulla giornata, non classificazione di laboratorio.",
         ],
+        metricTiles,
+        chart24h,
       },
       { headers: NO_STORE },
     );
