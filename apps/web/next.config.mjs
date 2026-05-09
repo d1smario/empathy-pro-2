@@ -69,6 +69,10 @@ const nextConfig = {
   distDir,
   experimental: {
     optimizePackageImports: ["lucide-react"],
+    /** Garmin Partner Verification (Activity Details) può inviare POST grandi; su alcuni deploy può influenzare limiti body (documentazione Next/Vercel). Route Handler verifica comunque limiti piattaforma (~4.5 MB su Vercel Serverless). */
+    serverActions: {
+      bodySizeLimit: "128mb",
+    },
     /** Monorepo (Next 14.2): tracing fino alla root repo per `packages/*` su Vercel. */
     outputFileTracingRoot: path.join(__dirname, "..", ".."),
     /** `pdf-parse` (fs nativo) — Next 14: chiave sotto `experimental`, non `serverExternalPackages`. */

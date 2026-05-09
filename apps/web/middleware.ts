@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    /** Garmin Push/Ping POST può superare i limiti Edge middleware / ridurre superficie su webhook partner (Partner Verification). */
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|api\\/integrations\\/garmin\\/push(?:\\/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

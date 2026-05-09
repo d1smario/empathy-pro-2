@@ -51,6 +51,11 @@ export async function HEAD() {
 
 /**
  * POST: riceve notifiche push Garmin (metadata + callbackURL per pull).
+ *
+ * **413 Payload Too Large**: Garmin Partner Verification segnala che Activity Details può richiedere body molto grandi (doc Garmin: verifica fino a 10 MB / activity details fino a ~100 MB).
+ * Su **Vercel Serverless** il limite tipico richiesta è **~4.5 MB**: sopra quella soglia il runtime può rispondere **413 prima** che questo handler legga il body.
+ * Se Partner Verification fallisce per 413: ingress dedicato (reverse proxy / VM / cloud con `client_max_body_size` alto) oppure piano Vercel che permetta payload maggiori — contattare support Vercel/Garmin.
+ *
  * Dopo l’inserimento in coda, avvia automaticamente `runGarminPullJobs` in background (Vercel `waitUntil`), senza attendere il cron.
  *
  * Esempio URL per riga nel portale:
