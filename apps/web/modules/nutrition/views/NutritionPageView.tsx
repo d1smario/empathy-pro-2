@@ -267,6 +267,38 @@ type FuelingSlot = {
   category: FuelingCategory;
 };
 
+type FuelingTrainingContextRow = {
+  id: string;
+  builderContract: Pro2BuilderSessionContract | null;
+  title: string;
+  family: string | null;
+  discipline: string | null;
+  target: string | null;
+  durationMin: number;
+  tss: number;
+  kcal: number;
+  structure: string | null;
+  blockLabels: string[];
+  intensityCues: string[];
+  substrate: {
+    estimatedIntensityPctFtp: number;
+    lactateProducedG: number;
+    glucoseFromCoriG: number;
+    glucoseNetFromCoriG: number;
+    exogenousOxidizedG: number;
+    choAvailableG: number;
+    glycolyticSharePct: number;
+    gutPathwayRisk: string;
+    bloodDeliveryPctOfIngested: number;
+    glycogenCombustedNetG: number;
+    glucoseRequiredForStrategyG: number;
+  } | null;
+  physiologicalIntent: string[];
+  nutritionSupports: string[];
+  inhibitorsAndRisks: string[];
+  choEnergyWeight: number;
+};
+
 type MediaAssetRow = {
   entity_type?: "meal" | "fueling" | "exercise";
   entity_key: string;
@@ -1368,7 +1400,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [profile, physio, selectedPlanSessions.length]);
   const predictorEffectiveTimeMin = predictorUsePlanDay ? effectiveSessionDurationMin : predictorTimeMin;
   const predictorEffectiveIntensityPctFtp = predictorUsePlanDay ? effectiveSessionIntensityPctFtp : predictorIntensityPctFtp;
-  const fuelingTrainingContext = useMemo(() => {
+  const fuelingTrainingContext = useMemo<FuelingTrainingContextRow[]>(() => {
     if (!fuelingReadiness.ready) return [];
     const ftp = n(physio?.ftp_watts, 0);
     const weightKg = n(profile?.weight_kg, 0);
@@ -1441,12 +1473,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         });
         const analysis = byId.get(String(session.id));
         return {
-          id: session.id,
+          id: String(session.id),
           builderContract: builder,
-          title: session.plannedSessionName ?? builder?.sessionName ?? session.plannedDiscipline ?? session.type ?? "Sessione",
-          family: session.plannedFamily ?? builder?.family ?? null,
-          discipline: session.plannedDiscipline ?? builder?.discipline ?? session.type ?? null,
-          target,
+          title: String(session.plannedSessionName ?? builder?.sessionName ?? session.plannedDiscipline ?? session.type ?? "Sessione"),
+          family: session.plannedFamily ? String(session.plannedFamily) : builder?.family ?? null,
+          discipline: session.plannedDiscipline ? String(session.plannedDiscipline) : builder?.discipline ?? (session.type ? String(session.type) : null),
+          target: target ? String(target) : null,
           durationMin: m.durationMinutes,
           tss: m.tss,
           kcal: m.kcal,
