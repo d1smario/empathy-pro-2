@@ -14,6 +14,15 @@ function normalizeDayToken(raw: string | null | undefined): string | null {
   return m ? m[1] : null;
 }
 
+/** Epoch sec o ms Garmin → giorno UTC ISO */
+function isoDayFromGarminEpoch(raw: unknown): string | null {
+  if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
+  const ms = raw > 10_000_000_000 ? Math.trunc(raw) : Math.trunc(raw) * 1000;
+  const d = new Date(ms);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString().slice(0, 10);
+}
+
 /** ISO calendar day shift (UTC noon anchor) for pairing WHOOP sleep-start vs recovery-scored day. */
 function addDaysIso(dateIso: string, deltaDays: number): string {
   const day = dateIso.slice(0, 10);
@@ -32,7 +41,15 @@ export function mergedPayloadFromExportRow(row: Record<string, unknown>): Record
   const source = asRecord(payload.sourcePayload);
   const reality = asRecord(payload.realityIngestion);
   const preview = asRecord(reality?.canonicalPreview);
-  return { ...payload, ...(source ?? {}), ...(preview ?? {}) };
+  /** Envelope `sessionDate` (es. export Garmin wellness con giorno logico) non sta in canonicalPreview. */
+  const envelopeDay =
+    typeof reality?.sessionDate === "string" ? normalizeDayToken(reality.sessionDate) : null;
+  return {
+    ...payload,
+    ...(source ?? {}),
+    ...(preview ?? {}),
+    ...(envelopeDay ? { calendarDate: envelopeDay, session_date: envelopeDay } : {}),
+  };
 }
 
 /**
@@ -86,6 +103,13 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
     "start",
     "start_time",
   ];
+  const epochKeys = [
+    "startTimeInSeconds",
+    "start_time_in_seconds",
+    "summaryTimestampInSeconds",
+    "summary_timestamp_in_seconds",
+    "startTimestampGMT",
+  ];
   for (const rec of expandDevicePayloadMetricRecords(merged)) {
     for (const key of keys) {
       const raw = rec[key];
@@ -93,6 +117,21 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
         const d = normalizeDayToken(raw);
         if (d) return d;
       }
+      if (typeof raw === "number" && key.toLowerCase().includes("calendar")) {
+        if (raw >= 19000101 && raw <= 29991231) {
+          const s = String(Math.trunc(raw)).padStart(8, "0");
+          if (s.length === 8) {
+            const fromInt = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(fromInt)) return fromInt;
+          }
+        }
+        const fromEpoch = isoDayFromGarminEpoch(raw);
+        if (fromEpoch) return fromEpoch;
+      }
+    }
+    for (const ek of epochKeys) {
+      const d = isoDayFromGarminEpoch(rec[ek]);
+      if (d) return d;
     }
   }
 
