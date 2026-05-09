@@ -71,3 +71,16 @@ test("Garmin dailies: calendarDate numerico YYYYMMDD", () => {
   };
   assert.equal(wellnessDayKeyFromDeviceExportRow(row as Record<string, unknown>), "2026-05-07");
 });
+
+test("Garmin bodyComps: measurementTimeInSeconds → giorno UTC ISO", () => {
+  const row = {
+    provider: "garmin",
+    payload: {
+      sourcePayload: {
+        garmin_wellness_stream: "bodyComps",
+        measurementTimeInSeconds: 1_457_702_400,
+      },
+    },
+  };
+  assert.equal(wellnessDayKeyFromDeviceExportRow(row as Record<string, unknown>), "2016-03-11");
+});

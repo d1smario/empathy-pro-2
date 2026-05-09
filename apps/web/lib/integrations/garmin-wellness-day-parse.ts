@@ -1,6 +1,7 @@
 /**
- * Giorno ISO (UTC) del campione wellness Garmin da un singolo oggetto summary (dailies/sleeps/hrv/stressDetails/…).
+ * Giorno ISO (UTC) del campione wellness Garmin da un singolo oggetto summary (dailies/sleeps/hrv/stressDetails/bodyComps/…).
  * Garmin varia casing (`calendarDate` vs `CalendarDate`) e talvolta usa intero YYYYMMDD.
+ * Body composition / blood pressure: spesso solo `measurementTimeInSeconds` (UTC sec).
  */
 
 function firstFiniteNumber(...vals: unknown[]): number | null {
@@ -34,7 +35,13 @@ export function parseGarminWellnessLogicalDay(rec: Record<string, unknown>): str
   const fromInt = isoDayFromGarminYyyyMmDdInt(calRaw);
   if (fromInt) return fromInt;
 
-  const sts = firstFiniteNumber(rec.startTimeInSeconds, rec.StartTimeInSeconds);
+  const sts = firstFiniteNumber(
+    rec.startTimeInSeconds,
+    rec.StartTimeInSeconds,
+    /** Body composition, blood pressure: momento della misura (UTC sec). */
+    rec.measurementTimeInSeconds,
+    rec.MeasurementTimeInSeconds,
+  );
   if (sts != null) {
     return new Date(Math.trunc(sts) * 1000).toISOString().slice(0, 10);
   }
