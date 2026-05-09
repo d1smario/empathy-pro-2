@@ -21,6 +21,19 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
 
 const EMPTY = { planned: [] as const, executed: [] as const };
 
+/**
+ * Date distinte da mostrare in diag API: prima erano solo i primi `max` giorni in ordine cronologico,
+ * quindi con molti allenamenti a inizio finestra sparivano del tutto maggio / la parte “recente”.
+ * Qui: primi ⌈max/2⌉ + ultimi ⌊max/2⌋ giorni distinti (dedup), ordinati.
+ */
+function executedDatesSampleForDiag(isoDayKeys: string[], max = 8): string[] {
+  const uniq = Array.from(new Set(isoDayKeys.map((d) => d.slice(0, 10)).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))).sort();
+  if (uniq.length <= max) return uniq;
+  const headN = Math.ceil(max / 2);
+  const tailN = max - headN;
+  return Array.from(new Set([...uniq.slice(0, headN), ...uniq.slice(-tailN)])).sort();
+}
+
 function twinContextStripFromMemory(twin: {
   asOf?: string;
   readiness?: number;
@@ -158,8 +171,8 @@ export async function GET(req: NextRequest) {
     });
     const plannedProvenanceSummary = summarizeProvenanceCounts(planned);
     const executed = ((executedRes.data ?? []) as ExecutedWorkoutDbRow[]).map(executedWorkoutFromDbRow);
-    const executedSampleDates = Array.from(new Set(executed.map((row) => String(row.date ?? "").slice(0, 10)).filter(Boolean))).slice(
-      0,
+    const executedSampleDates = executedDatesSampleForDiag(
+      executed.map((row) => String(row.date ?? "").slice(0, 10)),
       8,
     );
     const readSpineCoverage = includeAthleteContext ? summarizeReadSpineCoverage(athleteMemory) : null;

@@ -278,8 +278,7 @@ export default function TrainingCalendarPageView() {
         to = maxIsoDay(to, padTo);
       }
       const q = new URLSearchParams({ athleteId, from, to });
-      /** Calendario: solo planned/executed; evita `resolveAthleteMemory` su ogni cambio mese (vedi `docs/MODULE_FETCH_AUDIT_PRO2.md`). */
-      q.set("includeAthleteContext", "0");
+      /** Nessun `includeAthleteContext=0`: default API = `resolveAthleteMemory` → read spine + twin strip (come Builder / scheda giorno). */
       /** Badge cella sonno/HRV: server-side pre-fetch per evitare N+1 lato cella. */
       q.set("includeWellness", "1");
       const res = await fetch(`/api/training/planned-window?${q}`, {

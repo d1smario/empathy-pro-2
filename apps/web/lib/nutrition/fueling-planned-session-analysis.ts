@@ -401,7 +401,8 @@ export function analyzePlannedSessionsForFueling(input: {
       const segments = pro2BuilderContractToChartSegments(contract);
       const blocks: Array<{ durationMin: number; powerW: number }> = [];
       for (const s of segments) {
-        const dm = Math.max(0.25, s.durationSeconds / 60);
+        /** Allineato al lactate-engine: min 1s; evita che micro-blocchi (10–20s) vengano dilati a 15s fittizi. */
+        const dm = Math.max(1 / 60, s.durationSeconds / 60);
         const label = (s.intensityLabel || "Z3").trim();
         const rel = intensityToRelativeLoad(label);
         blocks.push({ durationMin: dm, powerW: ftp * rel });
@@ -421,12 +422,14 @@ export function analyzePlannedSessionsForFueling(input: {
     })();
 
     let lm: LactateEngineOutput;
+    let peakIntensityPctFtp = 0;
 
     if (segmentPowerBlocks.length > 0) {
       const totalSegMin = segmentPowerBlocks.reduce((s, b) => s + b.durationMin, 0);
       const parts: Array<{ out: LactateEngineOutput; durationMin: number }> = [];
       for (const b of segmentPowerBlocks) {
         const intensityPctBlock = (b.powerW / ftp) * 100;
+        peakIntensityPctFtp = Math.max(peakIntensityPctFtp, intensityPctBlock);
         const rer = estimateRerFromIntensity(intensityPctBlock);
         const vo2LMin = estimateVo2LMinFromPower(b.powerW, ftp, efficiency, rer);
         const choSlice =
@@ -496,6 +499,25 @@ export function analyzePlannedSessionsForFueling(input: {
       copy.physiologicalIntent.unshift(
         `Strategia substrati: somma motore lattato su ${segmentPowerBlocks.length} segmenti Builder (zone), non solo media da TSS.`,
       );
+      if (peakIntensityPctFtp - lm.intensityPctFtp >= 18) {
+        copy.physiologicalIntent.splice(
+          1,
+          0,
+          `Picchi fino ~${round(peakIntensityPctFtp, 0)}% FTP vs media ponderata ~${round(
+            lm.intensityPctFtp,
+            0,
+          )}% FTP: glicogenolisi e lattato sono concentrati negli sforzi brevi — CHO intra verso le ripetute e recupero facile tra uno sprint e l’altro contano più della sola potenza media.`,
+        );
+      }
+    }
+    const subRates = input.physiology?.physiologicalProfile?.substrateRates;
+    if (subRates && typeof subRates === "object") {
+      const choGMin = (subRates as Record<string, number>).choGMin;
+      if (typeof choGMin === "number" && choGMin > 0.01) {
+        copy.nutritionSupports.push(
+          `Da profilo fisiologico: stima CHO ossidati a carico ~${round(choGMin, 2)} g/min (ultimo metabolic lab / merge canonic) — riferimento per calibrare intra rispetto al motore sessione.`,
+        );
+      }
     }
     const dayChoEnergyWeight = Math.max(0, lm.choKcal);
 

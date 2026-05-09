@@ -95,7 +95,8 @@ function round(v: number, digits = 3) {
 }
 
 export function computeLactateEngine(input: LactateEngineInput): LactateEngineOutput {
-  const durationMin = Math.max(1, input.durationMin);
+  /** Blocchi sotto 1′ (scatti, tabata): usare la durata reale — floor a 1′ gonfiava energia/glicogeno/lattato nei merge per segmento. */
+  const durationMin = Math.max(1 / 60, input.durationMin);
   const durationH = durationMin / 60;
   const powerW = Math.max(0, input.powerW);
   const ftpW = Math.max(1, input.ftpW);
@@ -126,7 +127,7 @@ export function computeLactateEngine(input: LactateEngineInput): LactateEngineOu
   let profileMetabolicCouplingActive = false;
   const cpMet = input.cpW;
   const wPrimeJIn = input.wPrimeJ;
-  const tSec = Math.max(45, durationMin * 60);
+  const tSec = Math.max(10, durationMin * 60);
   if (
     cpMet != null &&
     Number.isFinite(cpMet) &&

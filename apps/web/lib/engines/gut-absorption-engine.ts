@@ -40,7 +40,8 @@ function round(v: number, digits = 3) {
 }
 
 export function computeGutAbsorptionEngine(input: GutAbsorptionInput): GutAbsorptionOutput {
-  const durationH = Math.max(0.1, input.durationH);
+  /** Coerenza con lactate-engine: segmenti brevi (secondi) non devono usare un fittizio 6′ che sovrastima CHO ingerito nel blocco. */
+  const durationH = Math.max(1 / 3600, input.durationH);
   const choIngestedGH = Math.max(0, input.choIngestedGH);
   const gutAbsorptionPct = clamp(input.gutAbsorptionPct, 35, 100);
   const microbiotaSequestrationPct = clamp(input.microbiotaSequestrationPct, 0, 40);
