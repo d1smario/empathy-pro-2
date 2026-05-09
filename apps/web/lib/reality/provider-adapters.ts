@@ -212,13 +212,69 @@ export async function persistRealityDeviceExport(
 
   const selectCols = "id, athlete_id, provider, status, external_ref, created_at, updated_at, payload";
 
-  const { data, error } = useUpsert
-    ? await supabase
-        .from("device_sync_exports")
-        .upsert(insertRow, { onConflict: "provider,external_event_id" })
-        .select(selectCols)
-        .single()
-    : await supabase.from("device_sync_exports").insert(insertRow).select(selectCols).single();
+  let data: Record<string, unknown> | null = null;
+  let error: { message: string; code?: string } | null = null;
+
+  if (useUpsert && externalRefTrimmed) {
+    /**
+     * `.upsert(onConflict: provider,external_event_id)` fallisce con indici UNIQUE **parziali**
+     * (`WHERE external_event_id IS NOT NULL`): Postgres non inferisce il constraint per ON CONFLICT.
+     * Merge esplicito come fallback compatibile con tutte le versioni DB / PostgREST.
+     */
+    const extId = externalRefTrimmed;
+    const { data: existing, error: selErr } = await supabase
+      .from("device_sync_exports")
+      .select("id")
+      .eq("provider", storedProvider)
+      .eq("external_event_id", extId)
+      .maybeSingle();
+
+    if (selErr) {
+      throw new Error(selErr.message);
+    }
+
+    const existingId =
+      existing && typeof (existing as { id?: unknown }).id === "string" ? (existing as { id: string }).id : null;
+
+    const updateRow = {
+      athlete_id: insertRow.athlete_id,
+      external_ref: insertRow.external_ref,
+      status: insertRow.status,
+      sync_kind: insertRow.sync_kind,
+      payload: insertRow.payload,
+      ...(createdAt ? { created_at: createdAt } : {}),
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingId) {
+      const up = await supabase.from("device_sync_exports").update(updateRow).eq("id", existingId).select(selectCols).single();
+      data = up.data as Record<string, unknown> | null;
+      error = up.error;
+    } else {
+      const ins = await supabase.from("device_sync_exports").insert(insertRow).select(selectCols).single();
+      data = ins.data as Record<string, unknown> | null;
+      error = ins.error;
+      const dup =
+        ins.error &&
+        (ins.error.code === "23505" ||
+          /duplicate key|unique constraint|violates unique constraint/i.test(ins.error.message ?? ""));
+      if (dup) {
+        const up = await supabase
+          .from("device_sync_exports")
+          .update(updateRow)
+          .eq("provider", storedProvider)
+          .eq("external_event_id", extId)
+          .select(selectCols)
+          .single();
+        data = up.data as Record<string, unknown> | null;
+        error = up.error;
+      }
+    }
+  } else {
+    const ins = await supabase.from("device_sync_exports").insert(insertRow).select(selectCols).single();
+    data = ins.data as Record<string, unknown> | null;
+    error = ins.error;
+  }
 
   if (error) {
     throw new Error(error.message);
