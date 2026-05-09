@@ -62,6 +62,17 @@ export type BioenergeticHour24Point = {
   glucoseMmol: number | null;
 };
 
+/** Serie temporale giornaliera per curve UI (timestamp ISO + valore numerico). */
+export type BioenergeticDaySeriesChannel = {
+  id: string;
+  labelIt: string;
+  unit: string;
+  points: BioenergeticSeriesPoint[];
+  provenance: BioenergeticChannelProvenance;
+  /** Origine logica per debug (es. device_sync_exports, executed_workouts). */
+  sourceHint?: string;
+};
+
 export type BioenergeticsDayViewModel = {
   athleteId: string;
   date: string;
@@ -80,4 +91,6 @@ export type BioenergeticsDayViewModel = {
   disclaimers: string[];
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
+  /** Curve fisiologiche / stimoli (memoria giorno + device); array vuoto se nessuna serie. */
+  series: BioenergeticDaySeriesChannel[];
 };

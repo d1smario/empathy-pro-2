@@ -14,6 +14,7 @@ import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
 import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
 
 function toIsoDate(d: Date): string {
@@ -76,7 +77,11 @@ export default function BioenergeticsPageView() {
           setError(json.error ?? "Lettura BioEnergetic Intelligence non riuscita.");
           return;
         }
-        setVm(json);
+        const vmPayload: BioenergeticsDayViewModel = {
+          ...json,
+          series: Array.isArray(json.series) ? json.series : [],
+        };
+        setVm(vmPayload);
       } catch {
         if (!cancelled) {
           setVm(null);
@@ -160,6 +165,10 @@ export default function BioenergeticsPageView() {
           <>
             <Pro2SectionCard accent="fuchsia" title="Via metabolica · 24 h" subtitle="Bilancio modello e glucosio; fascia colori = impatto orario" icon={LineChart}>
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
+              <div className="mt-6 border-t border-white/10 pt-4">
+                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fuchsia-200/80">Serie da memoria giorno</p>
+                <BioenergeticsDaySeriesPanel series={vm.series ?? []} />
+              </div>
             </Pro2SectionCard>
 
             <Pro2SectionCard accent="amber" title="Segnali & biomarker" subtitle="Da lab e canali del giorno; assenza dati non implica valore clinico" icon={LineChart}>
