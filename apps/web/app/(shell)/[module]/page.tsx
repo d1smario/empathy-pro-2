@@ -11,6 +11,7 @@ export function generateStaticParams(): { module: string }[] {
   return PRODUCT_MODULE_NAV.map((item) => ({ module: pathSegmentFromHref(item.href) })).filter(
     (p) =>
       p.module !== "nutrition" &&
+      p.module !== "bioenergetics" &&
       p.module !== "profile" &&
       p.module !== "physiology" &&
       p.module !== "health",

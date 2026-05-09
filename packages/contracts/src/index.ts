@@ -17,6 +17,7 @@ export type ProductModuleId =
   | "physiology"
   | "training"
   | "nutrition"
+  | "bioenergetics"
   | "health"
   | "biomechanics"
   | "aerodynamics"
@@ -30,6 +31,7 @@ export const PRODUCT_MODULE_ROUTE_MAP = {
   physiology: true,
   training: true,
   nutrition: true,
+  bioenergetics: true,
   health: true,
   biomechanics: true,
   aerodynamics: true,

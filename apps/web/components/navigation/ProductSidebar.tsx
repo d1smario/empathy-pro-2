@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   Activity,
   Calendar,
+  Cpu,
   Heart,
   LayoutDashboard,
   type LucideIcon,
@@ -28,6 +29,7 @@ const ICONS: Record<ProductNavIconKey, LucideIcon> = {
   activity: Activity,
   calendar: Calendar,
   utensils: Utensils,
+  pulse: Cpu,
   motion: Move,
   wind: Wind,
   settings: Settings,

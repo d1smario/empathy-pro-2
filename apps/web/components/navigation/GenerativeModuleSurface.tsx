@@ -24,6 +24,8 @@ function domainAccent(module: ProductModuleId): Pro2SectionAccent {
       return "orange";
     case "nutrition":
       return "amber";
+    case "bioenergetics":
+      return "emerald";
     case "physiology":
       return "emerald";
     case "health":
@@ -185,6 +187,36 @@ export function GenerativeModuleSurface({ module }: { module: ProductModuleId })
             </div>
           </Pro2SectionCard>
         </>
+      ) : null}
+
+      {module === "bioenergetics" ? (
+        <Pro2SectionCard
+          accent="emerald"
+          title="BioEnergetic Intelligence"
+          subtitle="Timeline giornata + provenienza misurato/stimato"
+          icon={LineChart}
+        >
+          <p className="text-sm leading-relaxed text-gray-400">
+            Vista operativa a giornata che incrocia training, diario nutrizionale e stream device per stimare pathway
+            supportanti/inibitori senza sostituire i dati misurati.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Pro2Link
+              href="/nutrition/diary"
+              variant="secondary"
+              className="justify-center border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15"
+            >
+              Diario alimentare
+            </Pro2Link>
+            <Pro2Link
+              href="/training/calendar"
+              variant="secondary"
+              className="justify-center border border-sky-500/35 bg-sky-500/10 hover:bg-sky-500/15"
+            >
+              Calendar
+            </Pro2Link>
+          </div>
+        </Pro2SectionCard>
       ) : null}
 
       {module === "physiology" ? (

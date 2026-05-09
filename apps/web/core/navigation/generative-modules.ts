@@ -5,6 +5,7 @@ const GENERATIVE: ReadonlySet<ProductModuleId> = new Set([
   "profile",
   "training",
   "nutrition",
+  "bioenergetics",
   "physiology",
   "health",
   "biomechanics",

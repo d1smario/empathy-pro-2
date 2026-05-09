@@ -17,6 +17,8 @@ export function moduleEyebrowClass(module: ProductModuleId): string {
       return "text-orange-400";
     case "nutrition":
       return "text-amber-400";
+    case "bioenergetics":
+      return "text-lime-400";
     case "biomechanics":
       return "text-teal-400";
     case "aerodynamics":

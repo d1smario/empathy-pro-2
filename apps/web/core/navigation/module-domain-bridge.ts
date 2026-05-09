@@ -41,6 +41,13 @@ export function getModuleDomainPanel(module: ProductModuleId): ModuleDomainPanel
         title: Nutrition.DOMAIN_TITLE,
         summary: Nutrition.DOMAIN_SUMMARY,
       };
+    case "bioenergetics":
+      return {
+        packageId: Bioenergetics.DOMAIN,
+        title: "BioEnergetic Intelligence",
+        summary:
+          "Motore giornata: integra timeline training/nutrizione/reality stream con provenance misurato-vs-stimato e tag multiscala per lettura metabolica operativa.",
+      };
     case "physiology":
       return {
         packageId: Physiology.DOMAIN,

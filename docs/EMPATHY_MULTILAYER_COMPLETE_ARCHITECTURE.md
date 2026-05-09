@@ -180,6 +180,7 @@ flowchart LR
 | Dashboard | `/`, `/dashboard` | Hub `athlete-hub` |
 | Training | `/training/*` | `planned-window`, builder, calendar |
 | Nutrition | `/nutrition/*` | Module, meal plan, diary, fueling |
+| BioEnergetics | `/bioenergetics` | `bioenergetics/day` (timeline + kernel + provenance) |
 | Health | `/health` | Pannelli, upload |
 | Physiology | `/physiology`, `/physiology/bioenergetics` | Metabolic Lab + **hub bioenergetico** (solo lettura: `athlete-hub` + bundle operativo; doc loop VIRYA/builder) |
 | Profile | `/profile` | `GET /api/profile`, `profile/athlete-row` |
@@ -192,6 +193,8 @@ flowchart LR
 **Training:** `planned-window`, `planned`, `planned/insert`, `import`, `import-planned`, `executed`, `engine/generate`, `virya-context`, `analytics`, `builder/*`.
 
 **Nutrition:** `module`, `intelligent-meal-plan`, `diary`, `diary/micronutrients`, `food-lookup`, `food-photo-estimate`, `catalog`, `usda-by-nutrient`, `profile-config`, `media`, `device-export`, `athlete-summary`, `nutrition` (radice se presente).
+
+**BioEnergetics:** `bioenergetics/day`.
 
 **Health:** `health`, `health/panels-latest`, `health/panels-timeline`, `health/upload-document`.
 

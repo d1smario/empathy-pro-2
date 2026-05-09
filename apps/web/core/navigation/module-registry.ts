@@ -9,6 +9,7 @@ export type ProductNavIconKey =
   | "activity"
   | "calendar"
   | "utensils"
+  | "pulse"
   | "motion"
   | "wind"
   | "settings";
@@ -36,6 +37,7 @@ export const PRODUCT_MODULE_NAV: ProductModuleNavItem[] = [
   { module: "physiology", href: "/physiology", label: "Physiology", icon: "activity", area: "main" },
   { module: "training", href: "/training", label: "Training", icon: "calendar", area: "main" },
   { module: "nutrition", href: "/nutrition", label: "Nutrition", icon: "utensils", area: "main" },
+  { module: "bioenergetics", href: "/bioenergetics", label: "BioEnergetic Intelligence", icon: "pulse", area: "main" },
   { module: "biomechanics", href: "/biomechanics", label: "Biomechanics", icon: "motion", area: "main" },
   { module: "aerodynamics", href: "/aerodynamics", label: "Aerodynamics", icon: "wind", area: "main" },
   { module: "settings", href: "/settings", label: "Impostazioni", icon: "settings", area: "footer" },

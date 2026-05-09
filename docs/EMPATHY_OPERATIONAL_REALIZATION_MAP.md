@@ -73,6 +73,7 @@ Aggiornare questo blocco quando si chiudono le cuciture.
 | **Dashboard** | Hub + `readSpineCoverage` + `resolveAthleteMemory` in parallelo | `GET /api/dashboard/athlete-hub` | KPI hub ancora da unificare con twin dove serve |
 | **Training** | Come sopra + **`GET /api/training/planned-window`** arricchito con `readSpineCoverage` e `twinContextStrip` (parallelo a `resolveAthleteMemory`) | `planned-window`, `virya-context`, `analytics`, `training/*` | Strip fisiologia KPI ancora minima su calendar card |
 | **Nutrition** | `nutrition/module` + memory | `/api/nutrition/module` | Pathway vs twin in evoluzione |
+| **BioEnergetics** | Memory + timeline giorno (planned/executed, diary, stream device/lab) con provenance misurato/stimato | `/api/bioenergetics/day` | Kernel v0 qualitativo; estensione intraday/real-time in roadmap |
 | **Health** | panels timeline / latest | `/api/health/*` | Biomarker → twin modulante |
 | **Physiology** | Strip dashboard: `fetchCanonicalPhysiologyProfile`; history/snapshot | `/api/physiology/profile`, `/api/physiology/history`, `POST /api/physiology/snapshot` | `profile-latest` deprecato (solo compat) |
 | **Profile** | `GET /api/profile` + memory | `profile` | Coerenza lab vs stima metabolic |

@@ -38,6 +38,16 @@ export function getGenerativeFocusConfig(module: ProductModuleId): GenerativeFoc
         defaultValue: "day",
         primaryCtaLabel: "Calcola",
       };
+    case "bioenergetics":
+      return {
+        options: [
+          { value: "day_report", label: "Report giornata" },
+          { value: "intra_day", label: "Intra-day" },
+          { value: "pathways", label: "Pathway" },
+        ],
+        defaultValue: "day_report",
+        primaryCtaLabel: "Genera report",
+      };
     case "physiology":
       return {
         options: [

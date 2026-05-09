@@ -17,6 +17,7 @@ const GENERATIVE_CROSS: Partial<Record<ProductModuleId, { href: string; label: s
     { href: "/dashboard", label: "Dashboard", className: "border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15" },
   ],
   nutrition: [
+    { href: "/bioenergetics", label: "BioEnergetics", className: "border-lime-500/35 bg-lime-500/10 hover:bg-lime-500/15" },
     { href: "/physiology/bioenergetics", label: "Bioenergetis", className: "border-emerald-500/40 bg-emerald-500/12 hover:bg-emerald-500/18" },
     { href: "/training", label: "Training", className: "border-orange-500/35 bg-orange-500/10 hover:bg-orange-500/15" },
     { href: "/physiology", label: "Physiology", className: "border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15" },
@@ -24,6 +25,7 @@ const GENERATIVE_CROSS: Partial<Record<ProductModuleId, { href: string; label: s
     { href: "/dashboard", label: "Dashboard", className: "border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15" },
   ],
   physiology: [
+    { href: "/bioenergetics", label: "BioEnergetics", className: "border-lime-500/35 bg-lime-500/10 hover:bg-lime-500/15" },
     { href: "/physiology/bioenergetics", label: "Bioenergetis", className: "border-emerald-500/40 bg-emerald-500/12 hover:bg-emerald-500/18" },
     { href: "/training/builder", label: "Builder", className: "border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/15" },
     { href: "/nutrition", label: "Nutrition", className: "border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15" },
@@ -31,10 +33,17 @@ const GENERATIVE_CROSS: Partial<Record<ProductModuleId, { href: string; label: s
     { href: "/profile", label: "Profile", className: "border-fuchsia-500/30 bg-fuchsia-500/10 hover:bg-fuchsia-500/15" },
   ],
   health: [
+    { href: "/bioenergetics", label: "BioEnergetics", className: "border-lime-500/35 bg-lime-500/10 hover:bg-lime-500/15" },
     { href: "/nutrition", label: "Nutrition", className: "border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15" },
     { href: "/physiology", label: "Physiology", className: "border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15" },
     { href: "/training/calendar", label: "Calendar", className: "border-sky-500/35 bg-sky-500/10 hover:bg-sky-500/15" },
     { href: "/profile", label: "Profile", className: "border-fuchsia-500/30 bg-fuchsia-500/10 hover:bg-fuchsia-500/15" },
+  ],
+  bioenergetics: [
+    { href: "/nutrition", label: "Nutrition", className: "border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15" },
+    { href: "/training/calendar", label: "Calendar", className: "border-sky-500/35 bg-sky-500/10 hover:bg-sky-500/15" },
+    { href: "/physiology", label: "Physiology", className: "border-emerald-500/35 bg-emerald-500/10 hover:bg-emerald-500/15" },
+    { href: "/biomechanics", label: "Biomechanics", className: "border-teal-500/35 bg-teal-500/10 hover:bg-teal-500/15" },
   ],
   biomechanics: [
     { href: "/training", label: "Training", className: "border-orange-500/35 bg-orange-500/10 hover:bg-orange-500/15" },
