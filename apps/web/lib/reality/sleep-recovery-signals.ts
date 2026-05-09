@@ -1,4 +1,5 @@
 import { summarizeSignalPresence } from "@/lib/data-sufficiency/coverage";
+import { parseGarminWellnessLogicalDay } from "@/lib/integrations/garmin-wellness-day-parse";
 
 type SleepRecoverySignal = {
   sleepScore?: number | null;
@@ -176,8 +177,10 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
     ]);
     merged.sourceDate ??= pickString(record, [
       "calendarDate",
+      "CalendarDate",
       "calendar_date",
       "date",
+      "Date",
       "day",
       "summary_date",
       "sleep_date",
@@ -185,6 +188,7 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "timestamp",
       "source_date",
     ]);
+    merged.sourceDate ??= parseGarminWellnessLogicalDay(record);
   }
 
   if (merged.readinessScore == null && merged.recoveryScore != null) {

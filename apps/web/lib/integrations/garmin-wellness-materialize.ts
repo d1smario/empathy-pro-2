@@ -1,6 +1,7 @@
 import "server-only";
 
 import { isGarminActivitySummaryStreamKey } from "@/lib/integrations/garmin-health-api-notification-schema";
+import { parseGarminWellnessLogicalDay } from "@/lib/integrations/garmin-wellness-day-parse";
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import {
   buildSleepRecoveryCanonicalPreview,
@@ -40,18 +41,7 @@ function canonWellnessKey(k: string): string | null {
 }
 
 export function garminWellnessCalendarDay(rec: Record<string, unknown>): string | null {
-  const cal = rec.calendarDate ?? rec.calendar_date ?? rec.date;
-  if (typeof cal === "string" && /^\d{4}-\d{2}-\d{2}/.test(cal.trim())) return cal.trim().slice(0, 10);
-  const sts = rec.startTimeInSeconds;
-  if (typeof sts === "number" && Number.isFinite(sts)) {
-    return new Date(Math.trunc(sts) * 1000).toISOString().slice(0, 10);
-  }
-  const gmt = rec.startTimeGMT ?? rec.startTimeGmt;
-  if (typeof gmt === "string" && gmt.length >= 8) {
-    const d = new Date(gmt);
-    if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  }
-  return null;
+  return parseGarminWellnessLogicalDay(rec);
 }
 
 function wellnessDomain(streamKey: string): "sleep" | "recovery" | "health" {

@@ -41,3 +41,33 @@ test("WHOOP recovery: giorno chiave = created_at; il giorno prima del rilevament
   assert.equal(wellnessExportMatchesPanelDate(row as Record<string, unknown>, "2026-05-06"), true);
   assert.equal(wellnessExportMatchesPanelDate(row as Record<string, unknown>, "2026-05-07"), true);
 });
+
+test("Garmin dailies: CalendarDate PascalCase → giorno wellness (non si usa solo created_at della sync)", () => {
+  const row = {
+    provider: "garmin",
+    created_at: "2026-05-08T14:00:00.000Z",
+    payload: {
+      sourcePayload: {
+        garmin_wellness_stream: "dailies",
+        CalendarDate: "2026-05-07",
+        steps: 5123,
+      },
+    },
+  };
+  assert.equal(wellnessDayKeyFromDeviceExportRow(row as Record<string, unknown>), "2026-05-07");
+  assert.equal(wellnessExportMatchesPanelDate(row as Record<string, unknown>, "2026-05-07"), true);
+  assert.equal(wellnessExportMatchesPanelDate(row as Record<string, unknown>, "2026-05-08"), false);
+});
+
+test("Garmin dailies: calendarDate numerico YYYYMMDD", () => {
+  const row = {
+    provider: "garmin",
+    payload: {
+      sourcePayload: {
+        garmin_wellness_stream: "dailies",
+        calendarDate: 20260507,
+      },
+    },
+  };
+  assert.equal(wellnessDayKeyFromDeviceExportRow(row as Record<string, unknown>), "2026-05-07");
+});

@@ -2,6 +2,7 @@
  * Giorno ISO logico per `device_sync_exports` — solo estrazioni pure (no Supabase / server-only),
  * così i test Node non importano `daily-wellness-panel` → `recovery-summary` → `supabase-server`.
  */
+import { parseGarminWellnessLogicalDay } from "@/lib/integrations/garmin-wellness-day-parse";
 import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -58,6 +59,14 @@ export function mergedPayloadFromExportRow(row: Record<string, unknown>): Record
 export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>): string | null {
   const merged = mergedPayloadFromExportRow(row);
 
+  const provider = typeof row.provider === "string" ? row.provider : "";
+  const payloadRoot = asRecord(row.payload);
+  const srcPayload = asRecord(payloadRoot?.sourcePayload);
+  if ((provider === "garmin" || typeof srcPayload?.garmin_wellness_stream === "string") && srcPayload) {
+    const gDay = parseGarminWellnessLogicalDay(srcPayload);
+    if (gDay) return gDay;
+  }
+
   if (merged) {
     const whoopSleep = asRecord(merged.whoop_sleep);
     if (whoopSleep) {
@@ -91,9 +100,11 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
   const keys = [
     "calendar_day",
     "calendarDate",
+    "CalendarDate",
     "calendar_date",
     "day",
     "date",
+    "Date",
     "summary_date",
     "sleep_date",
     "activity_date",
@@ -105,10 +116,12 @@ export function wellnessDayKeyFromDeviceExportRow(row: Record<string, unknown>):
   ];
   const epochKeys = [
     "startTimeInSeconds",
+    "StartTimeInSeconds",
     "start_time_in_seconds",
     "summaryTimestampInSeconds",
     "summary_timestamp_in_seconds",
     "startTimestampGMT",
+    "StartTimestampGMT",
   ];
   for (const rec of expandDevicePayloadMetricRecords(merged)) {
     for (const key of keys) {
