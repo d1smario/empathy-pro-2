@@ -9,6 +9,14 @@ import { supportsRealityProviderFlow } from "@/lib/reality/provider-registry";
 import { normalizeRealityProvider } from "@/lib/reality/provider-utils";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
+export type PersistRealityDeviceExportOptions = {
+  /**
+   * When set with a non-empty `externalRef`, uses upsert on `(provider, external_event_id)`
+   * so OAuth reconnect (same Garmin user id, etc.) does not violate `uq_device_sync_exports_provider_event`.
+   */
+  upsertOnProviderExternalId?: boolean;
+};
+
 type PersistRealityDeviceExportInput = {
   athleteId: string;
   provider?: string | null;
@@ -18,6 +26,10 @@ type PersistRealityDeviceExportInput = {
   payload?: Record<string, unknown> | null;
   canonicalPreview?: Record<string, unknown> | null;
   rawRefs?: Record<string, unknown> | null;
+  /** ISO calendar day for envelope `sessionDate` (wellness giornaliero). */
+  sessionDate?: string | null;
+  /** ISO timestamp written as `device_sync_exports.created_at` (finestre UI leggono per giorno logico). */
+  createdAt?: string | null;
   status?: "created" | "sent" | "failed";
   importedAt?: string;
   format?: string | null;
@@ -140,7 +152,10 @@ export function assertRealityProviderFlow(input: {
   }
 }
 
-export async function persistRealityDeviceExport(input: PersistRealityDeviceExportInput) {
+export async function persistRealityDeviceExport(
+  input: PersistRealityDeviceExportInput,
+  options?: PersistRealityDeviceExportOptions,
+) {
   const canonicalProvider = normalizeRealityProvider(input.provider);
   assertRealityProviderFlow({
     provider: canonicalProvider,
@@ -148,15 +163,19 @@ export async function persistRealityDeviceExport(input: PersistRealityDeviceExpo
     sourceKind: input.sourceKind,
   });
 
+  const externalRefTrimmed =
+    typeof input.externalRef === "string" && input.externalRef.trim().length > 0 ? input.externalRef.trim() : null;
+
   const ingestion = buildRealityIngestionEnvelope({
     athleteId: input.athleteId,
     domain: input.domain,
     sourceKind: input.sourceKind,
     provider: canonicalProvider,
+    sessionDate: input.sessionDate ?? null,
     importedAt: input.importedAt,
     format: input.format ?? null,
     device: input.device ?? null,
-    externalId: input.externalRef ?? null,
+    externalId: externalRefTrimmed,
     parserEngine: input.parserEngine ?? null,
     parserVersion: input.parserVersion ?? null,
     qualityStatus: input.qualityStatus ?? null,
@@ -170,13 +189,18 @@ export async function persistRealityDeviceExport(input: PersistRealityDeviceExpo
   });
 
   const supabase = createServerSupabaseClient();
+  const storedProvider = toStoredDeviceSyncProvider(canonicalProvider);
+  const createdAt =
+    typeof input.createdAt === "string" && input.createdAt.trim().length > 0 ? input.createdAt.trim() : null;
+
   const insertRow = {
     athlete_id: input.athleteId,
-    provider: toStoredDeviceSyncProvider(canonicalProvider),
-    external_ref: input.externalRef ?? null,
+    provider: storedProvider,
+    external_ref: externalRefTrimmed,
     status: input.status ?? "created",
     sync_kind: "pull" as const,
-    external_event_id: input.externalRef ?? null,
+    external_event_id: externalRefTrimmed,
+    ...(createdAt ? { created_at: createdAt } : {}),
     payload: {
       adapterKey: `${canonicalProvider}:${input.domain}:${input.sourceKind}`,
       realityIngestion: ingestion,
@@ -184,11 +208,17 @@ export async function persistRealityDeviceExport(input: PersistRealityDeviceExpo
     },
   };
 
-  const { data, error } = await supabase
-    .from("device_sync_exports")
-    .insert(insertRow)
-    .select("id, athlete_id, provider, status, external_ref, created_at, updated_at, payload")
-    .single();
+  const useUpsert = Boolean(options?.upsertOnProviderExternalId && externalRefTrimmed);
+
+  const selectCols = "id, athlete_id, provider, status, external_ref, created_at, updated_at, payload";
+
+  const { data, error } = useUpsert
+    ? await supabase
+        .from("device_sync_exports")
+        .upsert(insertRow, { onConflict: "provider,external_event_id" })
+        .select(selectCols)
+        .single()
+    : await supabase.from("device_sync_exports").insert(insertRow).select(selectCols).single();
 
   if (error) {
     throw new Error(error.message);
@@ -211,43 +241,49 @@ export async function persistRealityProviderCallback(input: PersistRealityProvid
         ? "Provider callback ricevuto ma con segnali di autorizzazione parziali."
         : "Provider callback con errore o autorizzazione incompleta.";
 
-  return persistRealityDeviceExport({
-    athleteId: input.athleteId,
-    provider: input.provider ?? "other",
-    domain: input.domain ?? "device",
-    sourceKind: input.sourceKind ?? "api_sync",
-    externalRef: input.externalRef ?? null,
-    payload: {
-      callback: input.callbackPayload,
-      callbackState: input.callbackState ?? null,
+  const externalRef =
+    typeof input.externalRef === "string" && input.externalRef.trim().length > 0 ? input.externalRef.trim() : null;
+
+  return persistRealityDeviceExport(
+    {
+      athleteId: input.athleteId,
+      provider: input.provider ?? "other",
+      domain: input.domain ?? "device",
+      sourceKind: input.sourceKind ?? "api_sync",
+      externalRef,
+      payload: {
+        callback: input.callbackPayload,
+        callbackState: input.callbackState ?? null,
+      },
+      canonicalPreview: {
+        callback_received: true,
+        has_code: Boolean(input.hasCode),
+        has_oauth_verifier: Boolean(input.hasOauthVerifier),
+        has_error: Boolean(input.hasError),
+      },
+      rawRefs: {
+        query_keys: input.queryKeys ?? [],
+      },
+      status: input.hasError ? "failed" : "created",
+      qualityStatus,
+      qualityNote,
+      channelCoverage: {
+        callback_state: input.callbackState ? 100 : 0,
+        authorization_code: input.hasCode ? 100 : 0,
+        oauth_verifier: input.hasOauthVerifier ? 100 : 0,
+        provider_error: input.hasError ? 100 : 0,
+      },
+      missingChannels: [
+        !input.callbackState ? "callback_state" : null,
+        !input.hasCode && !input.hasOauthVerifier ? "authorization_proof" : null,
+      ].filter((value): value is string => Boolean(value)),
+      recommendedInputs:
+        input.hasError || (!input.hasCode && !input.hasOauthVerifier)
+          ? ["provider_authorization_code_or_verifier"]
+          : [],
     },
-    canonicalPreview: {
-      callback_received: true,
-      has_code: Boolean(input.hasCode),
-      has_oauth_verifier: Boolean(input.hasOauthVerifier),
-      has_error: Boolean(input.hasError),
-    },
-    rawRefs: {
-      query_keys: input.queryKeys ?? [],
-    },
-    status: input.hasError ? "failed" : "created",
-    qualityStatus,
-    qualityNote,
-    channelCoverage: {
-      callback_state: input.callbackState ? 100 : 0,
-      authorization_code: input.hasCode ? 100 : 0,
-      oauth_verifier: input.hasOauthVerifier ? 100 : 0,
-      provider_error: input.hasError ? 100 : 0,
-    },
-    missingChannels: [
-      !input.callbackState ? "callback_state" : null,
-      !input.hasCode && !input.hasOauthVerifier ? "authorization_proof" : null,
-    ].filter((value): value is string => Boolean(value)),
-    recommendedInputs:
-      input.hasError || (!input.hasCode && !input.hasOauthVerifier)
-        ? ["provider_authorization_code_or_verifier"]
-        : [],
-  });
+    { upsertOnProviderExternalId: Boolean(externalRef) },
+  );
 }
 
 export function parseRealityCallbackState(rawState?: string | null): RealityCallbackState {

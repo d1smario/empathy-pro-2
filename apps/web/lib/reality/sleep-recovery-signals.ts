@@ -66,6 +66,11 @@ function flattenVendorMetricRecords(record: Record<string, unknown>): Record<str
   if (stageTop) {
     list.push(stageTop, { ...record, ...stageTop });
   }
+  /** Garmin Wellness: HRV summary blob */
+  const hrvSummary = asRecord(record.hrvSummary);
+  if (hrvSummary) {
+    list.push(hrvSummary, { ...record, ...hrvSummary });
+  }
   return list;
 }
 
@@ -93,7 +98,13 @@ function normalizeSleepDurationHours(record: Record<string, unknown> | null): nu
   ]);
   if (minutes != null) return Number((minutes / 60).toFixed(2));
 
-  const seconds = pickNumber(record, ["total_sleep_duration", "sleep_duration_seconds", "total_sleep_seconds"]);
+  const seconds = pickNumber(record, [
+    "total_sleep_duration",
+    "sleep_duration_seconds",
+    "total_sleep_seconds",
+    "sleepTimeInSeconds",
+    "sleep_time_seconds",
+  ]);
   if (seconds != null) return Number((seconds / 3600).toFixed(2));
 
   const milli = pickNumber(record, [
@@ -137,6 +148,8 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "hrv",
       "avg_hrv_ms",
       "average_hrv",
+      "lastNightAvg",
+      "last_night_avg",
       "rmssd",
       "rmssd_ms",
     ]);
@@ -144,13 +157,26 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "resting_heart_rate",
       "resting_hr_bpm",
       "resting_hr",
+      "restingHeartRateInBeatsPerMinute",
+      "restingHeartRate",
       "rhr",
       "lowest_hr_bpm",
       "lowest_heart_rate",
     ]);
     merged.sleepDurationHours ??= normalizeSleepDurationHours(record);
-    merged.strainScore ??= pickNumber(record, ["strain_score", "strainScore", "day_strain", "recovery_strain", "strain"]);
+    merged.strainScore ??= pickNumber(record, [
+      "strain_score",
+      "strainScore",
+      "day_strain",
+      "recovery_strain",
+      "strain",
+      "averageStressLevel",
+      "stress_score",
+      "stressScore",
+    ]);
     merged.sourceDate ??= pickString(record, [
+      "calendarDate",
+      "calendar_date",
       "date",
       "day",
       "summary_date",

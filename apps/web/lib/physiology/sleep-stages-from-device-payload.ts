@@ -79,6 +79,10 @@ export function extractSleepStagesFromDevicePayload(payload: Record<string, unkn
         const min = pickNumber(rec, ["deep_sleep_duration_min", "deep_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
       })() ??
+      (() => {
+        const sec = pickNumber(rec, ["deepSleepDurationInSeconds"]);
+        return sec != null && sec > 0 ? Number((sec / 3600).toFixed(2)) : null;
+      })() ??
       hoursFromSleepMilli(rec, [
         "slow_wave_sleep_time_milli",
         "total_slow_wave_sleep_time_milli",
@@ -90,6 +94,10 @@ export function extractSleepStagesFromDevicePayload(payload: Record<string, unkn
         const min = pickNumber(rec, ["light_sleep_duration_min", "light_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
       })() ??
+      (() => {
+        const sec = pickNumber(rec, ["lightSleepDurationInSeconds"]);
+        return sec != null && sec > 0 ? Number((sec / 3600).toFixed(2)) : null;
+      })() ??
       hoursFromSleepMilli(rec, ["light_sleep_time_milli", "total_light_sleep_time_milli"]);
     const rem =
       pickNumber(rec, ["rem_duration_hours", "rem_sleep_hours", "rem_sleep_duration_hours"]) ??
@@ -97,12 +105,20 @@ export function extractSleepStagesFromDevicePayload(payload: Record<string, unkn
         const min = pickNumber(rec, ["rem_duration_min", "rem_sleep_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
       })() ??
+      (() => {
+        const sec = pickNumber(rec, ["remSleepInSeconds", "rem_sleep_duration_seconds"]);
+        return sec != null && sec > 0 ? Number((sec / 3600).toFixed(2)) : null;
+      })() ??
       hoursFromSleepMilli(rec, ["rem_sleep_time_milli", "total_rem_sleep_time_milli"]);
     const awake =
       pickNumber(rec, ["awake_duration_hours", "awake_time_hours"]) ??
       (() => {
         const min = pickNumber(rec, ["awake_duration_min", "awake_minutes"]);
         return min != null ? Number((min / 60).toFixed(2)) : null;
+      })() ??
+      (() => {
+        const sec = pickNumber(rec, ["awakeDurationInSeconds"]);
+        return sec != null && sec > 0 ? Number((sec / 3600).toFixed(2)) : null;
       })() ??
       hoursFromSleepMilli(rec, ["wake_duration_milli", "awake_time_milli", "total_awake_time_milli"]);
     const perfPct = pickNumber(rec, ["sleep_performance_percentage"]);

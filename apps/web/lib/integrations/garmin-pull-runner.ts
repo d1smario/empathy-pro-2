@@ -11,6 +11,10 @@ import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
+import {
+  materializeGarminWellnessFromPullResponse,
+  shouldMaterializeGarminWellness,
+} from "./garmin-wellness-materialize";
 
 type PullJobRow = {
   id: string;
@@ -45,6 +49,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   errors: string[];
   activitiesUpserted: number;
   activityBlobsStored: number;
+  wellnessExportsUpserted: number;
 }> {
   if (!readOptionalServiceRoleKey()) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per la coda pull Garmin.");
@@ -65,6 +70,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   let failed = 0;
   let activitiesUpserted = 0;
   let activityBlobsStored = 0;
+  let wellnessExportsUpserted = 0;
   const errors: string[] = [];
 
   for (const job of list) {
@@ -165,6 +171,24 @@ export async function runGarminPullJobs(limit: number): Promise<{
         } catch {
           /* materializzazione best-effort */
         }
+        if (
+          shouldMaterializeGarminWellness({
+            streamKey: job.stream_key,
+            endpointKind: job.endpoint_kind,
+            responseBody: body,
+          })
+        ) {
+          try {
+            const { persisted } = await materializeGarminWellnessFromPullResponse({
+              athleteId: job.athlete_id,
+              streamKey: job.stream_key,
+              responseBody: body,
+            });
+            wellnessExportsUpserted += persisted;
+          } catch {
+            /* wellness export best-effort */
+          }
+        }
       }
     } catch (err) {
       failed += 1;
@@ -181,5 +205,13 @@ export async function runGarminPullJobs(limit: number): Promise<{
     }
   }
 
-  return { processed: list.length, completed, failed, errors, activitiesUpserted, activityBlobsStored };
+  return {
+    processed: list.length,
+    completed,
+    failed,
+    errors,
+    activitiesUpserted,
+    activityBlobsStored,
+    wellnessExportsUpserted,
+  };
 }
