@@ -117,19 +117,35 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
   };
   if (!payload) return out;
   for (const rec of expandDevicePayloadMetricRecords(payload)) {
-    out.steps ??= pickNumber(rec, ["steps", "step_count", "total_steps", "steps_count"]);
+    out.steps ??= pickNumber(rec, ["steps", "step_count", "total_steps", "steps_count", "Steps"]);
     out.activeCaloriesKcal ??= pickNumber(rec, [
       "active_energy_kcal",
       "active_calories",
       "active_kilocalories",
       "activeKilocalories",
+      "ActiveKilocalories",
       "kilojoules",
     ]);
     if (out.activeCaloriesKcal == null) {
       const kj = pickNumber(rec, ["active_kilojoules", "active_energy_kj"]);
       if (kj != null) out.activeCaloriesKcal = Number((kj / 4.184).toFixed(0));
     }
-    out.totalCaloriesKcal ??= pickNumber(rec, ["total_calories", "calories_total", "bmr_calories", "calories"]);
+    out.totalCaloriesKcal ??= pickNumber(rec, [
+      "total_calories",
+      "calories_total",
+      "bmr_calories",
+      "calories",
+      /** Garmin Daily: talvolta solo attive + BMR separati */
+      "total_kilocalories",
+      "TotalKilocalories",
+    ]);
+    if (out.totalCaloriesKcal == null) {
+      const activeGarmin = pickNumber(rec, ["activeKilocalories", "ActiveKilocalories"]);
+      const bmrGarmin = pickNumber(rec, ["bmrKilocalories", "BmrKilocalories"]);
+      if (activeGarmin != null && bmrGarmin != null) {
+        out.totalCaloriesKcal = Math.round(activeGarmin + bmrGarmin);
+      }
+    }
     out.respiratoryRateRpm ??= pickNumber(rec, [
       "respiratory_rate",
       "respiratory_rate_rpm",

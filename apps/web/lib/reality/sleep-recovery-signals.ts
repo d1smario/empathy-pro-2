@@ -105,6 +105,9 @@ function normalizeSleepDurationHours(record: Record<string, unknown> | null): nu
     "total_sleep_seconds",
     "sleepTimeInSeconds",
     "sleep_time_seconds",
+    /** Garmin Sleep summary: durata monitoraggio sonno (sec). */
+    "durationInSeconds",
+    "DurationInSeconds",
   ]);
   if (seconds != null) return Number((seconds / 3600).toFixed(2));
 
@@ -130,6 +133,7 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "sleep_quality_score",
       "sleepQualityScore",
     ]);
+    merged.sleepScore ??= pickNumber(asRecord(record.overallSleepScore ?? record.OverallSleepScore), ["value", "Value"]);
     merged.readinessScore ??= pickNumber(record, [
       "readiness_score",
       "readinessScore",

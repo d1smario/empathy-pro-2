@@ -58,3 +58,27 @@ test("device_sync_exports row: metriche da sourcePayload whoop_*", () => {
   assert.equal(s.recoveryScore, 71);
   assert.equal(s.hrvMs, 55);
 });
+
+test("Garmin sleeps: overallSleepScore.value → sleepScore; durationInSeconds → ore", () => {
+  const payload = {
+    summaryId: "x",
+    calendarDate: "2016-01-10",
+    durationInSeconds: 3600 * 7 + 1800,
+    overallSleepScore: { value: 87, qualifierKey: "GOOD" },
+    restingHeartRateInBeatsPerMinute: 58,
+  };
+  const s = extractSleepRecoverySignal(payload);
+  assert.equal(s.sleepScore, 87);
+  assert.ok(s.sleepDurationHours != null && Math.abs(s.sleepDurationHours - 7.5) < 0.01);
+  assert.equal(s.restingHrBpm, 58);
+});
+
+test("Garmin HRV summary: lastNightAvg", () => {
+  const payload = {
+    calendarDate: "2022-05-31",
+    lastNightAvg: 44,
+    lastNight5MinHigh: 72,
+  };
+  const s = extractSleepRecoverySignal(payload);
+  assert.equal(s.hrvMs, 44);
+});
