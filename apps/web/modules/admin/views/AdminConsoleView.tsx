@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AdminGrantsSection } from "@/components/admin/AdminGrantsSection";
 import type { AdminCoachRow } from "@/lib/admin/coach-list-types";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 
@@ -227,10 +228,13 @@ export default function AdminConsoleView() {
         </div>
       </section>
 
+      <AdminGrantsSection />
+
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-gray-400">
         <h2 className="text-base font-semibold text-white">In arrivo</h2>
         <p className="mt-2 leading-relaxed">
-          Da qui si estenderà la gestione di fatturazione Stripe, trial, upgrade/downgrade e audit azioni admin.
+          Audit dettagliato azioni admin, dashboard utilizzo, gestione piani Stripe (price/coupon) e self-serve
+          downgrade. L’enforcement server-side dell’accesso (paywall) viene attivato in fase separata.
         </p>
       </section>
     </div>
