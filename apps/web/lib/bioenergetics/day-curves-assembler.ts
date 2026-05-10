@@ -1,4 +1,5 @@
 import type { ExecutedWorkout } from "@empathy/contracts";
+import { ATHLETE_TIME_SERIES_CHANNEL_V1 } from "@empathy/contracts";
 import { averagePowerWattsFromKjAndDuration, kilojoulesFromKcal } from "@empathy/domain-bioenergetics";
 import type {
   BioenergeticChannelProvenance,
@@ -16,22 +17,54 @@ function sortPoints(pts: BioenergeticSeriesPoint[]): BioenergeticSeriesPoint[] {
   return [...pts].sort((a, b) => a.ts.localeCompare(b.ts));
 }
 
+/** Priorità merge su stesso `ts`: tabella canonica > lab > export device. */
+const GLU_LAC_SOURCE_PRIORITY: Record<string, number> = {
+  athlete_time_series_samples: 100,
+  lab_panel: 50,
+};
+
+function deviceExportSourcePriority(provider: string): number {
+  return GLU_LAC_SOURCE_PRIORITY[provider] ?? 10;
+}
+
+function scoredPoint(pt: BioenergeticSeriesPoint, priority: number): { pt: BioenergeticSeriesPoint; pr: number } {
+  return { pt, pr: priority };
+}
+
+function mergeMeasuredChannel(
+  scored: Array<{ pt: BioenergeticSeriesPoint; pr: number }>,
+): BioenergeticSeriesPoint[] {
+  const byTs = new Map<string, { pt: BioenergeticSeriesPoint; pr: number }>();
+  for (const s of scored) {
+    const prev = byTs.get(s.pt.ts);
+    if (!prev || s.pr > prev.pr) byTs.set(s.pt.ts, s);
+  }
+  return sortPoints([...byTs.values()].map((x) => x.pt));
+}
+
 /**
- * Estrae punti glucosio/lattato misurati da export giorno + panel lab (stessa logica della route storica).
+ * Estrae punti glucosio/lattato misurati da `athlete_time_series_samples` (055), export giorno e panel lab.
  */
 export function extractMeasuredGluLacFromSlice(slice: BioenergeticDayMemorySlice): {
   glucoseMeasured: BioenergeticSeriesPoint[];
   lactateMeasured: BioenergeticSeriesPoint[];
 } {
-  const glucoseMeasured: BioenergeticSeriesPoint[] = [];
-  const lactateMeasured: BioenergeticSeriesPoint[] = [];
+  const glucoseScored: Array<{ pt: BioenergeticSeriesPoint; pr: number }> = [];
+  const lactateScored: Array<{ pt: BioenergeticSeriesPoint; pr: number }> = [];
 
   for (const row of slice.deviceExportRows) {
     const payload = asRecord(row.payload) ?? {};
     const createdAt = typeof row.created_at === "string" ? row.created_at : null;
     const provider = typeof row.provider === "string" ? row.provider : "device";
-    if (provider === "cgm") glucoseMeasured.push(...glucosePointsFromPayload(payload, createdAt));
-    lactateMeasured.push(...lactatePointsFromPayload(payload, createdAt));
+    const pr = deviceExportSourcePriority(provider);
+    if (provider === "cgm") {
+      for (const pt of glucosePointsFromPayload(payload, createdAt)) {
+        glucoseScored.push(scoredPoint(pt, pr));
+      }
+    }
+    for (const pt of lactatePointsFromPayload(payload, createdAt)) {
+      lactateScored.push(scoredPoint(pt, pr));
+    }
   }
 
   for (const row of slice.biomarkerRows) {
@@ -44,13 +77,31 @@ export function extractMeasuredGluLacFromSlice(slice: BioenergeticDayMemorySlice
           : `${slice.date}T07:00:00`;
     const glucose = num(values.glucose_mmol_l ?? values.glucose_mmol ?? values.glucose);
     const lactate = num(values.lactate_mmol_l ?? values.lactate_mmoll ?? values.lactate);
-    if (glucose != null) glucoseMeasured.push({ ts: dateTs, value: glucose, source: "lab_panel" });
-    if (lactate != null) lactateMeasured.push({ ts: dateTs, value: lactate, source: "lab_panel" });
+    if (glucose != null) glucoseScored.push(scoredPoint({ ts: dateTs, value: glucose, source: "lab_panel" }, GLU_LAC_SOURCE_PRIORITY.lab_panel));
+    if (lactate != null) lactateScored.push(scoredPoint({ ts: dateTs, value: lactate, source: "lab_panel" }, GLU_LAC_SOURCE_PRIORITY.lab_panel));
+  }
+
+  const tsRows = slice.timeSeriesSamplesRows;
+  if (tsRows?.length) {
+    const prTs = GLU_LAC_SOURCE_PRIORITY.athlete_time_series_samples;
+    for (const row of tsRows) {
+      const channel = typeof row.channel === "string" ? row.channel : "";
+      const observedAt = typeof row.observed_at === "string" ? row.observed_at.trim() : "";
+      if (!observedAt) continue;
+      const value = num(row.value);
+      if (value == null) continue;
+      const srcRaw = typeof row.source === "string" && row.source.trim() ? row.source.trim() : "athlete_time_series_samples";
+      if (channel === ATHLETE_TIME_SERIES_CHANNEL_V1.GLUCOSE_MMOL_L) {
+        glucoseScored.push(scoredPoint({ ts: observedAt, value, source: srcRaw }, prTs));
+      } else if (channel === ATHLETE_TIME_SERIES_CHANNEL_V1.LACTATE_MMOL_L) {
+        lactateScored.push(scoredPoint({ ts: observedAt, value, source: srcRaw }, prTs));
+      }
+    }
   }
 
   return {
-    glucoseMeasured: sortPoints(glucoseMeasured),
-    lactateMeasured: sortPoints(lactateMeasured),
+    glucoseMeasured: mergeMeasuredChannel(glucoseScored),
+    lactateMeasured: mergeMeasuredChannel(lactateScored),
   };
 }
 
@@ -223,7 +274,7 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(g),
       provenance: input.provenance.glucose,
-      sourceHint: "device_sync_exports|biomarker_panels|sim_diurnal_v1",
+      sourceHint: "athlete_time_series_samples|device_sync_exports|biomarker_panels|sim_diurnal_v1",
     });
   }
   const l = input.channels.lactate;
@@ -234,7 +285,7 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(l),
       provenance: input.provenance.lactate,
-      sourceHint: "device_sync_exports|biomarker_panels|sim_diurnal_v1",
+      sourceHint: "athlete_time_series_samples|device_sync_exports|biomarker_panels|sim_diurnal_v1",
     });
   }
 

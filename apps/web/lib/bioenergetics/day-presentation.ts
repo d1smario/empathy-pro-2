@@ -23,12 +23,30 @@ import {
   countTimelineMealsWithMacroSignalsV1,
   hourlyFlat24,
   hourFromIsoTs,
-  mealInhibitoryHours,
+  mealGlycemicHourWeights24,
+  scaleSimulatedLabNumericForSkeletonPartialV1,
   simulatedLabNumeric,
+  type MetabolicNodeCoherenceV1,
 } from "@empathy/domain-bioenergetics";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
+}
+
+/** 0–1 da pasti con CHO/kcal elevati → modulazione diurna cortisolo/ACTH (`SIM_CORTISOL_MEAL_MOD_V1`, roadmap 2.2). */
+function postprandialMealLoad01ForCortisolMod(timeline: BioenergeticTimelineEvent[]): number {
+  let max = 0;
+  for (const e of timeline) {
+    if (e.type !== "meal") continue;
+    const payload = e.payload as { carbsG?: unknown; kcal?: unknown } | undefined;
+    const c = typeof payload?.carbsG === "number" ? payload.carbsG : Number(payload?.carbsG);
+    const cal = typeof payload?.kcal === "number" ? payload.kcal : Number(payload?.kcal);
+    const cScore = Number.isFinite(c) && c > 0 ? Math.min(1, c / 115) : 0;
+    const kScore = Number.isFinite(cal) && cal > 0 ? Math.min(1, cal / 950) : 0;
+    const combined = 0.55 * cScore + 0.45 * kScore;
+    if (combined > max) max = combined;
+  }
+  return Math.round(100 * Math.min(1, max)) / 100;
 }
 
 function isHighFrequencyStream(
@@ -56,6 +74,37 @@ function mergeLabSim(
   const s = simulatedLabNumeric(tileId, k);
   if (s != null) return { numeric: s, provenance: "estimated" };
   return { numeric: null, provenance: "absent" };
+}
+
+function skeletonObservability(
+  nodes: readonly MetabolicNodeCoherenceV1[] | null | undefined,
+  nodeId: string,
+): MetabolicNodeCoherenceV1["observability"] | null {
+  if (!nodes?.length) return null;
+  const n = nodes.find((x) => x.nodeId === nodeId);
+  return n?.observability ?? null;
+}
+
+/**
+ * Lab vince sempre; senza lab: `blocked` → tile `absent`; `partial` → sim attenuata (`SIM_LAB_TILE_PARTIAL_SCALE_V1`);
+ * `high` o nodo assente → sim piena come `mergeLabSim`.
+ */
+function mergeLabSimRespectingSkeleton(
+  labVal: number | null,
+  tileIdForSim: string,
+  skeletonNodeId: string,
+  k: BioenergeticDayKernelOutput,
+  interactionNodes: readonly MetabolicNodeCoherenceV1[] | null | undefined,
+): { numeric: number | null; provenance: BioenergeticChannelProvenance } {
+  if (labVal != null) return { numeric: labVal, provenance: "measured" };
+  const obs = skeletonObservability(interactionNodes, skeletonNodeId);
+  if (obs === "blocked") return { numeric: null, provenance: "absent" };
+  const sim = simulatedLabNumeric(tileIdForSim, k);
+  if (sim == null) return { numeric: null, provenance: "absent" };
+  if (obs === "partial") {
+    return { numeric: scaleSimulatedLabNumericForSkeletonPartialV1(sim), provenance: "estimated" };
+  }
+  return { numeric: sim, provenance: "estimated" };
 }
 
 function mergeLabValues(rows: Array<Record<string, unknown>>): Record<string, unknown> {
@@ -216,6 +265,8 @@ export function buildBioenergeticDayPresentation(input: {
   channels: { glucose: BioenergeticSeriesPoint[] | null; lactate: BioenergeticSeriesPoint[] | null };
   timeline: BioenergeticTimelineEvent[];
   biomarkerRows: Array<Record<string, unknown>>;
+  /** Da `buildMetabolicEndocrineInteractionReportV1`; se assente resta il comportamento storico (sim su tile). */
+  interactionNodes?: readonly MetabolicNodeCoherenceV1[] | null;
 }): {
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
@@ -223,8 +274,9 @@ export function buildBioenergeticDayPresentation(input: {
 } {
   const lab = mergeLabValues(input.biomarkerRows);
   const k = input.kernel;
+  const skNodes = input.interactionNodes;
   const baseBalance = clamp(k.oxidationDriveScore - k.insulinDemandScore, -55, 55);
-  const mealsHeavy = mealInhibitoryHours(input.timeline);
+  const mealW = mealGlycemicHourWeights24(input.timeline);
   const activityH = activitySupportHours(input.timeline);
   const activityLoad = clamp(k.oxidationDriveScore * 0.6 + k.glucoseHandlingScore * 0.2, 0, 100);
 
@@ -296,7 +348,7 @@ export function buildBioenergeticDayPresentation(input: {
   for (let hour = 0; hour < 24; hour += 1) {
     const circ = 12 * Math.sin(((hour - 6) * Math.PI) / 12);
     let bal = baseBalance + circ;
-    if (mealsHeavy.has(hour)) bal -= 22;
+    if (mealW[hour] > 0.1) bal -= 22 * Math.min(1.15, mealW[hour] * 0.52);
     if (activityH.has(hour)) bal += 18;
     bal = clamp(bal, -100, 100);
     let impact: BioenergeticPathwayImpact;
@@ -315,7 +367,9 @@ export function buildBioenergeticDayPresentation(input: {
     });
   }
 
-  const nomH = buildNominalCortisolActhHourly24(k);
+  const nomH = buildNominalCortisolActhHourly24(k, {
+    postprandialMealLoad01: postprandialMealLoad01ForCortisolMod(input.timeline),
+  });
 
   const insulinProxy = clamp(k.insulinDemandScore, 0, 100);
   const tiles: BioenergeticMetricTile[] = [];
@@ -453,7 +507,7 @@ export function buildBioenergeticDayPresentation(input: {
     category: "hormonal",
   });
 
-  const ghM = mergeLabSim(pickNum(lab, ["gh", "growth_hormone", "hgh"]), "gh", k);
+  const ghM = mergeLabSimRespectingSkeleton(pickNum(lab, ["gh", "growth_hormone", "hgh"]), "gh", "gh_pulse", k, skNodes);
   pushTile({
     id: "gh",
     labelIt: "GH",
@@ -525,7 +579,13 @@ export function buildBioenergeticDayPresentation(input: {
     category: "hormonal",
   });
 
-  const insulinLabM = mergeLabSim(pickNum(lab, ["insulin", "insulin_mui_ml", "insulin_uiu_ml", "fasting_insulin"]), "insulin_lab", k);
+  const insulinLabM = mergeLabSimRespectingSkeleton(
+    pickNum(lab, ["insulin", "insulin_mui_ml", "insulin_uiu_ml", "fasting_insulin"]),
+    "insulin_lab",
+    "insulin_demand",
+    k,
+    skNodes,
+  );
   pushTile({
     id: "insulin_lab",
     labelIt: "Insulina (lab)",
@@ -572,8 +632,8 @@ export function buildBioenergeticDayPresentation(input: {
   });
 
   const gastrinM = mergeLabSim(pickNum(lab, ["gastrin", "gastrin_pg_ml"]), "gastrin", k);
-  const ghrelinM = mergeLabSim(pickNum(lab, ["ghrelin", "ghrelin_pg_ml"]), "ghrelin", k);
-  const leptinM = mergeLabSim(pickNum(lab, ["leptin", "leptin_ng_ml"]), "leptin", k);
+  const ghrelinM = mergeLabSimRespectingSkeleton(pickNum(lab, ["ghrelin", "ghrelin_pg_ml"]), "ghrelin", "ghrelin", k, skNodes);
+  const leptinM = mergeLabSimRespectingSkeleton(pickNum(lab, ["leptin", "leptin_ng_ml"]), "leptin", "leptin_energy_balance", k, skNodes);
   pushTile({
     id: "gastrin",
     labelIt: "Gastrina",

@@ -7,6 +7,7 @@ import type {
 import { buildRealityIngestionEnvelope } from "@/lib/reality/build-ingestion-envelope";
 import { supportsRealityProviderFlow } from "@/lib/reality/provider-registry";
 import { normalizeRealityProvider } from "@/lib/reality/provider-utils";
+import { syncAthleteTimeSeriesSamplesForDeviceExport } from "@/lib/reality/athlete-time-series-from-device-export";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export type PersistRealityDeviceExportOptions = {
@@ -278,6 +279,20 @@ export async function persistRealityDeviceExport(
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  const exportRow = data as Record<string, unknown> | null;
+  const exportId = exportRow && typeof exportRow.id === "string" ? exportRow.id : null;
+  if (exportId && exportRow) {
+    const exportCreatedAt =
+      createdAt ?? (typeof exportRow.created_at === "string" ? exportRow.created_at : null);
+    await syncAthleteTimeSeriesSamplesForDeviceExport(supabase, {
+      athleteId: input.athleteId,
+      deviceSyncExportId: exportId,
+      provider: storedProvider,
+      payload: input.payload ?? null,
+      exportCreatedAt,
+    });
   }
 
   return {

@@ -116,7 +116,36 @@ export type BioenergeticDaySeriesChannel = {
   sourceHint?: string;
 };
 
+/** Scheletro rete metabolico-endocrina (v1): archi + osservabilità nodi da memoria giorno; si amplia nel tempo. */
+export type BioenergeticInteractionSkeletonVmV1 = {
+  contractVersion: 1;
+  northStarIt: string;
+  edges: ReadonlyArray<{
+    from: string;
+    to: string;
+    mechanismIt: string;
+    requires: readonly string[];
+  }>;
+  longestInterMealGapHoursEstimate: number | null;
+  nodes: ReadonlyArray<{
+    nodeId: string;
+    labelIt: string;
+    observability: "high" | "partial" | "blocked";
+    rationaleIt: string;
+  }>;
+};
+
 export type BioenergeticsDayViewModel = {
+  /** Versione contratto `GET …/bioenergetics/day`: incrementare solo con breaking change lato client. */
+  dayContractVersion: 1;
+  /**
+   * Conteggi campioni `athlete_time_series_samples` (055) nella slice giorno (stessa query della memoria;
+   * audit «stream canonico» senza parametri query aggiuntivi).
+   */
+  canonicalStreamCounts: {
+    glucoseSampleCount: number;
+    lactateSampleCount: number;
+  };
   athleteId: string;
   date: string;
   range: { from: string; to: string };
@@ -147,4 +176,6 @@ export type BioenergeticsDayViewModel = {
   evidenceConditionedLayer: BioenergeticDayEvidenceConditionedLayerV1 | null;
   /** Modello deterministico BIA↔letteratura (v1); assente senza snapshot BIA. */
   biaLiteratureSummary?: BioenergeticBiaLiteratureSummaryV1 | null;
+  /** Rete interazioni metabolico-endocrine: scheletro v1 + buchi dati (es. ghrelina senza diario). */
+  interactionSkeleton?: BioenergeticInteractionSkeletonVmV1 | null;
 };

@@ -7,14 +7,33 @@ export {
   tssPlanExecutionRatio,
 } from "./session-workload-adherence";
 
-export { SIM_BANK_VERSION, SIM_DIURNAL_GLUCOSE_V1, SIM_DIURNAL_LACTATE_V1, SIM_PATHWAY_SCALE_V1, SIM_STRESS_V1 } from "./sim-bank-v1";
-export type { SimTimelineEventV1 } from "./sim-timeline-v1";
-export { activitySupportHours, hourFromIsoTs, mealInhibitoryHours } from "./sim-timeline-v1";
-export type { SimDayKernelV1Input, SimSeriesPointV1 } from "./day-simulator-v1";
 export {
+  SIM_BANK_VERSION,
+  SIM_CORTISOL_MEAL_MOD_V1,
+  SIM_DIURNAL_GLUCOSE_V1,
+  SIM_DIURNAL_LACTATE_V1,
+  SIM_PATHWAY_SCALE_V1,
+  SIM_STRESS_V1,
+} from "./sim-bank-v1";
+export type { SimTimelineEventV1 } from "./sim-timeline-v1";
+export {
+  activitySupportHours,
+  hourFromIsoTs,
+  mealGlycemicHourWeights24,
+  mealInhibitoryHours,
+} from "./sim-timeline-v1";
+export type {
+  NominalCortisolActhModulationV1,
+  SimDayKernelV1Input,
+  SimGluLacDiurnalModulationV1,
+  SimSeriesPointV1,
+} from "./day-simulator-v1";
+export {
+  SIM_LAB_TILE_PARTIAL_SCALE_V1,
   buildNominalCortisolActhHourly24,
   buildSimulatedGluLacDiurnal,
   kernelDayStress01,
+  scaleSimulatedLabNumericForSkeletonPartialV1,
   simulatedLabNumeric,
 } from "./day-simulator-v1";
 export { hourlyFlat24, hourlyRippleRelative, hourlyRippleSeries24 } from "./continuous-monitoring-shape-v1";
@@ -34,6 +53,20 @@ export {
   simBlendDeterministicWeightFromRichness01,
 } from "./curve-fusion-arbitration-v1";
 export type { ArbitrationTimelineEventV1 } from "./curve-fusion-arbitration-v1";
+export {
+  METABOLIC_ENDOCRINE_INTERACTION_CONTRACT_VERSION,
+  METABOLIC_ENDOCRINE_INTERACTION_EDGES_V1,
+  buildMetabolicEndocrineInteractionReportV1,
+  estimateLongestInterMealGapHours,
+} from "./metabolic-endocrine-interaction-skeleton-v1";
+export type {
+  MetabolicDayCoherenceSnapshotV1,
+  MetabolicEndocrineEdgeV1,
+  MetabolicEndocrineInteractionReportV1,
+  MetabolicLabSomatoaxisSnapshotV1,
+  MetabolicNodeCoherenceV1,
+  MetabolicSleepContextSnapshotV1,
+} from "./metabolic-endocrine-interaction-skeleton-v1";
 
 export const DOMAIN = "@empathy/domain-bioenergetics" as const;
 export const DOMAIN_TITLE = "Bioenergetics";

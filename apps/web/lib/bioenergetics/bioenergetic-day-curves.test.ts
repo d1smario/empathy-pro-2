@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/contracts";
 import { averagePowerWattsFromKjAndDuration } from "@empathy/domain-bioenergetics";
+import { ATHLETE_TIME_SERIES_CHANNEL_V1 } from "@empathy/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import {
@@ -56,6 +57,38 @@ test("extractMeasuredGluLacFromSlice legge CGM e lab", () => {
   };
   const { glucoseMeasured } = extractMeasuredGluLacFromSlice(slice);
   assert.ok(glucoseMeasured.length >= 2);
+});
+
+test("extractMeasuredGluLacFromSlice unisce athlete_time_series_samples e vince su stesso ts vs CGM export", () => {
+  const sameTs = "2026-05-01T10:00:00.000Z";
+  const slice: BioenergeticDayMemorySlice = {
+    athleteId: "a1",
+    date: "2026-05-01",
+    planned: [],
+    executed: [],
+    diaryRows: [],
+    biomarkerRows: [],
+    deviceExportRows: [
+      {
+        id: "e1",
+        provider: "cgm",
+        created_at: sameTs,
+        payload: { glucose_mmol: 5.9 },
+      } as Record<string, unknown>,
+    ],
+    timeSeriesSamplesRows: [
+      {
+        channel: ATHLETE_TIME_SERIES_CHANNEL_V1.GLUCOSE_MMOL_L,
+        observed_at: sameTs,
+        value: 5.2,
+        source: "cgm_adapter",
+      } as Record<string, unknown>,
+    ],
+  };
+  const { glucoseMeasured } = extractMeasuredGluLacFromSlice(slice);
+  assert.equal(glucoseMeasured.length, 1);
+  assert.equal(glucoseMeasured[0].value, 5.2);
+  assert.equal(glucoseMeasured[0].source, "cgm_adapter");
 });
 
 test("buildBioenergeticDaySeries produce canali glucosio e CHO cumulativo", () => {

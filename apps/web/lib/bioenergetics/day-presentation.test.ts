@@ -1,6 +1,33 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import type { MetabolicNodeCoherenceV1 } from "@empathy/domain-bioenergetics";
 import { buildBioenergeticDayPresentation, pickGlucoseMmolFromLab } from "@/lib/bioenergetics/day-presentation";
+
+const kernelFixture = {
+  modelVersion: 1,
+  glucoseHandlingScore: 50,
+  insulinDemandScore: 40,
+  oxidationDriveScore: 50,
+  anabolicSuppressionScore: 20,
+  efficiencyBand: "high" as const,
+  pathwayState: "supportive" as const,
+  keyDrivers: [] as string[],
+};
+
+const ghrelinGhBlockedNodes: readonly MetabolicNodeCoherenceV1[] = [
+  {
+    nodeId: "ghrelin",
+    labelIt: "Ghrelina (proxy)",
+    observability: "blocked",
+    rationaleIt: "Test: diario assente.",
+  },
+  {
+    nodeId: "gh_pulse",
+    labelIt: "GH (pulsatile / contesto)",
+    observability: "blocked",
+    rationaleIt: "Test: ghrelina bloccata.",
+  },
+];
 
 test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati", () => {
   const { chart24h, metricTiles } = buildBioenergeticDayPresentation({
@@ -152,6 +179,127 @@ test("buildBioenergeticDayPresentation usa tile PCR simulata se panel assente", 
   const crp = metricTiles.find((t) => t.id === "crp");
   assert.equal(crp?.provenance, "estimated");
   assert.notEqual(crp?.displayValue, "—");
+});
+
+test("buildBioenergeticDayPresentation: ghrelina/GH senza lab e skeleton blocked → tile absent (no sim finto)", () => {
+  const { metricTiles } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: kernelFixture,
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+    interactionNodes: ghrelinGhBlockedNodes,
+  });
+  const ghrelin = metricTiles.find((t) => t.id === "ghrelin");
+  const gh = metricTiles.find((t) => t.id === "gh");
+  assert.equal(ghrelin?.provenance, "absent");
+  assert.equal(ghrelin?.displayValue, "—");
+  assert.equal(gh?.provenance, "absent");
+  assert.equal(gh?.displayValue, "—");
+});
+
+test("buildBioenergeticDayPresentation: ghrelina partial scala sim rispetto a nodo assente (coeff dominio v1)", () => {
+  const baseInput = {
+    date: "2026-05-01",
+    kernel: kernelFixture,
+    provenance: { glucose: "estimated", lactate: "estimated" } as const,
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [] as { id: string; sample_date?: string; values?: Record<string, unknown> }[],
+  };
+  const full = buildBioenergeticDayPresentation(baseInput);
+  const partial = buildBioenergeticDayPresentation({
+    ...baseInput,
+    interactionNodes: [
+      {
+        nodeId: "ghrelin",
+        labelIt: "Ghrelina (proxy)",
+        observability: "partial",
+        rationaleIt: "Test: contesto debole.",
+      },
+    ],
+  });
+  const f = full.metricTiles.find((t) => t.id === "ghrelin");
+  const p = partial.metricTiles.find((t) => t.id === "ghrelin");
+  assert.equal(p?.provenance, "estimated");
+  assert.ok(f?.numericValue != null && p?.numericValue != null);
+  assert.ok(p!.numericValue! < f!.numericValue!);
+  assert.ok(Math.abs(p!.numericValue! - f!.numericValue! * 0.82) < 0.02);
+});
+
+test("buildBioenergeticDayPresentation: leptina tile absent se leptin_energy_balance skeleton blocked", () => {
+  const { metricTiles } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: kernelFixture,
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+    interactionNodes: [
+      {
+        nodeId: "leptin_energy_balance",
+        labelIt: "Leptina / energia (proxy)",
+        observability: "blocked",
+        rationaleIt: "Test: nessun segnale energetico.",
+      },
+    ],
+  });
+  const lep = metricTiles.find((t) => t.id === "leptin");
+  assert.equal(lep?.provenance, "absent");
+  assert.equal(lep?.displayValue, "—");
+});
+
+test("buildBioenergeticDayPresentation: insulin_lab blocked senza panel → absent", () => {
+  const { metricTiles } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: kernelFixture,
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+    interactionNodes: [
+      {
+        nodeId: "insulin_demand",
+        labelIt: "Domanda insulinica (proxy)",
+        observability: "blocked",
+        rationaleIt: "Test: nessun pasto.",
+      },
+    ],
+  });
+  const ins = metricTiles.find((t) => t.id === "insulin_lab");
+  assert.equal(ins?.provenance, "absent");
+  assert.equal(ins?.displayValue, "—");
+});
+
+test("buildBioenergeticDayPresentation: lab ghrelina presente resta measured anche con skeleton blocked", () => {
+  const { metricTiles } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: kernelFixture,
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [{ id: "p1", sample_date: "2026-05-01", values: { ghrelin: 120 } }],
+    interactionNodes: ghrelinGhBlockedNodes,
+  });
+  const ghrelin = metricTiles.find((t) => t.id === "ghrelin");
+  assert.equal(ghrelin?.provenance, "measured");
+  assert.notEqual(ghrelin?.displayValue, "—");
 });
 
 test("buildBioenergeticDayPresentation legge valori da panel values fusi", () => {

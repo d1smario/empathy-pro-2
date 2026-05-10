@@ -24,6 +24,7 @@ export * from "./bioenergetic-conditioning-context-v1";
 export * from "./bioenergetic-evidence-interactions-v1";
 export * from "./bioenergetic-evidence-curve-v1";
 export * from "./bioenergetic-curve-fusion-v1";
+export * from "./athlete-time-series-sample-v1";
 export * from "./training-engine";
 export * from "./research";
 export * from "./common";

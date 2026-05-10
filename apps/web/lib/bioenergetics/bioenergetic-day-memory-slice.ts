@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/contracts";
 import { executedWorkoutFromDbRow, plannedWorkoutFromDbRow, type ExecutedWorkoutDbRow, type PlannedWorkoutDbRow } from "@empathy/domain-training";
+import { filterDeviceExportsByAthleteDataSourcePreference } from "@/lib/bioenergetics/bioenergetic-device-exports-preference-filter";
+import { loadDataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
 import { wellnessExportMatchesPanelDate } from "@/lib/physiology/wellness-day-key-from-device-export";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
@@ -13,6 +15,8 @@ export type BioenergeticDayMemorySlice = {
   biomarkerRows: Array<Record<string, unknown>>;
   /** Export il cui giorno logico (wellness / payload) coincide con `date`. */
   deviceExportRows: Array<Record<string, unknown>>;
+  /** Campioni time-series canonici (055) per `date` locale (CGM / lattato). */
+  timeSeriesSamplesRows?: Array<Record<string, unknown>>;
 };
 
 function addDaysIsoDate(date: string, deltaDays: number): string {
@@ -47,8 +51,10 @@ export async function loadBioenergeticDayMemorySlice(
   const exportFrom = addDaysIsoDate(dateKey, -2);
   const exportTo = addDaysIsoDate(dateKey, 3);
 
-  const [windowRes, diaryRes, exportsRes, biomarkersRes] = await Promise.all([
-    queryPlannedExecutedWindow(db, athleteId, dateKey, dateKey),
+  const prefMap = await loadDataSourcePreferenceMap(db, athleteId);
+
+  const [windowRes, diaryRes, exportsRes, biomarkersRes, timeSeriesRes] = await Promise.all([
+    queryPlannedExecutedWindow(db, athleteId, dateKey, dateKey, prefMap),
     db
       .from("food_diary_entries")
       .select("id, entry_date, entry_time, meal_slot, food_label, quantity_g, carbs_g, protein_g, fat_g, kcal, sodium_mg, insulin_load")
@@ -67,6 +73,13 @@ export async function loadBioenergeticDayMemorySlice(
       .select("id, sample_date, values, created_at")
       .eq("athlete_id", athleteId)
       .eq("sample_date", dateKey),
+    db
+      .from("athlete_time_series_samples")
+      .select("id, observed_at, channel, value, unit, quality, source, source_ref, created_at")
+      .eq("athlete_id", athleteId)
+      .gte("observed_at", `${dateKey}T00:00:00.000Z`)
+      .lte("observed_at", `${dateKey}T23:59:59.999Z`)
+      .order("observed_at", { ascending: true }),
   ]);
 
   const windowErr = firstWindowQueryError(windowRes.planned, windowRes.executed);
@@ -80,6 +93,7 @@ export async function loadBioenergeticDayMemorySlice(
         diaryRows: [],
         biomarkerRows: [],
         deviceExportRows: [],
+        timeSeriesSamplesRows: [],
       },
       queryError: windowErr,
     };
@@ -94,6 +108,7 @@ export async function loadBioenergeticDayMemorySlice(
         diaryRows: [],
         biomarkerRows: [],
         deviceExportRows: [],
+        timeSeriesSamplesRows: [],
       },
       queryError: diaryRes.error.message,
     };
@@ -108,6 +123,7 @@ export async function loadBioenergeticDayMemorySlice(
         diaryRows: [],
         biomarkerRows: [],
         deviceExportRows: [],
+        timeSeriesSamplesRows: [],
       },
       queryError: exportsRes.error.message,
     };
@@ -122,8 +138,24 @@ export async function loadBioenergeticDayMemorySlice(
         diaryRows: [],
         biomarkerRows: [],
         deviceExportRows: [],
+        timeSeriesSamplesRows: [],
       },
       queryError: biomarkersRes.error.message,
+    };
+  }
+  if (timeSeriesRes.error) {
+    return {
+      slice: {
+        athleteId,
+        date: dateKey,
+        planned: [],
+        executed: [],
+        diaryRows: [],
+        biomarkerRows: [],
+        deviceExportRows: [],
+        timeSeriesSamplesRows: [],
+      },
+      queryError: timeSeriesRes.error.message,
     };
   }
 
@@ -131,9 +163,11 @@ export async function loadBioenergeticDayMemorySlice(
   const executed = ((windowRes.executed.data ?? []) as ExecutedWorkoutDbRow[]).map(executedWorkoutFromDbRow);
   const diaryRows = (diaryRes.data ?? []) as Array<Record<string, unknown>>;
   const biomarkerRows = (biomarkersRes.data ?? []) as Array<Record<string, unknown>>;
-  const exportCandidates = (exportsRes.data ?? []) as Array<Record<string, unknown>>;
+  const exportCandidatesRaw = (exportsRes.data ?? []) as Array<Record<string, unknown>>;
+  const exportCandidates = filterDeviceExportsByAthleteDataSourcePreference(exportCandidatesRaw, prefMap);
 
   const deviceExportRows = filterDeviceExportsForPanelDate(exportCandidates, dateKey);
+  const timeSeriesSamplesRows = (timeSeriesRes.data ?? []) as Array<Record<string, unknown>>;
 
   return {
     slice: {
@@ -144,6 +178,7 @@ export async function loadBioenergeticDayMemorySlice(
       diaryRows,
       biomarkerRows,
       deviceExportRows,
+      timeSeriesSamplesRows: timeSeriesSamplesRows.length ? timeSeriesSamplesRows : undefined,
     },
     queryError: null,
   };

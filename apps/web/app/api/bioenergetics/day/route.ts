@@ -16,6 +16,7 @@ function isoDateOrToday(raw: string): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Query: `athleteId` (obbl.), `date` (YYYY-MM-DD, default oggi). Versioning contratto: campo `dayContractVersion` nel JSON body. */
 export async function GET(req: NextRequest) {
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();

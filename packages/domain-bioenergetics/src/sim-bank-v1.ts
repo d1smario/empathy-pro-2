@@ -42,3 +42,14 @@ export const SIM_PATHWAY_SCALE_V1 = {
   supportive: 0.96,
   mixed: 1,
 } as const;
+
+/**
+ * Modulazione diurna cortisolo / ACTH da carico prandiale (roadmap 2.2).
+ * Bump pomeridiano sul cortisolo + leggero anticipo picco ACTH; coefficienti revisionabili qui.
+ */
+export const SIM_CORTISOL_MEAL_MOD_V1 = {
+  /** Incremento massimo µg/dL (h≈15) quando `postprandialMealLoad01` = 1 */
+  afternoonCortisolMaxUgdL: 1.35,
+  /** Anticipo massimo centro gaussiano ACTH (ore) quando mealLoad01 = 1 */
+  acthPeakAdvanceHoursMax: 0.32,
+} as const;

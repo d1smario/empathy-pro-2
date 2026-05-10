@@ -2,7 +2,7 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, LineChart, Timer } from "lucide-react";
+import { Activity, BookOpen, GitBranch, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticBiaLiteratureSummaryV1,
   BioenergeticMetricTile,
@@ -19,6 +19,10 @@ import {
   readPersistedNutritionPlanDate,
   writePersistedNutritionPlanDate,
 } from "@/lib/nutrition/persisted-nutrition-plan-date";
+import {
+  evidenceLinkCountForSkeletonEdge,
+  evidenceLinkCountForSkeletonNode,
+} from "@/lib/bioenergetics/bioenergetic-evidence-skeleton-bridge";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsContinuousMonitoringGrid } from "@/modules/bioenergetics/components/BioenergeticsContinuousMonitoringGrid";
 import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
@@ -143,6 +147,11 @@ export default function BioenergeticsPageView() {
         const cm = json.continuousMonitoring as BioenergeticsDayViewModel["continuousMonitoring"] | undefined;
         const vmPayload: BioenergeticsDayViewModel = {
           ...json,
+          dayContractVersion: json.dayContractVersion ?? 1,
+          canonicalStreamCounts: json.canonicalStreamCounts ?? {
+            glucoseSampleCount: 0,
+            lactateSampleCount: 0,
+          },
           series: Array.isArray(json.series) ? json.series : [],
           evidenceConditionedLayer: json.evidenceConditionedLayer ?? null,
           continuousMonitoring:
@@ -297,6 +306,90 @@ export default function BioenergeticsPageView() {
               </div>
             </Pro2SectionCard>
 
+            {vm.interactionSkeleton ? (
+              <div id="bioenergetic-skeleton-layer" className="scroll-mt-24">
+              <Pro2SectionCard
+                accent="slate"
+                title="Rete metabolico-endocrina · scheletro v1"
+                subtitle={
+                  evidenceLinkCount > 0
+                    ? "Grafo dichiarativo (nutrizione, training, stress, sonno, lab). Badge arancione «DB»: link curati assi–fluidi (051/052) mappati a quel nodo o arco — vedi sezione evidenza sotto."
+                    : "Un solo grafo di interazioni (nutrizione, training, stress, lab): si espande nel tempo; oggi dichiara cosa è osservabile e cosa manca."
+                }
+                icon={GitBranch}
+              >
+                {evidenceLinkCount > 0 ? (
+                  <p className="mb-2 text-[0.7rem] text-orange-200/90">
+                    <a
+                      href="#bioenergetic-evidence-layer"
+                      className="underline decoration-orange-400/50 underline-offset-2 hover:text-orange-100"
+                    >
+                      Salta all’evidenza letteratura (assi–fluidi)
+                    </a>{" "}
+                    · {evidenceLinkCount} link caricati
+                  </p>
+                ) : null}
+                <p className="text-sm leading-relaxed text-gray-300">{vm.interactionSkeleton.northStarIt}</p>
+                {vm.interactionSkeleton.longestInterMealGapHoursEstimate != null ? (
+                  <p className="mt-2 font-mono text-[0.7rem] text-gray-500">
+                    Max intervallo inter-prandiale stimato (timeline):{" "}
+                    <span className="text-gray-300">{vm.interactionSkeleton.longestInterMealGapHoursEstimate} h</span>
+                  </p>
+                ) : null}
+                <ul className="mt-4 space-y-2">
+                  {vm.interactionSkeleton.nodes.map((n) => {
+                    const dbN = evidenceLinkCount > 0 ? evidenceLinkCountForSkeletonNode(n.nodeId, resolvedEvidenceLinks) : 0;
+                    return (
+                      <li key={n.nodeId} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs">
+                        <span className="font-medium text-white">{n.labelIt}</span>
+                        <span
+                          className={`ml-2 rounded px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide ${
+                            n.observability === "high"
+                              ? "bg-emerald-500/20 text-emerald-200"
+                              : n.observability === "partial"
+                                ? "bg-amber-500/20 text-amber-200"
+                                : "bg-rose-500/20 text-rose-200"
+                          }`}
+                        >
+                          {n.observability}
+                        </span>
+                        {dbN > 0 ? (
+                          <span
+                            className="ml-2 inline-flex items-center rounded border border-orange-500/35 bg-orange-500/10 px-1.5 py-0.5 font-mono text-[0.6rem] text-orange-200/95"
+                            title="Almeno un link assi–fluidi in banco mappato a questo nodo (curato DB)"
+                          >
+                            DB {dbN}
+                          </span>
+                        ) : null}
+                        <p className="mt-1 text-gray-400">{n.rationaleIt}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <details className="mt-4 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-gray-500">
+                  <summary className="cursor-pointer text-gray-300">Archi canonic (v1, in espansione)</summary>
+                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-[0.65rem] leading-snug">
+                    {vm.interactionSkeleton.edges.map((e, i) => {
+                      const dbE =
+                        evidenceLinkCount > 0 ? evidenceLinkCountForSkeletonEdge(e.from, e.to, resolvedEvidenceLinks) : 0;
+                      return (
+                        <li key={`${e.from}-${e.to}-${i}`} className="font-mono text-gray-400">
+                          <span className="text-fuchsia-200/90">{e.from}</span> → <span className="text-violet-200/90">{e.to}</span>
+                          {dbE > 0 ? (
+                            <span className="ml-2 inline-block rounded border border-orange-500/35 bg-orange-500/10 px-1 font-mono text-[0.6rem] text-orange-200/95">
+                              DB {dbE}
+                            </span>
+                          ) : null}
+                          <span className="mt-0.5 block text-gray-500">{e.mechanismIt}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </details>
+              </Pro2SectionCard>
+              </div>
+            ) : null}
+
             {vm.biaLiteratureSummary ? (
               <Pro2SectionCard
                 accent="violet"
@@ -345,12 +438,21 @@ export default function BioenergeticsPageView() {
             ) : null}
 
             {vm.evidenceConditionedLayer && evidenceLinkCount > 0 ? (
+              <div id="bioenergetic-evidence-layer" className="scroll-mt-24">
               <Pro2SectionCard
                 accent="orange"
                 title="Evidenza letteratura · assi e fluidi"
-                subtitle={`Banco ${vm.evidenceConditionedLayer.bankRef.bankId} · ${vm.evidenceConditionedLayer.bankRef.bankVersion} · ${evidenceLinkCount} link`}
+                subtitle={`Banco ${vm.evidenceConditionedLayer.bankRef.bankId} · ${vm.evidenceConditionedLayer.bankRef.bankVersion} · ${evidenceLinkCount} link · badge «DB» nel grafo skeleton = link mappati a quel contesto`}
                 icon={BookOpen}
               >
+                <p className="mb-2 text-[0.7rem] text-orange-200/85">
+                  <a
+                    href="#bioenergetic-skeleton-layer"
+                    className="underline decoration-orange-400/50 underline-offset-2 hover:text-orange-100"
+                  >
+                    Torna al grafo skeleton
+                  </a>
+                </p>
                 <p className="text-sm leading-relaxed text-gray-300">
                   Grafo curato (ormoni / neuro / renale ↔ processi di fluido). Serve al synthesizer evidenza e alla UI
                   «perché»; le curve sopra restano kernel / misura.
@@ -434,6 +536,7 @@ export default function BioenergeticsPageView() {
                   </ul>
                 </details>
               </Pro2SectionCard>
+              </div>
             ) : vm ? (
               <Pro2SectionCard accent="slate" title="Evidenza letteratura · assi e fluidi" subtitle="Nessun link caricato" icon={BookOpen}>
                 <p className="text-sm text-gray-400">

@@ -49,6 +49,14 @@ type Props = {
 
 const CHART_H = 92;
 
+const STROKE_BY_CHANNEL_ID: Record<string, string> = {
+  glucose: "#e879f9",
+  lactate: "#a78bfa",
+  insulin_proxy: "#fb923c",
+  cortisol: "#38bdf8",
+  acth: "#f472b6",
+};
+
 /** Recharts con dominio [v,v] non disegna la linea: aggiunge padding simmetrico. */
 function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
   const nums = hourly.filter((x): x is number => x != null && Number.isFinite(x));
@@ -73,7 +81,9 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {sorted.map((ch) => {
         const rows = ch.hourly.map((v, hour) => ({
+          hour,
           hourLabel: `${String(hour).padStart(2, "0")}:00`,
+          hourEndLabel: `${String(hour).padStart(2, "0")}:59`,
           v: v == null || Number.isNaN(v) ? null : v,
         }));
         const hasData = rows.some((r) => r.v != null);
@@ -109,11 +119,19 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                 <span className="text-violet-200/85">{governanceIt(ch.curveResolution.governance)}</span>
               </p>
             ) : null}
+            <p className="mb-1 text-[0.6rem] text-gray-600">Asse orizzontale: ore del giorno (0–23, locale).</p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
               <ResponsiveContainer width="100%" height={CHART_H} debounce={50}>
-                <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 2 }}>
+                <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 18 }}>
                   <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-                  <XAxis dataKey="hourLabel" tick={false} axisLine={false} tickLine={false} height={1} />
+                  <XAxis
+                    dataKey="hourLabel"
+                    tick={{ fill: "#94a3b8", fontSize: 8 }}
+                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                    tickLine={false}
+                    interval={3}
+                    height={16}
+                  />
                   <YAxis
                     width={36}
                     tick={{ fill: "#94a3b8", fontSize: 9 }}
@@ -130,14 +148,22 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                     }}
                     formatter={(value) => {
                       const v = typeof value === "number" ? value : Number(value);
-                      return Number.isFinite(v) ? [`${v.toFixed(3)}`, ch.labelIt] : ["—", ch.labelIt];
+                      return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, "Valore"] : ["—", ch.labelIt];
                     }}
-                    labelFormatter={(l) => String(l)}
+                    labelFormatter={(_label, payload) => {
+                      const row = payload?.[0]?.payload as
+                        | { hour?: number; hourLabel?: string; hourEndLabel?: string }
+                        | undefined;
+                      if (row && typeof row.hour === "number") {
+                        return `Finestra: ${row.hourLabel}–${row.hourEndLabel}`;
+                      }
+                      return "Orario";
+                    }}
                   />
                   <Line
                     type="monotone"
                     dataKey="v"
-                    stroke="#e879f9"
+                    stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
                     strokeWidth={2}
                     dot={false}
                     connectNulls

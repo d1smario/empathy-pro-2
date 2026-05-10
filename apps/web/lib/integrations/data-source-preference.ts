@@ -5,9 +5,9 @@
  *   "Sonno → WHOOP", "Recovery/HRV → WHOOP", "Training → Garmin", ecc.
  *
  * I consumer di lettura (daily-wellness-panel, wellness-window-summary,
- * recovery-summary, analytics) chiamano `resolveDataSourcePreferenceForAthlete`
- * e applicano `.eq("provider", chosenProvider)` (per `device_sync_exports`)
- * oppure prefisso `source` (per `executed_workouts`).
+ * bioenergetic-day-memory-slice, analytics, planned-window) caricano la mappa e
+ * filtrano `device_sync_exports.provider` (wellness_sleep / wellness_recovery)
+ * oppure il prefisso `executed_workouts.source` (training_activity → `api_sync:<provider>:`).
  *
  * Default: nessuna riga in `athlete_data_source_preference` → comportamento
  * attuale (legge tutti i provider). Niente regressioni se il cliente non sceglie.

@@ -29,27 +29,31 @@ const DOMAIN_META: Array<{
   {
     id: "wellness_sleep",
     title: "Sonno",
-    hint: "Ore di sonno, fasi (deep/light/REM), ipnogramma. Solo questo provider scrive il KPI Sonno.",
+    hint: "Ore di sonno, fasi (deep/light/REM), ipnogramma. Solo questo provider scrive il KPI Sonno. Se il device non espone sonno strutturato via Empathy per quel provider, il pannello può restare vuoto.",
     options: [
       { value: "", label: "Auto (mix tutti i provider)" },
       { value: "whoop", label: "WHOOP" },
       { value: "garmin", label: "Garmin" },
+      { value: "wahoo", label: "Wahoo" },
+      { value: "strava", label: "Strava" },
     ],
   },
   {
     id: "wellness_recovery",
     title: "Recovery / HRV",
-    hint: "HRV, frequenza cardiaca a riposo, recovery e readiness score.",
+    hint: "HRV, frequenza cardiaca a riposo, recovery e readiness score. Stessa nota: serve export Empathy riconosciuto come recovery per quel provider.",
     options: [
       { value: "", label: "Auto (mix tutti i provider)" },
       { value: "whoop", label: "WHOOP" },
       { value: "garmin", label: "Garmin" },
+      { value: "wahoo", label: "Wahoo" },
+      { value: "strava", label: "Strava" },
     ],
   },
   {
     id: "training_activity",
     title: "Training (attività)",
-    hint: "Workout eseguiti (corse, bici, gym, …). Filtra cosa entra nel calendario eseguito e negli analytics.",
+    hint: "Workout eseguiti (corse, bici, gym, …). Filtra cosa entra nel calendario eseguito e negli analytics (`executed_workouts.source` → api_sync:provider:…).",
     options: [
       { value: "", label: "Auto (mix tutti i provider)" },
       { value: "garmin", label: "Garmin" },

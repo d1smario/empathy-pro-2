@@ -219,7 +219,7 @@ export function arbitrateInsulinProxyCurveFusionV1(mealMacrosCount: number): Bio
   );
 }
 
-/** Diurna nominale (cosinusoide): come gli altri sim, AI inizialmente in vantaggio → pareggio con ricchezza contesto. */
+/** Diurna nominale (profili ACTH/cortisolo distinti in sim v1): come gli altri sim, AI inizialmente in vantaggio → pareggio con ricchezza contesto. */
 export function arbitrateNominalHormoneCurveFusionV1(
   channelId: "cortisol" | "acth",
   internalContextRichness01: number,
@@ -233,7 +233,7 @@ export function arbitrateNominalHormoneCurveFusionV1(
     d,
     r,
     [
-      "Diurna ormonale v1 (cosinusoide educativa): non è campionamento seriato; in fase prodotto prevale la quota AI, che si pareggia al crescere del contesto Empathy.",
+      "Diurna ormonale v1 (sim educativa, forme separate ACTH vs cortisolo): non è campionamento seriato; in fase prodotto prevale la quota AI, che si pareggia al crescere del contesto Empathy.",
       "Con valore lab misurato (hold) la policy passa a misura Empathy.",
     ],
   );
