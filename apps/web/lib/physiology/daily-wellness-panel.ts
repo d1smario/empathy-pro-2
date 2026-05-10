@@ -159,6 +159,11 @@ function extractActivityWellness(payload: Record<string, unknown> | null): {
       "respiratory_rate_rpm",
       "avg_respiratory_rate",
       "respiration_rate",
+      /** Garmin Health API (dailies / respiration stream) */
+      "avgRespirationRate",
+      "maxRespirationRate",
+      "AvgRespirationRate",
+      "MaxRespirationRate",
     ]);
     out.skinTempC ??= pickNumber(rec, [
       "skin_temperature_c",

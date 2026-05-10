@@ -133,6 +133,16 @@ test("Garmin HRV summary: lastNightAvg", () => {
   assert.equal(s.hrvMs, 44);
 });
 
+test("Garmin dailies: averageStressLevel NON è strain WHOOP (stress 0–100 separato)", () => {
+  const dailies = {
+    calendarDate: "2026-05-10",
+    averageStressLevel: 22,
+    garmin_wellness_stream: "dailies",
+  };
+  const s = extractSleepRecoverySignal(dailies);
+  assert.equal(s.strainScore, null);
+});
+
 /**
  * Bug live osservato: Garmin pusha `dailies` e `allDayRespiration` con `durationInSeconds`
  * (durata della finestra giorno / respirazione, NON del sonno). Il decoder vecchio scriveva

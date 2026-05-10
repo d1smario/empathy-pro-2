@@ -211,15 +211,17 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "lowest_heart_rate",
     ]);
     merged.sleepDurationHours ??= normalizeSleepDurationHours(record);
+    /**
+     * Strain = carico giornaliero WHOOP-like (`day_strain`, `strain`, …).
+     * **Non** mappare `averageStressLevel` / stress Garmin dailies qui: è stress 0–100,
+     * non strain — altrimenti la UI mostra "Strain 22" mentre Recovery resta vuoto.
+     */
     merged.strainScore ??= pickNumber(record, [
       "strain_score",
       "strainScore",
       "day_strain",
       "recovery_strain",
       "strain",
-      "averageStressLevel",
-      "stress_score",
-      "stressScore",
     ]);
     merged.sourceDate ??= pickString(record, [
       "calendarDate",

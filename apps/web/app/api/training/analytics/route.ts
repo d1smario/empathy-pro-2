@@ -24,6 +24,13 @@ import {
   loadDataSourcePreferenceMap,
   pickPreferredProvider,
 } from "@/lib/integrations/data-source-preference";
+import {
+  extractSignalFromDeviceExportRow,
+  isSleepBearingDevicePayload,
+} from "@/lib/reality/sleep-recovery-signals";
+
+/** Ore di sonno plausibili per analytics (oltre → dati sporchi / merge errato, scartiamo). */
+const MAX_ANALYTICS_SLEEP_HOURS = 20;
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -91,19 +98,28 @@ function normalizedTraceFromDeviceExport(payload: Record<string, unknown>, creat
   const date = readDateFromPayload(merged, createdAt ?? null);
   if (!date) return null;
 
-  const sleepHours =
-    readNumFromObject(merged, ["sleep_hours", "total_sleep_hours", "sleep_duration_hours"]) ??
-    (() => {
-      const mins = readNumFromObject(merged, ["total_sleep_minutes", "sleep_duration_minutes"]);
-      return mins != null && mins > 0 ? mins / 60 : null;
-    })();
+  /**
+   * Stesso gate del pannello giornaliero: `sleep_duration_hours` nel preview storico
+   * o merge grezzo su dailies/respiration altrimenti gonfia sonno medio / grafico a 24h.
+   */
+  const sig = extractSignalFromDeviceExportRow({ payload });
+  const allowSleepStages =
+    sourcePayload != null
+      ? isSleepBearingDevicePayload(sourcePayload)
+      : canonicalPreview != null && isSleepBearingDevicePayload(canonicalPreview);
 
   const normalized: Record<string, unknown> = {};
-  const restingHr = readNumFromObject(merged, ["resting_hr_bpm", "resting_heart_rate", "night_hr_bpm"]);
-  const hrv = readNumFromObject(merged, ["hrv_rmssd_ms", "hrv_ms", "rmssd"]);
-  const deepSleep = readNumFromObject(merged, ["sleep_deep_hours", "deep_sleep_hours"]);
-  const remSleep = readNumFromObject(merged, ["sleep_rem_hours", "rem_sleep_hours"]);
-  const lightSleep = readNumFromObject(merged, ["sleep_light_hours", "light_sleep_hours"]);
+  const sleepHours =
+    sig.sleepDurationHours != null &&
+    sig.sleepDurationHours > 0 &&
+    sig.sleepDurationHours <= MAX_ANALYTICS_SLEEP_HOURS
+      ? sig.sleepDurationHours
+      : null;
+  const restingHr = sig.restingHrBpm ?? readNumFromObject(merged, ["resting_hr_bpm", "resting_heart_rate", "night_hr_bpm"]);
+  const hrv = sig.hrvMs ?? readNumFromObject(merged, ["hrv_rmssd_ms", "hrv_ms", "rmssd"]);
+  const deepSleep = allowSleepStages ? readNumFromObject(merged, ["sleep_deep_hours", "deep_sleep_hours"]) : null;
+  const remSleep = allowSleepStages ? readNumFromObject(merged, ["sleep_rem_hours", "rem_sleep_hours"]) : null;
+  const lightSleep = allowSleepStages ? readNumFromObject(merged, ["sleep_light_hours", "light_sleep_hours"]) : null;
   const skinTemp = readNumFromObject(merged, ["skin_temp_c", "skin_temp_celsius", "temperature_avg_c"]);
   const glucoseMmol = readNumFromObject(merged, ["glucose_mmol_l_avg", "glucose_mmol_l", "glucose_mmol"]);
   const glucoseTir = readNumFromObject(merged, ["time_in_range_pct", "glucose_tir_pct"]);

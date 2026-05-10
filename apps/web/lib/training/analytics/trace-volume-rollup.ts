@@ -1,5 +1,8 @@
 import type { ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 
+/** Oltre questa soglia il valore è quasi certamente errore di merge/preview, non sonno reale. */
+const MAX_PLAUSIBLE_SLEEP_HOURS = 20;
+
 function pickNum(trace: Record<string, unknown> | null, keys: string[]): number | null {
   if (!trace) return null;
   for (const k of keys) {
@@ -103,7 +106,9 @@ export function rollupRecoveryContinuousFromLoadRows(rows: ExecutedWorkoutLoadRo
     const hrv = pickNum(tr, ["hrv_rmssd_ms", "hrv_rmssd_milli", "hrv_rmssd", "rmssd"]);
     const sleepHoursDirect = pickNum(tr, ["sleep_hours", "total_sleep_hours", "sleep_duration_hours"]);
     const sleepSec = pickNum(tr, ["sleep_duration_sec", "sleep_seconds"]);
-    const sleep = sleepHoursDirect ?? (sleepSec != null && sleepSec > 0 ? sleepSec / 3600 : null);
+    const sleepRaw = sleepHoursDirect ?? (sleepSec != null && sleepSec > 0 ? sleepSec / 3600 : null);
+    const sleep =
+      sleepRaw != null && sleepRaw > 0 && sleepRaw <= MAX_PLAUSIBLE_SLEEP_HOURS ? sleepRaw : null;
     const skinTemp = pickNum(tr, ["skin_temp_celsius", "temperature_avg_c", "avg_skin_temp_c"]);
     const hasAny = hr != null || hrv != null || sleep != null || skinTemp != null;
     if (!hasAny) continue;

@@ -69,6 +69,14 @@ function pick(trace: Record<string, unknown> | null, keys: string[]): number | n
   return null;
 }
 
+/** Difesa in profondità: trace legacy possono ancora avere ore sonno fuori scala. */
+function pickPlausibleSleepHours(trace: Record<string, unknown> | null, keys: string[]): number | null {
+  const v = pick(trace, keys);
+  if (v == null || !Number.isFinite(v)) return null;
+  if (v <= 0 || v > 20) return null;
+  return v;
+}
+
 function formatRollup(r: TrainingExecutedVolumeRollupViewModel | null | undefined): {
   sessions: string;
   hours: string;
@@ -146,7 +154,12 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
     return rows
       .map((row) => {
         const trace = asTrace(row);
-        const sleep = pick(trace, ["sleep_hours", "total_sleep_hours", "sleep_duration_hours", "sleep_h"]);
+        const sleep = pickPlausibleSleepHours(trace, [
+          "sleep_hours",
+          "total_sleep_hours",
+          "sleep_duration_hours",
+          "sleep_h",
+        ]);
         const deep = pick(trace, ["sleep_deep_hours", "deep_sleep_hours", "sleep_deep_h"]);
         const rem = pick(trace, ["sleep_rem_hours", "rem_sleep_hours", "sleep_rem_h"]);
         const light = pick(trace, ["sleep_light_hours", "light_sleep_hours", "sleep_light_h"]);
