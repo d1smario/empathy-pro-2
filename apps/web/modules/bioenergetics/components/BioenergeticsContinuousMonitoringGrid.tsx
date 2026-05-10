@@ -32,6 +32,23 @@ type Props = {
   monitoring: BioenergeticContinuousMonitoringDay;
 };
 
+const CHART_H = 92;
+
+/** Recharts con dominio [v,v] non disegna la linea: aggiunge padding simmetrico. */
+function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
+  const nums = hourly.filter((x): x is number => x != null && Number.isFinite(x));
+  if (!nums.length) return [0, 1];
+  const mn = Math.min(...nums);
+  const mx = Math.max(...nums);
+  if (mn === mx) {
+    const pad = Math.max(Math.abs(mn) * 0.06, 0.02);
+    return [mn - pad, mx + pad];
+  }
+  const span = mx - mn;
+  const pad = Math.max(span * 0.08, span * 0.01);
+  return [mn - pad, mx + pad];
+}
+
 export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
   const sorted = [...monitoring.channels].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
@@ -46,6 +63,8 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
         }));
         const hasData = rows.some((r) => r.v != null);
         if (!hasData) return null;
+
+        const yDomain = yDomainFromHourly(ch.hourly);
 
         return (
           <div
@@ -68,12 +87,18 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                 ) : null}
               </div>
             </div>
-            <div className="h-[88px] w-full min-w-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={rows} margin={{ top: 2, right: 4, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="hourLabel" tick={false} height={0} />
-                  <YAxis width={32} tick={{ fill: "#64748b", fontSize: 9 }} domain={["auto", "auto"]} />
+            <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
+              <ResponsiveContainer width="100%" height={CHART_H} debounce={50}>
+                <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 2 }}>
+                  <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+                  <XAxis dataKey="hourLabel" tick={false} axisLine={false} tickLine={false} height={1} />
+                  <YAxis
+                    width={36}
+                    tick={{ fill: "#94a3b8", fontSize: 9 }}
+                    domain={yDomain}
+                    axisLine={false}
+                    tickLine={false}
+                  />
                   <Tooltip
                     contentStyle={{
                       background: "rgba(15, 23, 42, 0.95)",
@@ -90,8 +115,8 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                   <Line
                     type="monotone"
                     dataKey="v"
-                    stroke="#c084fc"
-                    strokeWidth={1.5}
+                    stroke="#e879f9"
+                    strokeWidth={2}
                     dot={false}
                     connectNulls
                     isAnimationActive={false}
