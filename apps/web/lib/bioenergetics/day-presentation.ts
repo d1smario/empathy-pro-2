@@ -1,7 +1,9 @@
 import type {
   BioenergeticChannelProvenance,
+  BioenergeticContinuousMonitoringDay,
   BioenergeticDayKernelOutput,
-  BioenergeticNominalEducationCurve24,
+  BioenergeticMonitoringChannel24,
+  BioenergeticMonitoringDataPlane,
   BioenergeticPathwayImpact,
   BioenergeticSeriesPoint,
   BioenergeticTimelineEvent,
@@ -11,6 +13,8 @@ import type {
 import {
   activitySupportHours,
   buildNominalCortisolActhHourly24,
+  hourlyFlat24,
+  hourlyRippleSeries24,
   hourFromIsoTs,
   mealInhibitoryHours,
   simulatedLabNumeric,
@@ -18,6 +22,28 @@ import {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
+}
+
+function phaseHourForTileId(id: string): number {
+  let s = 0;
+  for (let i = 0; i < id.length; i += 1) s += id.charCodeAt(i);
+  return s % 24;
+}
+
+function isHighFrequencyStream(
+  provenance: BioenergeticChannelProvenance,
+  points: BioenergeticSeriesPoint[] | null,
+): boolean {
+  return provenance === "measured" && (points?.length ?? 0) > 3;
+}
+
+function monitoringPlaneForGluLac(
+  provenance: BioenergeticChannelProvenance,
+  points: BioenergeticSeriesPoint[] | null,
+): BioenergeticMonitoringDataPlane {
+  if (isHighFrequencyStream(provenance, points)) return "measured_stream";
+  if (provenance === "measured") return "sparse_lab_hold";
+  return "model_continuous";
 }
 
 function mergeLabSim(
@@ -192,7 +218,7 @@ export function buildBioenergeticDayPresentation(input: {
 }): {
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
-  nominalEducationCurves24h: BioenergeticNominalEducationCurve24[];
+  continuousMonitoring: BioenergeticContinuousMonitoringDay;
 } {
   const lab = mergeLabValues(input.biomarkerRows);
   const k = input.kernel;
@@ -289,24 +315,6 @@ export function buildBioenergeticDayPresentation(input: {
   }
 
   const nomH = buildNominalCortisolActhHourly24(k);
-  const nominalEducationCurves24h: BioenergeticNominalEducationCurve24[] = [
-    {
-      id: "cortisol_nominal_v1",
-      labelIt: "Cortisolo — profilo diurno nominale",
-      unit: "µg/dL",
-      hourly: nomH.cortisolUgdL,
-      modelNote:
-        "Forma circadiana modulata da stress/pathway del kernel (v1). Non è concentrazione da campionamento seriato; confronta con un singolo valore di lab come ancoraggio qualitativo.",
-    },
-    {
-      id: "acth_nominal_v1",
-      labelIt: "ACTH — profilo diurno nominale",
-      unit: "pg/mL",
-      hourly: nomH.acthPgMl,
-      modelNote:
-        "Profilo fase anticipata rispetto al cortisolo (modello v1). Uso educativo accanto al pathway e al carico giornaliero.",
-    },
-  ];
 
   const insulinProxy = clamp(k.insulinDemandScore, 0, 100);
   const tiles: BioenergeticMetricTile[] = [];
@@ -630,5 +638,74 @@ export function buildBioenergeticDayPresentation(input: {
     category: "gonadal",
   });
 
-  return { metricTiles: tiles, chart24h, nominalEducationCurves24h };
+  const monitoringChannels: BioenergeticMonitoringChannel24[] = [
+    {
+      id: "glucose",
+      labelIt: "Glucosio",
+      unit: "mmol/L",
+      category: "metabolic",
+      hourly: glucoseHourly,
+      dataPlane: monitoringPlaneForGluLac(input.provenance.glucose, chG),
+      replacesWithDeviceStream: true,
+    },
+    {
+      id: "lactate",
+      labelIt: "Lattato",
+      unit: "mmol/L",
+      category: "metabolic",
+      hourly: lactateHourly,
+      dataPlane: monitoringPlaneForGluLac(input.provenance.lactate, lactatePoints),
+      replacesWithDeviceStream: true,
+    },
+  ];
+
+  const skipTileIdsForMonitoring = new Set(["glucose", "lactate"]);
+  for (const tile of tiles) {
+    if (skipTileIdsForMonitoring.has(tile.id)) continue;
+    if (tile.numericValue == null) continue;
+    const v = tile.numericValue;
+    let hourly: (number | null)[];
+    let plane: BioenergeticMonitoringDataPlane;
+
+    if (tile.id === "cortisol") {
+      if (tile.provenance === "measured") {
+        hourly = hourlyFlat24(v);
+        plane = "sparse_lab_hold";
+      } else {
+        hourly = nomH.cortisolUgdL;
+        plane = "model_continuous";
+      }
+    } else if (tile.id === "acth") {
+      if (tile.provenance === "measured") {
+        hourly = hourlyFlat24(v);
+        plane = "sparse_lab_hold";
+      } else {
+        hourly = nomH.acthPgMl;
+        plane = "model_continuous";
+      }
+    } else if (tile.provenance === "measured") {
+      hourly = hourlyFlat24(v);
+      plane = "sparse_lab_hold";
+    } else {
+      hourly = hourlyRippleSeries24(v, phaseHourForTileId(tile.id));
+      plane = "model_continuous";
+    }
+
+    monitoringChannels.push({
+      id: tile.id,
+      labelIt: tile.labelIt,
+      unit: tile.unit,
+      category: tile.category,
+      hourly,
+      dataPlane: plane,
+      replacesWithDeviceStream: tile.id !== "insulin_proxy",
+    });
+  }
+
+  const continuousMonitoring: BioenergeticContinuousMonitoringDay = {
+    layer: "model_continuous_v1",
+    channels: monitoringChannels,
+  };
+
+  return { metricTiles: tiles, chart24h, continuousMonitoring };
 }

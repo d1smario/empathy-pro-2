@@ -19,8 +19,8 @@ import {
   writePersistedNutritionPlanDate,
 } from "@/lib/nutrition/persisted-nutrition-plan-date";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { BioenergeticsContinuousMonitoringGrid } from "@/modules/bioenergetics/components/BioenergeticsContinuousMonitoringGrid";
 import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
-import { BioenergeticsNominalHormone24Chart } from "@/modules/bioenergetics/components/BioenergeticsNominalHormone24Chart";
 import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
 
 function toIsoDate(d: Date): string {
@@ -125,12 +125,14 @@ export default function BioenergeticsPageView() {
           setError(json.error ?? "Lettura BioEnergetic Intelligence non riuscita.");
           return;
         }
+        const cm = json.continuousMonitoring as BioenergeticsDayViewModel["continuousMonitoring"] | undefined;
         const vmPayload: BioenergeticsDayViewModel = {
           ...json,
           series: Array.isArray(json.series) ? json.series : [],
-          nominalEducationCurves24h: Array.isArray(json.nominalEducationCurves24h)
-            ? json.nominalEducationCurves24h
-            : undefined,
+          continuousMonitoring:
+            cm && typeof cm === "object" && cm.layer === "model_continuous_v1" && Array.isArray(cm.channels)
+              ? cm
+              : undefined,
         };
         setVm(vmPayload);
       } catch {
@@ -165,7 +167,7 @@ export default function BioenergeticsPageView() {
       eyebrow="BioEnergetic Intelligence · Focus"
       eyebrowClassName="text-lime-400"
       title="BioEnergetic Intelligence"
-      description="Report fisiologico giornaliero: timeline training/nutrizione/device, provenienza misurato-vs-stimato, pathway supportivi o inibitori."
+      description="Monitoraggio continuo (modello v1) sulla giornata: timeline training/nutrizione/device, strisce 24 h per analita, pathway supportivo o inibitorio — contratto pronto a integrazione stream device."
       headerActions={
         <>
           <Pro2Link href="/nutrition" variant="secondary" className="justify-center border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15">
@@ -246,20 +248,21 @@ export default function BioenergeticsPageView() {
             <Pro2SectionCard
               accent="fuchsia"
               title="Via metabolica · 24 h"
-              subtitle="Bilancio modello, glucosio e lattato (mmol/L) sullo stesso asse temporale; fascia = impatto orario"
+              subtitle="Monitoraggio continuo (modello): bilancio pathway, glucosio e lattato; fascia = impatto orario. Stesso paradigma UI sostituibile da stream device."
               icon={LineChart}
             >
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
-              {vm.nominalEducationCurves24h && vm.nominalEducationCurves24h.length >= 2 ? (
+              {vm.continuousMonitoring?.channels?.length ? (
                 <div className="mt-6 border-t border-white/10 pt-4">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-200/85">
-                    Asse HPA — curve nominali (modello)
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fuchsia-200/85">
+                    Striscia monitoraggio continuo (24 h)
                   </p>
-                  <p className="mb-3 text-[0.7rem] leading-relaxed text-gray-500">
-                    Per ragionare sul ritmo circadiano rispetto al pathway e al carico: le linee non sono dosaggi continui da
-                    laboratorio; integra con i valori nelle tile se presenti referti.
+                  <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
+                    Ogni pannello è una serie oraria nello stesso contratto: oggi da modello deterministico o da referto
+                    tenuto costante; quando disponibile un device a monitoraggio continuo, le curve nello stesso layout
+                    diventano dati reali senza cambiare il ragionamento biochimico sul tempo.
                   </p>
-                  <BioenergeticsNominalHormone24Chart curves={vm.nominalEducationCurves24h} />
+                  <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
                 </div>
               ) : null}
               <div className="mt-6 border-t border-white/10 pt-4">

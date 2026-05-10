@@ -151,7 +151,7 @@ export async function assembleBioenergeticDay(
 
   const series = buildBioenergeticDaySeries({ slice, provenance, channels });
 
-  const { metricTiles, chart24h, nominalEducationCurves24h } = buildBioenergeticDayPresentation({
+  const { metricTiles, chart24h, continuousMonitoring } = buildBioenergeticDayPresentation({
     date,
     kernel,
     provenance,
@@ -184,14 +184,14 @@ export async function assembleBioenergeticDay(
       "Senza CGM/lab, glucosio e lattato seguono una diurna simulata (banca coefficienti v1), non misure continue.",
       "Quando presenti, i dati misurati (CGM/lab/device) hanno priorita sulle stime e sulle tile da referto.",
       "Le tile lab senza valore nel panel usano ordini di grandezza simulati dal kernel (stesso modello v1), non risultati analitici.",
-      "I grafici «profilo diurno nominale» cortisolo/ACTH sono curve educative modulate dal kernel, non tracce ematiche continue.",
+      "La striscia «monitoraggio continuo» usa oggi il modello deterministico (v1) su 24 h per ogni analita valorizzata; con stream device le stesse serie saranno alimentate dai dati reali senza cambiare il layout.",
       "Colori supportivo/neutro/inibitorio: modello operativo sulla giornata, non classificazione di laboratorio.",
       "Le serie aggiuntive (FC, CHO cumulativi, potenza da trace) dipendono da trace/diario disponibili per la data.",
       "La curva «Potenza (target da piano kJ/kcal)» è un vincolo energetico deterministico da `planned_workouts`, non una prescrizione FTP.",
     ],
     metricTiles,
     chart24h,
-    nominalEducationCurves24h,
+    continuousMonitoring,
     series,
   };
 

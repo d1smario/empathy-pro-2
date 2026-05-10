@@ -65,14 +65,30 @@ export type BioenergeticHour24Point = {
 };
 
 /**
- * Curva oraria (24 punti) a scopo educativo / ragionamento operativo: non sostituisce dosaggi clinici seriati.
+ * Piano dati dello strato «monitoraggio continuo»:
+ * - `model_continuous`: oggi da modello deterministico (sostituibile da stream).
+ * - `measured_stream`: serie ad alta frequenza (es. CGM) sul giorno.
+ * - `sparse_lab_hold`: singolo referto — valore tenuto costante fino a nuovi campioni/device.
  */
-export type BioenergeticNominalEducationCurve24 = {
+export type BioenergeticMonitoringDataPlane = "model_continuous" | "measured_stream" | "sparse_lab_hold";
+
+/** Un canale nello stesso paradigma UI: striscia 24 h, oggi modello o misura; domani stream device ove applicabile. */
+export type BioenergeticMonitoringChannel24 = {
   id: string;
   labelIt: string;
   unit: string;
-  hourly: number[];
-  modelNote: string;
+  category: BioenergeticMetricTileCategory;
+  /** Valore per ore 0–23 (timezone locale implicita nel report giorno). */
+  hourly: (number | null)[];
+  dataPlane: BioenergeticMonitoringDataPlane;
+  /** Se true, il prodotto intende questo canale come candidato a sostituzione con stream device continuo. */
+  replacesWithDeviceStream: boolean;
+};
+
+/** Vista giornaliera unificata «monitoraggio continuo» (modello v1 → device quando disponibile). */
+export type BioenergeticContinuousMonitoringDay = {
+  layer: "model_continuous_v1";
+  channels: BioenergeticMonitoringChannel24[];
 };
 
 /** Serie temporale giornaliera per curve UI (timestamp ISO + valore numerico). */
@@ -106,11 +122,8 @@ export type BioenergeticsDayViewModel = {
   disclaimers: string[];
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
-  /**
-   * Profili ormonali diurni nominali (modello v1) per lettura temporale accanto al pathway;
-   * non sono tracce da laboratorio continuo.
-   */
-  nominalEducationCurves24h?: BioenergeticNominalEducationCurve24[];
+  /** Striscia 24 h per ogni analita valorizzata: oggi modello/sparse/stream; stesso contratto quando arriveranno device. */
+  continuousMonitoring?: BioenergeticContinuousMonitoringDay;
   /** Curve fisiologiche / stimoli (memoria giorno + device); array vuoto se nessuna serie. */
   series: BioenergeticDaySeriesChannel[];
 };

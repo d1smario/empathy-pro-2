@@ -32,8 +32,8 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
 });
 
-test("buildBioenergeticDayPresentation espone curve ormonali nominali 24h", () => {
-  const { nominalEducationCurves24h } = buildBioenergeticDayPresentation({
+test("buildBioenergeticDayPresentation espone continuousMonitoring con cortisolo e ACTH su 24h", () => {
+  const { continuousMonitoring } = buildBioenergeticDayPresentation({
     date: "2026-05-01",
     kernel: {
       modelVersion: 1,
@@ -53,9 +53,11 @@ test("buildBioenergeticDayPresentation espone curve ormonali nominali 24h", () =
     timeline: [],
     biomarkerRows: [],
   });
-  assert.equal(nominalEducationCurves24h.length, 2);
-  assert.equal(nominalEducationCurves24h[0]?.hourly.length, 24);
-  assert.equal(nominalEducationCurves24h[1]?.hourly.length, 24);
+  assert.equal(continuousMonitoring.layer, "model_continuous_v1");
+  const cort = continuousMonitoring.channels.find((c) => c.id === "cortisol");
+  const acth = continuousMonitoring.channels.find((c) => c.id === "acth");
+  assert.ok(cort && cort.hourly.length === 24);
+  assert.ok(acth && acth.hourly.length === 24);
 });
 
 test("pickGlucoseMmolFromLab converte glicemia mg/dL da ontology", () => {
