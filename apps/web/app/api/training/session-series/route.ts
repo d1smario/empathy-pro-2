@@ -1,18 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import {
+  ALL_SERIES_CHANNEL_IDS,
+  getSeriesChannelSpec,
+  isGeoPoint,
+  type SeriesChannelId,
+} from "@/lib/training/series-channel-registry";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
 
-const ALLOWED_CHANNELS = new Set(["power", "hr", "speed", "cadence", "altitude", "temperature"]);
-
 /**
  * Fase 3 device→UI: lettura serie HD da `executed_workout_series` per una sessione.
  * Letture **read-only**, scoping atleta tramite `requireAthleteReadContext`.
  *
- * Query: `?athleteId=…&executedId=…&channels=power,hr` (channels opzionale).
+ * Query: `?athleteId=…&executedId=…&channels=power,hr,route` (channels opzionale).
+ *
+ * Canali supportati = `SERIES_CHANNEL_REGISTRY` (single source of truth):
+ *   - scalar (samples = number[]):   power, hr, speed, cadence, altitude, temperature,
+ *                                    distance, time_elapsed, pace_min_per_km, vertical_speed_mps
+ *   - geo_point (samples = {lat,lon,alt?}[]): route
  */
 export async function GET(req: NextRequest) {
   const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
@@ -26,12 +35,12 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const channels = channelsParam
+  const requested = channelsParam
     ? channelsParam
         .split(",")
         .map((s) => s.trim().toLowerCase())
-        .filter((s) => ALLOWED_CHANNELS.has(s))
-    : Array.from(ALLOWED_CHANNELS);
+        .filter((s): s is SeriesChannelId => ALL_SERIES_CHANNEL_IDS.has(s as SeriesChannelId))
+    : Array.from(ALL_SERIES_CHANNEL_IDS);
 
   try {
     const { db } = await requireAthleteReadContext(req, athleteId);
@@ -42,8 +51,8 @@ export async function GET(req: NextRequest) {
       .eq("athlete_id", athleteId)
       .eq("executed_workout_id", executedId);
 
-    if (channels.length && channels.length < ALLOWED_CHANNELS.size) {
-      query = query.in("channel", channels);
+    if (requested.length && requested.length < ALL_SERIES_CHANNEL_IDS.size) {
+      query = query.in("channel", requested);
     }
 
     const { data, error } = await query;
@@ -73,18 +82,27 @@ export async function GET(req: NextRequest) {
     };
     const rows = (data ?? []) as Row[];
 
-    const out = rows.map((r) => ({
-      channel: r.channel,
-      unit: r.unit,
-      sampleCount: r.sample_count,
-      samples: Array.isArray(r.samples)
-        ? r.samples.filter((v): v is number => typeof v === "number" && Number.isFinite(v))
-        : [],
-      parserEngine: r.parser_engine,
-      parserVersion: r.parser_version,
-      source: r.source,
-      version: r.version,
-    }));
+    const out = rows.map((r) => {
+      const spec = getSeriesChannelSpec(r.channel);
+      const rawSamples: unknown[] = Array.isArray(r.samples) ? r.samples : [];
+      let samples: unknown[];
+      if (spec?.shape === "geo_point") {
+        samples = rawSamples.filter((v) => isGeoPoint(v));
+      } else {
+        samples = rawSamples.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+      }
+      return {
+        channel: r.channel,
+        unit: r.unit,
+        shape: spec?.shape ?? "scalar",
+        sampleCount: samples.length,
+        samples,
+        parserEngine: r.parser_engine,
+        parserVersion: r.parser_version,
+        source: r.source,
+        version: r.version,
+      };
+    });
 
     return NextResponse.json(
       {

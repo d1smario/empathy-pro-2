@@ -1,6 +1,9 @@
 /**
  * Persistenza serie HD per `executed_workouts` su tabella dedicata
- * `executed_workout_series` (vedi `supabase/migrations/045_executed_workout_series_v1.sql`).
+ * `executed_workout_series` (vedi migrations 045 + 050).
+ *
+ * Convoglia tutti i canali (scalari + route geo) su un'unica tabella e usa il
+ * `SERIES_CHANNEL_REGISTRY` come single source of truth (no duplicazione enum).
  *
  * Best-effort: se la tabella non esiste o la write fallisce non si rompe l’import
  * (la sessione resta valida con le serie nel `trace_summary` come legacy).
@@ -8,22 +11,14 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-type SeriesChannel = "power" | "hr" | "speed" | "cadence" | "altitude" | "temperature";
+import {
+  type GeoPoint,
+  type SeriesChannelSpec,
+  SERIES_CHANNEL_REGISTRY,
+  isGeoPoint,
+} from "@/lib/training/series-channel-registry";
 
-const CHANNEL_DEFS: Array<{
-  channel: SeriesChannel;
-  unit: string;
-  traceKeys: string[];
-}> = [
-  { channel: "power", unit: "W", traceKeys: ["power_series_w"] },
-  { channel: "hr", unit: "bpm", traceKeys: ["hr_series_bpm"] },
-  { channel: "speed", unit: "km/h", traceKeys: ["speed_series_kmh"] },
-  { channel: "cadence", unit: "rpm", traceKeys: ["cadence_series_rpm"] },
-  { channel: "altitude", unit: "m", traceKeys: ["altitude_series_m", "route_altitude_series_m"] },
-  { channel: "temperature", unit: "°C", traceKeys: ["temperature_series_c"] },
-];
-
-function pickSeriesFromTrace(trace: Record<string, unknown>, keys: string[]): number[] | null {
+function pickScalarSeries(trace: Record<string, unknown>, keys: string[]): number[] | null {
   for (const k of keys) {
     const raw = trace[k];
     if (!Array.isArray(raw)) continue;
@@ -34,6 +29,25 @@ function pickSeriesFromTrace(trace: Record<string, unknown>, keys: string[]): nu
     }
     if (out.length > 1) return out;
   }
+  return null;
+}
+
+function pickGeoSeries(trace: Record<string, unknown>, keys: string[]): GeoPoint[] | null {
+  for (const k of keys) {
+    const raw = trace[k];
+    if (!Array.isArray(raw)) continue;
+    const out: GeoPoint[] = [];
+    for (const v of raw) {
+      if (isGeoPoint(v)) out.push({ lat: v.lat, lon: v.lon, ...(typeof v.alt === "number" ? { alt: v.alt } : {}) });
+    }
+    if (out.length >= 1) return out;
+  }
+  return null;
+}
+
+function pickSamplesForChannel(trace: Record<string, unknown>, def: SeriesChannelSpec): unknown[] | null {
+  if (def.shape === "scalar") return pickScalarSeries(trace, def.traceKeys);
+  if (def.shape === "geo_point") return pickGeoSeries(trace, def.traceKeys);
   return null;
 }
 
@@ -56,9 +70,9 @@ export async function persistExecutedWorkoutSeriesFromTrace(input: {
   const { db, athleteId, executedWorkoutId, traceSummary } = input;
   const result: PersistSeriesResult = { attempted: 0, written: 0, skipped: 0, errors: [] };
 
-  for (const def of CHANNEL_DEFS) {
-    const series = pickSeriesFromTrace(traceSummary, def.traceKeys);
-    if (!series) {
+  for (const def of SERIES_CHANNEL_REGISTRY) {
+    const samples = pickSamplesForChannel(traceSummary, def);
+    if (!samples) {
       result.skipped += 1;
       continue;
     }
@@ -70,8 +84,8 @@ export async function persistExecutedWorkoutSeriesFromTrace(input: {
           athlete_id: athleteId,
           channel: def.channel,
           unit: def.unit,
-          sample_count: series.length,
-          samples: series,
+          sample_count: samples.length,
+          samples,
           source: input.source ?? "file_import",
           parser_engine: input.parserEngine ?? null,
           parser_version: input.parserVersion ?? null,

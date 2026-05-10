@@ -150,16 +150,41 @@ function buildGarminCanonicalSummary(r: Record<string, unknown>): Record<string,
  * Estrazione serie HD da `samples[]` Garmin Activity Details API.
  * Schema: vedi https://developer.garmin.com/wellness-api/.
  * Restituisce le chiavi canoniche `*_series_*` compatibili con
- * `persistExecutedWorkoutSeriesFromTrace` (Fase 3 device → UI).
+ * `persistExecutedWorkoutSeriesFromTrace` + `series-channel-registry`.
+ *
+ * Canali popolati quando i samples li espongono:
+ *   - power_series_w, hr_series_bpm, speed_series_kmh, cadence_series_rpm
+ *   - altitude_series_m, temperature_series_c
+ *   - route_series_geo (oggetti `{lat, lon, alt?}`)
+ *   - distance_series_m (cumulato in metri)
+ *   - time_series_s (secondi dallo start)
+ *   - pace_series_min_per_km (derivato da speed quando ≥ ~0.3 m/s, evita /0 da fermo)
+ *   - vertical_speed_series_mps (derivato altitude/Δt)
  */
-function extractGarminActivitySeries(samples: unknown): Record<string, number[]> {
+type GarminGeoSample = { lat: number; lon: number; alt?: number };
+
+function extractGarminActivitySeries(samples: unknown): Record<string, unknown> {
   if (!Array.isArray(samples) || samples.length < 2) return {};
   const power: number[] = [];
   const hr: number[] = [];
   const speedKmh: number[] = [];
+  const speedMs: number[] = [];
   const cadence: number[] = [];
   const altitude: number[] = [];
   const tempC: number[] = [];
+  const route: GarminGeoSample[] = [];
+  const distanceM: number[] = [];
+  const timeS: number[] = [];
+
+  let startSec: number | null = null;
+  for (const raw of samples) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const sStart = (raw as Record<string, unknown>).startTimeInSeconds;
+    if (typeof sStart === "number" && Number.isFinite(sStart)) {
+      startSec = sStart;
+      break;
+    }
+  }
 
   for (const raw of samples) {
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
@@ -172,7 +197,10 @@ function extractGarminActivitySeries(samples: unknown): Record<string, number[]>
     if (typeof h === "number" && Number.isFinite(h)) hr.push(h);
 
     const v = s.speedMetersPerSecond;
-    if (typeof v === "number" && Number.isFinite(v)) speedKmh.push(v * 3.6);
+    if (typeof v === "number" && Number.isFinite(v)) {
+      speedMs.push(v);
+      speedKmh.push(v * 3.6);
+    }
 
     const cBike = s.bikeCadenceInRPM;
     const cRun = s.stepsPerMinute;
@@ -192,15 +220,61 @@ function extractGarminActivitySeries(samples: unknown): Record<string, number[]>
 
     const t = s.airTemperatureCelcius;
     if (typeof t === "number" && Number.isFinite(t)) tempC.push(t);
+
+    const lat = s.latitudeInDegree;
+    const lon = s.longitudeInDegree;
+    if (
+      typeof lat === "number" &&
+      Number.isFinite(lat) &&
+      Math.abs(lat) <= 90 &&
+      typeof lon === "number" &&
+      Number.isFinite(lon) &&
+      Math.abs(lon) <= 180
+    ) {
+      const geo: GarminGeoSample = { lat, lon };
+      if (typeof e === "number" && Number.isFinite(e)) geo.alt = e;
+      route.push(geo);
+    }
+
+    const dist = s.totalDistanceInMeters;
+    if (typeof dist === "number" && Number.isFinite(dist) && dist >= 0) distanceM.push(dist);
+
+    const sStart = s.startTimeInSeconds;
+    if (typeof sStart === "number" && Number.isFinite(sStart) && startSec != null) {
+      timeS.push(Math.max(0, sStart - startSec));
+    }
   }
 
-  const out: Record<string, number[]> = {};
+  /** Pace istantaneo (min/km) derivato da speed; evitiamo divisione per zero quando fermo. */
+  const paceMinPerKm: number[] = [];
+  if (speedMs.length > 1) {
+    for (const v of speedMs) {
+      if (v >= 0.3) paceMinPerKm.push(1000 / v / 60);
+    }
+  }
+
+  /** Velocità verticale m/s derivata da altitude e time_s; richiede entrambe stessa lunghezza. */
+  const verticalMps: number[] = [];
+  if (altitude.length > 2 && altitude.length === timeS.length) {
+    for (let i = 1; i < altitude.length; i += 1) {
+      const dh = altitude[i] - altitude[i - 1];
+      const dt = timeS[i] - timeS[i - 1];
+      if (dt > 0 && Number.isFinite(dh)) verticalMps.push(dh / dt);
+    }
+  }
+
+  const out: Record<string, unknown> = {};
   if (power.length > 1) out.power_series_w = power;
   if (hr.length > 1) out.hr_series_bpm = hr;
   if (speedKmh.length > 1) out.speed_series_kmh = speedKmh;
   if (cadence.length > 1) out.cadence_series_rpm = cadence;
   if (altitude.length > 1) out.altitude_series_m = altitude;
   if (tempC.length > 1) out.temperature_series_c = tempC;
+  if (route.length > 1) out.route_series_geo = route;
+  if (distanceM.length > 1) out.distance_series_m = distanceM;
+  if (timeS.length > 1) out.time_series_s = timeS;
+  if (paceMinPerKm.length > 1) out.pace_series_min_per_km = paceMinPerKm;
+  if (verticalMps.length > 1) out.vertical_speed_series_mps = verticalMps;
   return out;
 }
 
@@ -288,6 +362,33 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
     const samplesSeries = extractGarminActivitySeries(r.samples);
     const hasSamples = Object.keys(samplesSeries).length > 0;
 
+    /**
+     * Fallback: il push `activities` (summary) non porta `samples[]` ma può avere
+     * `startingLatitudeInDegree` / `startingLongitudeInDegree`. Lo salviamo come
+     * `route_series_geo` con due punti coincidenti (marker singolo) — la UI mappa
+     * lo riconoscerà come "punto di partenza" e disegnerà un marker invece di una
+     * polyline. Quando arriverà l'`activityDetails` corrispondente, il materializer
+     * sovrascriverà con la polyline completa via upsert (`onConflict` channel/version).
+     */
+    if (!samplesSeries.route_series_geo) {
+      const startLat = (r as Record<string, unknown>).startingLatitudeInDegree;
+      const startLon = (r as Record<string, unknown>).startingLongitudeInDegree;
+      if (
+        typeof startLat === "number" &&
+        Number.isFinite(startLat) &&
+        Math.abs(startLat) <= 90 &&
+        typeof startLon === "number" &&
+        Number.isFinite(startLon) &&
+        Math.abs(startLon) <= 180 &&
+        !(startLat === 0 && startLon === 0)
+      ) {
+        const marker = { lat: startLat, lon: startLon };
+        samplesSeries.route_series_geo = [marker, marker];
+      }
+    }
+
+    const hasPersistableSeries = Object.keys(samplesSeries).length > 0;
+
     const channelCoverage = garminActivityChannelCoverage(r);
     if (hasSamples) {
       if (samplesSeries.power_series_w) channelCoverage.power = 100;
@@ -360,8 +461,8 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       continue;
     }
 
-    /** Fase 3 device → UI: persistenza HD su `executed_workout_series` quando samples[] presenti. */
-    if (hasSamples && executedWorkoutId && traceFinal) {
+    /** Fase 3 device → UI: persistenza HD su `executed_workout_series` quando samples[] o marker GPS presenti. */
+    if (hasPersistableSeries && executedWorkoutId && traceFinal) {
       try {
         await persistExecutedWorkoutSeriesFromTrace({
           db: supabase,

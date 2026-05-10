@@ -1,20 +1,24 @@
 "use client";
 
 import type { ExecutedWorkout } from "@empathy/domain-training";
-import { Activity, Gauge } from "lucide-react";
+import { Activity, Gauge, Map as MapIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
+import { SessionRouteMap } from "@/components/training/SessionRouteMap";
 import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
 import { TrainingSingleTraceChart } from "@/components/training/TrainingSingleTraceChart";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import { formatElapsedLabel } from "@/lib/training/calendar-analyzer-helpers";
 import {
   buildSessionDetailVM,
-  type SeriesChannel,
   type SessionDetailViewModel,
   type SessionKpiTile,
-  type SessionSeriesBundle,
 } from "@/lib/training/session-detail-summary";
+import {
+  type GeoPoint,
+  isGeoPoint,
+  type SeriesChannelId,
+} from "@/lib/training/series-channel-registry";
 import { cn } from "@/lib/cn";
 
 const ACCENT_TEXT: Record<NonNullable<SessionKpiTile["accent"]>, string> = {
@@ -35,23 +39,55 @@ const ACCENT_BORDER: Record<NonNullable<SessionKpiTile["accent"]>, string> = {
   sky: "border-sky-500/25",
 };
 
-const SERIES_COLOR: Record<SeriesChannel, string> = {
+/**
+ * Canali scalari renderizzati come trace chart. `route` è gestito a parte come
+ * mini-mappa (vedi `SessionRouteMap`); `time_elapsed` non si chartizza da solo.
+ */
+type ChartChannel = Exclude<SeriesChannelId, "route" | "time_elapsed">;
+
+const CHART_CHANNELS: ReadonlySet<ChartChannel> = new Set([
+  "power",
+  "hr",
+  "speed",
+  "cadence",
+  "altitude",
+  "temperature",
+  "distance",
+  "pace_min_per_km",
+  "vertical_speed_mps",
+]);
+
+const SERIES_COLOR: Record<ChartChannel, string> = {
   power: "#f0abfc",
   hr: "#34d399",
   speed: "#22d3ee",
   cadence: "#a78bfa",
   altitude: "#fb923c",
   temperature: "#facc15",
+  distance: "#60a5fa",
+  pace_min_per_km: "#f472b6",
+  vertical_speed_mps: "#fb923c",
 };
 
-const SERIES_LABEL: Record<SeriesChannel, string> = {
+const SERIES_LABEL: Record<ChartChannel, string> = {
   power: "Potenza",
   hr: "FC",
   speed: "Velocità",
   cadence: "Cadenza",
   altitude: "Quota",
   temperature: "Temperatura",
+  distance: "Distanza",
+  pace_min_per_km: "Pace",
+  vertical_speed_mps: "Vel. verticale",
 };
+
+type ExtendedSeriesBundle = {
+  channel: ChartChannel;
+  unit: string;
+  values: number[];
+};
+
+type RouteBundle = { points: GeoPoint[] };
 
 function fmt(value: number | null, digits: number): string {
   if (value == null || !Number.isFinite(value)) return "—";
@@ -87,11 +123,12 @@ function SessionDetailCard({
   dayExecutedDuration: number | null;
   athleteId: string | null | undefined;
 }) {
-  const [dbSeries, setDbSeries] = useState<SessionSeriesBundle[]>([]);
+  const [dbSeries, setDbSeries] = useState<ExtendedSeriesBundle[]>([]);
+  const [routeBundle, setRouteBundle] = useState<RouteBundle | null>(null);
+  const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
 
   useEffect(() => {
     if (!athleteId || !vm.workoutId) return;
-    if (vm.series.length > 0) return; // serie già presenti in trace_summary
     let cancelled = false;
     (async () => {
       try {
@@ -105,26 +142,36 @@ function SessionDetailCard({
         const json = (await res.json()) as
           | {
               ok: true;
-              channels: Array<{ channel: string; unit: string; samples: number[] }>;
+              channels: Array<{
+                channel: string;
+                unit: string;
+                shape?: "scalar" | "geo_point";
+                samples: unknown[];
+              }>;
             }
           | { ok: false; error?: string };
         if (cancelled || !("ok" in json) || !json.ok) return;
-        const allowed: ReadonlySet<SeriesChannel> = new Set([
-          "power",
-          "hr",
-          "speed",
-          "cadence",
-          "altitude",
-          "temperature",
-        ]);
-        const merged: SessionSeriesBundle[] = [];
+
+        const merged: ExtendedSeriesBundle[] = [];
         for (const c of json.channels) {
-          if (!allowed.has(c.channel as SeriesChannel)) continue;
-          if (!Array.isArray(c.samples) || c.samples.length < 2) continue;
+          if (c.channel === "route") {
+            const pts = (Array.isArray(c.samples) ? c.samples : []).filter(isGeoPoint) as GeoPoint[];
+            if (pts.length >= 1) setRouteBundle({ points: pts });
+            continue;
+          }
+          if (!CHART_CHANNELS.has(c.channel as ChartChannel)) continue;
+          const nums = Array.isArray(c.samples)
+            ? (c.samples.filter((v) => typeof v === "number" && Number.isFinite(v)) as number[])
+            : [];
+          if (nums.length < 2) continue;
+          if (c.channel === "distance") {
+            const last = nums[nums.length - 1];
+            if (typeof last === "number" && Number.isFinite(last)) setDistanceMeters(last);
+          }
           merged.push({
-            channel: c.channel as SeriesChannel,
+            channel: c.channel as ChartChannel,
             unit: c.unit,
-            values: c.samples,
+            values: nums,
           });
         }
         if (merged.length) setDbSeries(merged);
@@ -135,15 +182,29 @@ function SessionDetailCard({
     return () => {
       cancelled = true;
     };
-  }, [athleteId, vm.workoutId, vm.series.length]);
+  }, [athleteId, vm.workoutId]);
 
-  const allSeries = useMemo<SessionSeriesBundle[]>(() => {
-    if (vm.series.length > 0) return vm.series;
-    return dbSeries;
+  const allSeries = useMemo<ExtendedSeriesBundle[]>(() => {
+    /**
+     * Merge: serie in `trace_summary` (vm.series, fonte VM legacy) + serie HD da DB.
+     * DB ha priorità per i canali presenti in entrambi (più completo + nuovi canali).
+     */
+    const byChannel = new Map<ChartChannel, ExtendedSeriesBundle>();
+    for (const s of vm.series) {
+      if (CHART_CHANNELS.has(s.channel as ChartChannel)) {
+        byChannel.set(s.channel as ChartChannel, {
+          channel: s.channel as ChartChannel,
+          unit: s.unit,
+          values: s.values,
+        });
+      }
+    }
+    for (const s of dbSeries) byChannel.set(s.channel, s);
+    return Array.from(byChannel.values());
   }, [vm.series, dbSeries]);
 
   const seriesChannels = allSeries.map((s) => s.channel);
-  const [activeChannel, setActiveChannel] = useState<SeriesChannel | null>(seriesChannels[0] ?? null);
+  const [activeChannel, setActiveChannel] = useState<ChartChannel | null>(seriesChannels[0] ?? null);
 
   useEffect(() => {
     if (activeChannel && seriesChannels.includes(activeChannel)) return;
@@ -186,7 +247,37 @@ function SessionDetailCard({
         {vm.kpi.map((tile) => (
           <KpiTile key={tile.label} tile={tile} />
         ))}
+        {distanceMeters != null && !vm.kpi.some((t) => t.label === "Distanza") ? (
+          <KpiTile
+            tile={{
+              label: "Distanza",
+              value: (distanceMeters / 1000).toFixed(2),
+              unit: "km",
+              accent: "fuchsia",
+            }}
+          />
+        ) : null}
       </div>
+
+      {routeBundle && routeBundle.points.length > 0 ? (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <MapIcon className="h-3.5 w-3.5 text-fuchsia-300" />
+            <p className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-fuchsia-300">
+              Percorso GPS
+            </p>
+            <span className="font-mono text-[0.6rem] uppercase tracking-wider text-zinc-500">
+              {routeBundle.points.length} pt
+              {routeBundle.points.length === 2 &&
+              routeBundle.points[0]!.lat === routeBundle.points[1]!.lat &&
+              routeBundle.points[0]!.lon === routeBundle.points[1]!.lon
+                ? " · solo punto di partenza (Activity Details non ancora ricevuto)"
+                : ""}
+            </span>
+          </div>
+          <SessionRouteMap points={routeBundle.points} />
+        </div>
+      ) : null}
 
       {vm.secondary.length > 0 ? (
         <div className="overflow-hidden rounded-2xl border border-white/10 bg-black/40">
