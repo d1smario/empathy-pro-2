@@ -1,4 +1,8 @@
-import "server-only";
+/**
+ * Pure mapping (regex su chiavi summary Garmin → ObservationDomain).
+ * Nessun IO server-side: importabile anche dal worker Express ingest (Fly).
+ * Quindi non serve `import "server-only"`.
+ */
 
 import type { ObservationDomain } from "@/lib/empathy/schemas";
 
