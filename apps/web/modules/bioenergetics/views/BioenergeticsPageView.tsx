@@ -143,10 +143,17 @@ export default function BioenergeticsPageView() {
     };
   }, [athleteId, athleteLoading, date]);
 
-  const measuredBadge = useMemo(() => {
+  /** Solo glucosio/lattato da CGM o lab quel giorno (non include potenza/trace né piano). */
+  const measuredGluLacBadge = useMemo(() => {
     if (!vm) return "—";
     const measuredCount = [vm.provenance.glucose, vm.provenance.lactate].filter((p) => p === "measured").length;
     return `${measuredCount}/2`;
+  }, [vm]);
+
+  const traceSeriesCount = useMemo(() => {
+    if (!vm?.series?.length) return 0;
+    const traceIds = new Set(["power_w", "hr_bpm", "speed_kmh", "cadence_rpm", "altitude_m", "temperature_c"]);
+    return vm.series.filter((s) => traceIds.has(s.id) && s.provenance === "measured" && s.points.length >= 2).length;
   }, [vm]);
 
   return (
@@ -194,8 +201,12 @@ export default function BioenergeticsPageView() {
             <p className="mt-1 text-xl font-semibold text-white">{vm?.timeline.length ?? 0}</p>
           </div>
           <div className="rounded-2xl border border-lime-500/25 bg-black/35 px-4 py-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-lime-300">Canali misurati</p>
-            <p className="mt-1 text-xl font-semibold text-white">{measuredBadge}</p>
+            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-lime-300">Glicemia / lattato (CGM o lab)</p>
+            <p className="mt-1 text-xl font-semibold text-white">{measuredGluLacBadge}</p>
+            <p className="mt-1 text-[0.65rem] leading-snug text-gray-500">
+              Serie da trace allenamento:{" "}
+              <span className="text-lime-200/90">{traceSeriesCount > 0 ? `${traceSeriesCount} con ≥2 punti` : "nessuna"}</span>
+            </p>
           </div>
           <div className="rounded-2xl border border-fuchsia-500/25 bg-black/35 px-4 py-3">
             <p className="font-mono text-[0.6rem] uppercase tracking-wider text-fuchsia-300">Pathway state</p>

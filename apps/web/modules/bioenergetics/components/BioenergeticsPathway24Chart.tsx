@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Area,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -104,13 +105,24 @@ export function BioenergeticsPathway24Chart({ data }: Props) {
             />
             <Legend wrapperStyle={{ fontSize: 11, color: "#94a3b8" }} />
             <ReferenceLine yAxisId="bal" y={0} stroke="rgba(255,255,255,0.2)" strokeDasharray="4 4" />
+            <Area
+              yAxisId="bal"
+              type="monotone"
+              dataKey="pathwayBalance"
+              name="Bilancio via (area)"
+              legendType="none"
+              fill="rgba(249, 115, 22, 0.22)"
+              stroke="rgba(249, 115, 22, 0.45)"
+              strokeWidth={1}
+              isAnimationActive={false}
+            />
             <Line
               yAxisId="bal"
               type="monotone"
               dataKey="pathwayBalance"
               name="Bilancio via"
-              stroke="#f97316"
-              strokeWidth={2}
+              stroke="#fb923c"
+              strokeWidth={2.5}
               dot={(props: { cx?: number; cy?: number; payload?: Row }) => {
                 const { cx, cy, payload } = props;
                 if (cx == null || cy == null || !payload) return <g />;
