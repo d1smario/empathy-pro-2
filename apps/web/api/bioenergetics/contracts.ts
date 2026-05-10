@@ -87,6 +87,8 @@ export type BioenergeticsDayViewModel = {
     lactate: BioenergeticChannelProvenance;
   };
   kernel: BioenergeticDayKernelOutput;
+  /** Banca coefficienti simulatore diurno / tile lab (domain-bioenergetics), se valorizzato. */
+  simBankVersion?: number;
   interpretationHints: BioenergeticInterpretationHint[];
   disclaimers: string[];
   metricTiles: BioenergeticMetricTile[];

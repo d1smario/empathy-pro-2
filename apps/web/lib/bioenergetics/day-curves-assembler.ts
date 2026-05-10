@@ -223,7 +223,7 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(g),
       provenance: input.provenance.glucose,
-      sourceHint: "device_sync_exports|biomarker_panels|kernel",
+      sourceHint: "device_sync_exports|biomarker_panels|sim_diurnal_v1",
     });
   }
   const l = input.channels.lactate;
@@ -234,7 +234,7 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(l),
       provenance: input.provenance.lactate,
-      sourceHint: "device_sync_exports|biomarker_panels|kernel",
+      sourceHint: "device_sync_exports|biomarker_panels|sim_diurnal_v1",
     });
   }
 

@@ -7,16 +7,26 @@ import type {
   BioenergeticMetricTile,
   BioenergeticHour24Point,
 } from "@/api/bioenergetics/contracts";
+import {
+  activitySupportHours,
+  hourFromIsoTs,
+  mealInhibitoryHours,
+  simulatedLabNumeric,
+} from "@empathy/domain-bioenergetics";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
 
-function hourFromIsoTs(ts: string): number | null {
-  const m = ts.match(/T(\d{2}):/);
-  if (!m) return null;
-  const h = Number(m[1]);
-  return Number.isFinite(h) && h >= 0 && h <= 23 ? h : null;
+function mergeLabSim(
+  labVal: number | null,
+  tileId: string,
+  k: BioenergeticDayKernelOutput,
+): { numeric: number | null; provenance: BioenergeticChannelProvenance } {
+  if (labVal != null) return { numeric: labVal, provenance: "measured" };
+  const s = simulatedLabNumeric(tileId, k);
+  if (s != null) return { numeric: s, provenance: "estimated" };
+  return { numeric: null, provenance: "absent" };
 }
 
 function mergeLabValues(rows: Array<Record<string, unknown>>): Record<string, unknown> {
@@ -150,31 +160,6 @@ function interpolateGlucoseByHour(
   return byHour;
 }
 
-function mealInhibitoryHours(timeline: BioenergeticTimelineEvent[]): Set<number> {
-  const s = new Set<number>();
-  for (const ev of timeline) {
-    if (ev.type !== "meal") continue;
-    const carbs = (ev.payload?.carbsG as number | undefined) ?? 0;
-    if (typeof carbs !== "number" || carbs < 35) continue;
-    const h = hourFromIsoTs(ev.ts);
-    if (h == null) continue;
-    s.add(h);
-    s.add((h + 1) % 24);
-  }
-  return s;
-}
-
-function activitySupportHours(timeline: BioenergeticTimelineEvent[]): Set<number> {
-  const s = new Set<number>();
-  for (const ev of timeline) {
-    if (ev.type !== "executed_session" && ev.type !== "planned_session") continue;
-    const h = hourFromIsoTs(ev.ts);
-    if (h == null) continue;
-    for (let d = -1; d <= 2; d += 1) s.add((h + d + 24) % 24);
-  }
-  return s;
-}
-
 export function buildBioenergeticDayPresentation(input: {
   date: string;
   kernel: BioenergeticDayKernelOutput;
@@ -300,196 +285,196 @@ export function buildBioenergeticDayPresentation(input: {
     category: "metabolic",
   });
 
-  const crp = pickNum(lab, ["crp_mg_l", "crp", "hs_crp", "hscrp"]);
+  const crpM = mergeLabSim(pickNum(lab, ["crp_mg_l", "crp", "hs_crp", "hscrp"]), "crp", k);
   pushTile({
     id: "crp",
     labelIt: "PCR-us (contesto)",
     unit: "mg/L",
-    displayValue: crp != null ? formatNum(crp, 2) : "—",
-    numericValue: crp,
-    provenance: crp != null ? "measured" : "absent",
-    impact: crp != null ? impactFromCrpMgL(crp) : "neutral",
+    displayValue: crpM.numeric != null ? formatNum(crpM.numeric, 2) : "—",
+    numericValue: crpM.numeric,
+    provenance: crpM.provenance,
+    impact: crpM.numeric != null ? impactFromCrpMgL(crpM.numeric) : "neutral",
     category: "inflammatory",
   });
 
-  const tTesto = pickNum(lab, ["testosterone", "testosterone_ng_dl", "testosterone_total"]);
+  const tTestoM = mergeLabSim(pickNum(lab, ["testosterone", "testosterone_ng_dl", "testosterone_total"]), "testosterone", k);
   pushTile({
     id: "testosterone",
     labelIt: "Testosterone",
     unit: "ng/dL",
-    displayValue: tTesto != null ? formatNum(tTesto, 0) : "—",
-    numericValue: tTesto,
-    provenance: tTesto != null ? "measured" : "absent",
-    impact: tTesto != null ? impactLabPresentModerate(tTesto, 300, 900) : "neutral",
+    displayValue: tTestoM.numeric != null ? formatNum(tTestoM.numeric, 0) : "—",
+    numericValue: tTestoM.numeric,
+    provenance: tTestoM.provenance,
+    impact: tTestoM.numeric != null ? impactLabPresentModerate(tTestoM.numeric, 300, 900) : "neutral",
     category: "hormonal",
   });
 
-  const ft = pickNum(lab, ["free_testosterone", "testosterone_free", "testosterone_free_pg_ml"]);
+  const ftM = mergeLabSim(pickNum(lab, ["free_testosterone", "testosterone_free", "testosterone_free_pg_ml"]), "free_testosterone", k);
   pushTile({
     id: "free_testosterone",
     labelIt: "Testosterone libero",
     unit: "pg/mL",
-    displayValue: ft != null ? formatNum(ft, 1) : "—",
-    numericValue: ft,
-    provenance: ft != null ? "measured" : "absent",
-    impact: ft != null ? "neutral" : "neutral",
+    displayValue: ftM.numeric != null ? formatNum(ftM.numeric, 1) : "—",
+    numericValue: ftM.numeric,
+    provenance: ftM.provenance,
+    impact: ftM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const tsh = pickNum(lab, ["tsh", "tsh_mui_l", "tsh_miu_l"]);
+  const tshM = mergeLabSim(pickNum(lab, ["tsh", "tsh_mui_l", "tsh_miu_l"]), "tsh", k);
   pushTile({
     id: "tsh",
     labelIt: "TSH",
     unit: "mUI/L",
-    displayValue: tsh != null ? formatNum(tsh, 2) : "—",
-    numericValue: tsh,
-    provenance: tsh != null ? "measured" : "absent",
-    impact: tsh != null ? impactLabPresentModerate(tsh, 0.5, 4.0) : "neutral",
+    displayValue: tshM.numeric != null ? formatNum(tshM.numeric, 2) : "—",
+    numericValue: tshM.numeric,
+    provenance: tshM.provenance,
+    impact: tshM.numeric != null ? impactLabPresentModerate(tshM.numeric, 0.5, 4.0) : "neutral",
     category: "hormonal",
   });
 
-  const ft3 = pickNum(lab, ["ft3", "t3", "free_t3"]);
+  const ft3M = mergeLabSim(pickNum(lab, ["ft3", "t3", "free_t3"]), "ft3", k);
   pushTile({
     id: "ft3",
     labelIt: "T3 / FT3",
     unit: "pg/mL",
-    displayValue: ft3 != null ? formatNum(ft3, 1) : "—",
-    numericValue: ft3,
-    provenance: ft3 != null ? "measured" : "absent",
-    impact: ft3 != null ? "neutral" : "neutral",
+    displayValue: ft3M.numeric != null ? formatNum(ft3M.numeric, 1) : "—",
+    numericValue: ft3M.numeric,
+    provenance: ft3M.provenance,
+    impact: ft3M.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const ft4 = pickNum(lab, ["ft4", "ft4_ng_dl", "free_t4", "t4"]);
+  const ft4M = mergeLabSim(pickNum(lab, ["ft4", "ft4_ng_dl", "free_t4", "t4"]), "ft4", k);
   pushTile({
     id: "ft4",
     labelIt: "T4 libera / T4",
     unit: "ng/dL",
-    displayValue: ft4 != null ? formatNum(ft4, 2) : "—",
-    numericValue: ft4,
-    provenance: ft4 != null ? "measured" : "absent",
-    impact: ft4 != null ? "neutral" : "neutral",
+    displayValue: ft4M.numeric != null ? formatNum(ft4M.numeric, 2) : "—",
+    numericValue: ft4M.numeric,
+    provenance: ft4M.provenance,
+    impact: ft4M.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const cortisol = pickNum(lab, ["cortisol_am", "cortisol_pm", "cortisol", "cortisol_ug_dl"]);
+  const cortisolM = mergeLabSim(pickNum(lab, ["cortisol_am", "cortisol_pm", "cortisol", "cortisol_ug_dl"]), "cortisol", k);
   pushTile({
     id: "cortisol",
     labelIt: "Cortisolo",
     unit: "µg/dL",
-    displayValue: cortisol != null ? formatNum(cortisol, 1) : "—",
-    numericValue: cortisol,
-    provenance: cortisol != null ? "measured" : "absent",
-    impact: cortisol != null ? "neutral" : "neutral",
+    displayValue: cortisolM.numeric != null ? formatNum(cortisolM.numeric, 1) : "—",
+    numericValue: cortisolM.numeric,
+    provenance: cortisolM.provenance,
+    impact: cortisolM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const acth = pickNum(lab, ["acth", "acth_pg_ml"]);
+  const acthM = mergeLabSim(pickNum(lab, ["acth", "acth_pg_ml"]), "acth", k);
   pushTile({
     id: "acth",
     labelIt: "ACTH",
     unit: "pg/mL",
-    displayValue: acth != null ? formatNum(acth, 1) : "—",
-    numericValue: acth,
-    provenance: acth != null ? "measured" : "absent",
-    impact: acth != null ? "neutral" : "neutral",
+    displayValue: acthM.numeric != null ? formatNum(acthM.numeric, 1) : "—",
+    numericValue: acthM.numeric,
+    provenance: acthM.provenance,
+    impact: acthM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const gh = pickNum(lab, ["gh", "growth_hormone", "hgh"]);
+  const ghM = mergeLabSim(pickNum(lab, ["gh", "growth_hormone", "hgh"]), "gh", k);
   pushTile({
     id: "gh",
     labelIt: "GH",
     unit: "ng/mL",
-    displayValue: gh != null ? formatNum(gh, 2) : "—",
-    numericValue: gh,
-    provenance: gh != null ? "measured" : "absent",
-    impact: gh != null ? "neutral" : "neutral",
+    displayValue: ghM.numeric != null ? formatNum(ghM.numeric, 2) : "—",
+    numericValue: ghM.numeric,
+    provenance: ghM.provenance,
+    impact: ghM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const igf = pickNum(lab, ["igf1", "igf_1", "igf1_ng_ml"]);
+  const igfM = mergeLabSim(pickNum(lab, ["igf1", "igf_1", "igf1_ng_ml"]), "igf1", k);
   pushTile({
     id: "igf1",
     labelIt: "IGF-1",
     unit: "ng/mL",
-    displayValue: igf != null ? formatNum(igf, 0) : "—",
-    numericValue: igf,
-    provenance: igf != null ? "measured" : "absent",
-    impact: igf != null ? "neutral" : "neutral",
+    displayValue: igfM.numeric != null ? formatNum(igfM.numeric, 0) : "—",
+    numericValue: igfM.numeric,
+    provenance: igfM.provenance,
+    impact: igfM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const dhea = pickNum(lab, ["dhea_s", "dhea", "dhea_ug_dl"]);
+  const dheaM = mergeLabSim(pickNum(lab, ["dhea_s", "dhea", "dhea_ug_dl"]), "dhea", k);
   pushTile({
     id: "dhea",
     labelIt: "DHEA-S / DHEA",
     unit: "µg/dL",
-    displayValue: dhea != null ? formatNum(dhea, 0) : "—",
-    numericValue: dhea,
-    provenance: dhea != null ? "measured" : "absent",
-    impact: dhea != null ? "neutral" : "neutral",
+    displayValue: dheaM.numeric != null ? formatNum(dheaM.numeric, 0) : "—",
+    numericValue: dheaM.numeric,
+    provenance: dheaM.provenance,
+    impact: dheaM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const prog = pickNum(lab, ["progesterone", "progesterone_ng_ml"]);
+  const progM = mergeLabSim(pickNum(lab, ["progesterone", "progesterone_ng_ml"]), "progesterone", k);
   pushTile({
     id: "progesterone",
     labelIt: "Progesterone",
     unit: "ng/mL",
-    displayValue: prog != null ? formatNum(prog, 2) : "—",
-    numericValue: prog,
-    provenance: prog != null ? "measured" : "absent",
-    impact: prog != null ? "neutral" : "neutral",
+    displayValue: progM.numeric != null ? formatNum(progM.numeric, 2) : "—",
+    numericValue: progM.numeric,
+    provenance: progM.provenance,
+    impact: progM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const prol = pickNum(lab, ["prolactin", "prolactin_ng_ml"]);
+  const prolM = mergeLabSim(pickNum(lab, ["prolactin", "prolactin_ng_ml"]), "prolactin", k);
   pushTile({
     id: "prolactin",
     labelIt: "Prolattina",
     unit: "ng/mL",
-    displayValue: prol != null ? formatNum(prol, 1) : "—",
-    numericValue: prol,
-    provenance: prol != null ? "measured" : "absent",
-    impact: prol != null ? "neutral" : "neutral",
+    displayValue: prolM.numeric != null ? formatNum(prolM.numeric, 1) : "—",
+    numericValue: prolM.numeric,
+    provenance: prolM.provenance,
+    impact: prolM.numeric != null ? "neutral" : "neutral",
     category: "hormonal",
   });
 
-  const homa = pickNum(lab, ["homa_ir", "homa", "homa_index"]);
+  const homaM = mergeLabSim(pickNum(lab, ["homa_ir", "homa", "homa_index"]), "homa_ir", k);
   pushTile({
     id: "homa_ir",
     labelIt: "HOMA-IR",
     unit: "indice",
-    displayValue: homa != null ? formatNum(homa, 2) : "—",
-    numericValue: homa,
-    provenance: homa != null ? "measured" : "absent",
-    impact: homa != null ? impactLabPresentModerate(homa, 0.8, 2.2) : "neutral",
+    displayValue: homaM.numeric != null ? formatNum(homaM.numeric, 2) : "—",
+    numericValue: homaM.numeric,
+    provenance: homaM.provenance,
+    impact: homaM.numeric != null ? impactLabPresentModerate(homaM.numeric, 0.8, 2.2) : "neutral",
     category: "hormonal",
   });
 
-  const insulinLab = pickNum(lab, ["insulin", "insulin_mui_ml", "insulin_uiu_ml", "fasting_insulin"]);
+  const insulinLabM = mergeLabSim(pickNum(lab, ["insulin", "insulin_mui_ml", "insulin_uiu_ml", "fasting_insulin"]), "insulin_lab", k);
   pushTile({
     id: "insulin_lab",
     labelIt: "Insulina (lab)",
     unit: "µUI/mL",
-    displayValue: insulinLab != null ? formatNum(insulinLab, 1) : "—",
-    numericValue: insulinLab,
-    provenance: insulinLab != null ? "measured" : "absent",
-    impact: insulinLab != null ? impactLabPresentModerate(insulinLab, 3, 25) : "neutral",
+    displayValue: insulinLabM.numeric != null ? formatNum(insulinLabM.numeric, 1) : "—",
+    numericValue: insulinLabM.numeric,
+    provenance: insulinLabM.provenance,
+    impact: insulinLabM.numeric != null ? impactLabPresentModerate(insulinLabM.numeric, 3, 25) : "neutral",
     category: "hormonal",
   });
 
-  const gaba = pickNum(lab, ["gaba", "gaba_umol_l"]);
-  const sero = pickNum(lab, ["serotonin", "serotonina", "5_ht"]);
-  const dopa = pickNum(lab, ["dopamine", "dopamina"]);
+  const gabaM = mergeLabSim(pickNum(lab, ["gaba", "gaba_umol_l"]), "gaba", k);
+  const seroM = mergeLabSim(pickNum(lab, ["serotonin", "serotonina", "5_ht"]), "serotonin", k);
+  const dopaM = mergeLabSim(pickNum(lab, ["dopamine", "dopamina"]), "dopamine", k);
   pushTile({
     id: "gaba",
     labelIt: "GABA (contesto)",
     unit: "a.u.",
-    displayValue: gaba != null ? formatNum(gaba, 2) : "—",
-    numericValue: gaba,
-    provenance: gaba != null ? "measured" : "absent",
+    displayValue: gabaM.numeric != null ? formatNum(gabaM.numeric, 2) : "—",
+    numericValue: gabaM.numeric,
+    provenance: gabaM.provenance,
     impact: "neutral",
     category: "neural",
   });
@@ -497,9 +482,9 @@ export function buildBioenergeticDayPresentation(input: {
     id: "serotonin",
     labelIt: "Serotonina",
     unit: "a.u.",
-    displayValue: sero != null ? formatNum(sero, 2) : "—",
-    numericValue: sero,
-    provenance: sero != null ? "measured" : "absent",
+    displayValue: seroM.numeric != null ? formatNum(seroM.numeric, 2) : "—",
+    numericValue: seroM.numeric,
+    provenance: seroM.provenance,
     impact: "neutral",
     category: "neural",
   });
@@ -507,23 +492,23 @@ export function buildBioenergeticDayPresentation(input: {
     id: "dopamine",
     labelIt: "Dopamina",
     unit: "a.u.",
-    displayValue: dopa != null ? formatNum(dopa, 2) : "—",
-    numericValue: dopa,
-    provenance: dopa != null ? "measured" : "absent",
+    displayValue: dopaM.numeric != null ? formatNum(dopaM.numeric, 2) : "—",
+    numericValue: dopaM.numeric,
+    provenance: dopaM.provenance,
     impact: "neutral",
     category: "neural",
   });
 
-  const gastrin = pickNum(lab, ["gastrin", "gastrin_pg_ml"]);
-  const ghrelin = pickNum(lab, ["ghrelin", "ghrelin_pg_ml"]);
-  const leptin = pickNum(lab, ["leptin", "leptin_ng_ml"]);
+  const gastrinM = mergeLabSim(pickNum(lab, ["gastrin", "gastrin_pg_ml"]), "gastrin", k);
+  const ghrelinM = mergeLabSim(pickNum(lab, ["ghrelin", "ghrelin_pg_ml"]), "ghrelin", k);
+  const leptinM = mergeLabSim(pickNum(lab, ["leptin", "leptin_ng_ml"]), "leptin", k);
   pushTile({
     id: "gastrin",
     labelIt: "Gastrina",
     unit: "pg/mL",
-    displayValue: gastrin != null ? formatNum(gastrin, 0) : "—",
-    numericValue: gastrin,
-    provenance: gastrin != null ? "measured" : "absent",
+    displayValue: gastrinM.numeric != null ? formatNum(gastrinM.numeric, 0) : "—",
+    numericValue: gastrinM.numeric,
+    provenance: gastrinM.provenance,
     impact: "neutral",
     category: "gastro_intestinal",
   });
@@ -531,9 +516,9 @@ export function buildBioenergeticDayPresentation(input: {
     id: "ghrelin",
     labelIt: "Ghrelina",
     unit: "pg/mL",
-    displayValue: ghrelin != null ? formatNum(ghrelin, 0) : "—",
-    numericValue: ghrelin,
-    provenance: ghrelin != null ? "measured" : "absent",
+    displayValue: ghrelinM.numeric != null ? formatNum(ghrelinM.numeric, 0) : "—",
+    numericValue: ghrelinM.numeric,
+    provenance: ghrelinM.provenance,
     impact: "neutral",
     category: "gastro_intestinal",
   });
@@ -541,23 +526,23 @@ export function buildBioenergeticDayPresentation(input: {
     id: "leptin",
     labelIt: "Leptina",
     unit: "ng/mL",
-    displayValue: leptin != null ? formatNum(leptin, 1) : "—",
-    numericValue: leptin,
-    provenance: leptin != null ? "measured" : "absent",
+    displayValue: leptinM.numeric != null ? formatNum(leptinM.numeric, 1) : "—",
+    numericValue: leptinM.numeric,
+    provenance: leptinM.provenance,
     impact: "neutral",
     category: "gastro_intestinal",
   });
 
-  const lh = pickNum(lab, ["lh", "lh_miu_ml"]);
-  const fsh = pickNum(lab, ["fsh", "fsh_miu_ml"]);
-  const estradiol = pickNum(lab, ["estradiol", "estradiol_pg_ml"]);
+  const lhM = mergeLabSim(pickNum(lab, ["lh", "lh_miu_ml"]), "lh", k);
+  const fshM = mergeLabSim(pickNum(lab, ["fsh", "fsh_miu_ml"]), "fsh", k);
+  const estradiolM = mergeLabSim(pickNum(lab, ["estradiol", "estradiol_pg_ml"]), "estradiol", k);
   pushTile({
     id: "lh",
     labelIt: "LH",
     unit: "mUI/mL",
-    displayValue: lh != null ? formatNum(lh, 1) : "—",
-    numericValue: lh,
-    provenance: lh != null ? "measured" : "absent",
+    displayValue: lhM.numeric != null ? formatNum(lhM.numeric, 1) : "—",
+    numericValue: lhM.numeric,
+    provenance: lhM.provenance,
     impact: "neutral",
     category: "gonadal",
   });
@@ -565,9 +550,9 @@ export function buildBioenergeticDayPresentation(input: {
     id: "fsh",
     labelIt: "FSH",
     unit: "mUI/mL",
-    displayValue: fsh != null ? formatNum(fsh, 1) : "—",
-    numericValue: fsh,
-    provenance: fsh != null ? "measured" : "absent",
+    displayValue: fshM.numeric != null ? formatNum(fshM.numeric, 1) : "—",
+    numericValue: fshM.numeric,
+    provenance: fshM.provenance,
     impact: "neutral",
     category: "gonadal",
   });
@@ -575,9 +560,9 @@ export function buildBioenergeticDayPresentation(input: {
     id: "estradiol",
     labelIt: "Estradiolo",
     unit: "pg/mL",
-    displayValue: estradiol != null ? formatNum(estradiol, 0) : "—",
-    numericValue: estradiol,
-    provenance: estradiol != null ? "measured" : "absent",
+    displayValue: estradiolM.numeric != null ? formatNum(estradiolM.numeric, 0) : "—",
+    numericValue: estradiolM.numeric,
+    provenance: estradiolM.provenance,
     impact: "neutral",
     category: "gonadal",
   });

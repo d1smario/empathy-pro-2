@@ -11,6 +11,11 @@ export type BioenergeticDayActionContext = {
   /** Σ TSS pianificato per la giornata (stesso slice calendario). */
   plannedTssSum?: number;
   glucoseProvenance: BioenergeticChannelProvenance;
+  lactateProvenance?: BioenergeticChannelProvenance;
+  /** Numero righe panel biomarker caricate per la data (0 = nessun referto nel slice). */
+  biomarkerPanelCount?: number;
+  /** Allineato a `simBankVersion` nel view model (domain-bioenergetics). */
+  simBankVersion?: number;
 };
 
 function nodeLabel(nodeId: string, fallback: string): string {
@@ -50,7 +55,22 @@ export function buildBioenergeticInterpretationHints(
         level: "metabolic",
         title: "Curva glucosio modello",
         detail:
-          "Non risultano letture CGM o glicemia lab per la giornata: la curva glucosio è stimata dal kernel, non sovrapposta a misure. Con dati reali si potrà confrontare modello vs osservato.",
+          day.simBankVersion != null
+            ? "Non risultano letture CGM o glicemia lab per la giornata: la curva glucosio è una diurna simulata deterministica (banca coefficienti sim v1), non misure continue. Con dati reali si potrà confrontare modello vs osservato."
+            : "Non risultano letture CGM o glicemia lab per la giornata: la curva glucosio è stimata dal kernel, non sovrapposta a misure. Con dati reali si potrà confrontare modello vs osservato.",
+      });
+    }
+    if (
+      day.simBankVersion != null &&
+      (day.biomarkerPanelCount ?? 0) === 0 &&
+      (day.glucoseProvenance === "estimated" || day.lactateProvenance === "estimated")
+    ) {
+      hints.push({
+        pathwayId: "ops.sim_lab_tiles_v1",
+        level: "metabolic",
+        title: "Tile da modello (nessun panel)",
+        detail:
+          "Non risultano righe biomarker per questa data: i marker di laboratorio in elenco con provenienza stimata sono ordini di grandezza simulati dal kernel (banca coefficienti), non risultati analitici.",
       });
     }
     const planned = day.plannedTssSum ?? 0;

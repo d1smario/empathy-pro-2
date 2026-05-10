@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { SIM_BANK_VERSION, buildSimulatedGluLacDiurnal } from "@empathy/domain-bioenergetics";
 import type { BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
 import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
@@ -132,14 +133,12 @@ export async function assembleBioenergeticDay(
     gutConstraintScore: Math.max(0, Math.min(100, avgInsulinLoad)),
   });
 
-  const glucoseEstimated =
-    glucoseMeasured.length > 0
-      ? null
-      : [{ ts: `${date}T12:00:00`, value: Math.round((5.4 + kernel.insulinDemandScore * 0.015) * 100) / 100, source: "kernel_v1" }];
-  const lactateEstimated =
-    lactateMeasured.length > 0
-      ? null
-      : [{ ts: `${date}T12:00:00`, value: Math.round((1.1 + kernel.oxidationDriveScore * 0.01) * 100) / 100, source: "kernel_v1" }];
+  const simGluLac =
+    glucoseMeasured.length === 0 || lactateMeasured.length === 0
+      ? buildSimulatedGluLacDiurnal(date, kernel, timeline)
+      : null;
+  const glucoseEstimated = glucoseMeasured.length > 0 ? null : simGluLac?.glucose ?? null;
+  const lactateEstimated = lactateMeasured.length > 0 ? null : simGluLac?.lactate ?? null;
 
   const channels = {
     glucose: glucoseMeasured.length ? glucoseMeasured : glucoseEstimated,
@@ -169,16 +168,22 @@ export async function assembleBioenergeticDay(
     channels,
     provenance,
     kernel,
+    simBankVersion: SIM_BANK_VERSION,
     interpretationHints: buildBioenergeticInterpretationHints(kernel, {
       diaryEntryCount: slice.diaryRows.length,
       choIntakeG,
       executedTssSum: executedLoad,
       plannedTssSum: plannedLoad,
       glucoseProvenance: provenance.glucose,
+      lactateProvenance: provenance.lactate,
+      biomarkerPanelCount: slice.biomarkerRows.length,
+      simBankVersion: SIM_BANK_VERSION,
     }),
     disclaimers: [
       "Le curve stimate sono modellazione deterministica operativa, non diagnosi clinica.",
-      "Quando presenti, i dati misurati (CGM/lab/device) hanno priorita sulle stime.",
+      "Senza CGM/lab, glucosio e lattato seguono una diurna simulata (banca coefficienti v1), non misure continue.",
+      "Quando presenti, i dati misurati (CGM/lab/device) hanno priorita sulle stime e sulle tile da referto.",
+      "Le tile lab senza valore nel panel usano ordini di grandezza simulati dal kernel (stesso modello v1), non risultati analitici.",
       "Colori supportivo/neutro/inibitorio: modello operativo sulla giornata, non classificazione di laboratorio.",
       "Le serie aggiuntive (FC, CHO cumulativi, potenza da trace) dipendono da trace/diario disponibili per la data.",
       "La curva «Potenza (target da piano kJ/kcal)» è un vincolo energetico deterministico da `planned_workouts`, non una prescrizione FTP.",

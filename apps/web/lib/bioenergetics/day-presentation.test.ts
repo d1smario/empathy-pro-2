@@ -61,6 +61,32 @@ test("buildBioenergeticDayPresentation usa lab se canale glucosio stimato", () =
   assert.ok(Number(g?.displayValue) < 6);
 });
 
+test("buildBioenergeticDayPresentation usa tile PCR simulata se panel assente", () => {
+  const { metricTiles } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 50,
+      insulinDemandScore: 40,
+      oxidationDriveScore: 50,
+      anabolicSuppressionScore: 20,
+      efficiencyBand: "high",
+      pathwayState: "supportive",
+      keyDrivers: [],
+    },
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+  });
+  const crp = metricTiles.find((t) => t.id === "crp");
+  assert.equal(crp?.provenance, "estimated");
+  assert.notEqual(crp?.displayValue, "—");
+});
+
 test("buildBioenergeticDayPresentation legge valori da panel values fusi", () => {
   const { metricTiles } = buildBioenergeticDayPresentation({
     date: "2026-05-01",
