@@ -11,6 +11,10 @@ import {
   inferGarminActivityStreamKeyFromRoot,
 } from "@/lib/integrations/garmin-health-api-notification-schema";
 import {
+  collectGarminWellnessRecords,
+  materializeGarminWellnessFromPullResponse,
+} from "@/lib/integrations/garmin-wellness-materialize";
+import {
   buildGarminPullRequestUrl,
   extractGarminPullItems,
   extractRootGarminUserId,
@@ -113,7 +117,16 @@ export async function persistGarminPushReceipt(input: {
     queued += 1;
   }
 
-  /** Push inline (Health API §5.1): nessun `callbackURL` → nessun job; materializziamo attività se payload compatibile. */
+  /**
+   * Push inline (Health API §5.1): nessun `callbackURL` → nessun job pull.
+   * Garmin spesso include i record interi nel body (sleeps/dailies/hrv/stress/respiration/…),
+   * quindi convogliamo qui la **stessa pipeline canonica** che girerebbe nel pull runner:
+   *   - attività (executed_workouts + executed_workout_series)
+   *   - wellness (device_sync_exports per dailies/sleeps/hrv/stress/…)
+   *
+   * Materializzatori idempotenti per `external_id` / `(provider, external_event_id)` →
+   * eventuali doppioni con un futuro pull restano dedotti.
+   */
   if (queued === 0) {
     const uid = extractFirstGarminUserIdDeep(input.parsedJson) ?? rootUid;
     const athleteId = uid ? await resolveAthleteIdForGarminUser(supabase, uid) : null;
@@ -126,7 +139,19 @@ export async function persistGarminPushReceipt(input: {
           responseBody: input.parsedJson,
         });
       } catch {
-        /* best-effort */
+        /* best-effort: non bloccare il 200 al portale Garmin */
+      }
+
+      if (collectGarminWellnessRecords(input.parsedJson).length > 0) {
+        try {
+          await materializeGarminWellnessFromPullResponse({
+            athleteId,
+            streamKey: input.endpointKind,
+            responseBody: input.parsedJson,
+          });
+        } catch {
+          /* best-effort */
+        }
       }
     }
   }

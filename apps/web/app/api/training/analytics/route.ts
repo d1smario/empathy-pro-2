@@ -262,7 +262,10 @@ export async function GET(req: NextRequest) {
         .from("device_sync_exports")
         .select("provider, payload, created_at")
         .eq("athlete_id", athleteId)
-        .in("provider", ["whoop", "cgm"])
+        // Provider wellness/recovery che `normalizedTraceFromDeviceExport` sa mappare
+        // (sleep_duration_hours / hrv_ms / resting_hr_bpm dal canonicalPreview).
+        // `cgm` resta perché serve anche al cross-channel intra-sessione più sotto.
+        .in("provider", ["whoop", "cgm", "garmin"])
         .gte("created_at", `${from}T00:00:00.000Z`)
         .lte("created_at", `${to}T23:59:59.999Z`)
         .order("created_at", { ascending: true }),
