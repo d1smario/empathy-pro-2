@@ -86,6 +86,29 @@ test("device_sync_exports row: metriche da sourcePayload whoop_*", () => {
   assert.equal(s.hrvMs, 55);
 });
 
+/** Preview DB può contenere sleep_duration_hours fasullo (persist pre-fix); la riga non è sleep-bearing → ignorare preview. */
+test("device_export Garmin dailies: preview.sleep_duration_hours sporco non contamina signal", () => {
+  const row = {
+    payload: {
+      sourcePayload: {
+        summaryId: "x",
+        calendarDate: "2026-05-10",
+        durationInSeconds: 43_920,
+        steps: 12_000,
+        garmin_wellness_stream: "dailies",
+      },
+      realityIngestion: {
+        canonicalPreview: {
+          source_date: "2026-05-10",
+          sleep_duration_hours: 12.2,
+        },
+      },
+    },
+  };
+  const s = extractSignalFromDeviceExportRow(row as Record<string, unknown>);
+  assert.equal(s.sleepDurationHours, null);
+});
+
 test("Garmin sleeps: overallSleepScore.value → sleepScore; durationInSeconds → ore", () => {
   const payload = {
     summaryId: "x",

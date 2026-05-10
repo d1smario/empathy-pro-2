@@ -300,13 +300,25 @@ export function extractSignalFromDeviceExportRow(row: Record<string, unknown>): 
   const sourceSignal = extractSleepRecoverySignal(sourcePayload);
   const previewSignal = extractSleepRecoverySignal(preview);
 
+  /**
+   * Preview storici possono avere `sleep_duration_hours` scritto da `buildSleepRecoveryCanonicalPreview`
+   * prima del fix decoder (dailies / respiration / stress → ore fasulle). La sorgente raw post-fix
+   * non le ha più, ma il merge `source ?? preview` ripropone il garbage dal DB.
+   * Accettiamo `sleepDurationHours` dal preview **solo** se il payload sorgente è realmente sleep-bearing.
+   */
+  const allowPreviewSleep =
+    sourcePayload != null
+      ? isSleepBearingDevicePayload(sourcePayload)
+      : preview != null && isSleepBearingDevicePayload(preview);
+
   return {
     sleepScore: sourceSignal.sleepScore ?? previewSignal.sleepScore ?? null,
     readinessScore: sourceSignal.readinessScore ?? previewSignal.readinessScore ?? null,
     recoveryScore: sourceSignal.recoveryScore ?? previewSignal.recoveryScore ?? null,
     hrvMs: sourceSignal.hrvMs ?? previewSignal.hrvMs ?? null,
     restingHrBpm: sourceSignal.restingHrBpm ?? previewSignal.restingHrBpm ?? null,
-    sleepDurationHours: sourceSignal.sleepDurationHours ?? previewSignal.sleepDurationHours ?? null,
+    sleepDurationHours:
+      sourceSignal.sleepDurationHours ?? (allowPreviewSleep ? previewSignal.sleepDurationHours : null) ?? null,
     strainScore: sourceSignal.strainScore ?? previewSignal.strainScore ?? null,
     sourceDate: sourceSignal.sourceDate ?? previewSignal.sourceDate ?? null,
   };

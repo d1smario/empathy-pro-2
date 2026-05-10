@@ -7,8 +7,8 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
-import { wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/wellness-day-key-from-device-export";
+import { extractSignalFromDeviceExportRow, isSleepBearingDevicePayload } from "@/lib/reality/sleep-recovery-signals";
+import { mergedPayloadFromExportRow, wellnessDayKeyFromDeviceExportRow } from "@/lib/physiology/wellness-day-key-from-device-export";
 
 export type WellnessDaySummary = {
   date: string;
@@ -69,6 +69,8 @@ export async function buildWellnessWindowSummary(input: {
 
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const byDate: WellnessByDateMap = {};
+  /** Giorni per cui abbiamo già preso HRV dallo stream Garmin `hrv` (priorità su altri export). */
+  const hrvFromDedicatedGarminStream = new Set<string>();
 
   for (const row of rows) {
     const dayKey = wellnessDayKeyFromDeviceExportRow(row);
@@ -76,6 +78,11 @@ export async function buildWellnessWindowSummary(input: {
     if (dayKey < from || dayKey > to) continue;
     const sig = extractSignalFromDeviceExportRow(row);
     const provider = typeof row.provider === "string" ? row.provider : "unknown";
+    const merged = mergedPayloadFromExportRow(row);
+    const src = merged;
+    const stream =
+      src && typeof src.garmin_wellness_stream === "string" ? src.garmin_wellness_stream.toLowerCase() : "";
+
     const existing = byDate[dayKey] ?? {
       date: dayKey,
       sleepHours: null,
@@ -87,8 +94,23 @@ export async function buildWellnessWindowSummary(input: {
       sourceProviders: [] as string[],
     };
 
-    existing.sleepHours = bestNumber(existing.sleepHours, sig.sleepDurationHours);
-    existing.hrvMs = bestNumber(existing.hrvMs, sig.hrvMs);
+    if (merged && isSleepBearingDevicePayload(merged)) {
+      const h = sig.sleepDurationHours;
+      if (h != null && Number.isFinite(h) && h > 0) {
+        existing.sleepHours = existing.sleepHours == null ? h : Math.max(existing.sleepHours, h);
+      }
+    }
+
+    if (sig.hrvMs != null && Number.isFinite(sig.hrvMs)) {
+      if (stream === "hrv") {
+        if (!hrvFromDedicatedGarminStream.has(dayKey)) {
+          existing.hrvMs = sig.hrvMs;
+          hrvFromDedicatedGarminStream.add(dayKey);
+        }
+      } else if (!hrvFromDedicatedGarminStream.has(dayKey)) {
+        existing.hrvMs = bestNumber(existing.hrvMs, sig.hrvMs);
+      }
+    }
     existing.restingHrBpm = bestNumber(existing.restingHrBpm, sig.restingHrBpm);
     existing.recoveryScore = bestNumber(existing.recoveryScore, sig.recoveryScore);
     existing.readinessScore = bestNumber(existing.readinessScore, sig.readinessScore);

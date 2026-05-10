@@ -197,9 +197,16 @@ function mergeActivityFromRows(rows: Array<Record<string, unknown>>): Physiology
   for (const row of rows) {
     const p = mergedPayloadFromExportRow(row);
     const part = extractActivityWellness(p);
-    if (merged.steps == null && part.steps != null) merged.steps = part.steps;
-    if (merged.activeCaloriesKcal == null && part.activeCaloriesKcal != null)
-      merged.activeCaloriesKcal = part.activeCaloriesKcal;
+    /** Più export `dailies` per lo stesso giorno: prendiamo il massimo passi/kcal (evita “10 passi” da riga parziale). */
+    if (part.steps != null) {
+      merged.steps = merged.steps == null ? part.steps : Math.max(merged.steps, part.steps);
+    }
+    if (part.activeCaloriesKcal != null) {
+      merged.activeCaloriesKcal =
+        merged.activeCaloriesKcal == null
+          ? part.activeCaloriesKcal
+          : Math.max(merged.activeCaloriesKcal, part.activeCaloriesKcal);
+    }
     if (merged.totalCaloriesKcal == null && part.totalCaloriesKcal != null)
       merged.totalCaloriesKcal = part.totalCaloriesKcal;
     if (merged.respiratoryRateRpm == null && part.respiratoryRateRpm != null)
@@ -265,6 +272,31 @@ function alignRecoverySleepDurationWithStages(
   }
   if (asleep - cur >= 1.25) {
     return { ...recovery, sleepDurationHours: Number(asleep.toFixed(2)) };
+  }
+  return recovery;
+}
+
+/**
+ * `buildRecoverySummaryFromRows` media solo le prime 3 righe recovery-like: se l'HRV Garmin
+ * (`stream=hrv`) è più indietro nel tempo, il KPI resta vuoto mentre il calendario (che scansiona
+ * tutte le righe) mostra HRV. Allineiamo: prima riga con `garmin_wellness_stream=hrv` nel giorno.
+ */
+function alignRecoveryHrvFromGarminStream(
+  recovery: RecoverySummary | null,
+  rows: Array<Record<string, unknown>>,
+): RecoverySummary | null {
+  if (!recovery || recovery.hrvMs != null) return recovery;
+  for (const row of rows) {
+    const merged = mergedPayloadFromExportRow(row);
+    const stream =
+      merged && typeof merged.garmin_wellness_stream === "string"
+        ? merged.garmin_wellness_stream.toLowerCase()
+        : "";
+    if (stream !== "hrv") continue;
+    const s = extractSignalFromDeviceExportRow(row);
+    if (s.hrvMs != null && Number.isFinite(s.hrvMs)) {
+      return { ...recovery, hrvMs: s.hrvMs };
+    }
   }
   return recovery;
 }
@@ -449,7 +481,10 @@ export async function buildPhysiologyDailyPanel(input: {
     created_at: typeof row.created_at === "string" ? row.created_at : "",
   }));
 
-  const recoveryAligned = alignRecoverySleepDurationWithStages(recovery, sleepStages, rows);
+  const recoveryAligned = alignRecoveryHrvFromGarminStream(
+    alignRecoverySleepDurationWithStages(recovery, sleepStages, rows),
+    rows,
+  );
 
   return {
     ok: true,
