@@ -86,11 +86,32 @@ export function expandDevicePayloadMetricRecords(payload: Record<string, unknown
   return out;
 }
 
-function looksLikeGarminSleepRecord(record: Record<string, unknown>): boolean {
+/**
+ * Vero solo per record che provengono dallo stream **Garmin sleeps**:
+ * presenti `overallSleepScore` o secondi per stadio (`deepSleepDurationInSeconds`, ecc.).
+ * Esportato perché serve anche al pannello daily per evitare di leggere `durationInSeconds`
+ * da `dailies` / `allDayRespiration` come "ore sonno".
+ */
+export function looksLikeGarminSleepRecord(record: Record<string, unknown> | null): boolean {
+  if (!record) return false;
   if (record.overallSleepScore != null || record.OverallSleepScore != null) return true;
   return (
     pickNumber(record, ["deepSleepDurationInSeconds", "lightSleepDurationInSeconds", "remSleepInSeconds"]) != null
   );
+}
+
+/** Vero per payload che è realmente un sleep record (Garmin sleeps stream o WHOOP sleep / stage_summary). */
+export function isSleepBearingDevicePayload(payload: Record<string, unknown> | null): boolean {
+  if (!payload) return false;
+  const stream = payload.garmin_wellness_stream;
+  if (typeof stream === "string" && stream.toLowerCase() === "sleeps") return true;
+  for (const rec of expandDevicePayloadMetricRecords(payload)) {
+    if (looksLikeGarminSleepRecord(rec)) return true;
+    if (rec.stage_summary != null) return true;
+    if (rec.sleep_performance_percentage != null) return true;
+    if (typeof rec.sleep_id === "string" || typeof rec.sleep_id === "number") return true;
+  }
+  return false;
 }
 
 /**

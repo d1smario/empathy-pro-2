@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { extractSleepRecoverySignal, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
+import {
+  extractSleepRecoverySignal,
+  extractSignalFromDeviceExportRow,
+  isSleepBearingDevicePayload,
+  looksLikeGarminSleepRecord,
+} from "@/lib/reality/sleep-recovery-signals";
 
 test("WHOOP recovery annidato in score → HRV, RHR, recovery %", () => {
   const payload = {
@@ -103,4 +108,56 @@ test("Garmin HRV summary: lastNightAvg", () => {
   };
   const s = extractSleepRecoverySignal(payload);
   assert.equal(s.hrvMs, 44);
+});
+
+/**
+ * Bug live osservato: Garmin pusha `dailies` e `allDayRespiration` con `durationInSeconds`
+ * (durata della finestra giorno / respirazione, NON del sonno). Il decoder vecchio scriveva
+ * `sleep_duration_hours` da quel valore corrompendo il KPI. Guardia: solo se Garmin sleep.
+ */
+test("Garmin dailies durationInSeconds NON è ore sonno", () => {
+  const dailies = {
+    summaryId: "x",
+    calendarDate: "2026-05-10",
+    durationInSeconds: 43920,
+    steps: 12000,
+    activeKilocalories: 850,
+    bmrKilocalories: 1700,
+    garmin_wellness_stream: "dailies",
+  };
+  const s = extractSleepRecoverySignal(dailies);
+  assert.equal(s.sleepDurationHours, null, "dailies non deve produrre ore sonno");
+  assert.equal(looksLikeGarminSleepRecord(dailies), false);
+  assert.equal(isSleepBearingDevicePayload(dailies), false);
+});
+
+test("Garmin allDayRespiration durationInSeconds NON è ore sonno", () => {
+  const respiration = {
+    summaryId: "x",
+    durationInSeconds: 900,
+    timeOffsetEpochToBreaths: {},
+    garmin_wellness_stream: "allDayRespiration",
+  };
+  const s = extractSleepRecoverySignal(respiration);
+  assert.equal(s.sleepDurationHours, null);
+  assert.equal(isSleepBearingDevicePayload(respiration), false);
+});
+
+test("Garmin sleeps stream: durationInSeconds → ore sonno + isSleepBearing", () => {
+  const sleeps = {
+    summaryId: "x",
+    calendarDate: "2026-05-10",
+    startTimeInSeconds: 1778357801,
+    durationInSeconds: 26100,
+    deepSleepDurationInSeconds: 2520,
+    lightSleepDurationInSeconds: 19980,
+    remSleepInSeconds: 3600,
+    awakeDurationInSeconds: 2400,
+    overallSleepScore: { value: 71, qualifierKey: "FAIR" },
+    garmin_wellness_stream: "sleeps",
+  };
+  const s = extractSleepRecoverySignal(sleeps);
+  assert.equal(s.sleepDurationHours, 7.25);
+  assert.equal(looksLikeGarminSleepRecord(sleeps), true);
+  assert.equal(isSleepBearingDevicePayload(sleeps), true);
 });

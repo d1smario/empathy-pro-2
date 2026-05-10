@@ -11,7 +11,11 @@ import {
   extractSleepHypnogramFromDevicePayload,
   extractSleepHypnogramWindowUtc,
 } from "@/lib/physiology/sleep-stages-from-device-payload";
-import { expandDevicePayloadMetricRecords, extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
+import {
+  expandDevicePayloadMetricRecords,
+  extractSignalFromDeviceExportRow,
+  isSleepBearingDevicePayload,
+} from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
 
 /** Re-export storico: alcuni import puntano a `daily-wellness-panel`. */
@@ -215,15 +219,44 @@ function asleepHoursFromSleepStages(stages: PhysiologyDailyPanelOk["sleepStages"
 }
 
 /**
- * Se il KPI `sleepDurationHours` (media export recovery) è molto più basso della somma delle fasi
- * (stesso giorno, stesso pannello), usiamo la somma — tipico quando `durationInSeconds` corto
- * vinceva sui milli WHOOP prima del fix decoder, o quando due provider si incrociano.
+ * Picka la durata sonno dalla riga **sleep-bearing** del giorno (Garmin sleeps stream o WHOOP sleep)
+ * con valore più alto = main sleep, NON dai naps né da preview corrotti calcolati da `dailies` /
+ * `allDayRespiration` (vecchi push pre-fix `looksLikeGarminSleepRecord` salvavano `sleep_duration_hours`
+ * dal `durationInSeconds` di payload non-sleep, contaminando il KPI).
+ *
+ * Restituisce `null` se nessuna riga è veramente sleep-bearing → il caller cade su altre fonti
+ * (somma stadi, valore aggregato precedente).
+ */
+function pickMainSleepDurationHoursFromSleepRows(rows: Array<Record<string, unknown>>): number | null {
+  let best: number | null = null;
+  for (const row of rows) {
+    const merged = mergedPayloadFromExportRow(row);
+    if (!isSleepBearingDevicePayload(merged)) continue;
+    const sig = extractSignalFromDeviceExportRow(row);
+    const h = sig.sleepDurationHours;
+    if (h == null || !Number.isFinite(h) || h <= 0) continue;
+    if (best == null || h > best) best = h;
+  }
+  return best != null ? Number(best.toFixed(2)) : null;
+}
+
+/**
+ * Allinea il KPI `sleepDurationHours` del recovery summary alla realtà del giorno:
+ *   1. main sleep entry (Garmin `sleeps` / WHOOP sleep) — fonte canonica;
+ *   2. fallback: somma stadi (deep+light+REM) se molto sopra il valore mediato corrente.
  */
 function alignRecoverySleepDurationWithStages(
   recovery: RecoverySummary | null,
   stages: PhysiologyDailyPanelOk["sleepStages"],
+  rows: Array<Record<string, unknown>>,
 ): RecoverySummary | null {
   if (!recovery) return null;
+
+  const mainSleepHours = pickMainSleepDurationHoursFromSleepRows(rows);
+  if (mainSleepHours != null) {
+    return { ...recovery, sleepDurationHours: mainSleepHours };
+  }
+
   const asleep = asleepHoursFromSleepStages(stages);
   if (asleep == null || asleep < 1) return recovery;
   const cur = recovery.sleepDurationHours;
@@ -416,7 +449,7 @@ export async function buildPhysiologyDailyPanel(input: {
     created_at: typeof row.created_at === "string" ? row.created_at : "",
   }));
 
-  const recoveryAligned = alignRecoverySleepDurationWithStages(recovery, sleepStages);
+  const recoveryAligned = alignRecoverySleepDurationWithStages(recovery, sleepStages, rows);
 
   return {
     ok: true,
