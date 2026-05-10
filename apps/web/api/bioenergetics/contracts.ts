@@ -1,8 +1,16 @@
-import type { BioenergeticBiaLiteratureSummaryV1, BioenergeticDayEvidenceConditionedLayerV1 } from "@empathy/contracts";
+import type {
+  BioenergeticBiaLiteratureSummaryV1,
+  BioenergeticChannelCurveResolutionV1,
+  BioenergeticDayEvidenceConditionedLayerV1,
+} from "@empathy/contracts";
 
 export type BioenergeticChannelProvenance = "measured" | "estimated" | "absent" | "planned";
 
-export type { BioenergeticBiaLiteratureSummaryV1, BioenergeticDayEvidenceConditionedLayerV1 };
+export type {
+  BioenergeticBiaLiteratureSummaryV1,
+  BioenergeticChannelCurveResolutionV1,
+  BioenergeticDayEvidenceConditionedLayerV1,
+};
 
 export type BioenergeticSeriesPoint = {
   ts: string;
@@ -87,6 +95,8 @@ export type BioenergeticMonitoringChannel24 = {
   dataPlane: BioenergeticMonitoringDataPlane;
   /** Se true, il prodotto intende questo canale come candidato a sostituzione con stream device continuo. */
   replacesWithDeviceStream: boolean;
+  /** Policy fusione motore vs AI (v1); merge numerico AI quando endpoint validato. */
+  curveResolution?: BioenergeticChannelCurveResolutionV1;
 };
 
 /** Vista giornaliera unificata «monitoraggio continuo» (modello v1 → device quando disponibile). */

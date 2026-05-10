@@ -23,6 +23,7 @@ export * from "./bioenergetic-evidence-db-v1";
 export * from "./bioenergetic-conditioning-context-v1";
 export * from "./bioenergetic-evidence-interactions-v1";
 export * from "./bioenergetic-evidence-curve-v1";
+export * from "./bioenergetic-curve-fusion-v1";
 export * from "./training-engine";
 export * from "./research";
 export * from "./common";

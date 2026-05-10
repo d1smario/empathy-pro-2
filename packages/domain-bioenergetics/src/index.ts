@@ -23,6 +23,17 @@ export { synthesizeEvidenceConditionedLayerV1 } from "./evidence-conditioned-syn
 export type { EvidenceConditionedSynthesisInputV1, EvidenceConditionedSynthesisOutputV1 } from "./evidence-conditioned-synthesizer-v1";
 export { analyzeBioenergeticBiaLiteratureV1, resolveEcwTbwRatio } from "./bia-literature-model-v1";
 export type { AnalyzeBioenergeticBiaLiteratureInputV1 } from "./bia-literature-model-v1";
+export {
+  arbitrateGlucoseCurveFusionV1,
+  arbitrateInsulinProxyCurveFusionV1,
+  arbitrateLabHoldHormoneCurveFusionV1,
+  arbitrateLactateCurveFusionV1,
+  arbitrateNominalHormoneCurveFusionV1,
+  computeInternalContextRichness01,
+  countTimelineMealsWithMacroSignalsV1,
+  simBlendDeterministicWeightFromRichness01,
+} from "./curve-fusion-arbitration-v1";
+export type { ArbitrationTimelineEventV1 } from "./curve-fusion-arbitration-v1";
 
 export const DOMAIN = "@empathy/domain-bioenergetics" as const;
 export const DOMAIN_TITLE = "Bioenergetics";

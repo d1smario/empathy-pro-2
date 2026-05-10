@@ -2,10 +2,12 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type {
+  BioenergeticChannelCurveResolutionV1,
   BioenergeticContinuousMonitoringDay,
   BioenergeticMetricTileCategory,
   BioenergeticMonitoringDataPlane,
 } from "@/api/bioenergetics/contracts";
+import type { BioenergeticCurveGovernanceHintV1 } from "@empathy/contracts";
 
 const CATEGORY_ORDER: BioenergeticMetricTileCategory[] = [
   "metabolic",
@@ -26,6 +28,19 @@ function planeBadgeClass(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "border-emerald-400/40 text-emerald-200/90";
   if (plane === "sparse_lab_hold") return "border-sky-400/40 text-sky-200/90";
   return "border-amber-400/40 text-amber-200/90";
+}
+
+function governanceIt(g: BioenergeticCurveGovernanceHintV1): string {
+  if (g === "measurement_wins") return "Policy: vince la misura Empathy";
+  if (g === "deterministic_engine_wins") return "Policy: motore / pareggio (contesto ricco vs sim)";
+  return "Policy: fase iniziale — prevale curva AI supervisionata (sim come fallback oggi)";
+}
+
+function fusionSummary(res: BioenergeticChannelCurveResolutionV1): string {
+  const dm = Math.round(res.deterministicWeight01 * 100);
+  const ai = Math.round(res.aiProposalWeight01 * 100);
+  const r = Math.round(res.internalContextRichness01 * 100);
+  return `Fusione v${res.fusionContractVersion}: motore ${dm}% · AI ${ai}% · ricchezza contesto ${r}%`;
 }
 
 type Props = {
@@ -87,6 +102,13 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                 ) : null}
               </div>
             </div>
+            {ch.curveResolution ? (
+              <p className="mb-2 text-[0.58rem] leading-snug text-gray-400">
+                {fusionSummary(ch.curveResolution)}
+                <span className="text-gray-500"> · </span>
+                <span className="text-violet-200/85">{governanceIt(ch.curveResolution.governance)}</span>
+              </p>
+            ) : null}
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
               <ResponsiveContainer width="100%" height={CHART_H} debounce={50}>
                 <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 2 }}>
