@@ -26,8 +26,36 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.equal(chart24h.length, 24);
   assert.equal(chart24h[0].hour, 0);
   assert.equal(chart24h[23].hour, 23);
+  assert.ok(chart24h.every((p) => "lactateMmol" in p && (p.lactateMmol == null || typeof p.lactateMmol === "number")));
+  assert.ok(chart24h[12].lactateMmol != null);
   assert.ok(metricTiles.some((t) => t.id === "glucose"));
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
+});
+
+test("buildBioenergeticDayPresentation espone curve ormonali nominali 24h", () => {
+  const { nominalEducationCurves24h } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 50,
+      insulinDemandScore: 45,
+      oxidationDriveScore: 48,
+      anabolicSuppressionScore: 30,
+      efficiencyBand: "moderate",
+      pathwayState: "mixed",
+      keyDrivers: ["test"],
+    },
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+  });
+  assert.equal(nominalEducationCurves24h.length, 2);
+  assert.equal(nominalEducationCurves24h[0]?.hourly.length, 24);
+  assert.equal(nominalEducationCurves24h[1]?.hourly.length, 24);
 });
 
 test("pickGlucoseMmolFromLab converte glicemia mg/dL da ontology", () => {

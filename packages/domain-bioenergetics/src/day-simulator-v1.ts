@@ -139,3 +139,25 @@ export function simulatedLabNumeric(tileId: string, k: SimDayKernelV1Input): num
       return null;
   }
 }
+
+/**
+ * Profili ormonali diurni nominali (24 valori/ora) per confronto temporale educativo con il pathway:
+ * non sono concentrazioni da campionamento ematico seriato; forma circadiana modulata da stress/pathway del kernel v1.
+ */
+export function buildNominalCortisolActhHourly24(kernel: SimDayKernelV1Input): { cortisolUgdL: number[]; acthPgMl: number[] } {
+  const st = stress01(kernel);
+  const ps = pathwayScale(kernel);
+  const cortisolUgdL: number[] = [];
+  const acthPgMl: number[] = [];
+  for (let h = 0; h < 24; h += 1) {
+    const morning = Math.cos(((h - 8) * Math.PI) / 12);
+    const circC = 0.5 * (1 + morning);
+    const cortRaw = 3.5 + circC * (12 + st * 6) + (ps - 1) * 2.2;
+    cortisolUgdL.push(Math.round(clamp(cortRaw, 2, 26) * 10) / 10);
+    const dawn = Math.cos(((h - 5.5) * Math.PI) / 11);
+    const circA = 0.5 * (1 + dawn);
+    const acthRaw = 10 + circA * (28 + st * 12) * (0.95 + (ps - 1) * 0.15);
+    acthPgMl.push(Math.round(clamp(acthRaw, 5, 55) * 10) / 10);
+  }
+  return { cortisolUgdL, acthPgMl };
+}

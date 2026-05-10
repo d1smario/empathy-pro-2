@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { SIM_BANK_VERSION, buildSimulatedGluLacDiurnal, simulatedLabNumeric } from "@empathy/domain-bioenergetics";
+import {
+  SIM_BANK_VERSION,
+  buildNominalCortisolActhHourly24,
+  buildSimulatedGluLacDiurnal,
+  simulatedLabNumeric,
+} from "@empathy/domain-bioenergetics";
 
 test("buildSimulatedGluLacDiurnal emette 24 punti in range e source sim_diurnal_v1", () => {
   const kernel = {
@@ -36,4 +41,19 @@ test("simulatedLabNumeric supporta tile note e null per id sconosciuto", () => {
 
 test("SIM_BANK_VERSION è 1", () => {
   assert.equal(SIM_BANK_VERSION, 1);
+});
+
+test("buildNominalCortisolActhHourly24 produce 24 punti per cortisolo e ACTH", () => {
+  const k = {
+    insulinDemandScore: 35,
+    anabolicSuppressionScore: 22,
+    glucoseHandlingScore: 58,
+    oxidationDriveScore: 46,
+    pathwayState: "mixed" as const,
+  };
+  const { cortisolUgdL, acthPgMl } = buildNominalCortisolActhHourly24(k);
+  assert.equal(cortisolUgdL.length, 24);
+  assert.equal(acthPgMl.length, 24);
+  assert.ok(cortisolUgdL.every((v) => v >= 2 && v <= 26));
+  assert.ok(acthPgMl.every((v) => v >= 5 && v <= 55));
 });

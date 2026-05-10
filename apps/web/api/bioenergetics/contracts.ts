@@ -60,6 +60,19 @@ export type BioenergeticHour24Point = {
   pathwayBalance: number;
   pathwayImpact: BioenergeticPathwayImpact;
   glucoseMmol: number | null;
+  /** Lattato ematico (mmol/L) interpolato sulla giornata da CGM/lab/sim diurna; stesso asse temporale del glucosio. */
+  lactateMmol: number | null;
+};
+
+/**
+ * Curva oraria (24 punti) a scopo educativo / ragionamento operativo: non sostituisce dosaggi clinici seriati.
+ */
+export type BioenergeticNominalEducationCurve24 = {
+  id: string;
+  labelIt: string;
+  unit: string;
+  hourly: number[];
+  modelNote: string;
 };
 
 /** Serie temporale giornaliera per curve UI (timestamp ISO + valore numerico). */
@@ -93,6 +106,11 @@ export type BioenergeticsDayViewModel = {
   disclaimers: string[];
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
+  /**
+   * Profili ormonali diurni nominali (modello v1) per lettura temporale accanto al pathway;
+   * non sono tracce da laboratorio continuo.
+   */
+  nominalEducationCurves24h?: BioenergeticNominalEducationCurve24[];
   /** Curve fisiologiche / stimoli (memoria giorno + device); array vuoto se nessuna serie. */
   series: BioenergeticDaySeriesChannel[];
 };

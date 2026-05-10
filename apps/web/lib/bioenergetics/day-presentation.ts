@@ -1,6 +1,7 @@
 import type {
   BioenergeticChannelProvenance,
   BioenergeticDayKernelOutput,
+  BioenergeticNominalEducationCurve24,
   BioenergeticPathwayImpact,
   BioenergeticSeriesPoint,
   BioenergeticTimelineEvent,
@@ -9,6 +10,7 @@ import type {
 } from "@/api/bioenergetics/contracts";
 import {
   activitySupportHours,
+  buildNominalCortisolActhHourly24,
   hourFromIsoTs,
   mealInhibitoryHours,
   simulatedLabNumeric,
@@ -84,6 +86,26 @@ function firstBiomarkerGlucosePoint(
   return null;
 }
 
+function firstBiomarkerLactatePoint(
+  rows: Array<Record<string, unknown>>,
+  date: string,
+): BioenergeticSeriesPoint | null {
+  for (const row of rows) {
+    const vr = row.values;
+    if (!vr || typeof vr !== "object" || Array.isArray(vr)) continue;
+    const lac = pickNum(vr as Record<string, unknown>, ["lactate_mmol_l", "lactate_mmoll", "lactate"]);
+    if (lac == null || !Number.isFinite(lac)) continue;
+    const sd =
+      typeof row.sample_date === "string" && String(row.sample_date).trim()
+        ? String(row.sample_date).slice(0, 10)
+        : date;
+    const ca = typeof row.created_at === "string" && row.created_at ? row.created_at : null;
+    const ts = ca && ca.includes("T") ? ca : `${sd}T09:15:00`;
+    return { ts, value: lac, source: "lab_panel" };
+  }
+  return null;
+}
+
 function impactFromCrpMgL(v: number): BioenergeticPathwayImpact {
   if (v <= 1) return "supportive";
   if (v <= 3) return "neutral";
@@ -120,7 +142,7 @@ function latestSeriesValue(points: BioenergeticSeriesPoint[] | null): number | n
   return typeof last.value === "number" && Number.isFinite(last.value) ? last.value : null;
 }
 
-function interpolateGlucoseByHour(
+function interpolateNumericSeriesByHour(
   _date: string,
   points: BioenergeticSeriesPoint[] | null,
   fallback: number | null,
@@ -167,7 +189,11 @@ export function buildBioenergeticDayPresentation(input: {
   channels: { glucose: BioenergeticSeriesPoint[] | null; lactate: BioenergeticSeriesPoint[] | null };
   timeline: BioenergeticTimelineEvent[];
   biomarkerRows: Array<Record<string, unknown>>;
-}): { metricTiles: BioenergeticMetricTile[]; chart24h: BioenergeticHour24Point[] } {
+}): {
+  metricTiles: BioenergeticMetricTile[];
+  chart24h: BioenergeticHour24Point[];
+  nominalEducationCurves24h: BioenergeticNominalEducationCurve24[];
+} {
   const lab = mergeLabValues(input.biomarkerRows);
   const k = input.kernel;
   const baseBalance = clamp(k.oxidationDriveScore - k.insulinDemandScore, -55, 55);
@@ -203,6 +229,15 @@ export function buildBioenergeticDayPresentation(input: {
           : null;
 
   const lactatePoints = input.channels.lactate;
+  const lacLabPoint = firstBiomarkerLactatePoint(input.biomarkerRows, input.date);
+  const lactatePointsForInterp =
+    input.provenance.lactate === "measured" && lactatePoints?.length
+      ? lactatePoints
+      : lacLabPoint
+        ? [lacLabPoint]
+        : lactatePoints?.length
+          ? lactatePoints
+          : null;
   const lFromLab = pickNum(lab, ["lactate_mmol_l", "lactate_mmoll", "lactate"]);
   const chL = latestSeriesValue(lactatePoints);
   let lVal: number | null;
@@ -218,10 +253,16 @@ export function buildBioenergeticDayPresentation(input: {
     lTileProv = input.provenance.lactate;
   }
 
-  const glucoseHourly = interpolateGlucoseByHour(
+  const glucoseHourly = interpolateNumericSeriesByHour(
     input.date,
     glucosePointsForInterp,
     gLatest ?? (gTileProv === "estimated" ? 5.4 + k.insulinDemandScore * 0.015 : null),
+  );
+
+  const lactateHourly = interpolateNumericSeriesByHour(
+    input.date,
+    lactatePointsForInterp,
+    lVal ?? (lTileProv === "estimated" ? 1.1 + k.oxidationDriveScore * 0.01 : null),
   );
 
   const chart24h: BioenergeticHour24Point[] = [];
@@ -236,14 +277,36 @@ export function buildBioenergeticDayPresentation(input: {
     else if (bal <= -18) impact = "inhibitory";
     else impact = "neutral";
     const g = glucoseHourly[hour];
+    const lacH = lactateHourly[hour];
     chart24h.push({
       hour,
       hourLabel: `${String(hour).padStart(2, "0")}:00`,
       pathwayBalance: Math.round(bal * 10) / 10,
       pathwayImpact: impact,
       glucoseMmol: g,
+      lactateMmol: lacH,
     });
   }
+
+  const nomH = buildNominalCortisolActhHourly24(k);
+  const nominalEducationCurves24h: BioenergeticNominalEducationCurve24[] = [
+    {
+      id: "cortisol_nominal_v1",
+      labelIt: "Cortisolo — profilo diurno nominale",
+      unit: "µg/dL",
+      hourly: nomH.cortisolUgdL,
+      modelNote:
+        "Forma circadiana modulata da stress/pathway del kernel (v1). Non è concentrazione da campionamento seriato; confronta con un singolo valore di lab come ancoraggio qualitativo.",
+    },
+    {
+      id: "acth_nominal_v1",
+      labelIt: "ACTH — profilo diurno nominale",
+      unit: "pg/mL",
+      hourly: nomH.acthPgMl,
+      modelNote:
+        "Profilo fase anticipata rispetto al cortisolo (modello v1). Uso educativo accanto al pathway e al carico giornaliero.",
+    },
+  ];
 
   const insulinProxy = clamp(k.insulinDemandScore, 0, 100);
   const tiles: BioenergeticMetricTile[] = [];
@@ -567,5 +630,5 @@ export function buildBioenergeticDayPresentation(input: {
     category: "gonadal",
   });
 
-  return { metricTiles: tiles, chart24h };
+  return { metricTiles: tiles, chart24h, nominalEducationCurves24h };
 }

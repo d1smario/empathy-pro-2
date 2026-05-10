@@ -33,6 +33,8 @@ type Props = {
 export function BioenergeticsPathway24Chart({ data }: Props) {
   const rows = toRows(data);
   const hasGlucose = rows.some((r) => r.glucoseMmol != null);
+  const hasLactate = rows.some((r) => r.lactateMmol != null);
+  const hasMetabolicMm = hasGlucose || hasLactate;
 
   return (
     <div className="space-y-3">
@@ -68,7 +70,7 @@ export function BioenergeticsPathway24Chart({ data }: Props) {
 
       <div className="h-[min(280px,42vw)] min-h-[220px] w-full min-w-0">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={rows} margin={{ top: 8, right: hasGlucose ? 48 : 12, left: 4, bottom: 4 }}>
+          <ComposedChart data={rows} margin={{ top: 8, right: hasMetabolicMm ? 52 : 12, left: 4, bottom: 4 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
             <XAxis dataKey="hourLabel" tick={{ fill: "#94a3b8", fontSize: 10 }} interval={3} minTickGap={18} />
             <YAxis
@@ -79,14 +81,14 @@ export function BioenergeticsPathway24Chart({ data }: Props) {
               domain={[-100, 100]}
               label={{ value: "Bilancio", angle: -90, position: "insideLeft", fill: "#94a3b8", fontSize: 9 }}
             />
-            {hasGlucose ? (
+            {hasMetabolicMm ? (
               <YAxis
                 yAxisId="glu"
                 orientation="right"
                 tick={{ fill: "#c4b5fd", fontSize: 10 }}
-                width={44}
+                width={48}
                 domain={["auto", "auto"]}
-                label={{ value: "mmol/L", angle: 90, position: "insideRight", fill: "#c4b5fd", fontSize: 9 }}
+                label={{ value: "Glu / Lac mmol/L", angle: 90, position: "insideRight", fill: "#c4b5fd", fontSize: 9 }}
               />
             ) : null}
             <Tooltip
@@ -100,6 +102,7 @@ export function BioenergeticsPathway24Chart({ data }: Props) {
               formatter={(value: number, name: string) => {
                 if (name === "pathwayBalance") return [`${value}`, "Bilancio via (modello)"];
                 if (name === "glucoseMmol" && value != null) return [`${Number(value).toFixed(2)} mmol/L`, "Glucosio"];
+                if (name === "lactateMmol" && value != null) return [`${Number(value).toFixed(2)} mmol/L`, "Lattato"];
                 return [String(value), name];
               }}
             />
@@ -139,6 +142,19 @@ export function BioenergeticsPathway24Chart({ data }: Props) {
                 name="Glucosio"
                 stroke="#c084fc"
                 strokeWidth={1.5}
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+              />
+            ) : null}
+            {hasLactate ? (
+              <Line
+                yAxisId="glu"
+                type="monotone"
+                dataKey="lactateMmol"
+                name="Lattato"
+                stroke="#f472b6"
+                strokeWidth={1.75}
                 dot={false}
                 connectNulls
                 isAnimationActive={false}

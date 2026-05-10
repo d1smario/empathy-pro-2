@@ -20,6 +20,7 @@ import {
 } from "@/lib/nutrition/persisted-nutrition-plan-date";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
+import { BioenergeticsNominalHormone24Chart } from "@/modules/bioenergetics/components/BioenergeticsNominalHormone24Chart";
 import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
 
 function toIsoDate(d: Date): string {
@@ -127,6 +128,9 @@ export default function BioenergeticsPageView() {
         const vmPayload: BioenergeticsDayViewModel = {
           ...json,
           series: Array.isArray(json.series) ? json.series : [],
+          nominalEducationCurves24h: Array.isArray(json.nominalEducationCurves24h)
+            ? json.nominalEducationCurves24h
+            : undefined,
         };
         setVm(vmPayload);
       } catch {
@@ -239,8 +243,25 @@ export default function BioenergeticsPageView() {
 
         {vm ? (
           <>
-            <Pro2SectionCard accent="fuchsia" title="Via metabolica · 24 h" subtitle="Bilancio modello e glucosio; fascia colori = impatto orario" icon={LineChart}>
+            <Pro2SectionCard
+              accent="fuchsia"
+              title="Via metabolica · 24 h"
+              subtitle="Bilancio modello, glucosio e lattato (mmol/L) sullo stesso asse temporale; fascia = impatto orario"
+              icon={LineChart}
+            >
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
+              {vm.nominalEducationCurves24h && vm.nominalEducationCurves24h.length >= 2 ? (
+                <div className="mt-6 border-t border-white/10 pt-4">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-200/85">
+                    Asse HPA — curve nominali (modello)
+                  </p>
+                  <p className="mb-3 text-[0.7rem] leading-relaxed text-gray-500">
+                    Per ragionare sul ritmo circadiano rispetto al pathway e al carico: le linee non sono dosaggi continui da
+                    laboratorio; integra con i valori nelle tile se presenti referti.
+                  </p>
+                  <BioenergeticsNominalHormone24Chart curves={vm.nominalEducationCurves24h} />
+                </div>
+              ) : null}
               <div className="mt-6 border-t border-white/10 pt-4">
                 <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fuchsia-200/80">Serie da memoria giorno</p>
                 <BioenergeticsDaySeriesPanel series={vm.series ?? []} />

@@ -11,7 +11,7 @@ export { SIM_BANK_VERSION, SIM_DIURNAL_GLUCOSE_V1, SIM_DIURNAL_LACTATE_V1, SIM_P
 export type { SimTimelineEventV1 } from "./sim-timeline-v1";
 export { activitySupportHours, hourFromIsoTs, mealInhibitoryHours } from "./sim-timeline-v1";
 export type { SimDayKernelV1Input, SimSeriesPointV1 } from "./day-simulator-v1";
-export { buildSimulatedGluLacDiurnal, simulatedLabNumeric } from "./day-simulator-v1";
+export { buildNominalCortisolActhHourly24, buildSimulatedGluLacDiurnal, simulatedLabNumeric } from "./day-simulator-v1";
 
 export const DOMAIN = "@empathy/domain-bioenergetics" as const;
 export const DOMAIN_TITLE = "Bioenergetics";
