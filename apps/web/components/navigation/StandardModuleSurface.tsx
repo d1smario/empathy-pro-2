@@ -19,6 +19,7 @@ import { SettingsIntegrationsDiagnostics } from "@/components/settings/SettingsI
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { ActionBar, Pro2Link } from "@/components/ui/empathy";
+import { PlatformAdminOnly } from "@/components/auth/PlatformAdminOnly";
 import { DashboardModuleSubnav } from "@/components/navigation/DashboardModuleSubnav";
 import { StandardModuleSubnav } from "@/components/navigation/StandardModuleSubnav";
 import { getModuleDomainPanel } from "@/core/navigation/module-domain-bridge";
@@ -215,17 +216,42 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
       {module === "athletes" ? <CoachAthletesModulePanel /> : null}
 
       {module === "settings" ? (
-        <Pro2SectionCard accent="slate" title="Impostazioni & diagnostica" subtitle="Sessione, atleta, integrazioni" icon={Settings2}>
-          <div className="flex flex-col gap-10">
-            <SettingsBuildPhasesCard />
-            <SettingsAuthSessionDiagnostics />
-            <SettingsAthleteContextDiagnostics />
-            <SettingsDataSourcePreference />
-            <SettingsDeviceIngestPolicy />
-            <SettingsIntegrationsDiagnostics />
-            <SettingsBillingDiagnostics />
-          </div>
-        </Pro2SectionCard>
+        <>
+          {/**
+           * Pannello "cliente": scelta provider per dominio + policy ingest.
+           * Tutto il resto (auth/athlete diagnostics, build phases, billing/integrazioni env)
+           * è interno e va dietro `PlatformAdminOnly` — no rumore tecnico, no impressione di
+           * "spegnere" Stripe. (NB: l'enforcement reale della sottoscrizione è server-side.)
+           */}
+          <Pro2SectionCard
+            accent="slate"
+            title="Mio account · device"
+            subtitle="Quale device guida sonno, recovery e training; quali stream sincronizzare"
+            icon={Settings2}
+          >
+            <div className="flex flex-col gap-10">
+              <SettingsDataSourcePreference />
+              <SettingsDeviceIngestPolicy />
+            </div>
+          </Pro2SectionCard>
+
+          <PlatformAdminOnly>
+            <Pro2SectionCard
+              accent="slate"
+              title="Diagnostica · admin"
+              subtitle="Sessione, atleta, integrazioni, billing — visibile solo a operatori piattaforma"
+              icon={Settings2}
+            >
+              <div className="flex flex-col gap-10">
+                <SettingsBuildPhasesCard />
+                <SettingsAuthSessionDiagnostics />
+                <SettingsAthleteContextDiagnostics />
+                <SettingsIntegrationsDiagnostics />
+                <SettingsBillingDiagnostics />
+              </div>
+            </Pro2SectionCard>
+          </PlatformAdminOnly>
+        </>
       ) : null}
       </section>
         </>
