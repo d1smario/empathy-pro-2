@@ -208,6 +208,34 @@ function mergeActivityFromRows(rows: Array<Record<string, unknown>>): Physiology
   return merged;
 }
 
+/** Somma deep+light+REM (tempo dormito, senza awake) — confrontabile con “ore sonno” KPI. */
+function asleepHoursFromSleepStages(stages: PhysiologyDailyPanelOk["sleepStages"]): number | null {
+  if (stages.deepHours == null && stages.lightHours == null && stages.remHours == null) return null;
+  return (stages.deepHours ?? 0) + (stages.lightHours ?? 0) + (stages.remHours ?? 0);
+}
+
+/**
+ * Se il KPI `sleepDurationHours` (media export recovery) è molto più basso della somma delle fasi
+ * (stesso giorno, stesso pannello), usiamo la somma — tipico quando `durationInSeconds` corto
+ * vinceva sui milli WHOOP prima del fix decoder, o quando due provider si incrociano.
+ */
+function alignRecoverySleepDurationWithStages(
+  recovery: RecoverySummary | null,
+  stages: PhysiologyDailyPanelOk["sleepStages"],
+): RecoverySummary | null {
+  if (!recovery) return null;
+  const asleep = asleepHoursFromSleepStages(stages);
+  if (asleep == null || asleep < 1) return recovery;
+  const cur = recovery.sleepDurationHours;
+  if (cur == null) {
+    return { ...recovery, sleepDurationHours: Number(asleep.toFixed(2)) };
+  }
+  if (asleep - cur >= 1.25) {
+    return { ...recovery, sleepDurationHours: Number(asleep.toFixed(2)) };
+  }
+  return recovery;
+}
+
 function pickGlucoseMmol(values: Record<string, unknown>): number | null {
   const mmol = pickNumber(values, ["glucose_mmol_l", "glucose_mmol", "blood_glucose_mmol"]);
   if (mmol != null) return mmol;
@@ -388,12 +416,14 @@ export async function buildPhysiologyDailyPanel(input: {
     created_at: typeof row.created_at === "string" ? row.created_at : "",
   }));
 
+  const recoveryAligned = alignRecoverySleepDurationWithStages(recovery, sleepStages);
+
   return {
     ok: true,
     date,
     athleteId,
     profileWeightKg,
-    recovery,
+    recovery: recoveryAligned,
     activity,
     sleepStages,
     sleepHypnogram,

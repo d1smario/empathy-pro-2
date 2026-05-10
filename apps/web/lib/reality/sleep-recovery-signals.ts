@@ -86,6 +86,24 @@ export function expandDevicePayloadMetricRecords(payload: Record<string, unknown
   return out;
 }
 
+function looksLikeGarminSleepRecord(record: Record<string, unknown>): boolean {
+  if (record.overallSleepScore != null || record.OverallSleepScore != null) return true;
+  return (
+    pickNumber(record, ["deepSleepDurationInSeconds", "lightSleepDurationInSeconds", "remSleepInSeconds"]) != null
+  );
+}
+
+/**
+ * Durata sonno in ore · ordine **intenzionale**:
+ *
+ * WHOOP v2 mette tempi affidabili in `score.stage_summary` come `*_milli` (letto qui
+ * **prima** dei secondi generici). Il campo `durationInSeconds` compare anche su
+ * record non “notte intera” (o con semantica diversa): se lo leggiamo prima dei milli
+ * vince un valore corto (~3 h) mentre le fasi sommano ~7 h — bug UI “ore sonno”.
+ *
+ * `durationInSeconds` / `DurationInSeconds` restano supportati per **Garmin sleeps**
+ * (summary notturno) dove spesso non ci sono i milli WHOOP-like.
+ */
 function normalizeSleepDurationHours(record: Record<string, unknown> | null): number | null {
   const hours = pickNumber(record, ["sleep_duration_hours", "sleepHours", "sleep_hours", "total_sleep_hours"]);
   if (hours != null) return hours;
@@ -99,25 +117,28 @@ function normalizeSleepDurationHours(record: Record<string, unknown> | null): nu
   ]);
   if (minutes != null) return Number((minutes / 60).toFixed(2));
 
-  const seconds = pickNumber(record, [
+  const milli = pickNumber(record, [
+    /** Sonno effettivo (WHOOP) — preferito rispetto al solo “in bed”. */
+    "total_sleep_time_milli",
+    "total_in_bed_time_milli",
+    "sleep_duration_milli",
+    "in_bed_duration_milli",
+  ]);
+  if (milli != null && milli > 0) return Number((milli / 3_600_000).toFixed(2));
+
+  const secondsGeneric = pickNumber(record, [
     "total_sleep_duration",
     "sleep_duration_seconds",
     "total_sleep_seconds",
     "sleepTimeInSeconds",
     "sleep_time_seconds",
-    /** Garmin Sleep summary: durata monitoraggio sonno (sec). */
-    "durationInSeconds",
-    "DurationInSeconds",
   ]);
-  if (seconds != null) return Number((seconds / 3600).toFixed(2));
+  if (secondsGeneric != null) return Number((secondsGeneric / 3600).toFixed(2));
 
-  const milli = pickNumber(record, [
-    "total_in_bed_time_milli",
-    "total_sleep_time_milli",
-    "sleep_duration_milli",
-    "in_bed_duration_milli",
-  ]);
-  if (milli != null && milli > 0) return Number((milli / 3_600_000).toFixed(2));
+  const garminSleepSeconds = pickNumber(record, ["durationInSeconds", "DurationInSeconds"]);
+  if (garminSleepSeconds != null && record != null && looksLikeGarminSleepRecord(record)) {
+    return Number((garminSleepSeconds / 3600).toFixed(2));
+  }
 
   return null;
 }

@@ -43,6 +43,28 @@ test("WHOOP sleep: score.stage_summary + sleep_performance_percentage", () => {
   assert.ok(s.sleepDurationHours != null && s.sleepDurationHours >= 7.4 && s.sleepDurationHours <= 7.6);
 });
 
+/** WHOOP può avere `durationInSeconds` corto su root insieme a `*_milli` nello stage_summary: i milli devono vincere. */
+test("WHOOP sleep: total_sleep_time_milli vince su durationInSeconds corto", () => {
+  const payload = {
+    whoop_sleep: {
+      start: "2026-05-06T23:00:00Z",
+      end: "2026-05-07T07:00:00Z",
+      durationInSeconds: 11_052,
+      score: {
+        sleep_performance_percentage: 88,
+        stage_summary: {
+          total_sleep_time_milli: 7 * 3_600_000 + 15 * 60_000,
+          slow_wave_sleep_time_milli: 3600_000,
+          rem_sleep_time_milli: 5400_000,
+          wake_duration_milli: 600_000,
+        },
+      },
+    },
+  };
+  const s = extractSleepRecoverySignal(payload);
+  assert.ok(s.sleepDurationHours != null && s.sleepDurationHours >= 7.2 && s.sleepDurationHours <= 7.35);
+});
+
 test("device_sync_exports row: metriche da sourcePayload whoop_*", () => {
   const row = {
     payload: {
