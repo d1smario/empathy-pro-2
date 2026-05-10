@@ -50,3 +50,13 @@ export function readOptionalGarminActivityBlobsBucket(): string | null {
   const name = normalizeSupabaseEnvValue(raw);
   return name.length > 0 ? name : null;
 }
+
+/** Bucket staging import manuale Training (migrazione 049); default allineato al bucket creato in SQL. */
+export function readTrainingManualImportsBucket(): string {
+  const raw = process.env.TRAINING_MANUAL_IMPORTS_BUCKET;
+  if (raw?.trim()) {
+    const name = normalizeSupabaseEnvValue(raw);
+    if (name.length > 0) return name;
+  }
+  return "empathy_training_manual_imports";
+}

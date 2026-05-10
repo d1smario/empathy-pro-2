@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
@@ -16,6 +18,14 @@ import {
   runPlannedProgramFileImport,
   runStructuredPlannedSingleImport,
 } from "@/lib/training/training-planned-import-service";
+import {
+  assertTrainingManualStagingPathForAthlete,
+  createSupabaseServiceRoleClient,
+  downloadTrainingManualStagingObject,
+  removeTrainingManualStagingObjectBestEffort,
+  TRAINING_MANUAL_IMPORT_MAX_BYTES,
+} from "@/lib/training/training-manual-import-storage";
+import { readTrainingManualImportsBucket } from "@/lib/supabase-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -61,30 +71,110 @@ function buildExternalId(input: {
 
 /**
  * Import workout eseguito (FIT/TCX/GPX/CSV/JSON) — auth Bearer+cookie come V1; scrittura con service role se configurato.
+ *
+ * **Upload diretto (grandi file):** `Content-Type: application/json` con `storage: { bucket, objectPath }`
+ * dopo `POST /api/training/import/sign-upload` + `uploadToSignedUrl` dal browser (vedi `training-import-api.ts`).
  */
 export async function POST(req: NextRequest) {
   let importJobId: string | null = null;
   try {
-    const form = await req.formData();
-    const athleteId = String(form.get("athleteId") ?? "").trim();
-    const file = form.get("file");
-    const dateOverride = String(form.get("date") ?? "").trim();
-    const plannedDate = String(form.get("plannedDate") ?? "").trim();
-    const notes = String(form.get("notes") ?? "").trim();
-    const device = String(form.get("device") ?? "").trim();
-    const plannedWorkoutId = String(form.get("plannedWorkoutId") ?? "").trim();
-    const importIntent = normalizeTrainingImportIntent(form.get("importIntent"));
+    let athleteId: string;
+    let file: File;
+    let fileBuffer: Buffer;
+    let dateOverride: string;
+    let plannedDate: string;
+    let notes: string;
+    let device: string;
+    let plannedWorkoutId: string;
+    let importIntent: ReturnType<typeof normalizeTrainingImportIntent>;
+    let db: SupabaseClient;
 
-    if (!athleteId) {
-      return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
+    const contentType = (req.headers.get("content-type") ?? "").toLowerCase();
+    if (contentType.includes("application/json")) {
+      const raw = (await req.json()) as Record<string, unknown>;
+      athleteId = String(raw.athleteId ?? "").trim();
+      const storage = raw.storage as { bucket?: string; objectPath?: string } | undefined;
+      const bucket = String(storage?.bucket ?? "").trim();
+      const objectPath = String(storage?.objectPath ?? "").trim();
+      const fileName = String(raw.fileName ?? "").trim();
+      const mimeType = String(raw.mimeType ?? "").trim() || "application/octet-stream";
+      const declaredSize =
+        typeof raw.fileSizeBytes === "number" && Number.isFinite(raw.fileSizeBytes)
+          ? Math.floor(raw.fileSizeBytes)
+          : 0;
+
+      if (!athleteId) {
+        return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
+      }
+      if (!bucket || !objectPath || !fileName) {
+        return NextResponse.json(
+          { error: "Missing storage.bucket, storage.objectPath or fileName" },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      const expectedBucket = readTrainingManualImportsBucket();
+      if (bucket !== expectedBucket) {
+        return NextResponse.json({ error: "storage_bucket_forbidden" }, { status: 400, headers: NO_STORE });
+      }
+      if (declaredSize > TRAINING_MANUAL_IMPORT_MAX_BYTES) {
+        return NextResponse.json({ error: "file_too_large" }, { status: 413, headers: NO_STORE });
+      }
+
+      ({ db } = await requireAthleteWriteContext(req, athleteId));
+      assertTrainingManualStagingPathForAthlete({ athleteId, objectPath });
+
+      const admin = createSupabaseServiceRoleClient();
+      if (!admin) {
+        return NextResponse.json(
+          { error: "storage_import_requires_SUPABASE_SERVICE_ROLE_KEY" },
+          { status: 503, headers: NO_STORE },
+        );
+      }
+
+      const dl = await downloadTrainingManualStagingObject({
+        supabase: admin,
+        bucket,
+        objectPath,
+      });
+      fileBuffer = dl.buffer;
+      await removeTrainingManualStagingObjectBestEffort({ supabase: admin, bucket, objectPath });
+
+      if (declaredSize > 0 && declaredSize !== fileBuffer.length) {
+        return NextResponse.json({ error: "file_size_mismatch" }, { status: 400, headers: NO_STORE });
+      }
+
+      const effMime = mimeType || dl.contentType || "application/octet-stream";
+      file = new File([new Uint8Array(fileBuffer)], fileName, { type: effMime });
+
+      dateOverride = String(raw.date ?? "").trim();
+      plannedDate = String(raw.plannedDate ?? "").trim();
+      notes = String(raw.notes ?? "").trim();
+      device = String(raw.device ?? "").trim();
+      plannedWorkoutId = String(raw.plannedWorkoutId ?? "").trim();
+      importIntent = normalizeTrainingImportIntent(raw.importIntent);
+    } else {
+      const form = await req.formData();
+      athleteId = String(form.get("athleteId") ?? "").trim();
+      const fileEntry = form.get("file");
+      dateOverride = String(form.get("date") ?? "").trim();
+      plannedDate = String(form.get("plannedDate") ?? "").trim();
+      notes = String(form.get("notes") ?? "").trim();
+      device = String(form.get("device") ?? "").trim();
+      plannedWorkoutId = String(form.get("plannedWorkoutId") ?? "").trim();
+      importIntent = normalizeTrainingImportIntent(form.get("importIntent"));
+
+      if (!athleteId) {
+        return NextResponse.json({ error: "Missing athleteId" }, { status: 400, headers: NO_STORE });
+      }
+      if (!(fileEntry instanceof File)) {
+        return NextResponse.json({ error: "Missing file" }, { status: 400, headers: NO_STORE });
+      }
+      file = fileEntry;
+
+      ({ db } = await requireAthleteWriteContext(req, athleteId));
+      fileBuffer = Buffer.from(await file.arrayBuffer());
     }
-    if (!(file instanceof File)) {
-      return NextResponse.json({ error: "Missing file" }, { status: 400, headers: NO_STORE });
-    }
 
-    const { db } = await requireAthleteWriteContext(req, athleteId);
-
-    const fileBuffer = Buffer.from(await file.arrayBuffer());
     const fileChecksum = createHash("sha1").update(fileBuffer).digest("hex");
 
     const route = resolveTrainingImportRoute({
