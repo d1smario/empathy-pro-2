@@ -1,6 +1,12 @@
 /** Bioenergetics as dominant modulating layer (see CONSTITUTION.md). */
 import type { BioenergeticProfile, InternalLoadState } from "@empathy/contracts";
 
+export {
+  averagePowerWattsFromKjAndDuration,
+  kilojoulesFromKcal,
+  tssPlanExecutionRatio,
+} from "./session-workload-adherence";
+
 export const DOMAIN = "@empathy/domain-bioenergetics" as const;
 export const DOMAIN_TITLE = "Bioenergetics";
 export const DOMAIN_SUMMARY =

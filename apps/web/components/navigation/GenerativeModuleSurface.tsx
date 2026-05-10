@@ -202,6 +202,13 @@ export function GenerativeModuleSurface({ module }: { module: ProductModuleId })
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <Pro2Link
+              href="/bioenergetics"
+              variant="secondary"
+              className="justify-center border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25"
+            >
+              Report giornaliero (grafici)
+            </Pro2Link>
+            <Pro2Link
               href="/nutrition/diary"
               variant="secondary"
               className="justify-center border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15"

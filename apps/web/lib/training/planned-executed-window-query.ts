@@ -8,7 +8,7 @@ export const PLANNED_WORKOUTS_WINDOW_SELECT =
   "id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, notes" as const;
 
 export const EXECUTED_WORKOUTS_WINDOW_SELECT =
-  "id, athlete_id, date, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
+  "id, athlete_id, date, started_at, ended_at, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
 
 type WindowQueryResult = {
   data: unknown[] | null;

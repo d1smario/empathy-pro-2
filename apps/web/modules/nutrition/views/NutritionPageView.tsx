@@ -118,31 +118,11 @@ import {
   readMealRotationWeekPayload,
   recordPlanDayStaples,
 } from "@/lib/nutrition/meal-rotation-week-cache";
-
-const NUTRITION_PLAN_DATE_STORAGE_PREFIX = "empathy-pro2.nutrition.planDate.";
-
-function isIsoDateKey(s: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
-
-function readPersistedNutritionPlanDate(athleteId: string): string | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = sessionStorage.getItem(`${NUTRITION_PLAN_DATE_STORAGE_PREFIX}${athleteId}`)?.trim();
-    return raw && isIsoDateKey(raw) ? raw : null;
-  } catch {
-    return null;
-  }
-}
-
-function writePersistedNutritionPlanDate(athleteId: string, dateKey: string): void {
-  if (typeof window === "undefined" || !isIsoDateKey(dateKey)) return;
-  try {
-    sessionStorage.setItem(`${NUTRITION_PLAN_DATE_STORAGE_PREFIX}${athleteId}`, dateKey);
-  } catch {
-    /* quota / private mode */
-  }
-}
+import {
+  isIsoDateKey,
+  readPersistedNutritionPlanDate,
+  writePersistedNutritionPlanDate,
+} from "@/lib/nutrition/persisted-nutrition-plan-date";
 
 type AthleteNutritionRow = {
   id: string;
@@ -235,8 +215,10 @@ const FUELING_CHART_THEME_PRO2 = {
 } as const;
 
 type FoodLookupItem = {
-  source: "internal" | "openfoodfacts" | "usda";
+  source: "usda" | "brand-site";
+  lookupTier?: string;
   fdcId?: number | null;
+  catalogId?: string | null;
   label: string;
   brand: string | null;
   kcal_100: number | null;
@@ -855,6 +837,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   /** Etichette aggiunte per la prossima rigenerazione (vincolo deterministico sul request). */
   const [coachSessionFoodExclusions, setCoachSessionFoodExclusions] = useState<string[]>([]);
   const [profileFoodExcludeBusy, setProfileFoodExcludeBusy] = useState<string | null>(null);
+  const [fuelingConfirmBusy, setFuelingConfirmBusy] = useState(false);
 
   useEffect(() => {
     if (!athleteId) return;
@@ -1398,6 +1381,25 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       dayTrainingAlsoMissing,
     };
   }, [profile, physio, selectedPlanSessions.length]);
+
+  const fuelingExecutionConfirmations = useMemo(() => {
+    const raw = record(profile?.nutrition_config).fueling_execution_confirmations;
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+      return {} as Record<string, { confirmed?: boolean; at?: string }>;
+    }
+    const out: Record<string, { confirmed?: boolean; at?: string }> = {};
+    for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+      const vr = record(v);
+      out[k] = {
+        confirmed: Boolean(vr.confirmed),
+        at: typeof vr.at === "string" ? vr.at : undefined,
+      };
+    }
+    return out;
+  }, [profile?.nutrition_config]);
+
+  const fuelingConfirmedForSelectedDate = Boolean(fuelingExecutionConfirmations[selectedPlanDate]?.confirmed);
+
   const predictorEffectiveTimeMin = predictorUsePlanDay ? effectiveSessionDurationMin : predictorTimeMin;
   const predictorEffectiveIntensityPctFtp = predictorUsePlanDay ? effectiveSessionIntensityPctFtp : predictorIntensityPctFtp;
   const fuelingTrainingContext = useMemo<FuelingTrainingContextRow[]>(() => {
@@ -3003,6 +3005,34 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setSaving(false);
   }
 
+  async function persistFuelingExecutionConfirmation(nextConfirmed: boolean) {
+    if (!athleteId || !profile) return;
+    setFuelingConfirmBusy(true);
+    setError(null);
+    try {
+      const existingNutrition = record(profile.nutrition_config);
+      const prev = record(existingNutrition.fueling_execution_confirmations);
+      const merged: Record<string, unknown> = { ...prev };
+      if (nextConfirmed) {
+        merged[selectedPlanDate] = { confirmed: true, at: new Date().toISOString() };
+      } else {
+        delete merged[selectedPlanDate];
+      }
+      await saveNutritionProfileConfig({
+        athleteId,
+        nutrition_config: {
+          ...existingNutrition,
+          fueling_execution_confirmations: merged,
+        },
+        routine_config: record(profile.routine_config),
+      });
+      setNutritionContextVersion((v) => v + 1);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Salvataggio conferma fueling fallito");
+    }
+    setFuelingConfirmBusy(false);
+  }
+
   async function runFoodLookupForQuery(rawQuery: string) {
     const q = rawQuery.trim();
     if (!q) return;
@@ -3272,6 +3302,44 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 dell&apos;eseguito importato). Numeri sintetici prima, dettagli apribili quando servono.
               </p>
             </header>
+            {athleteId ? (
+              <section
+                className="viz-card builder-panel border border-lime-500/20 bg-black/25 px-4 py-3 sm:px-5"
+                style={{ marginBottom: 12 }}
+              >
+                <h3 className="viz-title text-base">Assunzione fueling</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  Conferma che hai seguito il piano (pre / intra / post) per{" "}
+                  <strong className="text-white">{selectedPlanDate}</strong>. La conferma resta in memoria atleta (
+                  <span className="font-mono text-[0.65rem] text-slate-500">nutrition_config.fueling_execution_confirmations</span>
+                  ) e può supportare il confronto piano vs reale se attivi l&apos;aderenza nutrizione sul meal plan.
+                </p>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="btn-nutrition-cta"
+                    disabled={fuelingConfirmBusy || saving}
+                    onClick={() => void persistFuelingExecutionConfirmation(!fuelingConfirmedForSelectedDate)}
+                  >
+                    {fuelingConfirmBusy
+                      ? "Salvataggio…"
+                      : fuelingConfirmedForSelectedDate
+                        ? "Annulla conferma questo giorno"
+                        : "Confermo assunzione fueling questo giorno"}
+                  </button>
+                  {fuelingConfirmedForSelectedDate ? (
+                    <span className="text-xs text-lime-200">
+                      Confermato
+                      {fuelingExecutionConfirmations[selectedPlanDate]?.at
+                        ? ` · ${new Date(fuelingExecutionConfirmations[selectedPlanDate]!.at!).toLocaleString("it-IT")}`
+                        : null}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-500">Nessuna conferma per questa data.</span>
+                  )}
+                </div>
+              </section>
+            ) : null}
             <section className="viz-card builder-panel" style={{ marginBottom: "12px" }}>
               <div className="nutrition-section-head">
                 <h3 className="viz-title">Fueling Plan · pre / intra / post</h3>

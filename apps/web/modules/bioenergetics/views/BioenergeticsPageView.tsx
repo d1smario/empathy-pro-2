@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticMetricTile,
@@ -13,6 +14,10 @@ import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import {
+  readPersistedNutritionPlanDate,
+  writePersistedNutritionPlanDate,
+} from "@/lib/nutrition/persisted-nutrition-plan-date";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
 import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
@@ -22,6 +27,11 @@ function toIsoDate(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function coerceIsoDate(s: string | null | undefined): string | null {
+  const u = (s ?? "").trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(u) ? u : null;
 }
 
 const CATEGORY_LABEL: Record<BioenergeticMetricTileCategory, string> = {
@@ -42,15 +52,52 @@ function impactTileClass(impact: BioenergeticPathwayImpact): string {
 function provenanceLabel(p: BioenergeticMetricTile["provenance"]): string {
   if (p === "measured") return "Misurato";
   if (p === "estimated") return "Stimato";
+  if (p === "planned") return "Da piano";
   return "Assente";
 }
 
 export default function BioenergeticsPageView() {
+  const searchParams = useSearchParams();
   const { athleteId, loading: athleteLoading } = useActiveAthlete();
   const [date, setDate] = useState(() => toIsoDate(new Date()));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vm, setVm] = useState<BioenergeticsDayViewModel | null>(null);
+  const seededFromContext = useRef(false);
+
+  useEffect(() => {
+    seededFromContext.current = false;
+  }, [athleteId]);
+
+  useEffect(() => {
+    const fromUrl = coerceIsoDate(searchParams.get("date"));
+    if (fromUrl) {
+      setDate((d) => (d === fromUrl ? d : fromUrl));
+      seededFromContext.current = true;
+      return;
+    }
+    if (!athleteId || athleteLoading) return;
+    if (seededFromContext.current) return;
+    seededFromContext.current = true;
+    const persisted = readPersistedNutritionPlanDate(athleteId);
+    if (persisted) setDate((d) => (d === persisted ? d : persisted));
+  }, [searchParams, athleteId, athleteLoading]);
+
+  const setDateAndPersist = useCallback(
+    (next: string) => {
+      const k = coerceIsoDate(next);
+      if (!k) return;
+      setDate(k);
+      if (athleteId) writePersistedNutritionPlanDate(athleteId, k);
+      if (typeof window !== "undefined") {
+        const u = new URL(window.location.href);
+        u.searchParams.set("date", k);
+        const qs = u.searchParams.toString();
+        window.history.replaceState({}, "", qs ? `${u.pathname}?${qs}${u.hash}` : `${u.pathname}${u.hash}`);
+      }
+    },
+    [athleteId],
+  );
 
   useEffect(() => {
     if (athleteLoading) return;
@@ -129,10 +176,13 @@ export default function BioenergeticsPageView() {
             <input
               type="date"
               value={date}
-              onChange={(e) => setDate(e.currentTarget.value)}
+              onChange={(e) => setDateAndPersist(e.currentTarget.value)}
               className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
             />
-            <p className="text-xs text-gray-400">Dati certi prioritari; stime solo se canali mancanti.</p>
+            <p className="max-w-xl text-xs leading-relaxed text-gray-400">
+              La data di default segue il <strong className="text-gray-200">giorno piano Nutrizione</strong> (stesso valore in sessionStorage per atleta) oppure{" "}
+              <code className="text-gray-300">?date=YYYY-MM-DD</code> nell&apos;URL. Cambiando qui si aggiornano anche Nutrizione e il link condiviso.
+            </p>
           </div>
         </Pro2SectionCard>
       </section>
@@ -159,6 +209,21 @@ export default function BioenergeticsPageView() {
             <div className="h-3 w-full max-w-xl animate-pulse rounded bg-white/10" />
             <div className="h-24 w-full animate-pulse rounded-2xl bg-white/5" />
           </div>
+        ) : null}
+
+        {vm && vm.timeline.length === 0 ? (
+          <p className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+            Per <strong className="text-white">{vm.date}</strong> non risultano ancora eventi in timeline (sessioni pianificate/eseguite nel range, voci diario, export device o lab con
+            quella data). I grafici mostrano comunque il modello kernel; per arricchire i dati usa{" "}
+            <Pro2Link href="/nutrition/diary" className="text-cyan-200 underline-offset-2 hover:text-white">
+              Diario
+            </Pro2Link>{" "}
+            e{" "}
+            <Pro2Link href="/training/calendar" className="text-cyan-200 underline-offset-2 hover:text-white">
+              Calendario
+            </Pro2Link>{" "}
+            con la stessa data.
+          </p>
         ) : null}
 
         {vm ? (

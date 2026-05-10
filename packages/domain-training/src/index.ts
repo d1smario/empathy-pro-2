@@ -50,6 +50,8 @@ export type ExecutedWorkoutDbRow = {
   id: string;
   athlete_id: string;
   date: string;
+  started_at?: string | null;
+  ended_at?: string | null;
   duration_minutes: number | string;
   tss: number | string;
   planned_workout_id?: string | null;
@@ -76,12 +78,20 @@ function optNum(v: number | string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+function optIsoTime(v: string | null | undefined): ExecutedWorkout["startedAt"] {
+  if (v == null || typeof v !== "string") return undefined;
+  const t = v.trim();
+  return t.length >= 10 ? (t as ExecutedWorkout["startedAt"]) : undefined;
+}
+
 export function executedWorkoutFromDbRow(row: ExecutedWorkoutDbRow): ExecutedWorkout {
   const d = typeof row.date === "string" ? row.date : String(row.date);
   return {
     id: row.id,
     athleteId: row.athlete_id,
     date: d.slice(0, 10) as ExecutedWorkout["date"],
+    startedAt: optIsoTime(row.started_at ?? undefined),
+    endedAt: optIsoTime(row.ended_at ?? undefined),
     durationMinutes: Number(row.duration_minutes),
     tss: Number(row.tss),
     plannedWorkoutId: row.planned_workout_id?.trim() || undefined,

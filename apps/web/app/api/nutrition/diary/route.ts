@@ -9,6 +9,7 @@ import {
 } from "@/lib/nutrition/fdc-food-cache";
 import { scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
 import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
+import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
 
@@ -121,6 +122,7 @@ export async function POST(req: NextRequest) {
       mealSlot?: string;
       mode?: string;
       fdcId?: number;
+      catalogId?: string;
       quantityG?: number;
       foodLabel?: string;
       notes?: string | null;
@@ -191,6 +193,69 @@ export async function POST(req: NextRequest) {
         supplements: body.supplements?.trim() || null,
         user_confirmed: true,
       };
+    } else if (mode === "catalog_product") {
+      const catalogId = (body.catalogId ?? "").trim();
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(catalogId)) {
+        return NextResponse.json({ error: "catalogId deve essere un UUID valido" }, { status: 400 });
+      }
+      const catalogDb = createServerSupabaseClient();
+      const { data: catRow, error: catErr } = await catalogDb
+        .from("nutrition_product_catalog")
+        .select("id, brand, product_name, kcal_100g, cho_100g, protein_100g, fat_100g, sodium_mg_100g, source")
+        .eq("id", catalogId)
+        .maybeSingle();
+      if (catErr || !catRow) {
+        return NextResponse.json(
+          { error: catErr?.message ?? "Prodotto catalogo non trovato o non accessibile." },
+          { status: 404 },
+        );
+      }
+      const src = String((catRow as Record<string, unknown>).source ?? "");
+      if (src !== "brand-site" && src !== "internal") {
+        return NextResponse.json({ error: "Solo voci catalogo brand-site/internal possono usare catalog_product." }, { status: 400 });
+      }
+      const k100 = Number((catRow as Record<string, unknown>).kcal_100g);
+      const c100 = Number((catRow as Record<string, unknown>).cho_100g);
+      const p100 = Number((catRow as Record<string, unknown>).protein_100g);
+      const f100 = Number((catRow as Record<string, unknown>).fat_100g);
+      if (![k100, c100, p100, f100].every((x) => Number.isFinite(x) && x >= 0)) {
+        return NextResponse.json({ error: "Macro per 100g del catalogo non validi" }, { status: 502 });
+      }
+      const na100Raw = (catRow as Record<string, unknown>).sodium_mg_100g;
+      const na100 = na100Raw != null ? Number(na100Raw) : null;
+      const scaled = scaleMacrosFromPer100g(
+        {
+          kcalPer100g: k100,
+          carbsPer100g: c100,
+          proteinPer100g: p100,
+          fatPer100g: f100,
+          sodiumMgPer100g: na100 != null && Number.isFinite(na100) ? na100 : null,
+        },
+        quantityG,
+      );
+      const brand = (catRow as Record<string, unknown>).brand != null ? String((catRow as Record<string, unknown>).brand) : "";
+      const pname = String((catRow as Record<string, unknown>).product_name ?? "Prodotto");
+      const label = [brand, pname].filter(Boolean).join(" · ").slice(0, 500);
+      insert = {
+        athlete_id: athleteId,
+        entry_date: entryDate,
+        entry_time: body.entryTime?.trim() || null,
+        meal_slot: mealSlot,
+        provenance: "scaled_reference",
+        fdc_id: null,
+        food_label: label,
+        quantity_g: quantityG,
+        kcal: scaled.kcal,
+        carbs_g: scaled.carbsG,
+        protein_g: scaled.proteinG,
+        fat_g: scaled.fatG,
+        sodium_mg: scaled.sodiumMg,
+        micronutrients: {},
+        reference_source_tag: `nutrition_catalog:${catalogId}`,
+        notes: body.notes?.trim() || null,
+        supplements: body.supplements?.trim() || null,
+        user_confirmed: true,
+      };
     } else if (mode === "scaled_reference") {
       const label = (body.foodLabel ?? "").trim();
       if (label.length < 1) {
@@ -235,7 +300,7 @@ export async function POST(req: NextRequest) {
         user_confirmed: true,
       };
     } else {
-      return NextResponse.json({ error: "mode deve essere usda_fdc o scaled_reference" }, { status: 400 });
+      return NextResponse.json({ error: "mode deve essere usda_fdc, catalog_product o scaled_reference" }, { status: 400 });
     }
 
     const { data, error } = await db.from("food_diary_entries").insert(insert).select("*").single();

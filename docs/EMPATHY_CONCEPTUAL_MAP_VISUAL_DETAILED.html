@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>EMPATHY Pro 2 — Mappa visiva · ragionamenti e pipeline</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <style>
+    :root {
+      --void: #09090b;
+      --surface: rgba(255, 255, 255, 0.05);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #fafafa;
+      --muted: #a1a1aa;
+      --fuchsia: #e879f9;
+      --violet: #a855f7;
+      --orange: #fb923c;
+      --ingest: #22d3ee;
+      --compute: #a78bfa;
+      --interp: #f472b6;
+      --app: #fdba74;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      color: var(--text);
+      line-height: 1.55;
+      background: var(--void);
+      background-image:
+        radial-gradient(ellipse 120% 80% at 50% -20%, rgba(168, 85, 247, 0.22), transparent 50%),
+        radial-gradient(ellipse 80% 50% at 100% 50%, rgba(232, 121, 249, 0.12), transparent 45%),
+        radial-gradient(ellipse 60% 40% at 0% 80%, rgba(251, 146, 60, 0.1), transparent 40%);
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .hero {
+      text-align: center;
+      padding: 2rem 1rem 2rem;
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      background: linear-gradient(145deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.04) inset, 0 24px 80px rgba(0,0,0,0.45);
+    }
+    .hero-badge { font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.6rem; }
+    h1 {
+      margin: 0 0 0.5rem;
+      font-size: clamp(1.45rem, 3.8vw, 2.15rem);
+      font-weight: 700;
+      background: linear-gradient(105deg, var(--fuchsia), var(--violet) 42%, var(--orange));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .hero-sub { margin: 0 auto; max-width: 40rem; font-size: 0.92rem; color: var(--muted); }
+    .nav-mini {
+      margin-top: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .nav-mini a {
+      font-size: 0.82rem;
+      color: var(--orange);
+      text-decoration: none;
+      border: 1px solid rgba(251,146,60,0.35);
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+    }
+    .nav-mini a:hover { background: rgba(251,146,60,0.12); }
+    .toc {
+      margin: 1.75rem 0 0;
+      padding: 1rem 1.2rem;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .toc strong { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .toc ul { margin: 0.5rem 0 0; padding-left: 1.2rem; columns: 2; column-gap: 2rem; font-size: 0.86rem; }
+    @media (max-width: 640px) { .toc ul { columns: 1; } }
+    .toc a { color: #c4b5fd; text-decoration: none; }
+    .toc a:hover { text-decoration: underline; }
+
+    .section-title {
+      margin: 2.5rem 0 0.85rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      scroll-margin-top: 1rem;
+    }
+    .section-title::before {
+      content: "";
+      width: 4px;
+      height: 1.1em;
+      border-radius: 2px;
+      background: linear-gradient(var(--fuchsia), var(--orange));
+    }
+    .diagram-wrap {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: #18181b;
+      padding: 1rem;
+      margin: 0.85rem 0 1.75rem;
+      overflow-x: auto;
+    }
+    .mermaid { display: flex; justify-content: center; min-height: 60px; }
+
+    .glass {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      background: var(--surface);
+      padding: 1.1rem 1.25rem;
+      margin: 0.85rem 0 1.75rem;
+    }
+    .glass h3 {
+      margin: 0 0 0.65rem;
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .callout {
+      border-left: 3px solid var(--interp);
+      padding: 0.65rem 0 0.65rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.88rem;
+      color: #e4e4e7;
+    }
+    .callout.compute { border-left-color: var(--compute); }
+    .dual-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin: 0.85rem 0 1.5rem;
+    }
+    .steps {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      counter-reset: s;
+    }
+    .steps li {
+      counter-increment: s;
+      position: relative;
+      padding: 0.65rem 0 0.65rem 2.35rem;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      font-size: 0.88rem;
+    }
+    .steps li::before {
+      content: counter(s);
+      position: absolute;
+      left: 0;
+      top: 0.55rem;
+      width: 1.65rem;
+      height: 1.65rem;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(168,85,247,0.35), rgba(232,121,249,0.15));
+      border: 1px solid rgba(168,85,247,0.45);
+      font-size: 0.72rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fafafa;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+    }
+    th, td {
+      border: 1px solid rgba(255,255,255,0.08);
+      padding: 0.5rem 0.55rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: rgba(255,255,255,0.06);
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    code {
+      font-size: 0.78em;
+      background: rgba(255,255,255,0.08);
+      padding: 0.12rem 0.38rem;
+      border-radius: 6px;
+    }
+    .refs { margin: 0; padding-left: 1.1rem; font-size: 0.82rem; color: var(--muted); }
+    .hint { margin-top: 1rem; font-size: 0.78rem; color: var(--muted); }
+    .hint kbd {
+      padding: 0.1rem 0.35rem;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid var(--border);
+    }
+    .pill {
+      display: inline-block;
+      padding: 0.12rem 0.45rem;
+      border-radius: 999px;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      margin-right: 0.35rem;
+    }
+    .pill-i { background: rgba(244,114,182,0.2); color: #f9a8d4; }
+    .pill-c { background: rgba(167,139,250,0.2); color: #c4b5fd; }
+    .pill-a { background: rgba(253,186,116,0.15); color: #fcd34d; }
+
+    @media print {
+      body { background: #fff; color: #111; background-image: none; }
+      .hero, .glass, .diagram-wrap { border-color: #ccc; background: #f8fafc; }
+      h1 { color: #4c1d95; -webkit-background-clip: unset; background: none; }
+      .toc a { color: #6d28d9; }
+      .hint { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <div class="hero-badge">Empathy Pro 2 · mappa ragionativa</div>
+      <h1>Dove nascono «consigli», numeri e piani</h1>
+      <p class="hero-sub">
+        Composition di <strong>Ingest · Compute · Interpretation · Application</strong>: interrogazioni intelligenti sulla fisiologia e sulla letteratura arricchiscono
+        <strong>contesto</strong> e <strong>vincoli strutturati</strong>; i <strong>numeri canonici</strong> restano sempre da twin, motori, solver e builder.
+      </p>
+      <div class="nav-mini">
+        <a href="EMPATHY_CONCEPTUAL_MAP_VISUAL.html">← Mappa sintetica</a>
+        <a href="#interpretazione-ai">Interpretazione / AI</a>
+        <a href="#bundle-compute">Catena deterministica</a>
+        <a href="#bioenergetica">Bioenergetica</a>
+        <a href="#virya-builder">VIRYA · Builder · Calendario</a>
+      </div>
+    </header>
+
+    <nav class="toc" aria-label="Indice">
+      <strong>Indice pagina</strong>
+      <ul>
+        <li><a href="#panoramica">Panoramica: due «cervelli» cooperanti</a></li>
+        <li><a href="#interpretazione-ai">Interpretazione e AI sul fisiologico</a></li>
+        <li><a href="#staging-l2">Staging L2: da proposta a memoria senza fork</a></li>
+        <li><a href="#bundle-compute"><code>resolveOperationalSignalsBundle</code></a></li>
+        <li><a href="#consigli">Consigli: deterministici vs narrativi</a></li>
+        <li><a href="#bioenergetica">Bioenergetica (trasparenza)</a></li>
+        <li><a href="#virya-builder">VIRYA, builder, calendario</a></li>
+        <li><a href="#riferimenti">Fonti nel repo</a></li>
+      </ul>
+    </nav>
+
+    <h2 class="section-title" id="panoramica">Panoramica: come si compongono i ragionamenti</h2>
+    <div class="callout">
+      In EMPATHY Pro 2 non esiste un secondo «motore nascosto» parallelo: gli strati <strong>narrativo / retrieval / AI</strong> lavorano in
+      <span class="pill pill-i">Interpretation</span> e <strong>propongono</strong>; gli strati <strong>misurazione, twin, allenamento pasti</strong>
+      lavorano in <span class="pill pill-c">Compute</span> con formule e pipeline uniche. Il flusso sotto è <strong>monodirezionale verso il generativo canonico</strong>
+      (<code>.cursor/rules/empathy_generative_core.mdc</code>, hub VIRYA/builder doc).
+    </div>
+    <div class="diagram-wrap">
+<pre class="mermaid">
+%%{init: {'theme':'dark', 'themeVariables': {'primaryTextColor':'#fafafa','lineColor':'#71717a'}}}%%
+flowchart TB
+  subgraph app_gate [Application gate]
+    G[requireAthleteReadContext]
+    M[resolveAthleteMemory · profile DB]
+  end
+  subgraph compute_numbers [Compute — numeri canonici]
+    T[Twin · physiology state]
+    B[Operational bundle orchestration]
+    S[Solver nutrizione · daily energy · meal-plan deterministico]
+    E[POST engine/generate — builder session]
+    CW[planned_workouts · executed_workouts]
+  end
+  subgraph interp_layer [Interpretation — senso AI]
+    P[pathway-modulation · template · filtri narrativi]
+    MS[multiscala · bottleneck API]
+    K[PubMed / knowledge traces · virya-context research]
+    ST[Staging L2 — proposte strutturate candidate]
+  end
+  G --> M
+  M --> T
+  M --> B
+  T --> B
+  B --> S
+  B --> VIRYA[VIRYA context · ritune proposal]
+  T --> K
+  T --> MS
+  T --> P
+  K --> ST
+  ST -->|"commit auditato"| M
+  P -->|"righe contesto / vincoli testuali"| S
+  E --> CW
+  VIRYA -->|"struttura piano · priorità giorno"| CW
+  E -->|"una sessione materializzata"| CW
+</pre>
+    </div>
+
+    <h2 class="section-title" id="interpretazione-ai">Interpretazione e interrogazioni «intelligenti» sul fisiologico</h2>
+    <div class="dual-grid">
+      <div class="glass">
+        <h3>Cosa fa il layer Interpretation (+ AI)</h3>
+        <ul class="refs" style="list-style: disc;">
+          <li><strong>Osserva</strong> snapshot autorizzati (dopo gate): memoria atleta, fisiologia risolta, training diario, hub.</li>
+          <li><strong>Interroga</strong> basi tipo multiscala, PubMed, pathway nutrizionale: recupera evidenza, mechanism, testi.</li>
+          <li><strong>Arricchisce il prodotto</strong> con priorità narrative, disclaimers, <strong>suggerimenti testuali</strong>, filtri su catalogo alimenti, template timing — senza riscrivere macro o blocchi allenamento come «verità numerica finale».</li>
+          <li><strong>Produce input strutturato</strong> (patch candidate, trace) che può essere <strong>sottoposto a commit</strong> in memoria o audit solo dove previsto dalla pipeline (<code>virya-context</code> persistence research come esempio di tracciabilità).</li>
+        </ul>
+      </div>
+      <div class="glass">
+        <h3>Cosa non fa (architecture gate)</h3>
+        <ul class="refs" style="list-style: disc;">
+          <li>Non calcola al posto del <strong>twin</strong> o dei <strong>motori laboratorio</strong>.</li>
+          <li>Non è sorgente del <strong>piano pasti deterministico</strong> (<code>POST …/intelligent-meal-plan</code>).</li>
+          <li>Non genera una <strong>seconda</strong> sessione builder in parallelo al percorso canonico <code>engine/generate → map blocchi → contract</code>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="diagram-wrap">
+<pre class="mermaid">
+%%{init: {'theme':'dark', 'themeVariables': {'primaryTextColor':'#fafafa','lineColor':'#a855f7'}}}%%
+flowchart LR
+  subgraph inputs [Legge da Compute/Application]
+    PHY[Canonico physiology + twin · da memory]
+    WIN[planned-window · giornata · esecuzione]
+  end
+  subgraph ai_flow [Interpretation]
+    RAG[Knowledge / retrieval]
+    QM[Domande tipo: bottleneck metabolico · evidenza su marker]
+    OUT1[copy · rationale UX]
+    OUT2[pathway modulation view model]
+    OUT3[binding / trace PubMed]
+  end
+  inputs --> QM
+  RAG --> QM
+  QM --> OUT1
+  PHY --> OUT2
+  QM --> OUT3
+</pre>
+    </div>
+
+    <h2 class="section-title" id="staging-l2">Staging L2 · da confronto multi-sorgente a memoria canonica</h2>
+    <div class="glass">
+      <h3>Contratto comportamentale</h3>
+      <p style="margin:0; font-size:0.88rem; color:#d4d4d8;">
+        L’orchestrazione multi-step confronta più letture già autorizzate, tiene le <strong>proposte</strong> fuori dalla memoria «finale» finché non passano gate di validazione,
+        e deposita solo <strong>fatti strutturati</strong> con audit. Dettaglio: <code>docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md</code>,
+        tipi <code>apps/web/lib/memory/interpretation-staging-contract.ts</code>.
+      </p>
+      <div class="diagram-wrap" style="margin-bottom:0; margin-top:1rem;">
+<pre class="mermaid">
+%%{init: {'theme':'dark'}}%%
+flowchart TB
+  A[Leggi memoria · knowledge · ingest] --> B{Lavoro staging L2}
+  B --> C[Candidate JSON · diff vs stato corrente]
+  C --> D{Gate umano · policy route}
+  D -->|"no"| B
+  D -->|"sì"| E[Persist trace / patch approvati / profilo audit]
+  E --> F[AthleteMemory coerente al commit]
+</pre>
+      </div>
+    </div>
+
+    <h2 class="section-title" id="bundle-compute"><code>resolveOperationalSignalsBundle</code> — catena giornata (nessun LLM sui numeri)</h2>
+    <div class="callout compute">
+      Unica orchestrazione deterministic che alimenta <strong>dial nutrizione</strong>, contesto giornata, <strong>modulazione bioenergetica</strong> derivata da physiology+twin,
+      e il <strong>loop adattamento</strong> (divergenza piano vs eseguito → <code>nextAction</code>). Usata da
+      <code>GET /api/nutrition/module</code> e, opzionalmente,
+      <code>GET /api/dashboard/athlete-hub?includeOperationalSignals=1</code>. Fonte:
+      <code>docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md</code> §3.1 ·
+      <code>apps/web/lib/dashboard/resolve-operational-signals-bundle.ts</code>.
+    </div>
+    <ol class="steps">
+      <li><strong>AthleteMemory</strong> — twin, fisiologia, diario, profilo dopo <code>resolveAthleteMemory</code>.</li>
+      <li><strong>Adaptation guidance</strong> — atteso vs osservato, semaforo.</li>
+      <li><strong>Training-day operational context</strong> — recovery, traffic-light → modalità giornata.</li>
+      <li><strong>Adaptation/regeneration loop</strong> — <code>divergenceScore</code>, stati (<code>aligned</code>/<code>watch</code>/<code>regenerate</code>),
+        <strong>anche <code>nextAction</code></strong> verso ritune/regenerazione: azione utente/coach o job applicativo — non rewrite silenziosa del planner.</li>
+      <li><strong>Bioenergetic modulation</strong> — ponte physique + twin + recovery (input a dial e VIRYA).</li>
+      <li><strong>Diary adaptive signals</strong> — realtà da diario nella finestra.</li>
+      <li><strong>Nutrition performance integration</strong> — leve su energia training, CHO, proteine, idratazione + <code>rationale[]</code> deterministiche.</li>
+    </ol>
+
+    <h2 class="section-title" id="consigli">Due famiglie di «consigli» (da non confondere)</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Tipo</th>
+          <th>Piano</th>
+          <th>Esempi in prodotto</th>
+          <th>Effetto su numeri canonici</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="pill pill-c">Compute</span> Operativo</td>
+          <td>L3 / Compute bundle</td>
+          <td><code>nextAction</code> loop rigenerazione, dial fueling/chiaro su training day, ledger righe deterministiche hub</td>
+          <td>Parametri e leve passati a <strong>solver / VIRYA inputs / UX</strong> — derivati da stesse funzioni, ripetibili.</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-i">Interpretation</span></td>
+          <td>L2</td>
+          <td>Copy pathway, bottleneck multiscala (UI), abstract PubMed, tracce ricerca VIRYA quando persistite</td>
+          <td><strong>Non</strong> sostituisce macro pasto o template builder; arricchisce senso, vincoli narrativi, evidenza.</td>
+        </tr>
+        <tr>
+          <td><span class="pill pill-a">Application</span></td>
+          <td>L1</td>
+          <td>Moduli training/nutrition/health, CTA esplicite (salva, rigenera, conferma staging)</td>
+          <td>Presenta e committa azioni umane esplicite verso DB e pipeline.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h2 class="section-title" id="bioenergetica">Bioenergetica · dove interagisce col resto</h2>
+    <div class="glass">
+      <h3>Ruolo: trasparenza e audit, non secondo motore</h3>
+      <p style="margin:0 0 0.75rem; font-size:0.88rem; color:#d4d4d8;">
+        L’hub bioenergetico è <strong>solo lettura</strong>: mostra provenienza ed effetto dei segnali già calcolati nel bundle operativo.
+        Stessa «verità» che nutrizione vede nel modulo. Dettaglio:
+        <code>docs/EMPATHY_PRO2_BIOENERGETIC_TRANSPARENCY_HUB_AND_VIRYA_LOOP.md</code>.
+      </p>
+      <ul class="refs" style="list-style: disc;">
+        <li><strong>API hub:</strong> <code>GET /api/dashboard/athlete-hub?includeOperationalSignals=1</code></li>
+        <li><strong>Giornata bioenergetica:</strong> <code>GET /api/bioenergetics/day</code></li>
+        <li><strong>UI hub:</strong> <code>apps/web/app/(shell)/physiology/bioenergetics/page.tsx</code> → <code>BioenergeticTransparencyHubPageView</code></li>
+        <li><strong>Ledger influenze:</strong> <code>apps/web/lib/platform/bioenergetic-transparency-ledger.ts</code> — righe che collegano <em>fonte Compute</em> → <em>consumatore</em> → <em>effetto sintetico</em> (audit, non nuova matematica).</li>
+      </ul>
+    </div>
+    <div class="diagram-wrap">
+<pre class="mermaid">
+%%{init: {'theme':'dark'}}%%
+flowchart TB
+  BUN[Operational signals bundle]
+  NUT[Nutrition module API]
+  HUB[DASH athlete-hub operational]
+  BIO[Bioenergetics day timeline]
+  UIH[Bioenergetic transparency hub UI]
+  BUN --> NUT
+  BUN --> HUB
+  BUN -.->|"influence ledger"| UIH
+  BIO --> UIH
+  HUB --> UIH
+</pre>
+    </div>
+
+    <h2 class="section-title" id="virya-builder">VIRYA · Builder · Calendario (interni canonici)</h2>
+    <div class="callout">
+      <strong>VIRYA:</strong> fasi di piano, distribuzione degli stimoli, <strong>ritune</strong> quando i segnali superano soglie — input dalla realtà giorno +
+      bundle (<code>divergence</code>, <code>adaptationLoop</code>, patch training approvati). Non sostituisce il builder su blocco-esercizio.
+      <strong>Builder (<code>POST /api/training/engine/generate</code>):</strong> unica generazione canonica della <strong>singola sessione</strong> (famiglie non-strength convogliano sulla stessa matematica del builder; regola VIRYA-builder in <code>.cursor/rules/empathy_pro2_virya_builder_pipeline.mdc</code>).
+      <strong>Calendario:</strong> <code>planned_workouts</code> dopo <code>POST …/planned/insert</code>; esecuzione in <code>executed_workouts</code>; lettura finestra <code>GET …/planned-window</code>.
+    </div>
+    <div class="diagram-wrap">
+<pre class="mermaid">
+%%{init: {'theme':'dark', 'themeVariables': {'primaryTextColor':'#fafafa'}}}%%
+flowchart TB
+  DAY[Realtà giorno · eseguito · diario · twin]
+  BUN2[Operational bundle · loop · semafori]
+  VC[GET/POST ecosystem virya-context]
+  CAL[Programma calendario pianificato]
+  BL[Builder engine/generate · contract]
+  DB[(planned_workouts)]
+  DAY --> BUN2
+  BUN2 --> VC
+  VC -->|"ritune directive · proposals"| CAL
+  CAL --> BL
+  BL -->|"POST planned/insert o equivalente"| DB
+  subgraph read_path [Lettura condivisa]
+    PW[planned-window]
+  end
+  DB --> PW
+</pre>
+    </div>
+
+    <h2 class="section-title" id="riferimenti">Fonti nel repo (approfondire senza perdere il filo)</h2>
+    <div class="glass">
+      <ul class="refs">
+        <li><code>docs/EMPATHY_MULTILAYER_COMPLETE_ARCHITECTURE.md</code> — mappa piani × file.</li>
+        <li><code>docs/EMPATHY_PRO2_DATA_AND_GENERATION_NETWORK.md</code> — reti A/B, bundle passo-passo.</li>
+        <li><code>docs/EMPATHY_PRO2_BIOENERGETIC_TRANSPARENCY_HUB_AND_VIRYA_LOOP.md</code> — hub + loop giorno → VIRYA → builder.</li>
+        <li><code>docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md</code> — gate + staging L2.</li>
+        <li><code>docs/EMPATHY_CONCEPTUAL_MAP_VISUAL.html</code> — vista sintetica.</li>
+      </ul>
+    </div>
+
+    <p class="hint">Salva PDF: apri questo file nel browser dopo il caricamento Mermaid → <kbd>Ctrl</kbd>+<kbd>P</kbd> → Salva come PDF. Link locale tipo <code>file:///…/docs/EMPATHY_CONCEPTUAL_MAP_VISUAL_DETAILED.html</code>.</p>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      securityLevel: "loose",
+      flowchart: { curve: "basis", padding: 14, nodeSpacing: 36, rankSpacing: 44 },
+      theme: "dark",
+    });
+  </script>
+</body>
+</html>

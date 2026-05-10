@@ -30,8 +30,11 @@ import {
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
 
 type LookupHit = {
-  source: "internal" | "openfoodfacts" | "usda";
+  source: "usda" | "brand-site";
+  /** Tier server: cache FDC locale vs discovery API vs catalogo fornitore. */
+  lookupTier?: string;
   fdcId?: number | null;
+  catalogId?: string | null;
   label: string;
   brand: string | null;
   kcal_100: number | null;
@@ -93,9 +96,10 @@ function sumEntryTotals(rows: FoodDiaryEntryViewModel[]) {
 
 function lookupHitSame(a: LookupHit | null, b: LookupHit): boolean {
   if (!a) return false;
-  if (a.source !== b.source || a.label !== b.label || a.brand !== b.brand) return false;
+  if (a.source !== b.source) return false;
+  if (a.source === "brand-site" && (a.catalogId || b.catalogId)) return a.catalogId === b.catalogId;
   if (a.fdcId != null || b.fdcId != null) return a.fdcId === b.fdcId;
-  return true;
+  return a.label === b.label && a.brand === b.brand;
 }
 
 function formatDateIt(iso: string): string {
@@ -108,6 +112,18 @@ function formatDateIt(iso: string): string {
   } catch {
     return iso;
   }
+}
+
+/** YYYY-MM-DD valido o null. */
+function coerceIsoDay(v: string | null | undefined): string | null {
+  if (typeof v !== "string") return null;
+  const s = v.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+/** Data voci diario allineata al giorno piano del modulo (Nutrizione / contesto report). */
+function defaultDiaryEntryDate(anchor: string | null | undefined, plan: string | null | undefined): string {
+  return coerceIsoDay(anchor) ?? coerceIsoDay(plan) ?? new Date().toISOString().slice(0, 10);
 }
 
 function provenanceLabel(p: FoodDiaryEntryViewModel["provenance"]): string {
@@ -176,7 +192,7 @@ export function FoodDiaryPanel({
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [entryDate, setEntryDate] = useState(() => defaultDiaryEntryDate(planDateAnchor, planDateForSolverTargets));
   const [mealSlot, setMealSlot] = useState<FoodDiaryEntryViewModel["mealSlot"]>("lunch");
   const [quantityG, setQuantityG] = useState("100");
   const [notes, setNotes] = useState("");
@@ -342,6 +358,13 @@ export function FoodDiaryPanel({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  /** Quando cambia il giorno selezionato nel modulo, il registro consumi segue quel giorno (stesso asse di piano/target e di aggregati tipo bioenergetica). */
+  useEffect(() => {
+    const day = coerceIsoDay(planDateAnchor) ?? coerceIsoDay(planDateForSolverTargets);
+    if (!day) return;
+    setEntryDate((prev) => (prev === day ? prev : day));
+  }, [planDateAnchor, planDateForSolverTargets]);
 
   useEffect(() => {
     if (!athleteId) {
@@ -563,7 +586,18 @@ export function FoodDiaryPanel({
     setSaving(true);
     setActionError(null);
     let result;
-    if (selectedHit.source === "usda" && selectedHit.fdcId != null && Number.isFinite(selectedHit.fdcId)) {
+    if (selectedHit.source === "brand-site" && selectedHit.catalogId?.trim()) {
+      result = await postFoodDiaryEntry({
+        athleteId,
+        entryDate,
+        mealSlot,
+        mode: "catalog_product",
+        catalogId: selectedHit.catalogId.trim(),
+        quantityG: qg,
+        notes: notes.trim() || undefined,
+        supplements: supplements.trim() || undefined,
+      });
+    } else if (selectedHit.source === "usda" && selectedHit.fdcId != null && Number.isFinite(selectedHit.fdcId)) {
       result = await postFoodDiaryEntry({
         athleteId,
         entryDate,
@@ -596,7 +630,7 @@ export function FoodDiaryPanel({
         proteinPer100g: p,
         fatPer100g: f,
         sodiumMgPer100g: selectedHit.sodium_mg_100,
-        referenceSourceTag: `${selectedHit.source}`,
+        referenceSourceTag: selectedHit.source,
         notes: notes.trim() || undefined,
         supplements: supplements.trim() || undefined,
       });
@@ -992,7 +1026,11 @@ export function FoodDiaryPanel({
                 {selectedHit.label}
               </div>
               <div className="muted-copy" style={{ fontSize: "0.82rem", marginTop: 6, lineHeight: 1.5 }}>
-                {selectedHit.source === "usda" ? "Database USDA" : selectedHit.source === "openfoodfacts" ? "Open Food Facts" : "Elenco interno"}
+                {selectedHit.source === "usda"
+                  ? selectedHit.lookupTier === "usda_fdc_cache"
+                    ? "USDA FDC (cache locale)"
+                    : "USDA FDC (discovery — nutrienti confermati al salvataggio)"
+                  : "Catalogo fornitore / fueling (dichiarazione + metadata)"}
                 {selectedHit.fdcId != null ? ` · codice ${selectedHit.fdcId}` : null}
               </div>
               {(() => {
@@ -1073,7 +1111,7 @@ export function FoodDiaryPanel({
             aria-label="Risultati ricerca alimenti"
           >
             {hits.map((h, i) => {
-              const key = `${h.source}-${h.fdcId ?? i}-${h.label}-${i}`;
+              const key = `${h.source}-${h.catalogId ?? h.fdcId ?? "x"}-${h.label}-${i}`;
               const active = lookupHitSame(selectedHit, h);
               const usdaNoPreview = h.source === "usda" && h.fdcId != null && h.kcal_100 == null;
               return (
@@ -1095,7 +1133,7 @@ export function FoodDiaryPanel({
                     <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>{h.label}</div>
                     <div className="muted-copy" style={{ fontSize: "0.78rem", marginTop: 2 }}>
                       {h.brand ? `${h.brand} · ` : ""}
-                      {h.source.toUpperCase()}
+                      {h.source === "brand-site" ? "CATALOGO" : "USDA FDC"}
                       {h.fdcId != null ? ` · FDC ${h.fdcId}` : ""}
                       {h.kcal_100 != null ? ` · ${h.kcal_100} kcal/100g` : ""}
                       {usdaNoPreview ? " · nutrienti da FDC al salvataggio" : ""}

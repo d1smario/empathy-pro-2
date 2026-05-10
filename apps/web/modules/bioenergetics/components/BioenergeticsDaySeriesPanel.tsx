@@ -48,7 +48,20 @@ export function BioenergeticsDaySeriesPanel({ series }: Props) {
     if (id === "lactate_mmol") return "#38bdf8";
     if (id === "meal_carbs_g_cumulative") return "#fbbf24";
     if (id === "hr_bpm") return "#fb7185";
+    if (id === "power_w") return "#f472b6";
+    if (id === "planned_power_w") return "#6ee7b7";
+    if (id === "speed_kmh") return "#22d3ee";
+    if (id === "cadence_rpm") return "#a78bfa";
+    if (id === "altitude_m") return "#34d399";
+    if (id === "temperature_c") return "#fb923c";
     return "#94a3b8";
+  };
+
+  const provenanceUi = (p: BioenergeticDaySeriesChannel["provenance"]): string => {
+    if (p === "measured") return "misurato";
+    if (p === "estimated") return "stimato";
+    if (p === "planned") return "da piano";
+    return "assente";
   };
 
   return (
@@ -60,7 +73,7 @@ export function BioenergeticsDaySeriesPanel({ series }: Props) {
             <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
               <p className="text-sm font-medium text-white">{ch.labelIt}</p>
               <span className="text-[0.65rem] uppercase tracking-wide text-gray-500">
-                {ch.unit} · {ch.provenance}
+                {ch.unit} · {provenanceUi(ch.provenance)}
                 {ch.sourceHint ? ` · ${ch.sourceHint}` : ""}
               </span>
             </div>
@@ -85,7 +98,8 @@ export function BioenergeticsDaySeriesPanel({ series }: Props) {
                     dataKey="v"
                     name={ch.labelIt}
                     stroke={strokeFor(ch.id)}
-                    strokeWidth={1.5}
+                    strokeWidth={ch.provenance === "planned" ? 1.25 : 1.5}
+                    strokeDasharray={ch.provenance === "planned" ? "5 4" : undefined}
                     dot={false}
                     isAnimationActive={false}
                   />

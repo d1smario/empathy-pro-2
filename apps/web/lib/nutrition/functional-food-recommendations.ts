@@ -15,7 +15,7 @@ export type FunctionalNutrientCatalogEntry = {
   pathwayIds: string[];
   /** Match if this substring appears in substrates/cofactors (lowercase). */
   textHints: string[];
-  /** Queries for `/api/nutrition/food-lookup` (OpenFoodFacts + USDA branded). */
+  /** Queries per `/api/nutrition/food-lookup` (catalogo brand-site + cache USDA FDC + discovery FDC). */
   searchQueries: string[];
   rationaleIt: string;
   curatedExamples: Array<{ name: string; why: string }>;

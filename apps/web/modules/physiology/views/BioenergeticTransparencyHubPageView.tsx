@@ -766,6 +766,13 @@ export default function BioenergeticTransparencyHubPageView() {
       headerActions={
         <>
           <Pro2Link
+            href="/bioenergetics"
+            variant="secondary"
+            className="justify-center border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25"
+          >
+            Report giornaliero
+          </Pro2Link>
+          <Pro2Link
             href="/dashboard"
             variant="secondary"
             className="justify-center border border-cyan-500/35 bg-cyan-500/10 hover:bg-cyan-500/15"

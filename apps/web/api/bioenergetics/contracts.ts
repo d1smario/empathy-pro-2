@@ -1,4 +1,4 @@
-export type BioenergeticChannelProvenance = "measured" | "estimated" | "absent";
+export type BioenergeticChannelProvenance = "measured" | "estimated" | "absent" | "planned";
 
 export type BioenergeticSeriesPoint = {
   ts: string;

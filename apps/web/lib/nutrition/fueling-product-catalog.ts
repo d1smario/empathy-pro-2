@@ -1,3 +1,7 @@
+/**
+ * Catalogo strutturale fueling (UI, media, protocolli). Macro nutrizionali per diario/lookup
+ * convogliano su `nutrition_product_catalog` (seed da `fueling-product-to-catalog-row.ts` + migrazione 048).
+ */
 export type FuelingCategory = "recovery" | "drink" | "gel" | "bar" | "chew";
 
 export type FuelingFormat =
