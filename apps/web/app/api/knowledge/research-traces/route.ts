@@ -10,11 +10,13 @@ import {
 } from "@/lib/auth/athlete-read-context";
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import {
+  getKnowledgeExpansionTraceById,
   listKnowledgeExpansionTraceSummaries,
   listKnowledgeExpansionTraces,
-  persistKnowledgeExpansionTrace,
   summarizeKnowledgeExpansionTrace,
 } from "@/lib/knowledge/knowledge-research-trace-store";
+import { syncResearchTracePlans } from "@/lib/knowledge/virya-research-trace-sync";
+import type { ResearchPlan } from "@/lib/empathy/schemas";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -74,20 +76,51 @@ export async function POST(req: NextRequest) {
   try {
     await requireAuthenticatedTrainingUser(req);
     const body = (await req.json().catch(() => null)) as KnowledgeResearchTraceSaveInput | null;
-    const plan = body?.plan ?? null;
-    if (!plan) {
+    const batchPlans =
+      body && "plans" in body && Array.isArray(body.plans) && body.plans.length
+        ? (body.plans as ResearchPlan[])
+        : null;
+    const singlePlan = body && "plan" in body && body.plan ? body.plan : null;
+    const plans: ResearchPlan[] | null = batchPlans ?? (singlePlan ? [singlePlan] : null);
+    if (!plans?.length) {
       return NextResponse.json<KnowledgeResearchTraceViewModel>(
-        { trace: null, error: "Invalid JSON body" },
+        { trace: null, error: "Invalid JSON body: expect plan or plans[]" },
         { status: 400 },
       );
     }
-    if (plan.trigger.athleteId) {
-      await requireAthleteReadContext(req, plan.trigger.athleteId);
+
+    const athleteIds = new Set(plans.map((p) => p.trigger.athleteId).filter(Boolean) as string[]);
+    if (athleteIds.size > 1) {
+      return NextResponse.json<KnowledgeResearchTraceViewModel>(
+        { trace: null, error: "All plans must share the same athleteId" },
+        { status: 400 },
+      );
     }
-    const trace = await persistKnowledgeExpansionTrace(plan);
+    const athleteIdGate = [...athleteIds][0];
+    if (!athleteIdGate) {
+      return NextResponse.json<KnowledgeResearchTraceViewModel>(
+        { trace: null, error: "Each plan must include trigger.athleteId" },
+        { status: 400 },
+      );
+    }
+    await requireAthleteReadContext(req, athleteIdGate);
+
+    const summaries = await syncResearchTracePlans(plans);
+
+    if (batchPlans) {
+      return NextResponse.json<KnowledgeResearchTraceViewModel>({
+        trace: null,
+        summary: null,
+        summaries,
+        error: null,
+      });
+    }
+
+    const first = summaries[0];
+    const trace = first ? await getKnowledgeExpansionTraceById(first.traceId) : null;
     return NextResponse.json<KnowledgeResearchTraceViewModel>({
       trace,
-      summary: summarizeKnowledgeExpansionTrace(trace),
+      summary: first ?? null,
       error: null,
     });
   } catch (error) {

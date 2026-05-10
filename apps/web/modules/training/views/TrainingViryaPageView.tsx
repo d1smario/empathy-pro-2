@@ -7,10 +7,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
-import { Pro2Link } from "@/components/ui/empathy";
+import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { ViryaAnnualPlanOrchestrator } from "@/modules/training/components/ViryaAnnualPlanOrchestrator";
-import { fetchTrainingPlannerContext } from "@/modules/training/services/training-virya-api";
+import { fetchTrainingPlannerContext, persistTrainingResearchPlans } from "@/modules/training/services/training-virya-api";
 
 function planTriggerLine(p: ResearchPlan): string {
   const t = p.trigger;
@@ -43,6 +43,7 @@ export default function TrainingViryaPageView() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [ctx, setCtx] = useState<Awaited<ReturnType<typeof fetchTrainingPlannerContext>> | null>(null);
+  const [persistingTraces, setPersistingTraces] = useState(false);
 
   const load = useCallback(async () => {
     if (ctxLoading) return;
@@ -55,7 +56,7 @@ export default function TrainingViryaPageView() {
     setLoading(true);
     setErr(null);
     try {
-      const vm = await fetchTrainingPlannerContext(athleteId);
+      const vm = await fetchTrainingPlannerContext(athleteId, { persistResearchTraces: true });
       if (vm.error) {
         setErr(vm.error);
       } else {
@@ -69,6 +70,24 @@ export default function TrainingViryaPageView() {
       setLoading(false);
     }
   }, [athleteId, ctxLoading]);
+
+  const handlePersistResearchTraces = useCallback(async () => {
+    if (!ctx?.researchPlans?.length) return;
+    setPersistingTraces(true);
+    setErr(null);
+    try {
+      const res = await persistTrainingResearchPlans(ctx.researchPlans);
+      if (!res.ok) {
+        setErr(res.error ?? "Persistenza trace non riuscita.");
+      } else {
+        await load();
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Persistenza trace non riuscita.");
+    } finally {
+      setPersistingTraces(false);
+    }
+  }, [ctx?.researchPlans, load]);
 
   useEffect(() => {
     void load();
@@ -308,6 +327,18 @@ export default function TrainingViryaPageView() {
             </Pro2SectionCard>
           ) : null}
 
+          {(ctx.researchPlans?.length ?? 0) > 0 && (ctx.researchTraces?.length ?? 0) === 0 ? (
+            <div className="rounded-2xl border border-amber-500/25 bg-amber-500/5 px-4 py-3 text-xs text-amber-100/90">
+              <p className="mb-2">
+                Nessun trace in risposta (es. contesto letto con <code className="rounded bg-black/40 px-1">persistResearchTraces=0</code> o
+                foundation knowledge assente). Puoi eseguire la stessa persistenza del GET tramite POST batch unico.
+              </p>
+              <Pro2Button type="button" variant="secondary" disabled={persistingTraces} onClick={() => void handlePersistResearchTraces()}>
+                {persistingTraces ? "Sincronizzazione…" : "Sincronizza trace (POST batch)"}
+              </Pro2Button>
+            </div>
+          ) : null}
+
           {(ctx.researchTraces?.length ?? 0) > 0 ? (
             <Pro2SectionCard accent="orange" title="Trace salvati (canonical)" subtitle="Stato hop / link documenti dopo persistenza" icon={FlaskConical}>
               <ul className="max-h-64 space-y-2 overflow-y-auto pr-1">
@@ -336,6 +367,11 @@ export default function TrainingViryaPageView() {
         <ol className="list-decimal space-y-2 pl-5 text-sm text-slate-400">
           <li>Builder = generazione singola sessione; Virya = batch annuale che chiama lo stesso endpoint engine.</li>
           <li>Research plans/trace restano knowledge — non sostituiscono il motore deterministico.</li>
+          <li>
+            Persistenza trace: <code className="text-slate-300">GET …/virya-context?persistResearchTraces=1</code> (default) e
+            <code className="text-slate-300"> POST /api/knowledge/research-traces</code> con <code className="text-slate-300">plans[]</code> usano lo stesso
+            <code className="text-slate-300"> syncResearchTracePlans</code> in <code className="text-slate-300">lib/knowledge/virya-research-trace-sync.ts</code>.
+          </li>
         </ol>
       </Pro2SectionCard>
     </Pro2ModulePageShell>

@@ -1,4 +1,8 @@
+import type { BioenergeticBiaLiteratureSummaryV1, BioenergeticDayEvidenceConditionedLayerV1 } from "@empathy/contracts";
+
 export type BioenergeticChannelProvenance = "measured" | "estimated" | "absent" | "planned";
+
+export type { BioenergeticBiaLiteratureSummaryV1, BioenergeticDayEvidenceConditionedLayerV1 };
 
 export type BioenergeticSeriesPoint = {
   ts: string;
@@ -126,4 +130,11 @@ export type BioenergeticsDayViewModel = {
   continuousMonitoring?: BioenergeticContinuousMonitoringDay;
   /** Curve fisiologiche / stimoli (memoria giorno + device); array vuoto se nessuna serie. */
   series: BioenergeticDaySeriesChannel[];
+  /**
+   * Scenario letteratura + contesto (prior condizionate). `null` finché il synthesizer non è attivo.
+   * Tipi canonici: `@empathy/contracts` (`BioenergeticDayEvidenceConditionedLayerV1`).
+   */
+  evidenceConditionedLayer: BioenergeticDayEvidenceConditionedLayerV1 | null;
+  /** Modello deterministico BIA↔letteratura (v1); assente senza snapshot BIA. */
+  biaLiteratureSummary?: BioenergeticBiaLiteratureSummaryV1 | null;
 };

@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { buildViryaResearchPlans } from "@/lib/knowledge/training-research-context";
-import { persistCanonicalResearchTracePlan } from "@/lib/knowledge/knowledge-research-flow";
+import { syncResearchTracePlans } from "@/lib/knowledge/virya-research-trace-sync";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 import { buildViryaRetuneProposalVm } from "@/lib/training/virya-retune-proposal";
@@ -166,19 +165,10 @@ export async function GET(req: NextRequest) {
       strategyHints,
       flags,
     });
-    const researchTraces = new Array<Awaited<ReturnType<typeof persistCanonicalResearchTracePlan>>>();
-    const persistenceResults = await Promise.allSettled(
-      researchPlans.map((plan) => persistCanonicalResearchTracePlan(plan)),
-    );
-    for (const result of persistenceResults) {
-      if (result.status === "fulfilled") {
-        researchTraces.push(result.value);
-        continue;
-      }
-      if (!isMissingKnowledgeFoundationError(result.reason)) {
-        console.error("virya research trace persistence failed", result.reason);
-      }
-    }
+    const persistResearchTraces =
+      req.nextUrl.searchParams.get("persistResearchTraces") !== "0" &&
+      req.nextUrl.searchParams.get("persistResearchTraces") !== "false";
+    const researchTraces = persistResearchTraces ? await syncResearchTracePlans(researchPlans) : [];
 
     return NextResponse.json(
       {

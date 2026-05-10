@@ -304,10 +304,11 @@ flowchart TB
       <div class="glass">
         <h3>Cosa fa il layer Interpretation (+ AI)</h3>
         <ul class="refs" style="list-style: disc;">
-          <li><strong>Osserva</strong> snapshot autorizzati (dopo gate): memoria atleta, fisiologia risolta, training diario, hub.</li>
-          <li><strong>Interroga</strong> basi tipo multiscala, PubMed, pathway nutrizionale: recupera evidenza, mechanism, testi.</li>
-          <li><strong>Arricchisce il prodotto</strong> con priorità narrative, disclaimers, <strong>suggerimenti testuali</strong>, filtri su catalogo alimenti, template timing — senza riscrivere macro o blocchi allenamento come «verità numerica finale».</li>
-          <li><strong>Produce input strutturato</strong> (patch candidate, trace) che può essere <strong>sottoposto a commit</strong> in memoria o audit solo dove previsto dalla pipeline (<code>virya-context</code> persistence research come esempio di tracciabilità).</li>
+          <li><strong>Osserva</strong> snapshot dopo gate: <code>multiscale-bottleneck</code>, <code>virya-context</code>, <code>research-traces</code> usano <code>requireAthleteReadContext</code> + <code>resolveAthleteMemory</code> dove serve l’atleta. <code>GET /api/knowledge/pubmed</code> senza <code>athleteId</code> resta ricerca generica su <code>q</code>.</li>
+          <li><strong>Multiscala e pathway</strong> sono in gran parte <strong>resolver deterministici</strong> su stato canonico (grafo dominio / template). <strong>PubMed</strong> è retrieval; con <code>athleteId</code> la query viene arricchita da vincoli già in memoria (<code>lib/knowledge/pubmed-query-from-memory.ts</code>).</li>
+          <li><strong>Arricchisce</strong> copy, rationale UX, filtri catalogo pasti (<code>filterIntelligentMealPlanRequestFoods</code>), timing nel request — <strong>senza</strong> riscrivere macro solver o blocchi builder.</li>
+          <li><strong>Trace research:</strong> un solo modulo <code>syncResearchTracePlans</code> — usato da <code>GET …/virya-context</code> (param <code>persistResearchTraces</code>) e da <code>POST …/research-traces</code> (<code>plan</code> o <code>plans[]</code>). Dedup in DB; link hop saltati se nessun hop è più <code>planned</code>.</li>
+          <li><strong>Staging L2 (pilota):</strong> risposta <code>interpretationStaging</code> su <code>food-photo-estimate</code> (<code>interpretation-staging-service.ts</code>) — bundle proposta, commit sul diario/FDC resta sul flusso esistente.</li>
         </ul>
       </div>
       <div class="glass">
@@ -350,6 +351,7 @@ flowchart LR
         L’orchestrazione multi-step confronta più letture già autorizzate, tiene le <strong>proposte</strong> fuori dalla memoria «finale» finché non passano gate di validazione,
         e deposita solo <strong>fatti strutturati</strong> con audit. Dettaglio: <code>docs/PRO2_APPLICATION_READ_SPINE_AND_INTERPRETATION_STAGING.md</code>,
         tipi <code>apps/web/lib/memory/interpretation-staging-contract.ts</code>.
+        <strong>Pilota implementato:</strong> <code>buildFoodPhotoInterpretationStaging</code> in <code>apps/web/lib/memory/interpretation-staging-service.ts</code> (risposta accanto a <code>estimate</code> sulla route food-photo).
       </p>
       <div class="diagram-wrap" style="margin-bottom:0; margin-top:1rem;">
 <pre class="mermaid">

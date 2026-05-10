@@ -46,6 +46,7 @@ export async function autoLinkCanonicalResearchTrace(
  * Resolves every hop still in `planned` against the persisted knowledge corpus (same search path as literature).
  * Operational goal: each layer (stimulus, mechanisms/metabolic, projection) gets evidence links when the corpus has matches.
  */
+/** Exported for `virya-research-trace-sync` — same corpus link path as `persistCanonicalResearchTracePlan`. */
 export async function autoLinkAllPlannedResearchTraceHops(
   trace: KnowledgeExpansionTrace,
 ): Promise<KnowledgeResearchTraceSummary> {

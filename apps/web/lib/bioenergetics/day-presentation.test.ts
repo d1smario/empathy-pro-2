@@ -32,7 +32,7 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
 });
 
-test("buildBioenergeticDayPresentation espone continuousMonitoring con cortisolo e ACTH su 24h", () => {
+test("buildBioenergeticDayPresentation espone continuousMonitoring essenziale (glu lac insulin cort acth)", () => {
   const { continuousMonitoring } = buildBioenergeticDayPresentation({
     date: "2026-05-01",
     kernel: {
@@ -54,10 +54,47 @@ test("buildBioenergeticDayPresentation espone continuousMonitoring con cortisolo
     biomarkerRows: [],
   });
   assert.equal(continuousMonitoring.layer, "model_continuous_v1");
-  const cort = continuousMonitoring.channels.find((c) => c.id === "cortisol");
-  const acth = continuousMonitoring.channels.find((c) => c.id === "acth");
-  assert.ok(cort && cort.hourly.length === 24);
-  assert.ok(acth && acth.hourly.length === 24);
+  const ids = continuousMonitoring.channels.map((c) => c.id);
+  assert.ok(ids.includes("glucose") && ids.includes("lactate") && ids.includes("insulin_proxy"));
+  assert.ok(ids.includes("cortisol") && ids.includes("acth"));
+  assert.equal(continuousMonitoring.channels.length, 5);
+});
+
+test("buildBioenergeticDayPresentation: insulin proxy orario sale dopo pasto in timeline", () => {
+  const { continuousMonitoring } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 50,
+      insulinDemandScore: 35,
+      oxidationDriveScore: 40,
+      anabolicSuppressionScore: 20,
+      efficiencyBand: "moderate",
+      pathwayState: "mixed",
+      keyDrivers: [],
+    },
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "sim_diurnal_v1" }],
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.2, source: "sim_diurnal_v1" }],
+    },
+    timeline: [
+      {
+        id: "m1",
+        ts: "2026-05-01T12:30:00",
+        type: "meal",
+        title: "Pranzo",
+        payload: { carbsG: 90, insulinLoad: 28 },
+      },
+    ],
+    biomarkerRows: [],
+  });
+  const ins = continuousMonitoring.channels.find((c) => c.id === "insulin_proxy");
+  assert.ok(ins);
+  const h = ins!.hourly.map((x) => (x == null ? NaN : x)) as number[];
+  const maxH = Math.max(...h);
+  const minH = Math.min(...h);
+  assert.ok(maxH - minH > 3, "variazione oraria con pasto e circadiano");
 });
 
 test("pickGlucoseMmolFromLab converte glicemia mg/dL da ontology", () => {

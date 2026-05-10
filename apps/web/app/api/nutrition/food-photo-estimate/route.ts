@@ -1,20 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import {
+  buildFoodPhotoInterpretationStaging,
+  type FoodPhotoEstimateStagingPayload,
+} from "@/lib/memory/interpretation-staging-service";
 
 export const runtime = "nodejs";
 
 const MAX_B64_CHARS = 6_500_000;
 
-export type FoodPhotoEstimateBody = {
-  label_it: string;
-  portion_g_estimate: number | null;
-  kcal_estimate: number | null;
-  carbs_g: number | null;
-  protein_g: number | null;
-  fat_g: number | null;
-  fdc_search_hint: string | null;
-  notes_it: string | null;
-};
+export type FoodPhotoEstimateBody = FoodPhotoEstimateStagingPayload;
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -155,7 +150,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "JSON vision non interpretabile." }, { status: 422 });
     }
 
-    return NextResponse.json({ estimate });
+    const interpretationStaging = buildFoodPhotoInterpretationStaging({ athleteId, estimate });
+    return NextResponse.json({ estimate, interpretationStaging });
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

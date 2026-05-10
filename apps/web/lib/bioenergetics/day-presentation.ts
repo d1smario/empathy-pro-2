@@ -12,9 +12,9 @@ import type {
 } from "@/api/bioenergetics/contracts";
 import {
   activitySupportHours,
+  buildInsulinProxyHourly24,
   buildNominalCortisolActhHourly24,
   hourlyFlat24,
-  hourlyRippleSeries24,
   hourFromIsoTs,
   mealInhibitoryHours,
   simulatedLabNumeric,
@@ -22,12 +22,6 @@ import {
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
-}
-
-function phaseHourForTileId(id: string): number {
-  let s = 0;
-  for (let i = 0; i < id.length; i += 1) s += id.charCodeAt(i);
-  return s % 24;
 }
 
 function isHighFrequencyStream(
@@ -657,48 +651,37 @@ export function buildBioenergeticDayPresentation(input: {
       dataPlane: monitoringPlaneForGluLac(input.provenance.lactate, lactatePoints),
       replacesWithDeviceStream: true,
     },
+    {
+      id: "insulin_proxy",
+      labelIt: "Domanda insulinica (proxy)",
+      unit: "score 0–100",
+      category: "metabolic",
+      hourly: buildInsulinProxyHourly24(k, input.timeline),
+      dataPlane: "model_continuous",
+      replacesWithDeviceStream: true,
+    },
   ];
 
-  const skipTileIdsForMonitoring = new Set(["glucose", "lactate"]);
-  for (const tile of tiles) {
-    if (skipTileIdsForMonitoring.has(tile.id)) continue;
-    if (tile.numericValue == null) continue;
-    const v = tile.numericValue;
-    let hourly: (number | null)[];
-    let plane: BioenergeticMonitoringDataPlane;
-
-    if (tile.id === "cortisol") {
-      if (tile.provenance === "measured") {
-        hourly = hourlyFlat24(v);
-        plane = "sparse_lab_hold";
-      } else {
-        hourly = nomH.cortisolUgdL;
-        plane = "model_continuous";
-      }
-    } else if (tile.id === "acth") {
-      if (tile.provenance === "measured") {
-        hourly = hourlyFlat24(v);
-        plane = "sparse_lab_hold";
-      } else {
-        hourly = nomH.acthPgMl;
-        plane = "model_continuous";
-      }
-    } else if (tile.provenance === "measured") {
-      hourly = hourlyFlat24(v);
-      plane = "sparse_lab_hold";
-    } else {
-      hourly = hourlyRippleSeries24(v, phaseHourForTileId(tile.id));
-      plane = "model_continuous";
-    }
-
+  if (cortisolM.numeric != null) {
     monitoringChannels.push({
-      id: tile.id,
-      labelIt: tile.labelIt,
-      unit: tile.unit,
-      category: tile.category,
-      hourly,
-      dataPlane: plane,
-      replacesWithDeviceStream: tile.id !== "insulin_proxy",
+      id: "cortisol",
+      labelIt: "Cortisolo",
+      unit: "µg/dL",
+      category: "hormonal",
+      hourly: cortisolM.provenance === "measured" ? hourlyFlat24(cortisolM.numeric) : [...nomH.cortisolUgdL],
+      dataPlane: cortisolM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+      replacesWithDeviceStream: true,
+    });
+  }
+  if (acthM.numeric != null) {
+    monitoringChannels.push({
+      id: "acth",
+      labelIt: "ACTH",
+      unit: "pg/mL",
+      category: "hormonal",
+      hourly: acthM.provenance === "measured" ? hourlyFlat24(acthM.numeric) : [...nomH.acthPgMl],
+      dataPlane: acthM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+      replacesWithDeviceStream: true,
     });
   }
 

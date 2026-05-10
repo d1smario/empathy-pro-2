@@ -51,7 +51,7 @@ export async function loadBioenergeticDayMemorySlice(
     queryPlannedExecutedWindow(db, athleteId, dateKey, dateKey),
     db
       .from("food_diary_entries")
-      .select("id, entry_date, entry_time, meal_slot, food_label, carbs_g, protein_g, fat_g, kcal, insulin_load")
+      .select("id, entry_date, entry_time, meal_slot, food_label, quantity_g, carbs_g, protein_g, fat_g, kcal, sodium_mg, insulin_load")
       .eq("athlete_id", athleteId)
       .eq("entry_date", dateKey)
       .order("entry_time", { ascending: true }),

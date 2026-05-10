@@ -37,6 +37,11 @@ function stress01(k: SimDayKernelV1Input): number {
   );
 }
 
+/** Stress 0–1 da kernel (stesso `buildSimulatedGluLacDiurnal`); esportato per synthesizer evidenza. */
+export function kernelDayStress01(k: SimDayKernelV1Input): number {
+  return stress01(k);
+}
+
 function pathwayScale(k: SimDayKernelV1Input): number {
   if (k.pathwayState === "inhibitory") return SIM_PATHWAY_SCALE_V1.inhibitory;
   if (k.pathwayState === "supportive") return SIM_PATHWAY_SCALE_V1.supportive;

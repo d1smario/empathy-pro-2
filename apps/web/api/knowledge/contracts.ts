@@ -87,9 +87,9 @@ export type KnowledgeResearchPlanViewModel = {
   error?: string | null;
 };
 
-export type KnowledgeResearchTraceSaveInput = {
-  plan: ResearchPlan;
-};
+export type KnowledgeResearchTraceSaveInput =
+  | { plan: ResearchPlan; plans?: undefined }
+  | { plans: ResearchPlan[]; plan?: undefined };
 
 export type KnowledgeResearchTraceSummary = {
   traceId: string;
@@ -114,6 +114,8 @@ export type KnowledgeResearchTraceSummary = {
 export type KnowledgeResearchTraceViewModel = {
   trace: KnowledgeExpansionTrace | null;
   summary?: KnowledgeResearchTraceSummary | null;
+  /** Populated when POST body used `plans` batch — same summaries as `syncResearchTracePlans`. */
+  summaries?: KnowledgeResearchTraceSummary[];
   error?: string | null;
 };
 

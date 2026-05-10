@@ -2,8 +2,9 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, LineChart, Timer } from "lucide-react";
+import { Activity, BookOpen, LineChart, Timer } from "lucide-react";
 import type {
+  BioenergeticBiaLiteratureSummaryV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
   BioenergeticPathwayImpact,
@@ -55,6 +56,20 @@ function provenanceLabel(p: BioenergeticMetricTile["provenance"]): string {
   if (p === "estimated") return "Stimato";
   if (p === "planned") return "Da piano";
   return "Assente";
+}
+
+function biaCellularBandIt(b: BioenergeticBiaLiteratureSummaryV1["cellularGeometry"]["band"]): string {
+  if (b === "low_support_cue") return "Geometria cellulare: segnale basso (letteratura)";
+  if (b === "mid") return "Geometria cellulare: intermedio";
+  if (b === "favourable_geometry_cue") return "Geometria cellulare: segnale favorevole (contesto)";
+  return "Geometria cellulare: dati insufficienti";
+}
+
+function biaFluidBandIt(b: BioenergeticBiaLiteratureSummaryV1["extracellularFluid"]["band"]): string {
+  if (b === "favourable_balance") return "ECW vs TBW: bilanciamento favorevole";
+  if (b === "neutral") return "ECW vs TBW: neutro";
+  if (b === "extracellular_shift_cue") return "ECW vs TBW: spostamento extracellulare (letteratura)";
+  return "ECW vs TBW: dati insufficienti";
 }
 
 export default function BioenergeticsPageView() {
@@ -129,6 +144,7 @@ export default function BioenergeticsPageView() {
         const vmPayload: BioenergeticsDayViewModel = {
           ...json,
           series: Array.isArray(json.series) ? json.series : [],
+          evidenceConditionedLayer: json.evidenceConditionedLayer ?? null,
           continuousMonitoring:
             cm && typeof cm === "object" && cm.layer === "model_continuous_v1" && Array.isArray(cm.channels)
               ? cm
@@ -161,6 +177,9 @@ export default function BioenergeticsPageView() {
     const traceIds = new Set(["power_w", "hr_bpm", "speed_kmh", "cadence_rpm", "altitude_m", "temperature_c"]);
     return vm.series.filter((s) => traceIds.has(s.id) && s.provenance === "measured" && s.points.length >= 2).length;
   }, [vm]);
+
+  const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
+  const evidenceLinkCount = resolvedEvidenceLinks.length;
 
   return (
     <Pro2ModulePageShell
@@ -201,7 +220,7 @@ export default function BioenergeticsPageView() {
       </section>
 
       <section id="gen-body" className="scroll-mt-28 space-y-6">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-cyan-500/25 bg-black/35 px-4 py-3">
             <p className="font-mono text-[0.6rem] uppercase tracking-wider text-cyan-300">Eventi timeline</p>
             <p className="mt-1 text-xl font-semibold text-white">{vm?.timeline.length ?? 0}</p>
@@ -217,6 +236,13 @@ export default function BioenergeticsPageView() {
           <div className="rounded-2xl border border-fuchsia-500/25 bg-black/35 px-4 py-3">
             <p className="font-mono text-[0.6rem] uppercase tracking-wider text-fuchsia-300">Pathway state</p>
             <p className="mt-1 text-xl font-semibold capitalize text-white">{vm?.kernel.pathwayState ?? "—"}</p>
+          </div>
+          <div className="rounded-2xl border border-orange-500/25 bg-black/35 px-4 py-3">
+            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-orange-300">Link evidenza assi ↔ fluidi</p>
+            <p className="mt-1 text-xl font-semibold text-white">{vm ? evidenceLinkCount : "—"}</p>
+            <p className="mt-1 text-[0.65rem] leading-snug text-gray-500">
+              Da DB curato <span className="text-orange-200/90">051 + 052</span>; non è modello curva giornaliera.
+            </p>
           </div>
         </div>
 
@@ -258,9 +284,9 @@ export default function BioenergeticsPageView() {
                     Striscia monitoraggio continuo (24 h)
                   </p>
                   <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
-                    Ogni pannello è una serie oraria nello stesso contratto: oggi da modello deterministico o da referto
-                    tenuto costante; quando disponibile un device a monitoraggio continuo, le curve nello stesso layout
-                    diventano dati reali senza cambiare il ragionamento biochimico sul tempo.
+                    Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH: niente curve
+                    «tutte uguali» per riempire. Gli altri biomarker restano nelle tile finché non c&apos;è un modello
+                    serio legato a timeline e fisiologia.
                   </p>
                   <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
                 </div>
@@ -270,6 +296,154 @@ export default function BioenergeticsPageView() {
                 <BioenergeticsDaySeriesPanel series={vm.series ?? []} />
               </div>
             </Pro2SectionCard>
+
+            {vm.biaLiteratureSummary ? (
+              <Pro2SectionCard
+                accent="violet"
+                title="BIA · modello letteratura (v1)"
+                subtitle={`Prior deterministico · confidenza ${Math.round(vm.biaLiteratureSummary.confidence01 * 100)}% · non diagnosi clinica`}
+                icon={Activity}
+              >
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                    <p className="text-[0.65rem] font-medium uppercase tracking-wide text-violet-200/90">Geometria (PhA)</p>
+                    <p className="mt-1 text-sm text-white">{biaCellularBandIt(vm.biaLiteratureSummary.cellularGeometry.band)}</p>
+                    <p className="mt-1 font-mono text-xs text-gray-400">
+                      supportIndex01={vm.biaLiteratureSummary.cellularGeometry.supportIndex01.toFixed(2)}
+                      {vm.biaLiteratureSummary.cellularGeometry.phaseAngleDegUsed != null
+                        ? ` · PhA ${vm.biaLiteratureSummary.cellularGeometry.phaseAngleDegUsed.toFixed(1)}°`
+                        : null}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
+                    <p className="text-[0.65rem] font-medium uppercase tracking-wide text-orange-200/90">Comparti fluidi (ECW/TBW)</p>
+                    <p className="mt-1 text-sm text-white">{biaFluidBandIt(vm.biaLiteratureSummary.extracellularFluid.band)}</p>
+                    <p className="mt-1 font-mono text-xs text-gray-400">
+                      loadBias01={vm.biaLiteratureSummary.extracellularFluid.loadBias01.toFixed(2)}
+                      {vm.biaLiteratureSummary.extracellularFluid.ecwTbwRatioUsed != null
+                        ? ` · ratio ${vm.biaLiteratureSummary.extracellularFluid.ecwTbwRatioUsed.toFixed(3)}`
+                        : null}
+                    </p>
+                  </div>
+                </div>
+                <details className="mt-4 text-xs text-gray-400">
+                  <summary className="cursor-pointer text-violet-200/90">Disclaimer e ancore metodologiche</summary>
+                  <ul className="mt-2 space-y-2">
+                    {vm.biaLiteratureSummary.disclaimersIt.map((d) => (
+                      <li key={d} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-gray-300">
+                        {d}
+                      </li>
+                    ))}
+                    {vm.biaLiteratureSummary.literatureAnchorsIt.map((a) => (
+                      <li key={a} className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2 py-1.5 text-gray-300">
+                        {a}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </Pro2SectionCard>
+            ) : null}
+
+            {vm.evidenceConditionedLayer && evidenceLinkCount > 0 ? (
+              <Pro2SectionCard
+                accent="orange"
+                title="Evidenza letteratura · assi e fluidi"
+                subtitle={`Banco ${vm.evidenceConditionedLayer.bankRef.bankId} · ${vm.evidenceConditionedLayer.bankRef.bankVersion} · ${evidenceLinkCount} link`}
+                icon={BookOpen}
+              >
+                <p className="text-sm leading-relaxed text-gray-300">
+                  Grafo curato (ormoni / neuro / renale ↔ processi di fluido). Serve al synthesizer evidenza e alla UI
+                  «perché»; le curve sopra restano kernel / misura.
+                </p>
+                <ul className="mt-3 space-y-2 text-xs text-gray-400">
+                  {vm.evidenceConditionedLayer.disclaimersIt.map((d) => (
+                    <li key={d} className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-gray-300">
+                      {d}
+                    </li>
+                  ))}
+                </ul>
+                {vm.evidenceConditionedLayer.series.length > 0 ? (
+                  <div className="mt-4 border-t border-white/10 pt-4">
+                    <p className="text-xs font-medium uppercase tracking-wide text-orange-200/85">
+                      Serie evidenza condizionata (24 h, indice 0–100)
+                    </p>
+                    <ul className="mt-2 space-y-2">
+                      {vm.evidenceConditionedLayer.series.map((s) => {
+                        const lo = Math.min(...s.hourlyMean24);
+                        const hi = Math.max(...s.hourlyMean24);
+                        return (
+                          <li
+                            key={s.analyteId}
+                            className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-gray-300"
+                          >
+                            <span className="font-mono text-orange-200/90">{s.analyteId}</span> · {s.unit} · fascia{" "}
+                            {lo.toFixed(1)}–{hi.toFixed(1)}
+                            <span className="mt-1 block truncate font-mono text-[0.6rem] text-gray-500">
+                              digest contesto {s.contextDigest.slice(0, 14)}…
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ) : null}
+                {vm.evidenceConditionedLayer.contributionGraph ? (
+                  <details className="mt-3 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium text-orange-200/90">
+                      Grafo contributi ({vm.evidenceConditionedLayer.contributionGraph.edges.length} archi,{" "}
+                      {vm.evidenceConditionedLayer.contributionGraph.nodes.length} nodi)
+                    </summary>
+                    <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[0.65rem] text-gray-500">
+                      {vm.evidenceConditionedLayer.contributionGraph.edges.map((e, i) => (
+                        <li key={`${e.from}-${e.to}-${i}`} className="font-mono">
+                          {e.from} → {e.to}
+                          {e.weight01 != null ? ` · w ${e.weight01.toFixed(2)}` : ""}
+                          {e.evidenceLinkId ? ` · link ${e.evidenceLinkId.slice(0, 8)}…` : ""}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+                <details className="mt-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
+                  <summary className="cursor-pointer text-sm font-medium text-orange-200/95">
+                    Mostra link ({evidenceLinkCount})
+                  </summary>
+                  <ul className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
+                    {resolvedEvidenceLinks.map((lk) => (
+                      <li key={lk.linkId} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
+                        <p className="text-[0.65rem] font-mono uppercase tracking-wide text-orange-300/90">
+                          {lk.axis.labelIt} → {lk.fluidProcess.labelIt}
+                        </p>
+                        <p className="mt-1 text-[0.7rem] text-gray-500">
+                          {lk.relationKind} · {lk.strength}
+                          {lk.ontologyRefs?.length ? ` · ontology ${lk.ontologyRefs.length}` : null}
+                        </p>
+                        <p className="mt-1 text-xs leading-snug text-gray-300">{lk.narrativeIt}</p>
+                        {lk.documents.length ? (
+                          <p className="mt-1 text-[0.65rem] text-gray-500">
+                            Fonti:{" "}
+                            {lk.documents
+                              .map((doc) => `${doc.sourceDb}:${doc.externalId}`)
+                              .slice(0, 4)
+                              .join(" · ")}
+                            {lk.documents.length > 4 ? ` · +${lk.documents.length - 4}` : ""}
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </Pro2SectionCard>
+            ) : vm ? (
+              <Pro2SectionCard accent="slate" title="Evidenza letteratura · assi e fluidi" subtitle="Nessun link caricato" icon={BookOpen}>
+                <p className="text-sm text-gray-400">
+                  Il layer opzionale è vuoto se le migrazioni <code className="text-gray-300">051</code> /{" "}
+                  <code className="text-gray-300">052</code> non sono sul progetto Supabase collegato, oppure se la query fallisce
+                  (permessi). Con seed applicato dovresti vedere <strong className="text-white">8</strong> link e la tile arancione con
+                  conteggio.
+                </p>
+              </Pro2SectionCard>
+            ) : null}
 
             <Pro2SectionCard accent="amber" title="Segnali & biomarker" subtitle="Da lab e canali del giorno; assenza dati non implica valore clinico" icon={LineChart}>
               {(() => {

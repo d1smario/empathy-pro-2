@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   SIM_BANK_VERSION,
+  buildInsulinProxyHourly24,
   buildNominalCortisolActhHourly24,
   buildSimulatedGluLacDiurnal,
   simulatedLabNumeric,
@@ -41,6 +42,22 @@ test("simulatedLabNumeric supporta tile note e null per id sconosciuto", () => {
 
 test("SIM_BANK_VERSION è 1", () => {
   assert.equal(SIM_BANK_VERSION, 1);
+});
+
+test("buildInsulinProxyHourly24 ha 24 punti e reagisce a pasto con CHO/insulin_load", () => {
+  const kernel = {
+    insulinDemandScore: 32,
+    anabolicSuppressionScore: 18,
+    glucoseHandlingScore: 55,
+    oxidationDriveScore: 42,
+    pathwayState: "mixed" as const,
+  };
+  const empty = buildInsulinProxyHourly24(kernel, []);
+  assert.equal(empty.length, 24);
+  const withMeal = buildInsulinProxyHourly24(kernel, [
+    { ts: "2026-05-01T08:15:00", type: "meal", payload: { carbsG: 70, insulinLoad: 22 } },
+  ]);
+  assert.ok(withMeal[8] > empty[8]);
 });
 
 test("buildNominalCortisolActhHourly24 produce 24 punti per cortisolo e ACTH", () => {

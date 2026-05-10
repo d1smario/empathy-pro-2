@@ -11,8 +11,18 @@ export { SIM_BANK_VERSION, SIM_DIURNAL_GLUCOSE_V1, SIM_DIURNAL_LACTATE_V1, SIM_P
 export type { SimTimelineEventV1 } from "./sim-timeline-v1";
 export { activitySupportHours, hourFromIsoTs, mealInhibitoryHours } from "./sim-timeline-v1";
 export type { SimDayKernelV1Input, SimSeriesPointV1 } from "./day-simulator-v1";
-export { buildNominalCortisolActhHourly24, buildSimulatedGluLacDiurnal, simulatedLabNumeric } from "./day-simulator-v1";
+export {
+  buildNominalCortisolActhHourly24,
+  buildSimulatedGluLacDiurnal,
+  kernelDayStress01,
+  simulatedLabNumeric,
+} from "./day-simulator-v1";
 export { hourlyFlat24, hourlyRippleRelative, hourlyRippleSeries24 } from "./continuous-monitoring-shape-v1";
+export { buildInsulinProxyHourly24 } from "./insulin-proxy-hourly-v1";
+export { synthesizeEvidenceConditionedLayerV1 } from "./evidence-conditioned-synthesizer-v1";
+export type { EvidenceConditionedSynthesisInputV1, EvidenceConditionedSynthesisOutputV1 } from "./evidence-conditioned-synthesizer-v1";
+export { analyzeBioenergeticBiaLiteratureV1, resolveEcwTbwRatio } from "./bia-literature-model-v1";
+export type { AnalyzeBioenergeticBiaLiteratureInputV1 } from "./bia-literature-model-v1";
 
 export const DOMAIN = "@empathy/domain-bioenergetics" as const;
 export const DOMAIN_TITLE = "Bioenergetics";

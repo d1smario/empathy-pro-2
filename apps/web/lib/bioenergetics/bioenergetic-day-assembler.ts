@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { SIM_BANK_VERSION, buildSimulatedGluLacDiurnal } from "@empathy/domain-bioenergetics";
+import { BIOENERGETIC_EVIDENCE_CURVE_CONTRACT_VERSION } from "@empathy/contracts";
+import { SIM_BANK_VERSION, buildSimulatedGluLacDiurnal, synthesizeEvidenceConditionedLayerV1 } from "@empathy/domain-bioenergetics";
 import type { BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
 import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
@@ -8,6 +9,9 @@ import { buildBioenergeticDaySeries, extractMeasuredGluLacFromSlice } from "@/li
 import { buildBioenergeticDayPresentation } from "@/lib/bioenergetics/day-presentation";
 import { computeBioenergeticDayKernel } from "@/lib/bioenergetics/day-response-kernel";
 import { buildBioenergeticInterpretationHints } from "@/lib/bioenergetics/interpretation-bridge";
+import { buildBioenergeticConditioningContextFromDay } from "@/lib/bioenergetics/build-bioenergetic-conditioning-context";
+import { sha256BioenergeticConditioningContext } from "@/lib/bioenergetics/canonical-conditioning-digest";
+import { loadBioenergeticEvidenceAxisFluidLinks } from "@/lib/bioenergetics/load-bioenergetic-evidence-links";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 
 function toDateKey(value: string): string {
@@ -160,6 +164,52 @@ export async function assembleBioenergeticDay(
     biomarkerRows: slice.biomarkerRows,
   });
 
+  const simKernel = {
+    insulinDemandScore: kernel.insulinDemandScore,
+    anabolicSuppressionScore: kernel.anabolicSuppressionScore,
+    glucoseHandlingScore: kernel.glucoseHandlingScore,
+    oxidationDriveScore: kernel.oxidationDriveScore,
+    pathwayState: kernel.pathwayState,
+  };
+  const simTimeline = timeline.map((e) => ({ ts: e.ts, type: e.type, payload: e.payload }));
+
+  const conditioningContext = buildBioenergeticConditioningContextFromDay({
+    athleteId,
+    date,
+    timeline,
+    slice,
+  });
+  const contextDigest = sha256BioenergeticConditioningContext(conditioningContext);
+
+  const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
+  const evidenceConditionedLayer =
+    evidenceLinks.ok && evidenceLinks.links.length > 0
+      ? (() => {
+          const bankRef = { bankId: "empathy_bioenergetic_axis_fluid_v1", bankVersion: "051+052+synth_v1" };
+          const synth = synthesizeEvidenceConditionedLayerV1({
+            date,
+            kernel: simKernel,
+            timeline: simTimeline,
+            conditioningContext,
+            contextDigest,
+            bankRef,
+            resolvedEvidenceLinks: evidenceLinks.links,
+          });
+          return {
+            contractVersion: BIOENERGETIC_EVIDENCE_CURVE_CONTRACT_VERSION,
+            bankRef,
+            series: synth.series,
+            resolvedEvidenceLinks: evidenceLinks.links,
+            contributionGraph: synth.contributionGraph,
+            disclaimersIt: [
+              "Link assi ormonali / neuroendocrini ↔ fluidi: grafo curato in database (non generato da LLM). Non è diagnosi clinica.",
+              "Serie «evidence_conditioned» v1: proxy deterministico 0–100 da kernel + timeline + peso link DB; non sostituisce misure cliniche né le curve glucosio/lattato operative.",
+              "Grafo contributi: nodi kernel / training / nutrizione / DB → output sintetico per audit e UI «perché».",
+            ],
+          };
+        })()
+      : null;
+
   const body: BioenergeticsDayViewModel = {
     athleteId,
     date,
@@ -184,7 +234,7 @@ export async function assembleBioenergeticDay(
       "Senza CGM/lab, glucosio e lattato seguono una diurna simulata (banca coefficienti v1), non misure continue.",
       "Quando presenti, i dati misurati (CGM/lab/device) hanno priorita sulle stime e sulle tile da referto.",
       "Le tile lab senza valore nel panel usano ordini di grandezza simulati dal kernel (stesso modello v1), non risultati analitici.",
-      "La striscia «monitoraggio continuo» usa oggi il modello deterministico (v1) su 24 h per ogni analita valorizzata; con stream device le stesse serie saranno alimentate dai dati reali senza cambiare il layout.",
+      "La striscia «monitoraggio continuo» mostra solo serie difendibili: glucosio/lattato (diario/sim o stream), domanda insulinica da pasti/sedute, cortisolo/ACTH (modello circadiano o lab tenuto). Nessuna curva decorativa per altri biomarker.",
       "Colori supportivo/neutro/inibitorio: modello operativo sulla giornata, non classificazione di laboratorio.",
       "Le serie aggiuntive (FC, CHO cumulativi, potenza da trace) dipendono da trace/diario disponibili per la data.",
       "La curva «Potenza (target da piano kJ/kcal)» è un vincolo energetico deterministico da `planned_workouts`, non una prescrizione FTP.",
@@ -193,6 +243,8 @@ export async function assembleBioenergeticDay(
     chart24h,
     continuousMonitoring,
     series,
+    evidenceConditionedLayer,
+    biaLiteratureSummary: conditioningContext.biaLiteratureSummary ?? null,
   };
 
   return { ok: true, body };

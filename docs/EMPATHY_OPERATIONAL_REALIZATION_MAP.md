@@ -62,6 +62,14 @@
 
 Altri endpoint (dashboard hub, nutrition module, twin) possono leggere `planned_workouts` / `executed_workouts` direttamente lato server per aggregati; il principio resta: **una sola coppia di tabelle calendario**, niente “secondo registro” attività parallelo in prodotto.
 
+### 2.2 Knowledge trace VIRYA / research — un solo convoglio (no doppioni)
+
+- **Persistenza + link hop:** `apps/web/lib/knowledge/virya-research-trace-sync.ts` — `syncResearchTracePlans` chiama `persistKnowledgeExpansionTrace` (dedup per `canonicalKey` / `signature` in `knowledge-research-trace-store`) poi `autoLinkAllPlannedResearchTraceHops` **solo** se restano hop in stato `planned` (evita lavoro ripetuto su GET).
+- **GET** `GET /api/training/virya-context?persistResearchTraces=0|1` — default `1`; con `0` solo `researchPlans` in risposta, nessuna scrittura trace.
+- **POST** `POST /api/knowledge/research-traces` — body `{ plan }` oppure `{ plans: ResearchPlan[] }` (stesso `athleteId` su tutti i piani); delega allo stesso `syncResearchTracePlans`.
+- **PubMed contestualizzato:** `GET /api/knowledge/pubmed?q=…&athleteId=…` opzionale — `requireAthleteReadContext` + arricchimento query da vincoli knowledge in memoria (`pubmed-query-from-memory.ts`); senza `athleteId` resta la ricerca generica su `q`.
+- **Staging L2 pilota (diario foto):** `POST /api/nutrition/food-photo-estimate` restituisce anche `interpretationStaging` (`buildFoodPhotoInterpretationStaging` in `interpretation-staging-service.ts`); il commit FDC/diario resta sul flusso finalize esistente.
+
 ---
 
 ## 3. Matrice modulo × dominio (stato attuale — indicativo)
