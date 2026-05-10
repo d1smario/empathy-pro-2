@@ -13,6 +13,7 @@ import { SettingsAthleteContextDiagnostics } from "@/components/settings/Setting
 import { SettingsAuthSessionDiagnostics } from "@/components/settings/SettingsAuthSessionDiagnostics";
 import { SettingsBillingDiagnostics } from "@/components/settings/SettingsBillingDiagnostics";
 import { SettingsBuildPhasesCard } from "@/components/settings/SettingsBuildPhasesCard";
+import { SettingsDataSourcePreference } from "@/components/settings/SettingsDataSourcePreference";
 import { SettingsDeviceIngestPolicy } from "@/components/settings/SettingsDeviceIngestPolicy";
 import { SettingsIntegrationsDiagnostics } from "@/components/settings/SettingsIntegrationsDiagnostics";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
@@ -219,6 +220,7 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             <SettingsBuildPhasesCard />
             <SettingsAuthSessionDiagnostics />
             <SettingsAthleteContextDiagnostics />
+            <SettingsDataSourcePreference />
             <SettingsDeviceIngestPolicy />
             <SettingsIntegrationsDiagnostics />
             <SettingsBillingDiagnostics />

@@ -20,6 +20,10 @@ import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulat
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
 import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
+import {
+  loadDataSourcePreferenceMap,
+  pickPreferredProvider,
+} from "@/lib/integrations/data-source-preference";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -245,7 +249,7 @@ export async function GET(req: NextRequest) {
       db
         .from("executed_workouts")
         .select(
-          "id, date, started_at, ended_at, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2",
+          "id, date, started_at, ended_at, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2, source",
         )
         .eq("athlete_id", athleteId)
         .gte("date", from)
@@ -281,7 +285,27 @@ export async function GET(req: NextRequest) {
 
     const error = executedError?.message ?? plannedError?.message ?? deviceExportsError?.message ?? biomarkerError?.message ?? null;
     if (error) return NextResponse.json({ error, rows: [] }, { status: 500, headers: NO_STORE });
-    const rows = (executedData ?? []) as Array<Record<string, unknown>>;
+
+    // Preferenze cliente per dominio (Settings → Devices). Se ha scelto WHOOP per
+    // recovery, gli export Garmin (anche se presenti) non contribuiscono ai trace
+    // recovery degli analytics. Se non c'è preferenza, comportamento storico.
+    const dataSourcePref = await loadDataSourcePreferenceMap(db, athleteId);
+    const preferRecovery = pickPreferredProvider(dataSourcePref, "wellness_recovery");
+    const preferTrainingActivity = pickPreferredProvider(dataSourcePref, "training_activity");
+
+    const filteredDeviceExports = preferRecovery
+      ? ((deviceExportsData ?? []) as Array<Record<string, unknown>>).filter(
+          (row) => typeof row.provider === "string" && row.provider === preferRecovery,
+        )
+      : (deviceExportsData ?? []);
+
+    const rows = ((executedData ?? []) as Array<Record<string, unknown>>).filter((row) => {
+      if (!preferTrainingActivity) return true;
+      const source = (row as { source?: unknown }).source;
+      if (typeof source !== "string") return true; // legacy: non scartare row senza source
+      if (source === preferTrainingActivity) return true;
+      return source.startsWith(`api_sync:${preferTrainingActivity}:`);
+    });
     const rowsByDate = new Map<string, Record<string, unknown>>();
     for (const row of rows) {
       const date = typeof row.date === "string" ? row.date : "";
@@ -289,7 +313,7 @@ export async function GET(req: NextRequest) {
       rowsByDate.set(date, row);
     }
 
-    const deviceRows = ((deviceExportsData ?? []) as Array<Record<string, unknown>>)
+    const deviceRows = (filteredDeviceExports as Array<Record<string, unknown>>)
       .map((row) =>
         normalizedTraceFromDeviceExport(
           asRecord(row.payload) ?? {},

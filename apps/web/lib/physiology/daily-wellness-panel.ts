@@ -17,6 +17,10 @@ import {
   isSleepBearingDevicePayload,
 } from "@/lib/reality/sleep-recovery-signals";
 import { buildRecoverySummaryFromRows, type RecoverySummary } from "@/lib/reality/recovery-summary";
+import {
+  loadDataSourcePreferenceMap,
+  pickPreferredProvider,
+} from "@/lib/integrations/data-source-preference";
 
 /** Re-export storico: alcuni import puntano a `daily-wellness-panel`. */
 export { mergedPayloadFromExportRow, wellnessDayKeyFromDeviceExportRow, wellnessExportMatchesPanelDate };
@@ -364,7 +368,20 @@ export async function buildPhysiologyDailyPanel(input: {
     wellnessExportMatchesPanelDate(row, date),
   );
 
-  const recoveryRows = rows.filter((row) => {
+  // Preferenze provider per dominio (Settings → Devices). Se l'atleta ha scelto
+  // "WHOOP per recovery" / "Garmin per sonno", filtriamo qui le righe candidate
+  // ai consumer (recovery summary, sleep stages/hypnogram). I passi/calorie
+  // attivi (`activity`) restano cross-provider: tipicamente solo Garmin li scrive.
+  const pref = await loadDataSourcePreferenceMap(db, athleteId);
+  const preferRecovery = pickPreferredProvider(pref, "wellness_recovery");
+  const preferSleep = pickPreferredProvider(pref, "wellness_sleep");
+
+  const matchesProvider = (row: Record<string, unknown>, provider: string): boolean => {
+    const p = (row as { provider?: unknown }).provider;
+    return typeof p === "string" && p === provider;
+  };
+
+  const recoveryRowsAll = rows.filter((row) => {
     const s = extractSignalFromDeviceExportRow(row);
     return (
       s.sleepScore != null ||
@@ -375,6 +392,9 @@ export async function buildPhysiologyDailyPanel(input: {
       s.restingHrBpm != null
     );
   });
+  const recoveryRows = preferRecovery
+    ? recoveryRowsAll.filter((row) => matchesProvider(row, preferRecovery))
+    : recoveryRowsAll;
 
   const recovery = recoveryRows.length ? buildRecoverySummaryFromRows(recoveryRows) : null;
   const activity = mergeActivityFromRows(rows);
@@ -387,8 +407,12 @@ export async function buildPhysiologyDailyPanel(input: {
     summaryLabel: null,
   };
 
+  const sleepCandidateRows = preferSleep
+    ? rows.filter((row) => matchesProvider(row, preferSleep))
+    : rows;
+
   let sleepStages: PhysiologyDailyPanelOk["sleepStages"] = { ...sleepStagesEmpty };
-  for (const row of rows) {
+  for (const row of sleepCandidateRows) {
     const p = mergedPayloadFromExportRow(row);
     sleepStages = mergeSleepStageCandidates(sleepStages, extractSleepStagesFromDevicePayload(p));
   }
@@ -401,7 +425,7 @@ export async function buildPhysiologyDailyPanel(input: {
   };
 
   let bestHyp: HypnogramExtraction | null = null;
-  for (const row of rows) {
+  for (const row of sleepCandidateRows) {
     const p = mergedPayloadFromExportRow(row);
     if (!p) continue;
     const ex = extractSleepHypnogramFromDevicePayload(p, sleepStages);
