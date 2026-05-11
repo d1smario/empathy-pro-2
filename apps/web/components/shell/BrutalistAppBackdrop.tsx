@@ -74,7 +74,7 @@ export function BrutalistAppBackdrop({ children, matrix = true }: BrutalistAppBa
   }, []);
 
   return (
-    <div className="min-h-screen bg-black text-white overflow-hidden relative">
+    <div className="relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-black text-white">
       {matrix ? (
         <canvas
           ref={canvasRef}

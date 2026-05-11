@@ -26,7 +26,7 @@ export function EmpathyPublicHome({ billingFlash, variant = "landing" }: Empathy
       <main
         id="main-content"
         tabIndex={-1}
-        className="relative scroll-mt-0 px-6 py-16 outline-none sm:py-24"
+        className="relative scroll-mt-0 px-4 py-12 outline-none sm:px-6 sm:py-16 md:py-24"
       >
         <div className="relative mx-auto max-w-4xl">
           {variant === "landing" ? (
@@ -35,8 +35,8 @@ export function EmpathyPublicHome({ billingFlash, variant = "landing" }: Empathy
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-orange-400" />
                 Athlete OS
               </div>
-              <p className="text-4xl font-black tracking-[0.12em] text-white sm:text-5xl lg:text-6xl">EMPATHY</p>
-              <h1 className="mt-2 text-4xl font-black tracking-tight sm:text-5xl lg:text-6xl">
+              <p className="text-3xl font-black tracking-[0.12em] text-white sm:text-5xl lg:text-6xl">EMPATHY</p>
+              <h1 className="mt-2 text-3xl font-black tracking-tight sm:text-5xl lg:text-6xl">
                 <span className="bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-transparent">
                   Pro 2.0
                 </span>
@@ -121,7 +121,7 @@ export function EmpathyPublicHome({ billingFlash, variant = "landing" }: Empathy
           </div>
 
           {variant === "landing" ? (
-            <p className="mt-16 text-center text-xs text-gray-600">
+            <p className="mt-16 max-w-full text-center text-xs leading-relaxed text-gray-600 break-words px-1">
               <Link href="/pricing" className="underline-offset-4 hover:text-gray-400 hover:underline">
                 Link diretto /pricing
               </Link>

@@ -113,8 +113,8 @@ export function HomeStripePricing({
     <section id={sectionId} className="scroll-mt-24">
       {showTitle ? (
         <>
-          <p className="text-2xl font-black tracking-[0.14em] text-white sm:text-3xl lg:text-4xl">EMPATHY</p>
-          <h2 className="mt-1 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
+          <p className="text-xl font-black tracking-[0.14em] text-white sm:text-3xl lg:text-4xl">EMPATHY</p>
+          <h2 className="mt-1 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-2xl font-black tracking-tight text-transparent sm:text-4xl">
             Pro 2.0
           </h2>
           <div className="mx-auto mt-4 h-px w-20 bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500 opacity-80" />
@@ -166,9 +166,9 @@ export function HomeStripePricing({
               )}
             >
               <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-orange-300/90">{plan.label}</span>
-              <span className="mt-2 text-4xl font-black text-white">
+              <span className="mt-2 text-3xl font-black text-white sm:text-4xl">
                 {plan.monthlyPrice} €
-                <span className="text-base font-semibold text-gray-500"> / mese</span>
+                <span className="text-sm font-semibold text-gray-500 sm:text-base"> / mese</span>
               </span>
               <span className="mt-3 text-sm leading-relaxed text-gray-400">{plan.summary}</span>
               <ul className="mt-4 list-inside list-disc space-y-1.5 text-xs text-gray-500">
