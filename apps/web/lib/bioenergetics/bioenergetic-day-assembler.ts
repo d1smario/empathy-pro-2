@@ -29,6 +29,7 @@ import {
 import { enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-window-range";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 import { buildBioenergeticDayTimeline } from "@/lib/bioenergetics/bioenergetic-day-timeline";
+import { applyOpenAiContinuousMonitoringStrip } from "@/lib/bioenergetics/bioenergetic-predictor-curves-ai";
 
 function diaryMealsWithMacroCount(rows: BioenergeticDayMemorySlice["diaryRows"]): number {
   let n = 0;
@@ -43,6 +44,24 @@ function diaryMealsWithMacroCount(rows: BioenergeticDayMemorySlice["diaryRows"])
 export type AssembleBioenergeticDayResult =
   | { ok: true; body: BioenergeticsDayViewModel }
   | { ok: false; status: number; error: string };
+
+/** Opzioni `assembleBioenergeticDay` (stessa slice → VM; OpenAI opzionale sulla striscia continua). */
+export type AssembleBioenergeticDayOptions = {
+  /**
+   * `auto` (default): con `OPENAI_API_KEY` applica OpenAI sulla striscia dopo il motore deterministico.
+   * `false`: solo deterministico (es. merge orario, POST predictor-curves).
+   * `true`: richiede la chiave; senza chiave non chiama OpenAI.
+   */
+  applyOpenAiContinuousStrip?: "auto" | boolean;
+};
+
+function resolveApplyOpenAiContinuousStrip(opts: AssembleBioenergeticDayOptions | undefined): boolean {
+  const mode = opts?.applyOpenAiContinuousStrip ?? "auto";
+  const hasKey = Boolean((process.env.OPENAI_API_KEY ?? "").trim());
+  if (mode === false) return false;
+  if (mode === true) return hasKey;
+  return hasKey;
+}
 
 export type AssembleBioenergeticWindowResult =
   | { ok: true; body: BioenergeticsWindowViewModel }
@@ -234,12 +253,15 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
 }
 
 /**
- * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation.
+ * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation;
+ * con `OPENAI_API_KEY` e `applyOpenAiContinuousStrip` non `false`, sostituisce la striscia continua con curve OpenAI
+ * (stesso contratto del POST predictor-curves). Finestra multi-giorno resta senza OpenAI per costo/latenza.
  */
 export async function assembleBioenergeticDay(
   db: SupabaseClient,
   athleteId: string,
   dateRaw: string,
+  opts?: AssembleBioenergeticDayOptions,
 ): Promise<AssembleBioenergeticDayResult> {
   const date = dateRaw.trim().slice(0, 10);
   const { slice, queryError } = await loadBioenergeticDayMemorySlice(db, athleteId, date);
@@ -247,7 +269,10 @@ export async function assembleBioenergeticDay(
     return { ok: false, status: 500, error: queryError };
   }
   const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
-  const body = buildBioenergeticDayViewModelFromSlice({ athleteId, date, slice, evidenceLinks });
+  let body = buildBioenergeticDayViewModelFromSlice({ athleteId, date, slice, evidenceLinks });
+  if (resolveApplyOpenAiContinuousStrip(opts)) {
+    body = await applyOpenAiContinuousMonitoringStrip(body);
+  }
   return { ok: true, body };
 }
 

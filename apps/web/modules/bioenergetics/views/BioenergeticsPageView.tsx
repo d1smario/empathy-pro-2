@@ -758,10 +758,8 @@ export default function BioenergeticsPageView() {
                       </Pro2Button>
                     ) : null}
                     <p className="min-w-[12rem] flex-1 text-[0.65rem] leading-relaxed text-gray-500">
-                      Legge la stessa giornata assemblata e traccia <strong className="text-gray-300">curve illustrative</strong>{" "}
-                      (salita, discesa, forma d&apos;onda) per orientamento — non sostituisce misure né valori clinici.
-                      Con <code className="text-gray-400">OPENAI_API_KEY</code> usa il modello; in <code className="text-gray-400">npm run dev</code> senza chiave
-                      compaiono curve <strong className="text-gray-300">demo locali</strong> (stessa UI).
+                      Con <code className="text-gray-400">OPENAI_API_KEY</code> il caricamento giornata applica già OpenAI sulla striscia (dopo raccolta dati). Qui rigenera le curve partendo dal sim deterministico
+                      (stesso endpoint POST) per un refresh interpretativo. Non sostituisce misure dense CGM né lab a valore unico.
                     </p>
                   </div>
                   {predictorError ? (

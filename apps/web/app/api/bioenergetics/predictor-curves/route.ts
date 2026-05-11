@@ -33,11 +33,13 @@ export async function POST(req: NextRequest) {
     }
 
     const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
-    const demoAllowed =
-      process.env.NODE_ENV === "development" || process.env.EMPATHY_PREDICTOR_DEMO === "1";
+    /** Solo QA: curve sintetiche fisse, non LLM. Le curve «con AI» richiedono `OPENAI_API_KEY`. */
+    const demoAllowed = process.env.EMPATHY_PREDICTOR_DEMO === "1";
 
     const { db } = await requireAthleteReadContext(req, athleteId);
-    const assembled = await assembleBioenergeticDay(db, athleteId, date);
+    const assembled = await assembleBioenergeticDay(db, athleteId, date, {
+      applyOpenAiContinuousStrip: false,
+    });
     if (!assembled.ok) {
       const out: BioenergeticPredictorCurvesResponseV1 = {
         predictorContractVersion: 1,
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
         date,
         disclaimerIt: "OPENAI_API_KEY non configurata sul server.",
         noteIt:
-          "In locale (`npm run dev`) le curve dimostrative sono disponibili senza chiave. In deploy: imposta OPENAI_API_KEY oppure (solo anteprima) EMPATHY_PREDICTOR_DEMO=1.",
+          "Imposta OPENAI_API_KEY sul server per le curve predittore generate dal modello. Solo per test UI senza OpenAI: EMPATHY_PREDICTOR_DEMO=1 (serie sintetiche, non inferenza).",
         channels: [],
         skippedReason: "no_openai",
       };

@@ -265,7 +265,7 @@ export type BioenergeticPredictorCurvesResponseV1 = {
     | "bad_openai_response"
     | "network"
     | "empty_predictor"
-    /** Serie sintetiche deterministiche (stesso merge del predittore), solo dev o `EMPATHY_PREDICTOR_DEMO=1`. */
+    /** Serie sintetiche (stesso merge del predittore), solo con `EMPATHY_PREDICTOR_DEMO=1` — non LLM. */
     | "predictor_demo_local";
 };
 

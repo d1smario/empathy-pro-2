@@ -132,8 +132,8 @@ export type PredictorCurvesParseResult = {
 };
 
 /**
- * Serie dimostrative per l’anteprima in-app quando manca OpenAI (`NODE_ENV=development` o `EMPATHY_PREDICTOR_DEMO=1`).
- * Stesso percorso di `buildPredictorChannelsFromParse` del predittore reale; numeri deterministici, non LLM.
+ * Serie sintetiche per QA UI quando manca OpenAI (solo se `EMPATHY_PREDICTOR_DEMO=1` sulla route).
+ * Stesso merge di `buildPredictorChannelsFromParse` del flusso AI; numeri fissi, **non** inferenza LLM.
  */
 export function buildPredictorCurvesDemoParseResult(skipGlucosePredictor: boolean): PredictorCurvesParseResult {
   const disclaimerIt =
@@ -254,6 +254,59 @@ export function buildPredictorChannelsFromParse(
   }
 
   return out;
+}
+
+const STRIP_OPENAI_DISCLAIMER_IT =
+  "Striscia monitoraggio continuo: curve generate da OpenAI sui dati giornata assemblati (predittore integrato nell'assembler), salvo glucosio da stream CGM denso (predittore omesso su quel canale) o profili lab a valore unico tenuto costante.";
+
+/**
+ * Dopo la VM deterministica completa, sostituisce le strisce `model_predictor_ai` sui canali restituiti dal parse
+ * (stessa logica del POST `/api/bioenergetics/predictor-curves`). In assenza di chiave o su errore OpenAI → `vm` invariato.
+ * `EMPATHY_BIOENERGETIC_STRIP_AI=0` forza il no-op (solo motore deterministico).
+ */
+export async function applyOpenAiContinuousMonitoringStrip(
+  vm: BioenergeticsDayViewModel,
+  opts?: { apiKey?: string; model?: string },
+): Promise<BioenergeticsDayViewModel> {
+  const apiKey = (opts?.apiKey ?? process.env.OPENAI_API_KEY ?? "").trim();
+  if (!apiKey) return vm;
+  if (process.env.EMPATHY_BIOENERGETIC_STRIP_AI === "0") return vm;
+  if (!vm.continuousMonitoring?.channels?.length) return vm;
+
+  const gluCh = vm.continuousMonitoring.channels.find((c) => c.id === "glucose");
+  const skipGlucosePredictor =
+    vm.provenance.glucose === "measured" &&
+    (gluCh?.dataPlane === "measured_stream" || (gluCh?.streamTrace?.length ?? 0) >= 48);
+
+  const model = (opts?.model ?? process.env.OPENAI_BIOENERGETIC_MODEL ?? "").trim() || "gpt-4o-mini";
+  const compact = compactBioenergeticDayForPredictorAi(vm, { skipGlucosePredictor });
+  const ai = await requestOpenAiPredictorCurves(compact, { apiKey, model });
+  if (!ai.ok) return vm;
+
+  const parsed = parsePredictorCurvesOpenAiContent(ai.text);
+  if (!parsed) return vm;
+
+  const channels = buildPredictorChannelsFromParse(vm, parsed);
+  if (!channels.length) return vm;
+
+  const pmap = new Map(channels.map((c) => [c.id, c]));
+  const nextChannels = vm.continuousMonitoring.channels.map((ch) => {
+    const p = pmap.get(ch.id);
+    return p ? { ...ch, ...p } : ch;
+  });
+
+  const disclaimers = vm.disclaimers.includes(STRIP_OPENAI_DISCLAIMER_IT)
+    ? vm.disclaimers
+    : [...vm.disclaimers, STRIP_OPENAI_DISCLAIMER_IT];
+
+  return {
+    ...vm,
+    disclaimers,
+    continuousMonitoring: {
+      ...vm.continuousMonitoring,
+      channels: nextChannels,
+    },
+  };
 }
 
 function b24FromStream(st: BioenergeticMonitoringStreamPoint[]): (number | null)[] {
