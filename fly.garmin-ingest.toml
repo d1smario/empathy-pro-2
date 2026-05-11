@@ -15,9 +15,11 @@ primary_region = "fra"
 [http_service]
   internal_port = 8790
   force_https = true
-  auto_stop_machines = "stop"
+  # Garmin Partner Verification non perdona cold start (proxy 5xx prima del nostro handler).
+  # Tieni almeno una macchina viva: stream `ACTIVITY_DETAIL` è puntato qui dal portale.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
   processes = ["app"]
 
 [[vm]]
