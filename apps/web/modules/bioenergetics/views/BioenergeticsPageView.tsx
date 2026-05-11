@@ -5,8 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BookOpen, CalendarRange, GitBranch, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticBiaLiteratureSummaryV1,
+  BioenergeticGlucoseSimulatorCompareResponseV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
+  BioenergeticMonitoringStreamPoint,
   BioenergeticPathwayImpact,
   BioenergeticsDayViewModel,
   BioenergeticsTimeSeriesStreamResponseV1,
@@ -107,8 +109,16 @@ export default function BioenergeticsPageView() {
   const [windowStreamError, setWindowStreamError] = useState<string | null>(null);
   const [windowLoading, setWindowLoading] = useState(false);
   const [windowError, setWindowError] = useState<string | null>(null);
+  const [glucoseAiOverlay, setGlucoseAiOverlay] = useState<BioenergeticMonitoringStreamPoint[] | null>(null);
+  const [compareLoading, setCompareLoading] = useState(false);
+  const [compareBanner, setCompareBanner] = useState<string | null>(null);
   const seededFromContext = useRef(false);
   const genBodyRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    setGlucoseAiOverlay(null);
+    setCompareBanner(null);
+  }, [athleteId, date]);
 
   useEffect(() => {
     seededFromContext.current = false;
@@ -221,6 +231,50 @@ export default function BioenergeticsPageView() {
     },
     [setDateAndPersist],
   );
+
+  const fetchGlucoseSimulatorCompare = useCallback(async () => {
+    if (!athleteId) return;
+    setCompareLoading(true);
+    setCompareBanner(null);
+    try {
+      const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch("/api/bioenergetics/simulator-glucose-compare", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers,
+        body: JSON.stringify({ athleteId, date }),
+      });
+      const j = (await res.json()) as BioenergeticGlucoseSimulatorCompareResponseV1 & { error?: string };
+      if (!res.ok) {
+        setGlucoseAiOverlay(null);
+        setCompareBanner(j.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      if (j.compareContractVersion !== 1) {
+        setGlucoseAiOverlay(null);
+        setCompareBanner("Risposta confronto non valida.");
+        return;
+      }
+      if (j.skippedReason) {
+        setGlucoseAiOverlay(null);
+        setCompareBanner(j.noteIt ?? j.skippedReason);
+        return;
+      }
+      if (!j.aiTrace?.length) {
+        setGlucoseAiOverlay(null);
+        setCompareBanner(j.noteIt ?? "Nessun punto nella curva AI.");
+        return;
+      }
+      setGlucoseAiOverlay(j.aiTrace);
+      setCompareBanner(j.noteIt ?? null);
+    } catch {
+      setGlucoseAiOverlay(null);
+      setCompareBanner("Errore di rete durante il confronto simulatore.");
+    } finally {
+      setCompareLoading(false);
+    }
+  }, [athleteId, date]);
 
   useEffect(() => {
     if (athleteLoading) return;
@@ -519,7 +573,42 @@ export default function BioenergeticsPageView() {
                     «tutte uguali» per riempire. Gli altri biomarker restano nelle tile finché non c&apos;è un modello
                     serio legato a timeline e fisiologia.
                   </p>
-                  <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
+                  {compareBanner ? (
+                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
+                      {compareBanner}
+                    </p>
+                  ) : null}
+                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                    <Pro2Button
+                      type="button"
+                      variant="secondary"
+                      disabled={!vm || athleteLoading || compareLoading}
+                      onClick={() => void fetchGlucoseSimulatorCompare()}
+                      className="!text-xs"
+                    >
+                      {compareLoading ? "Curva AI…" : "Confronta curva AI (simulatore)"}
+                    </Pro2Button>
+                    {glucoseAiOverlay?.length ? (
+                      <Pro2Button
+                        type="button"
+                        variant="ghost"
+                        className="!text-xs"
+                        onClick={() => {
+                          setGlucoseAiOverlay(null);
+                          setCompareBanner(null);
+                        }}
+                      >
+                        Rimuovi overlay AI
+                      </Pro2Button>
+                    ) : null}
+                    <span className="text-[0.65rem] leading-snug text-gray-500">
+                      Richiede <code className="text-gray-400">OPENAI_API_KEY</code> sul server. Con glucosio misurato (CGM/lab) quel giorno il confronto non è proposto.
+                    </span>
+                  </div>
+                  <BioenergeticsContinuousMonitoringGrid
+                    monitoring={vm.continuousMonitoring}
+                    glucoseAiOverlay={glucoseAiOverlay}
+                  />
                 </div>
               ) : null}
               <div className="mt-6 border-t border-white/10 pt-4">

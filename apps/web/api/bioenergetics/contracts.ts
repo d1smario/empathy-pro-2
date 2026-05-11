@@ -221,3 +221,14 @@ export type BioenergeticsTimeSeriesStreamResponseV1 = {
   truncated: boolean;
   skippedSchema?: boolean;
 };
+
+/** `POST …/bioenergetics/simulator-glucose-compare`: curva AI sovrapponibile al deterministico (solo laboratorio). */
+export type BioenergeticGlucoseSimulatorCompareResponseV1 = {
+  compareContractVersion: 1;
+  athleteId: string;
+  date: string;
+  aiTrace: BioenergeticMonitoringStreamPoint[];
+  noteIt: string | null;
+  /** Presente se la richiesta non ha prodotto punti (es. mancanza API key). */
+  skippedReason?: "no_openai" | "measured_glucose_day" | "no_sim_curve" | "bad_openai_response" | "network";
+};

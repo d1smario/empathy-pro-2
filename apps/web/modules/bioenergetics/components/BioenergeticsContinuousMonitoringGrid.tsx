@@ -7,6 +7,7 @@ import type {
   BioenergeticMetricTileCategory,
   BioenergeticMonitoringChannel24,
   BioenergeticMonitoringDataPlane,
+  BioenergeticMonitoringStreamPoint,
 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticCurveGovernanceHintV1 } from "@empathy/contracts";
 
@@ -44,8 +45,18 @@ function fusionSummary(res: BioenergeticChannelCurveResolutionV1): string {
   return `Fusione v${res.fusionContractVersion}: motore ${dm}% · AI ${ai}% · ricchezza contesto ${r}%`;
 }
 
+type StreamChartRow = {
+  tsMs: number;
+  observedAt: string;
+  v: number;
+  vAi: number | null;
+  timeLabel: string;
+};
+
 type Props = {
   monitoring: BioenergeticContinuousMonitoringDay;
+  /** Confronto simulatore: curva interpretazione AI (stessi timestamp del glucosio deterministico 10 min). */
+  glucoseAiOverlay?: BioenergeticMonitoringStreamPoint[] | null;
 };
 
 const CHART_H = 92;
@@ -73,14 +84,16 @@ function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
   return [mn - pad, mx + pad];
 }
 
-function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["streamTrace"]>) {
+function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["streamTrace"]>): StreamChartRow[] {
   return [...trace]
     .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
     .map((p) => {
       const tsMs = Date.parse(p.observedAt);
       return {
         tsMs,
+        observedAt: p.observedAt,
         v: p.value,
+        vAi: null as number | null,
         timeLabel: Number.isFinite(tsMs)
           ? new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(tsMs))
           : "—",
@@ -89,11 +102,22 @@ function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["str
     .filter((r) => Number.isFinite(r.tsMs));
 }
 
+function attachGlucoseAiOverlay(rows: StreamChartRow[], ai: BioenergeticMonitoringStreamPoint[] | null | undefined): StreamChartRow[] {
+  if (!ai?.length || !rows.length) return rows;
+  const m = new Map(ai.map((p) => [p.observedAt, p.value]));
+  return rows.map((r) => ({ ...r, vAi: m.has(r.observedAt) ? (m.get(r.observedAt) as number) : null }));
+}
+
+function yDomainFromMergedStream(rows: StreamChartRow[]): [number, number] {
+  const nums = rows.flatMap((r) => [r.v, r.vAi].filter((x): x is number => x != null && Number.isFinite(x)));
+  return yDomainFromHourly(nums);
+}
+
 function formatStreamAxisTick(ms: number): string {
   return new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 }
 
-export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
+export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOverlay }: Props) {
   const sorted = [...monitoring.channels].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
   );
@@ -102,9 +126,17 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {sorted.map((ch) => {
         const streamTrace = ch.streamTrace;
+        const isGluLac = ch.id === "glucose" || ch.id === "lactate";
         const useStreamChart =
-          ch.dataPlane === "measured_stream" && streamTrace && streamTrace.length >= 4;
-        const streamRows = useStreamChart ? streamChartRows(streamTrace) : null;
+          streamTrace &&
+          streamTrace.length >= 4 &&
+          (ch.dataPlane === "measured_stream" ||
+            (isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
+        let streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace) : null;
+        if (streamRows?.length && ch.id === "glucose" && glucoseAiOverlay?.length) {
+          streamRows = attachGlucoseAiOverlay(streamRows, glucoseAiOverlay);
+        }
+        const hasAiGlucoseOverlay = Boolean(streamRows?.some((r) => r.vAi != null && Number.isFinite(r.vAi)));
 
         const rows = ch.hourly.map((v, hour) => ({
           hour,
@@ -116,7 +148,9 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
         if (!hasData) return null;
 
         const yDomain = streamRows?.length
-          ? yDomainFromHourly(streamRows.map((r) => r.v))
+          ? hasAiGlucoseOverlay
+            ? yDomainFromMergedStream(streamRows)
+            : yDomainFromHourly(streamRows.map((r) => r.v))
           : yDomainFromHourly(ch.hourly);
 
         return (
@@ -149,7 +183,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
             ) : null}
             <p className="mb-1 text-[0.6rem] text-gray-600">
               {streamRows?.length
-                ? "Asse: tempo reale del campione (stream misurato; stessi punti della tabella 055 / merge device)."
+                ? ch.dataPlane === "measured_stream"
+                  ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
+                  : hasAiGlucoseOverlay && ch.id === "glucose"
+                    ? "Asse tempo: fucsia = motore deterministico (10 min, pasti/IG/sedute); giallo tratteggio = interpretazione AI (simulatore confronto — non canonica)."
+                    : "Asse: tempo reale del modello (passo 10 min, deterministico da pasti/sedute in timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
@@ -183,9 +221,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                         borderRadius: 10,
                         fontSize: 11,
                       }}
-                      formatter={(value) => {
+                      formatter={(value, name) => {
                         const v = typeof value === "number" ? value : Number(value);
-                        return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, "Misura"] : ["—", ch.labelIt];
+                        if (!Number.isFinite(v)) return ["—", String(name)];
+                        const label = name === "vAi" ? "AI (sim.)" : "Motore";
+                        return [`${v.toFixed(3)} ${ch.unit}`, label];
                       }}
                       labelFormatter={(_label, payload) => {
                         const row = payload?.[0]?.payload as { tsMs?: number } | undefined;
@@ -198,12 +238,26 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                     <Line
                       type="linear"
                       dataKey="v"
+                      name="v"
                       stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
+                    {hasAiGlucoseOverlay && ch.id === "glucose" ? (
+                      <Line
+                        type="linear"
+                        dataKey="vAi"
+                        name="vAi"
+                        stroke="#fbbf24"
+                        strokeWidth={1.25}
+                        strokeDasharray="5 4"
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+                    ) : null}
                   </LineChart>
                 ) : (
                   <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 18 }}>

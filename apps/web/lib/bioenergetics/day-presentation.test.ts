@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { MetabolicNodeCoherenceV1 } from "@empathy/domain-bioenergetics";
+import { buildSimulatedGluLacDiurnalSubHourly } from "@empathy/domain-bioenergetics";
 import { applyTimelineContextToGluLacHourly24, buildBioenergeticDayPresentation, pickGlucoseMmolFromLab } from "@/lib/bioenergetics/day-presentation";
 
 const kernelFixture = {
@@ -57,6 +58,37 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.ok(chart24h[12].lactateMmol != null);
   assert.ok(metricTiles.some((t) => t.id === "glucose"));
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
+});
+
+test("buildBioenergeticDayPresentation: sim diurno 10m espone streamTrace su glucosio stimato", () => {
+  const simKernel = {
+    insulinDemandScore: 45,
+    anabolicSuppressionScore: 30,
+    glucoseHandlingScore: 50,
+    oxidationDriveScore: 48,
+    pathwayState: "mixed" as const,
+  };
+  const sim = buildSimulatedGluLacDiurnalSubHourly("2026-05-01", simKernel, [], {}, 10);
+  const { continuousMonitoring } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 50,
+      insulinDemandScore: 45,
+      oxidationDriveScore: 48,
+      anabolicSuppressionScore: 30,
+      efficiencyBand: "moderate",
+      pathwayState: "mixed",
+      keyDrivers: ["test"],
+    },
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: { glucose: sim.glucose, lactate: sim.lactate },
+    timeline: [],
+    biomarkerRows: [],
+  });
+  const glu = continuousMonitoring.channels.find((c) => c.id === "glucose");
+  assert.ok(glu?.streamTrace && glu.streamTrace.length === 144);
+  assert.equal(glu?.dataPlane, "model_continuous");
 });
 
 test("buildBioenergeticDayPresentation: stream glucosio denso espone streamTrace per grafico tempo reale", () => {

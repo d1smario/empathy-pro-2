@@ -5,6 +5,10 @@ export type SimTimelineEventV1 = {
   payload?: Record<string, unknown>;
 };
 
+function clamp(n: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, n));
+}
+
 export function hourFromIsoTs(ts: string): number | null {
   const m = ts.match(/T(\d{2}):/);
   if (!m) return null;
@@ -13,8 +17,37 @@ export function hourFromIsoTs(ts: string): number | null {
 }
 
 /**
- * Peso 0–~2.8 per ogni ora: pasti con CHO/kcal modesti generano bump post-prandiale su h, h+1, h+2.
- * Deterministico, auditabile (stesso timeline → stessa curva).
+ * Pesi decadimento post-prandiale da indice glicemico (0–100): IG alto → picco più stretto;
+ * IG basso → coda più lunga (stesso carico CHO, forma diversa — allineato a meal plan / diario).
+ */
+export function mealPostprandialDecayWeightsForGi(glycemicIndex01: number): number[] {
+  const gi = clamp(glycemicIndex01, 28, 95);
+  const rapidity = clamp((gi - 38) / 50, 0, 1);
+  if (rapidity >= 0.52) {
+    const u = (rapidity - 0.52) / 0.48;
+    return [0.88 + 0.26 * u, 0.4 - 0.1 * u, 0.18 - 0.07 * u];
+  }
+  const u = rapidity / 0.52;
+  const spread = [
+    0.48 + 0.28 * u,
+    0.38 + 0.12 * u,
+    0.26 + 0.06 * u,
+    0.12 + 0.06 * u,
+  ];
+  return spread;
+}
+
+function mealGlycemicIndexFromPayload(payload: Record<string, unknown> | undefined): number {
+  if (!payload) return 52;
+  const raw = payload.glycemicIndex;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0 && raw <= 100) return raw;
+  return 52;
+}
+
+/**
+ * Peso 0–~2.8 per ogni ora: pasti con CHO/kcal modesti generano bump post-prandiale.
+ * Modulato da **indice glicemico** nel payload pasto (`glycemicIndex` 1–100) quando presente;
+ * default 52 se assente. Deterministico, auditabile (stesso timeline → stessa curva).
  */
 export function mealGlycemicHourWeights24(timeline: readonly SimTimelineEventV1[]): number[] {
   const w = Array.from({ length: 24 }, () => 0);
@@ -27,10 +60,15 @@ export function mealGlycemicHourWeights24(timeline: readonly SimTimelineEventV1[
     if (carbs < 3.5 && kcal < 40) continue;
     const h = hourFromIsoTs(ev.ts);
     if (h == null) continue;
-    const score = Math.min(1.35, carbs * 0.011 + kcal * 0.0016);
-    const decays = [1, 0.46, 0.19] as const;
+    const gi = mealGlycemicIndexFromPayload(ev.payload);
+    const rapidity = clamp((gi - 38) / 52, 0, 1);
+    const score0 = Math.min(1.35, carbs * 0.011 + kcal * 0.0016);
+    const score = score0 * (0.9 + 0.22 * rapidity);
+    const decays = mealPostprandialDecayWeightsForGi(gi);
     for (let t = 0; t < decays.length; t += 1) {
-      w[(h + t) % 24] += score * decays[t];
+      const dw = decays[t];
+      if (dw == null || !Number.isFinite(dw)) continue;
+      w[(h + t) % 24] += score * dw;
     }
   }
   return w.map((x) => Math.min(x, 2.9));

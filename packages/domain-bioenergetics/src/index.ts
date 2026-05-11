@@ -21,6 +21,7 @@ export {
   hourFromIsoTs,
   mealGlycemicHourWeights24,
   mealInhibitoryHours,
+  mealPostprandialDecayWeightsForGi,
 } from "./sim-timeline-v1";
 export type {
   NominalCortisolActhModulationV1,
@@ -29,9 +30,11 @@ export type {
   SimSeriesPointV1,
 } from "./day-simulator-v1";
 export {
+  SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX,
   SIM_LAB_TILE_PARTIAL_SCALE_V1,
   buildNominalCortisolActhHourly24,
   buildSimulatedGluLacDiurnal,
+  buildSimulatedGluLacDiurnalSubHourly,
   kernelDayStress01,
   scaleSimulatedLabNumericForSkeletonPartialV1,
   simulatedLabNumeric,

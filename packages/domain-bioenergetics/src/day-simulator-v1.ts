@@ -103,6 +103,69 @@ export function buildSimulatedGluLacDiurnal(
   return { glucose, lactate };
 }
 
+/** Sorgente serie diurna ad alta risoluzione (solo modello; non sostituisce misura device). */
+export const SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX = "sim_diurnal_v1_" as const;
+
+/**
+ * Stessa logica di `buildSimulatedGluLacDiurnal` ma con passo temporale (5 o 10 min) per forma più «continua»
+ * e reazione pasti/sedute allineata alla timeline (diario, pianificato/eseguito). Deterministico, auditabile.
+ */
+export function buildSimulatedGluLacDiurnalSubHourly(
+  date: string,
+  kernel: SimDayKernelV1Input,
+  timeline: readonly SimTimelineEventV1[],
+  modulation: SimGluLacDiurnalModulationV1 | undefined,
+  stepMinutes: 5 | 10,
+): { glucose: SimSeriesPointV1[]; lactate: SimSeriesPointV1[] } {
+  const day = date.slice(0, 10);
+  if (stepMinutes !== 5 && stepMinutes !== 10) {
+    throw new Error("buildSimulatedGluLacDiurnalSubHourly: stepMinutes must be 5 or 10");
+  }
+  const mealW = mealGlycemicHourWeights24(timeline);
+  const act = activitySupportHours(timeline);
+  const mealScale = modulation?.mealResponseScale01 != null ? clamp(modulation.mealResponseScale01, 0.35, 1.2) : 1;
+  const actScale = modulation?.activityResponseScale01 != null ? clamp(modulation.activityResponseScale01, 0.35, 1.2) : 1;
+  const s = stress01(kernel);
+  const gCfg = SIM_DIURNAL_GLUCOSE_V1;
+  const lCfg = SIM_DIURNAL_LACTATE_V1;
+  const gBase = gCfg.baseMmol + kernel.insulinDemandScore * gCfg.insulinLinear + s * gCfg.stressLinear;
+  const lacBase = lCfg.baseMmol + kernel.oxidationDriveScore * lCfg.oxidationLinear + s * lCfg.stressLinear;
+  const steps = (24 * 60) / stepMinutes;
+  const src = `${SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX}${stepMinutes}m` as const;
+  const glucose: SimSeriesPointV1[] = [];
+  const lactate: SimSeriesPointV1[] = [];
+
+  for (let i = 0; i < steps; i += 1) {
+    const totalMin = i * stepMinutes;
+    const hh = Math.floor(totalMin / 60);
+    const mm = totalMin % 60;
+    const fh = totalMin / 60;
+    const h0 = hh % 24;
+    const frac = fh - h0;
+    const h1 = (h0 + 1) % 24;
+    const mw = mealW[h0]! * (1 - frac) + mealW[h1]! * frac;
+
+    const circG = gCfg.circAmp * Math.sin(((fh - gCfg.circPhaseHour) * Math.PI) / 12);
+    let g = gBase + circG;
+    if (mw > 0) g += gCfg.mealBumpMmol * mw * mealScale;
+    if (act.has(h0)) g -= gCfg.activityDipMmol * actScale;
+    const jitterG = Math.sin(fh * 6.2 + day.length * 0.13) * 0.048 * mealScale + Math.cos(mm * 0.21) * 0.014;
+    g = clamp(g + jitterG, gCfg.clampLo, gCfg.clampHi);
+
+    const circL = lCfg.circAmp * Math.sin(((fh - lCfg.circPhaseHour) * Math.PI) / 12);
+    let lac = lacBase + circL;
+    if (act.has(h0)) lac += (lCfg.activityBumpMmol + kernel.oxidationDriveScore * lCfg.oxidationActivityK) * actScale;
+    if (mw > 0) lac -= lCfg.mealDipMmol * Math.min(1.15, mw * 0.55) * mealScale;
+    const jitterL = Math.sin(fh * 5.1 + 1.7) * 0.024 * actScale + Math.sin(mm * 0.17) * 0.008;
+    lac = clamp(lac + jitterL, lCfg.clampLo, lCfg.clampHi);
+
+    const ts = `${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
+    glucose.push({ ts, value: Math.round(g * 1000) / 1000, source: src });
+    lactate.push({ ts, value: Math.round(lac * 1000) / 1000, source: src });
+  }
+  return { glucose, lactate };
+}
+
 /**
  * Valore tile quando manca il lab: ordine di grandezza deterministico da kernel + pathway.
  * `null` se tileId non supportato dalla banca v1.

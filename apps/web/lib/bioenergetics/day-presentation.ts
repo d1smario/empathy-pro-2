@@ -66,15 +66,26 @@ function monitoringPlaneForGluLac(
   return "model_continuous";
 }
 
-/** Punti misurati per asse tempo nativo nella UI (stesso merge di `extractMeasuredGluLacFromSlice`). */
+/**
+ * Traccia nativa per grafico continuo: stream CGM reale **oppure** modello diurno sub-orario deterministico
+ * (`sim_diurnal_v1_*m`). Curva AI confronto (simulatore) è **separata** (`POST …/simulator-glucose-compare`), mai come `source` di questi punti.
+ */
 function monitoringStreamTraceFromPoints(
   provenance: BioenergeticChannelProvenance,
   points: BioenergeticSeriesPoint[] | null,
 ): BioenergeticMonitoringStreamPoint[] | undefined {
-  if (!isHighFrequencyStream(provenance, points) || !points?.length) return undefined;
-  return [...points]
-    .sort((a, b) => a.ts.localeCompare(b.ts))
-    .map((p) => ({ observedAt: p.ts, value: p.value }));
+  if (!points?.length) return undefined;
+  if (isHighFrequencyStream(provenance, points)) {
+    return [...points]
+      .sort((a, b) => a.ts.localeCompare(b.ts))
+      .map((p) => ({ observedAt: p.ts, value: p.value }));
+  }
+  if (provenance === "estimated" && isDenseSimDiurnalSeries(points)) {
+    return [...points]
+      .sort((a, b) => a.ts.localeCompare(b.ts))
+      .map((p) => ({ observedAt: p.ts, value: p.value }));
+  }
+  return undefined;
 }
 
 function mergeLabSim(
@@ -270,6 +281,22 @@ function interpolateNumericSeriesByHour(
   return byHour;
 }
 
+/** Media oraria da serie densa (es. sim 10 min) per `chart24h` senza collassare più campioni nella stessa ora. */
+function hourlyMeansFromDensePoints(points: BioenergeticSeriesPoint[]): (number | null)[] {
+  const buckets: number[][] = Array.from({ length: 24 }, () => []);
+  for (const p of points) {
+    const h = hourFromIsoTs(p.ts);
+    if (h == null || !Number.isFinite(p.value)) continue;
+    buckets[h]!.push(p.value);
+  }
+  return buckets.map((b) => (b.length ? b.reduce((a, c) => a + c, 0) / b.length : null));
+}
+
+function isDenseSimDiurnalSeries(points: BioenergeticSeriesPoint[] | null): boolean {
+  if (!points?.length || points.length < 72) return false;
+  return points.some((p) => typeof p.source === "string" && p.source.startsWith("sim_diurnal_v1_"));
+}
+
 /**
  * Deforma le serie orarie glucosio/lattato in base a timeline pasti / sedute (stessi pesi di `mealGlycemicHourWeights24` e `activitySupportHours`).
  * Con stream denso (CGM molti punti) il bump pasto su glucosio è attenuato per non duplicare ciò che il device cattura già; il lattato in allenamento resta leggermente modulabile.
@@ -401,17 +428,27 @@ export function buildBioenergeticDayPresentation(input: {
     lTileProv = input.provenance.lactate;
   }
 
-  let glucoseHourly = interpolateNumericSeriesByHour(
-    input.date,
-    glucosePointsForInterp,
-    gLatest ?? (gTileProv === "estimated" ? 5.4 + k.insulinDemandScore * 0.015 : null),
-  );
+  let glucoseHourly: (number | null)[];
+  if (glucosePointsForInterp && isDenseSimDiurnalSeries(glucosePointsForInterp)) {
+    glucoseHourly = hourlyMeansFromDensePoints(glucosePointsForInterp);
+  } else {
+    glucoseHourly = interpolateNumericSeriesByHour(
+      input.date,
+      glucosePointsForInterp,
+      gLatest ?? (gTileProv === "estimated" ? 5.4 + k.insulinDemandScore * 0.015 : null),
+    );
+  }
 
-  let lactateHourly = interpolateNumericSeriesByHour(
-    input.date,
-    lactatePointsForInterp,
-    lVal ?? (lTileProv === "estimated" ? 1.1 + k.oxidationDriveScore * 0.01 : null),
-  );
+  let lactateHourly: (number | null)[];
+  if (lactatePointsForInterp && isDenseSimDiurnalSeries(lactatePointsForInterp)) {
+    lactateHourly = hourlyMeansFromDensePoints(lactatePointsForInterp);
+  } else {
+    lactateHourly = interpolateNumericSeriesByHour(
+      input.date,
+      lactatePointsForInterp,
+      lVal ?? (lTileProv === "estimated" ? 1.1 + k.oxidationDriveScore * 0.01 : null),
+    );
+  }
 
   const gluLacMod = applyTimelineContextToGluLacHourly24({
     glucose: glucoseHourly,
