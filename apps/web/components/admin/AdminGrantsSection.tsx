@@ -3,25 +3,20 @@
 /**
  * Sezione "Concedi accesso gratuito" della console admin.
  * Convoglia sul resolver `loadUserAccessEntitlement` (lib/billing/access-entitlement.ts).
- *
- * Permette: cercare utente per email, vedere stato entitlement, creare grant
- * (testimonial 3-6-9 mesi, promo 1 mese, comp ad-hoc, beta), revocare grant attivi.
+ * Testi UI via next-intl (`AdminGrants.*`) — Tier A EN in messages/en.json.
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Pro2Button } from "@/components/ui/empathy";
 
-const PRESET_BUTTONS: Array<{
-  label: string;
-  months: number;
-  kind: "testimonial" | "promo" | "comp" | "beta";
-}> = [
-  { label: "Promo 1 mese", months: 1, kind: "promo" },
-  { label: "Testimonial 3 mesi", months: 3, kind: "testimonial" },
-  { label: "Testimonial 6 mesi", months: 6, kind: "testimonial" },
-  { label: "Testimonial 9 mesi", months: 9, kind: "testimonial" },
-  { label: "Comp 12 mesi", months: 12, kind: "comp" },
-];
+const PRESET_DEFS = [
+  { translationKey: "presetPromo1" as const, months: 1, kind: "promo" as const },
+  { translationKey: "presetTestimonial3" as const, months: 3, kind: "testimonial" as const },
+  { translationKey: "presetTestimonial6" as const, months: 6, kind: "testimonial" as const },
+  { translationKey: "presetTestimonial9" as const, months: 9, kind: "testimonial" as const },
+  { translationKey: "presetComp12" as const, months: 12, kind: "comp" as const },
+] as const;
 
 type LookupUser = {
   userId: string;
@@ -51,31 +46,52 @@ type Grant = {
   created_at: string;
 };
 
-function formatDate(iso: string | null): string {
+function formatDate(iso: string | null, locale: string): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+    return new Date(iso).toLocaleDateString(locale === "en" ? "en-GB" : "it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
   } catch {
     return iso;
   }
 }
 
-function entitlementBadge(source: string): { className: string; label: string } {
+function entitlementDescription(t: (key: string) => string, source: string): string {
   switch (source) {
     case "admin":
-      return { className: "bg-violet-500/15 text-violet-200", label: "Admin" };
+      return t("entitlementLabel.admin");
     case "stripe_paid":
-      return { className: "bg-emerald-500/15 text-emerald-200", label: "Stripe attivo" };
+      return t("entitlementLabel.stripe_paid");
     case "grant_active":
-      return { className: "bg-cyan-500/15 text-cyan-200", label: "Grant attivo" };
+      return t("entitlementLabel.grant_active");
     case "coach_operator":
-      return { className: "bg-amber-500/15 text-amber-200", label: "Solo coach" };
+      return t("entitlementLabel.coach_operator");
     default:
-      return { className: "bg-rose-500/15 text-rose-200", label: "Nessun piano" };
+      return t("entitlementLabel.none");
+  }
+}
+
+function entitlementBadgeClass(source: string): string {
+  switch (source) {
+    case "admin":
+      return "bg-violet-500/15 text-violet-200";
+    case "stripe_paid":
+      return "bg-emerald-500/15 text-emerald-200";
+    case "grant_active":
+      return "bg-cyan-500/15 text-cyan-200";
+    case "coach_operator":
+      return "bg-amber-500/15 text-amber-200";
+    default:
+      return "bg-rose-500/15 text-rose-200";
   }
 }
 
 export function AdminGrantsSection() {
+  const t = useTranslations("AdminGrants");
+  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<LookupUser[]>([]);
   const [searching, setSearching] = useState(false);
@@ -99,33 +115,36 @@ export function AdminGrantsSection() {
       const res = await fetch(`/api/admin/users/lookup?q=${encodeURIComponent(q)}`, { cache: "no-store" });
       const j = (await res.json()) as { ok: boolean; users?: LookupUser[]; error?: string };
       if (!res.ok || !j.ok) {
-        setErr(j.error ?? "Ricerca utente fallita.");
+        setErr(j.error ?? t("errors.searchFailed"));
         setUsers([]);
       } else {
         setUsers(j.users ?? []);
       }
     } catch {
-      setErr("Errore di rete.");
+      setErr(t("errors.network"));
     } finally {
       setSearching(false);
     }
-  }, [query]);
+  }, [query, t]);
 
-  const loadGrants = useCallback(async (userId: string) => {
-    setLoadingGrants(true);
-    try {
-      const res = await fetch(`/api/admin/grants?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
-      const j = (await res.json()) as { ok: boolean; grants?: Grant[]; error?: string };
-      if (res.ok && j.ok) {
-        setGrants(j.grants ?? []);
-      } else {
-        setErr(j.error ?? "Lettura grants fallita.");
-        setGrants([]);
+  const loadGrants = useCallback(
+    async (userId: string) => {
+      setLoadingGrants(true);
+      try {
+        const res = await fetch(`/api/admin/grants?userId=${encodeURIComponent(userId)}`, { cache: "no-store" });
+        const j = (await res.json()) as { ok: boolean; grants?: Grant[]; error?: string };
+        if (res.ok && j.ok) {
+          setGrants(j.grants ?? []);
+        } else {
+          setErr(j.error ?? t("errors.grantsLoad"));
+          setGrants([]);
+        }
+      } finally {
+        setLoadingGrants(false);
       }
-    } finally {
-      setLoadingGrants(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   const selectUser = useCallback(
     async (u: LookupUser) => {
@@ -138,7 +157,7 @@ export function AdminGrantsSection() {
   );
 
   const createGrant = useCallback(
-    async (preset: (typeof PRESET_BUTTONS)[number]) => {
+    async (preset: (typeof PRESET_DEFS)[number]) => {
       if (!selected) return;
       setBusy(true);
       setErr(null);
@@ -154,29 +173,28 @@ export function AdminGrantsSection() {
             note: note.trim() || undefined,
           }),
         });
-        const j = (await res.json()) as { ok: boolean; error?: string };
+        const j = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok || !j.ok) {
-          setErr(j.error ?? "Creazione grant fallita.");
+          setErr(j.error ?? t("errors.createFailed"));
         } else {
-          setInfo(`Grant ${preset.kind} di ${preset.months} mesi concesso.`);
+          setInfo(t("info.grantCreated"));
           setNote("");
           await loadGrants(selected.userId);
-          // Refresh entitlement nella lista users.
           await search();
         }
       } catch {
-        setErr("Errore di rete.");
+        setErr(t("errors.network"));
       } finally {
         setBusy(false);
       }
     },
-    [selected, note, loadGrants, search],
+    [selected, note, loadGrants, search, t],
   );
 
   const revokeGrant = useCallback(
     async (grantId: string) => {
       if (!selected) return;
-      const reason = window.prompt("Motivo revoca (opzionale):") ?? "";
+      const reason = window.prompt(t("revokePrompt")) ?? "";
       setBusy(true);
       setErr(null);
       try {
@@ -185,34 +203,39 @@ export function AdminGrantsSection() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reason }),
         });
-        const j = (await res.json()) as { ok: boolean; error?: string };
+        const j = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok || !j.ok) {
-          setErr(j.error ?? "Revoca fallita.");
+          setErr(j.error ?? t("errors.revokeFailed"));
         } else {
-          setInfo("Grant revocato.");
+          setInfo(t("info.revoked"));
           await loadGrants(selected.userId);
           await search();
         }
       } catch {
-        setErr("Errore di rete.");
+        setErr(t("errors.network"));
       } finally {
         setBusy(false);
       }
     },
-    [selected, loadGrants, search],
+    [selected, loadGrants, search, t],
+  );
+
+  const presets = useMemo(
+    () =>
+      PRESET_DEFS.map((p) => ({
+        ...p,
+        label: t(p.translationKey),
+      })),
+    [t],
   );
 
   return (
     <section aria-labelledby="admin-grants-heading" className="space-y-4">
       <div>
         <h2 id="admin-grants-heading" className="text-lg font-semibold text-white">
-          Accessi gratuiti (testimonial / promo / comp)
+          {t("title")}
         </h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Cerca un utente per email e concedi un accesso gratuito a tempo. I coach approvati hanno già
-          accesso alla console coach (gestione roster), ma per usare la piattaforma <em>come atleta</em> sul
-          proprio profilo serve un piano attivo o un grant qui sotto.
-        </p>
+        <p className="mt-1 text-sm text-gray-500">{t("intro")}</p>
       </div>
 
       {err ? (
@@ -228,12 +251,12 @@ export function AdminGrantsSection() {
 
       <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <label className="flex-1 text-xs uppercase tracking-wider text-gray-400">
-          Email utente
+          {t("emailLabel")}
           <input
             type="search"
             inputMode="email"
             autoComplete="off"
-            placeholder="cerca per email…"
+            placeholder={t("emailPlaceholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
@@ -243,7 +266,7 @@ export function AdminGrantsSection() {
           />
         </label>
         <Pro2Button type="button" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
-          {searching ? "Cerco…" : "Cerca"}
+          {searching ? t("searching") : t("search")}
         </Pro2Button>
       </div>
 
@@ -252,16 +275,27 @@ export function AdminGrantsSection() {
           <table className="min-w-full text-left text-sm text-gray-300">
             <thead className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">Ruolo</th>
-                <th className="px-4 py-3">Stato accesso</th>
-                <th className="px-4 py-3">Scade</th>
-                <th className="px-4 py-3">Azioni</th>
+                <th className="px-4 py-3">{t("thEmail")}</th>
+                <th className="px-4 py-3">{t("thRole")}</th>
+                <th className="px-4 py-3">{t("thAccess")}</th>
+                <th className="px-4 py-3">{t("thExpires")}</th>
+                <th className="px-4 py-3">{t("thManage")}</th>
               </tr>
             </thead>
             <tbody>
               {users.map((u) => {
-                const badge = entitlementBadge(u.entitlement.source);
+                const src = u.entitlement.source;
+                const badgeClass = entitlementBadgeClass(src);
+                const shortBadge =
+                  src === "admin"
+                    ? t("badgeAdmin")
+                    : src === "stripe_paid"
+                      ? t("badgeStripe")
+                      : src === "grant_active"
+                        ? t("badgeGrant")
+                        : src === "coach_operator"
+                          ? t("badgeCoachOnly")
+                          : t("badgeNone");
                 return (
                   <tr
                     key={u.userId}
@@ -276,11 +310,9 @@ export function AdminGrantsSection() {
                       {u.isPlatformAdmin ? <span className="ml-1 text-violet-300">· admin</span> : null}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badge.className}`}>
-                        {badge.label}
-                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${badgeClass}`}>{shortBadge}</span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-400">{formatDate(u.entitlement.validUntil)}</td>
+                    <td className="px-4 py-3 text-xs text-gray-400">{formatDate(u.entitlement.validUntil, locale)}</td>
                     <td className="px-4 py-3">
                       <Pro2Button
                         type="button"
@@ -288,7 +320,7 @@ export function AdminGrantsSection() {
                         variant={selected?.userId === u.userId ? "primary" : "secondary"}
                         onClick={() => void selectUser(u)}
                       >
-                        {selected?.userId === u.userId ? "Selezionato" : "Gestisci"}
+                        {selected?.userId === u.userId ? t("selected") : t("manage")}
                       </Pro2Button>
                     </td>
                   </tr>
@@ -302,46 +334,42 @@ export function AdminGrantsSection() {
       {selected ? (
         <div className="space-y-4 rounded-2xl border border-cyan-400/30 bg-cyan-500/[0.04] p-5">
           <div>
-            <p className="text-xs uppercase tracking-wider text-cyan-300">Utente selezionato</p>
+            <p className="text-xs uppercase tracking-wider text-cyan-300">{t("selectedUser")}</p>
             <p className="mt-1 text-sm font-semibold text-white">{selected.email}</p>
             <p className="text-xs text-gray-400">
-              {selected.entitlement.label}
-              {selected.entitlement.validUntil ? ` · scade ${formatDate(selected.entitlement.validUntil)}` : ""}
+              {entitlementDescription(t, selected.entitlement.source)}
+              {selected.entitlement.validUntil
+                ? t("expiresWithDate", { date: formatDate(selected.entitlement.validUntil, locale) })
+                : ""}
             </p>
           </div>
 
           <label className="block text-xs uppercase tracking-wider text-gray-400">
-            Nota (opzionale, visibile in audit)
+            {t("noteLabel")}
             <input
               type="text"
               maxLength={200}
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="es. Testimonial campagna autunno"
+              placeholder={t("notePlaceholder")}
               className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60"
             />
           </label>
 
           <div className="flex flex-wrap gap-2">
-            {PRESET_BUTTONS.map((p) => (
-              <Pro2Button
-                key={p.label}
-                type="button"
-                disabled={busy}
-                onClick={() => void createGrant(p)}
-                className="text-xs"
-              >
+            {presets.map((p) => (
+              <Pro2Button key={p.translationKey} type="button" disabled={busy} onClick={() => void createGrant(p)} className="text-xs">
                 {p.label}
               </Pro2Button>
             ))}
           </div>
 
           <div>
-            <p className="mb-2 text-xs uppercase tracking-wider text-gray-400">Storico grants</p>
+            <p className="mb-2 text-xs uppercase tracking-wider text-gray-400">{t("history")}</p>
             {loadingGrants ? (
-              <p className="text-sm text-gray-400">Carico…</p>
+              <p className="text-sm text-gray-400">{t("loadingGrants")}</p>
             ) : grants.length === 0 ? (
-              <p className="text-sm text-gray-500">Nessun grant per questo utente.</p>
+              <p className="text-sm text-gray-500">{t("noGrants")}</p>
             ) : (
               <ul className="space-y-1.5">
                 {grants.map((g) => {
@@ -357,10 +385,10 @@ export function AdminGrantsSection() {
                             active ? "bg-emerald-500/15 text-emerald-200" : "bg-gray-700/40 text-gray-400"
                           }`}
                         >
-                          {active ? g.kind : g.revoked_at ? "revocato" : "scaduto"}
+                          {active ? g.kind : g.revoked_at ? t("grantKindRevoked") : t("grantKindExpired")}
                         </span>
                         <span className="text-gray-300">
-                          {formatDate(g.starts_at)} → {formatDate(g.ends_at)}
+                          {formatDate(g.starts_at, locale)} → {formatDate(g.ends_at, locale)}
                         </span>
                         {g.note ? <span className="ml-2 text-gray-500">— {g.note}</span> : null}
                         {g.granted_by_email ? (
@@ -375,7 +403,7 @@ export function AdminGrantsSection() {
                           disabled={busy}
                           onClick={() => void revokeGrant(g.id)}
                         >
-                          Revoca
+                          {t("revoke")}
                         </Pro2Button>
                       ) : null}
                     </li>

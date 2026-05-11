@@ -33,11 +33,26 @@ export async function GET() {
   const profile = (data as { preferred_locale?: string | null; preferred_units?: string | null } | null) ?? null;
   const enabled = await loadEnabledLocales();
 
+  const { data: locRows } = await supabase
+    .from("supported_locales")
+    .select("code, display_name")
+    .eq("is_enabled", true)
+    .order("sort_order", { ascending: true });
+
+  const enabledLocaleOptions =
+    (locRows ?? []).length > 0
+      ? (locRows ?? []).map((row) => ({
+          code: String((row as { code?: unknown }).code ?? ""),
+          displayName: String((row as { display_name?: unknown }).display_name ?? ""),
+        }))
+      : enabled.map((code) => ({ code, displayName: code }));
+
   return NextResponse.json({
     ok: true as const,
     preferredLocale: profile?.preferred_locale ?? "it",
     preferredUnits: profile?.preferred_units === "imperial" ? "imperial" : "metric",
     enabledLocales: enabled,
+    enabledLocaleOptions,
   });
 }
 

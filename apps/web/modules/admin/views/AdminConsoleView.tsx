@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { AdminGrantsSection } from "@/components/admin/AdminGrantsSection";
 import type { AdminCoachRow } from "@/lib/admin/coach-list-types";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
@@ -8,6 +9,7 @@ import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 type MeJson = { ok: boolean; isAdmin?: boolean; email?: string };
 
 export default function AdminConsoleView() {
+  const t = useTranslations("Admin");
   const [me, setMe] = useState<MeJson | null>(null);
   const [coaches, setCoaches] = useState<AdminCoachRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
@@ -17,13 +19,13 @@ export default function AdminConsoleView() {
     const res = await fetch("/api/admin/coaches", { cache: "no-store" });
     const j = (await res.json()) as { ok?: boolean; coaches?: AdminCoachRow[]; error?: string };
     if (!res.ok || !j.ok) {
-      setLoadErr(j.error ?? "Lettura coach non riuscita.");
+      setLoadErr(j.error ?? t("errors.coachList"));
       setCoaches([]);
       return;
     }
     setLoadErr(null);
     setCoaches(j.coaches ?? []);
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     let c = false;
@@ -53,17 +55,17 @@ export default function AdminConsoleView() {
         });
         const j = (await res.json()) as { ok?: boolean; error?: string };
         if (!res.ok || !j.ok) {
-          setLoadErr(j.error ?? "Aggiornamento non riuscito.");
+          setLoadErr(j.error ?? t("errors.updateFailed"));
           return;
         }
         await reloadCoaches();
       } catch {
-        setLoadErr("Errore di rete.");
+        setLoadErr(t("errors.network"));
       } finally {
         setBusyId(null);
       }
     },
-    [reloadCoaches],
+    [reloadCoaches, t],
   );
 
   const sortedCoaches = useMemo(() => {
@@ -88,12 +90,10 @@ export default function AdminConsoleView() {
   if (me && me.isAdmin === false) {
     return (
       <div className="mx-auto max-w-lg px-4 py-20 text-center">
-        <h1 className="text-xl font-bold text-white">Accesso negato</h1>
-        <p className="mt-4 text-sm text-gray-400">
-          Questa console è riservata agli amministratori piattaforma. Contatta il supporto se serve accesso operativo.
-        </p>
+        <h1 className="text-xl font-bold text-white">{t("deniedTitle")}</h1>
+        <p className="mt-4 text-sm text-gray-400">{t("deniedBody")}</p>
         <Pro2Link href="/dashboard" variant="primary" className="mt-8 inline-flex justify-center">
-          Torna alla dashboard
+          {t("backDashboard")}
         </Pro2Link>
       </div>
     );
@@ -103,7 +103,7 @@ export default function AdminConsoleView() {
     return (
       <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-sm text-gray-400">
         <div className="h-10 w-10 animate-spin rounded-full border-2 border-cyan-500/30 border-t-cyan-400" aria-hidden />
-        <p>Verifica permessi…</p>
+        <p>{t("checking")}</p>
       </div>
     );
   }
@@ -111,15 +111,15 @@ export default function AdminConsoleView() {
   return (
     <div className="mx-auto max-w-4xl space-y-10 px-4 py-10">
       <header className="space-y-2 border-b border-white/10 pb-8">
-        <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-orange-300">Piattaforma</p>
-        <h1 className="text-2xl font-bold text-white">Console amministrazione</h1>
+        <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-orange-300">{t("eyebrow")}</p>
+        <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
         <p className="text-sm text-gray-400">
-          Abilitazione coach e monitoraggio base. Accesso:{" "}
+          {t("intro")}{" "}
           <span className="text-gray-300">{me.email ?? "—"}</span>
         </p>
         <div className="flex flex-wrap gap-2 pt-2">
           <Pro2Link href="/dashboard" variant="secondary" className="justify-center border border-white/15">
-            Dashboard
+            {t("dashboard")}
           </Pro2Link>
         </div>
       </header>
@@ -128,14 +128,12 @@ export default function AdminConsoleView() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 id="admin-coaches-heading" className="text-lg font-semibold text-white">
-              Richieste coach
+              {t("coachesHeading")}
             </h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Approva, metti in attesa o sospendi. In coda prima le richieste in attesa ({pendingCount}).
-            </p>
+            <p className="mt-1 text-sm text-gray-500">{t("coachesSub", { count: pendingCount })}</p>
           </div>
           <Pro2Button type="button" variant="secondary" disabled={!!busyId} onClick={() => void reloadCoaches()}>
-            Ricarica elenco
+            {t("reloadList")}
           </Pro2Button>
         </div>
 
@@ -146,33 +144,31 @@ export default function AdminConsoleView() {
         ) : null}
 
         <p className="rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-gray-400">
-          <strong className="text-gray-300">Nota:</strong> compaiono solo gli account registrati come <strong className="text-gray-200">coach</strong>.
-          Chi usa ancora l’account <strong className="text-gray-200">atleta</strong> non è in lista: deve uscire e rientrare da accesso scegliendo
-          «Coach».
+          <strong className="text-gray-300">{t("coachNoteLead")}</strong> {t("coachNoteBody")}
         </p>
 
         <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25">
           <table className="min-w-full text-left text-sm text-gray-300">
             <thead className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wide text-gray-500">
               <tr>
-                <th className="px-4 py-3 font-semibold">Email</th>
-                <th className="px-4 py-3 font-semibold">Stato</th>
-                <th className="px-4 py-3 font-semibold">Azioni</th>
+                <th className="px-4 py-3 font-semibold">{t("thEmail")}</th>
+                <th className="px-4 py-3 font-semibold">{t("thStatus")}</th>
+                <th className="px-4 py-3 font-semibold">{t("thActions")}</th>
               </tr>
             </thead>
             <tbody>
               {coaches.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-4 py-8 text-center text-sm leading-relaxed text-gray-500">
-                    Nessun coach in elenco. Se ti aspettavi un nome, verifica che abbia effettivamente l’account coach (accesso
-                    con opzione Coach), non solo la pagina Atleti aperta come atleta.
+                    {t("emptyCoaches")}
                   </td>
                 </tr>
               ) : (
                 sortedCoaches.map((c) => {
                   const busy = busyId === c.userId;
                   const st = c.platformCoachStatus ?? "pending";
-                  const stLabel = st === "approved" ? "Attivo" : st === "suspended" ? "Sospeso" : "In attesa";
+                  const stLabel =
+                    st === "approved" ? t("statusActive") : st === "suspended" ? t("statusSuspended") : t("statusPending");
                   return (
                     <tr key={c.userId} className="border-b border-white/5 last:border-0">
                       <td className="px-4 py-3 text-sm text-gray-200">{c.email ?? c.userId}</td>
@@ -197,7 +193,7 @@ export default function AdminConsoleView() {
                             disabled={busy || st === "approved"}
                             onClick={() => void setCoachStatus(c.userId, "approve")}
                           >
-                            Approva
+                            {t("approve")}
                           </Pro2Button>
                           <Pro2Button
                             type="button"
@@ -206,7 +202,7 @@ export default function AdminConsoleView() {
                             disabled={busy || st === "pending"}
                             onClick={() => void setCoachStatus(c.userId, "pending")}
                           >
-                            In attesa
+                            {t("pending")}
                           </Pro2Button>
                           <Pro2Button
                             type="button"
@@ -215,7 +211,7 @@ export default function AdminConsoleView() {
                             disabled={busy || st === "suspended"}
                             onClick={() => void setCoachStatus(c.userId, "suspend")}
                           >
-                            Sospendi
+                            {t("suspend")}
                           </Pro2Button>
                         </div>
                       </td>
@@ -231,11 +227,8 @@ export default function AdminConsoleView() {
       <AdminGrantsSection />
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-gray-400">
-        <h2 className="text-base font-semibold text-white">In arrivo</h2>
-        <p className="mt-2 leading-relaxed">
-          Audit dettagliato azioni admin, dashboard utilizzo, gestione piani Stripe (price/coupon) e self-serve
-          downgrade. L’enforcement server-side dell’accesso (paywall) viene attivato in fase separata.
-        </p>
+        <h2 className="text-base font-semibold text-white">{t("comingHeading")}</h2>
+        <p className="mt-2 leading-relaxed">{t("comingBody")}</p>
       </section>
     </div>
   );

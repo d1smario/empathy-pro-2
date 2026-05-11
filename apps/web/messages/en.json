@@ -1,0 +1,102 @@
+{
+  "Common": {
+    "skipToContent": "Skip to content"
+  },
+  "SettingsLocale": {
+    "title": "Interface language",
+    "subtitle": "Navigation and panel labels only (chrome). Engines, API contracts, and technical names stay unchanged.",
+    "label": "Language",
+    "unitsLabel": "Units",
+    "metric": "Metric (km, kg, °C)",
+    "imperial": "Imperial (mi, lb, °F)",
+    "saving": "Saving…",
+    "saved": "Preferences saved.",
+    "loadError": "Could not load preferences.",
+    "saveError": "Save failed."
+  },
+  "Admin": {
+    "deniedTitle": "Access denied",
+    "deniedBody": "This console is for platform administrators only. Contact support if you need operational access.",
+    "backDashboard": "Back to dashboard",
+    "checking": "Checking permissions…",
+    "eyebrow": "Platform",
+    "title": "Administration console",
+    "intro": "Coach onboarding and basic monitoring. Signed in as:",
+    "dashboard": "Dashboard",
+    "coachesHeading": "Coach requests",
+    "coachesSub": "Approve, hold, or suspend. Pending requests are listed first ({count}).",
+    "reloadList": "Reload list",
+    "coachNoteLead": "Note:",
+    "coachNoteBody": "only accounts registered as coach appear here. Users still on an athlete account are not listed: they must sign out and sign in via /access choosing “Coach”.",
+    "thEmail": "Email",
+    "thStatus": "Status",
+    "thActions": "Actions",
+    "emptyCoaches": "No coaches in the list. If you expected someone, make sure they use a coach account (sign in with Coach), not only the Athletes page while logged in as an athlete.",
+    "statusActive": "Active",
+    "statusSuspended": "Suspended",
+    "statusPending": "Pending",
+    "approve": "Approve",
+    "pending": "Hold",
+    "suspend": "Suspend",
+    "comingHeading": "Coming next",
+    "comingBody": "Detailed admin audit log, usage dashboard, Stripe plan management (prices/coupons), and self-serve downgrade. Server-side access enforcement (paywall) is enabled separately.",
+    "errors": {
+      "coachList": "Could not load coaches.",
+      "updateFailed": "Update failed.",
+      "network": "Network error."
+    }
+  },
+  "AdminGrants": {
+    "title": "Complimentary access (testimonial / promo / comp)",
+    "intro": "Search by email and grant time-limited free access. Approved coaches already have the coach console (roster management), but to use the product as an athlete on their own profile they still need an active plan or a grant below.",
+    "emailLabel": "User email",
+    "emailPlaceholder": "search by email…",
+    "search": "Search",
+    "searching": "Searching…",
+    "thRole": "Role",
+    "thAccess": "Access status",
+    "thExpires": "Expires",
+    "thManage": "Actions",
+    "manage": "Manage",
+    "selected": "Selected",
+    "selectedUser": "Selected user",
+    "noteLabel": "Note (optional, for audit)",
+    "notePlaceholder": "e.g. Autumn testimonial campaign",
+    "history": "Grant history",
+    "loadingGrants": "Loading…",
+    "noGrants": "No grants for this user.",
+    "revoke": "Revoke",
+    "presetPromo1": "Promo 1 month",
+    "presetTestimonial3": "Testimonial 3 months",
+    "presetTestimonial6": "Testimonial 6 months",
+    "presetTestimonial9": "Testimonial 9 months",
+    "presetComp12": "Comp 12 months",
+    "badgeAdmin": "Admin",
+    "badgeStripe": "Stripe active",
+    "badgeGrant": "Active grant",
+    "badgeCoachOnly": "Coach only",
+    "badgeNone": "No plan",
+    "grantKindRevoked": "revoked",
+    "grantKindExpired": "expired",
+    "errors": {
+      "searchFailed": "User search failed.",
+      "network": "Network error.",
+      "grantsLoad": "Could not load grants.",
+      "createFailed": "Could not create grant.",
+      "revokeFailed": "Could not revoke grant."
+    },
+    "info": {
+      "grantCreated": "Grant created.",
+      "revoked": "Grant revoked."
+    },
+    "revokePrompt": "Revoke reason (optional):",
+    "expiresWithDate": " · expires {date}",
+    "entitlementLabel": {
+      "admin": "Platform admin",
+      "stripe_paid": "Active subscription",
+      "grant_active": "Active complimentary access",
+      "coach_operator": "Approved coach (no athlete plan)",
+      "none": "No active plan"
+    }
+  }
+}

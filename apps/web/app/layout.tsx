@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit, JetBrains_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages, getTranslations } from "next-intl/server";
 import { ClientRootProviders } from "@/app/client-root-providers";
 import { getMetadataBaseUrl, isSiteIndexingDisabled } from "@/lib/site-url";
 import "./globals.css";
@@ -59,21 +61,27 @@ export const viewport: Viewport = {
   colorScheme: "dark",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+  const t = await getTranslations("Common");
+
   return (
-    <html lang="it" className={`${outfit.variable} ${jetbrainsMono.variable}`}>
+    <html lang={locale} className={`${outfit.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen bg-black font-sans text-white antialiased">
         <a
           href="#main-content"
           className="fixed left-4 top-0 z-[300] -translate-y-full rounded-b-lg border border-white/20 bg-purple-950/95 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-purple-900/40 transition focus:translate-y-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-pink-400"
         >
-          Salta al contenuto
+          {t("skipToContent")}
         </a>
-        <ClientRootProviders>{children}</ClientRootProviders>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <ClientRootProviders>{children}</ClientRootProviders>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

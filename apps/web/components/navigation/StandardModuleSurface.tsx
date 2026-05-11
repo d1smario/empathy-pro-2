@@ -15,6 +15,7 @@ import { SettingsBillingDiagnostics } from "@/components/settings/SettingsBillin
 import { SettingsBuildPhasesCard } from "@/components/settings/SettingsBuildPhasesCard";
 import { SettingsDataSourcePreference } from "@/components/settings/SettingsDataSourcePreference";
 import { SettingsDeviceIngestPolicy } from "@/components/settings/SettingsDeviceIngestPolicy";
+import { SettingsLocalePreference } from "@/components/settings/SettingsLocalePreference";
 import { SettingsIntegrationsDiagnostics } from "@/components/settings/SettingsIntegrationsDiagnostics";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
@@ -230,6 +231,7 @@ export function StandardModuleSurface({ module }: { module: ProductModuleId }) {
             icon={Settings2}
           >
             <div className="flex flex-col gap-10">
+              <SettingsLocalePreference />
               <SettingsDataSourcePreference />
               <SettingsDeviceIngestPolicy />
             </div>

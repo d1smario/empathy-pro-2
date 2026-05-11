@@ -1,0 +1,102 @@
+{
+  "Common": {
+    "skipToContent": "Salta al contenuto"
+  },
+  "SettingsLocale": {
+    "title": "Lingua interfaccia",
+    "subtitle": "Solo testi di navigazione e pannelli (chrome). Motori, contratti API e nomi tecnici restano invariati.",
+    "label": "Lingua",
+    "unitsLabel": "Unità di misura",
+    "metric": "Metrico (km, kg, °C)",
+    "imperial": "Imperiale (mi, lb, °F)",
+    "saving": "Salvataggio…",
+    "saved": "Preferenze salvate.",
+    "loadError": "Impossibile caricare le preferenze.",
+    "saveError": "Salvataggio non riuscito."
+  },
+  "Admin": {
+    "deniedTitle": "Accesso negato",
+    "deniedBody": "Questa console è riservata agli amministratori piattaforma. Contatta il supporto se serve accesso operativo.",
+    "backDashboard": "Torna alla dashboard",
+    "checking": "Verifica permessi…",
+    "eyebrow": "Piattaforma",
+    "title": "Console amministrazione",
+    "intro": "Abilitazione coach e monitoraggio base. Accesso:",
+    "dashboard": "Dashboard",
+    "coachesHeading": "Richieste coach",
+    "coachesSub": "Approva, metti in attesa o sospendi. In coda prima le richieste in attesa ({count}).",
+    "reloadList": "Ricarica elenco",
+    "coachNoteLead": "Nota:",
+    "coachNoteBody": "compaiono solo gli account registrati come coach. Chi usa ancora l'account atleta non è in lista: deve uscire e rientrare da accesso scegliendo «Coach».",
+    "thEmail": "Email",
+    "thStatus": "Stato",
+    "thActions": "Azioni",
+    "emptyCoaches": "Nessun coach in elenco. Se ti aspettavi un nome, verifica che abbia effettivamente l'account coach (accesso con opzione Coach), non solo la pagina Atleti aperta come atleta.",
+    "statusActive": "Attivo",
+    "statusSuspended": "Sospeso",
+    "statusPending": "In attesa",
+    "approve": "Approva",
+    "pending": "In attesa",
+    "suspend": "Sospendi",
+    "comingHeading": "In arrivo",
+    "comingBody": "Audit dettagliato azioni admin, dashboard utilizzo, gestione piani Stripe (price/coupon) e self-serve downgrade. L'enforcement server-side dell'accesso (paywall) viene attivato in fase separata.",
+    "errors": {
+      "coachList": "Lettura coach non riuscita.",
+      "updateFailed": "Aggiornamento non riuscito.",
+      "network": "Errore di rete."
+    }
+  },
+  "AdminGrants": {
+    "title": "Accessi gratuiti (testimonial / promo / comp)",
+    "intro": "Cerca un utente per email e concedi un accesso gratuito a tempo. I coach approvati hanno già accesso alla console coach (gestione roster), ma per usare la piattaforma come atleta sul proprio profilo serve un piano attivo o un grant qui sotto.",
+    "emailLabel": "Email utente",
+    "emailPlaceholder": "cerca per email…",
+    "search": "Cerca",
+    "searching": "Cerco…",
+    "thRole": "Ruolo",
+    "thAccess": "Stato accesso",
+    "thExpires": "Scade",
+    "thManage": "Azioni",
+    "manage": "Gestisci",
+    "selected": "Selezionato",
+    "selectedUser": "Utente selezionato",
+    "noteLabel": "Nota (opzionale, visibile in audit)",
+    "notePlaceholder": "es. Testimonial campagna autunno",
+    "history": "Storico grants",
+    "loadingGrants": "Carico…",
+    "noGrants": "Nessun grant per questo utente.",
+    "revoke": "Revoca",
+    "presetPromo1": "Promo 1 mese",
+    "presetTestimonial3": "Testimonial 3 mesi",
+    "presetTestimonial6": "Testimonial 6 mesi",
+    "presetTestimonial9": "Testimonial 9 mesi",
+    "presetComp12": "Comp 12 mesi",
+    "badgeAdmin": "Admin",
+    "badgeStripe": "Stripe attivo",
+    "badgeGrant": "Grant attivo",
+    "badgeCoachOnly": "Solo coach",
+    "badgeNone": "Nessun piano",
+    "grantKindRevoked": "revocato",
+    "grantKindExpired": "scaduto",
+    "errors": {
+      "searchFailed": "Ricerca utente fallita.",
+      "network": "Errore di rete.",
+      "grantsLoad": "Lettura grants fallita.",
+      "createFailed": "Creazione grant fallita.",
+      "revokeFailed": "Revoca fallita."
+    },
+    "info": {
+      "grantCreated": "Grant concesso.",
+      "revoked": "Grant revocato."
+    },
+    "revokePrompt": "Motivo revoca (opzionale):",
+    "expiresWithDate": " · scade {date}",
+    "entitlementLabel": {
+      "admin": "Platform admin",
+      "stripe_paid": "Abbonamento attivo",
+      "grant_active": "Accesso gratuito attivo",
+      "coach_operator": "Coach approvato (senza piano atleta)",
+      "none": "Nessun piano attivo"
+    }
+  }
+}

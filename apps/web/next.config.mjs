@@ -4,8 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import withPWAInit from "@ducanh2912/next-pwa";
+import createNextIntlPlugin from "next-intl/plugin";
 
 const require = createRequire(import.meta.url);
+
+const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -145,4 +148,4 @@ const withPWA = withPWAInit({
   },
 });
 
-export default withPWA(nextConfig);
+export default withPWA(withNextIntl(nextConfig));
