@@ -273,7 +273,9 @@ function SessionDetailCard({
               {routeBundle.points.length === 2 &&
               routeBundle.points[0]!.lat === routeBundle.points[1]!.lat &&
               routeBundle.points[0]!.lon === routeBundle.points[1]!.lon
-                ? " · solo punto di partenza (Activity Details non ancora ricevuto)"
+                ? vm.parserEngine === "garmin_wellness_api_summary"
+                  ? " · solo punto di partenza (Activity Details Garmin non ancora ricevuto)"
+                  : " · solo un punto GPS — nessun tracciato interpolato"
                 : ""}
             </span>
           </div>

@@ -60,6 +60,22 @@ function collectActivityRecords(node: unknown, sink: Record<string, unknown>[]):
   }
 }
 
+/**
+ * Se il summary espone già medie canoniche (anche senza `samples[]`), la copertura qualità
+ * non deve restare a zero: altrimenti l’UI segnala “tutto mancante” pur avendo FC/distanza ok.
+ */
+function bumpChannelCoverageFromGarminCanonical(
+  cov: Record<string, number>,
+  canonical: Record<string, number | null>,
+): void {
+  if (canonical.hr_avg_bpm != null) cov.hr = Math.max(cov.hr, 100);
+  if (canonical.power_avg_w != null) cov.power = Math.max(cov.power, 100);
+  if (canonical.speed_avg_kmh != null) cov.speed = Math.max(cov.speed, 100);
+  if (canonical.cadence_avg_rpm != null) cov.cadence = Math.max(cov.cadence, 100);
+  if (canonical.elevation_gain_m != null) cov.altitude = Math.max(cov.altitude, 100);
+  if (canonical.temperature_avg_c != null) cov.temperature = Math.max(cov.temperature, 100);
+}
+
 /** Copertura canali da summary Garmin (nessuno stream intero: spesso parziale vs file). */
 function garminActivityChannelCoverage(r: Record<string, unknown>): Record<string, number> {
   const hr =
@@ -390,7 +406,9 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
 
     const hasPersistableSeries = Object.keys(samplesSeries).length > 0;
 
+    const canonical = buildGarminCanonicalSummary(r);
     const channelCoverage = garminActivityChannelCoverage(r);
+    bumpChannelCoverageFromGarminCanonical(channelCoverage, canonical);
     if (hasSamples) {
       if (samplesSeries.power_series_w) channelCoverage.power = 100;
       if (samplesSeries.hr_series_bpm) channelCoverage.hr = 100;
@@ -400,7 +418,6 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       if (samplesSeries.temperature_series_c) channelCoverage.temperature = 100;
     }
     const quality = buildExecutedTrainingImportQuality({ channelCoverage });
-    const canonical = buildGarminCanonicalSummary(r);
 
     const traceSummary = {
       parser_engine: hasSamples

@@ -52,6 +52,8 @@ export type SessionDetailViewModel = {
   sport: string | null;
   sportGlyph: SportGlyphId | null;
   sourceLabel: string;
+  /** Es. `garmin_wellness_api_summary` vs `gpx_native_parser` — per copy mappa / provenienza dati. */
+  parserEngine: string | null;
   fileName: string | null;
   importQualityNote: string | null;
   kpi: SessionKpiTile[];
@@ -134,9 +136,21 @@ function provenanceLabel(source: string | null | undefined, fileName: string | n
   return source ?? "Sconosciuta";
 }
 
+function pickImportQualityStatus(trace: Record<string, unknown> | null): string | null {
+  if (!trace) return null;
+  const top = pickText(trace, ["import_quality_status", "fit_quality_status"]);
+  if (top) return top;
+  const iq = trace.import_quality;
+  if (iq && typeof iq === "object" && !Array.isArray(iq)) {
+    const st = (iq as Record<string, unknown>).quality_status;
+    if (typeof st === "string" && st.trim()) return st.trim();
+  }
+  return null;
+}
+
 function importQualityNote(trace: Record<string, unknown> | null): string | null {
   if (!trace) return null;
-  const status = pickText(trace, ["import_quality_status", "fit_quality_status"]);
+  const status = pickImportQualityStatus(trace);
   if (!status) return null;
   if (status === "OK") return null;
   if (status === "SPARSE") return "Campionamento sparso (smart recording).";
@@ -351,6 +365,7 @@ export function buildSessionDetailVM(workout: ExecutedWorkout): SessionDetailVie
 
   const fileName = pickText(trace, ["imported_file_name"]);
   const sourceLabel = provenanceLabel(workout.source, fileName);
+  const parserEngine = pickText(trace, ["parser_engine"]);
   const note = importQualityNote(trace);
 
   const hasAnySignal =
@@ -365,6 +380,7 @@ export function buildSessionDetailVM(workout: ExecutedWorkout): SessionDetailVie
     sport,
     sportGlyph: resolveSportGlyph(sport),
     sourceLabel,
+    parserEngine,
     fileName,
     importQualityNote: note,
     kpi,
