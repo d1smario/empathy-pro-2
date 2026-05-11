@@ -5,13 +5,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BookOpen, CalendarRange, GitBranch, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticBiaLiteratureSummaryV1,
-  BioenergeticCurveDirectionHintsResponseV1,
-  BioenergeticCurveDirectionSegmentV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
-  BioenergeticMonitoringChannel24,
   BioenergeticPathwayImpact,
-  BioenergeticPredictorCurvesResponseV1,
   BioenergeticTimelineEvent,
   BioenergeticsDayViewModel,
   BioenergeticsTimeSeriesStreamResponseV1,
@@ -114,31 +110,8 @@ export default function BioenergeticsPageView() {
   const [windowStreamError, setWindowStreamError] = useState<string | null>(null);
   const [windowLoading, setWindowLoading] = useState(false);
   const [windowError, setWindowError] = useState<string | null>(null);
-  const [curveDirectionHints, setCurveDirectionHints] = useState<BioenergeticCurveDirectionSegmentV1[] | null>(null);
-  const [curveHintsSummary, setCurveHintsSummary] = useState<string | null>(null);
-  const [curveHintsNote, setCurveHintsNote] = useState<string | null>(null);
-  const [curveHintsLoading, setCurveHintsLoading] = useState(false);
-  const [curveHintsError, setCurveHintsError] = useState<string | null>(null);
-  const [predictorChannels, setPredictorChannels] = useState<BioenergeticMonitoringChannel24[] | null>(null);
-  const [predictorDisclaimer, setPredictorDisclaimer] = useState<string | null>(null);
-  const [predictorNote, setPredictorNote] = useState<string | null>(null);
-  const [predictorLoading, setPredictorLoading] = useState(false);
-  const [predictorError, setPredictorError] = useState<string | null>(null);
-  const [predictorDemoLocal, setPredictorDemoLocal] = useState(false);
   const seededFromContext = useRef(false);
   const genBodyRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    setCurveDirectionHints(null);
-    setCurveHintsSummary(null);
-    setCurveHintsNote(null);
-    setCurveHintsError(null);
-    setPredictorChannels(null);
-    setPredictorDisclaimer(null);
-    setPredictorNote(null);
-    setPredictorError(null);
-    setPredictorDemoLocal(false);
-  }, [athleteId, date]);
 
   useEffect(() => {
     seededFromContext.current = false;
@@ -252,107 +225,6 @@ export default function BioenergeticsPageView() {
     [setDateAndPersist],
   );
 
-  const fetchCurveDirectionHints = useCallback(async () => {
-    if (!athleteId) return;
-    setCurveHintsLoading(true);
-    setCurveHintsError(null);
-    try {
-      const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch("/api/bioenergetics/curve-direction-hints", {
-        method: "POST",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers,
-        body: JSON.stringify({ athleteId, date }),
-      });
-      const j = (await res.json()) as BioenergeticCurveDirectionHintsResponseV1 & { error?: string };
-      if (!("hintsContractVersion" in j) || j.hintsContractVersion !== 1) {
-        setCurveDirectionHints(null);
-        setCurveHintsSummary(null);
-        setCurveHintsNote(null);
-        setCurveHintsError(j.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const segments = Array.isArray(j.segments) ? j.segments : [];
-      setCurveDirectionHints(segments);
-      const rawSum = typeof j.summaryIt === "string" ? j.summaryIt.trim() : "";
-      setCurveHintsSummary(rawSum && rawSum !== "—" ? rawSum : null);
-      setCurveHintsNote(j.noteIt ?? null);
-      if (j.skippedReason === "no_openai" || j.skippedReason === "assemble_failed") {
-        setCurveHintsError(j.noteIt ?? j.skippedReason);
-      } else if (!segments.length && (j.noteIt || j.skippedReason)) {
-        setCurveHintsError(j.noteIt ?? String(j.skippedReason));
-      } else {
-        setCurveHintsError(null);
-      }
-    } catch {
-      setCurveDirectionHints(null);
-      setCurveHintsSummary(null);
-      setCurveHintsNote(null);
-      setCurveHintsError("Errore di rete durante l’analisi AI.");
-    } finally {
-      setCurveHintsLoading(false);
-    }
-  }, [athleteId, date]);
-
-  const fetchPredictorCurves = useCallback(async () => {
-    if (!athleteId) return;
-    setPredictorLoading(true);
-    setPredictorError(null);
-    try {
-      const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch("/api/bioenergetics/predictor-curves", {
-        method: "POST",
-        cache: "no-store",
-        credentials: "same-origin",
-        headers,
-        body: JSON.stringify({ athleteId, date }),
-      });
-      const j = (await res.json()) as BioenergeticPredictorCurvesResponseV1 & { error?: string };
-      if (!("predictorContractVersion" in j) || j.predictorContractVersion !== 1) {
-        setPredictorChannels(null);
-        setPredictorDisclaimer(null);
-        setPredictorNote(null);
-        setPredictorDemoLocal(false);
-        setPredictorError(j.error ?? `HTTP ${res.status}`);
-        return;
-      }
-      const chans = Array.isArray(j.channels) ? j.channels : [];
-      const rawDisc = typeof j.disclaimerIt === "string" ? j.disclaimerIt.trim() : "";
-      setPredictorDisclaimer(rawDisc && rawDisc !== "—" ? rawDisc : null);
-      setPredictorNote(j.noteIt ?? null);
-      if (!chans.length) {
-        setPredictorChannels(null);
-        setPredictorDemoLocal(false);
-        const skipMsg =
-          j.noteIt?.trim() ||
-          (rawDisc && rawDisc !== "—" ? rawDisc : "") ||
-          (typeof j.skippedReason === "string" ? j.skippedReason : "") ||
-          "Nessuna curva generata.";
-        setPredictorError(skipMsg);
-        if (j.skippedReason === "no_openai") {
-          setPredictorDisclaimer(null);
-        }
-        return;
-      }
-      setPredictorChannels(chans);
-      setPredictorDemoLocal(j.skippedReason === "predictor_demo_local");
-      setPredictorError(null);
-      setCurveDirectionHints(null);
-      setCurveHintsSummary(null);
-      setCurveHintsNote(null);
-      setCurveHintsError(null);
-    } catch {
-      setPredictorChannels(null);
-      setPredictorDisclaimer(null);
-      setPredictorNote(null);
-      setPredictorDemoLocal(false);
-      setPredictorError("Errore di rete durante il predittore AI.");
-    } finally {
-      setPredictorLoading(false);
-    }
-  }, [athleteId, date]);
-
   useEffect(() => {
     if (athleteLoading) return;
     if (!athleteId) {
@@ -447,20 +319,6 @@ export default function BioenergeticsPageView() {
     if (!vm?.timeline?.length) return [];
     return [...vm.timeline].filter((e) => TIMELINE_MODEL_TYPES.has(e.type)).sort((a, b) => a.ts.localeCompare(b.ts));
   }, [vm?.timeline]);
-
-  const monitoringForStrip = useMemo(() => {
-    if (!vm?.continuousMonitoring) return null;
-    if (!predictorChannels?.length) return vm.continuousMonitoring;
-    const pmap = new Map(predictorChannels.map((c) => [c.id, c]));
-    return {
-      ...vm.continuousMonitoring,
-      channels: vm.continuousMonitoring.channels.map((ch) => {
-        const p = pmap.get(ch.id);
-        if (!p) return ch;
-        return { ...ch, ...p };
-      }),
-    };
-  }, [vm?.continuousMonitoring, predictorChannels]);
 
   const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
   const evidenceLinkCount = resolvedEvidenceLinks.length;
@@ -659,7 +517,7 @@ export default function BioenergeticsPageView() {
               icon={LineChart}
             >
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
-              {monitoringForStrip?.channels?.length ? (
+              {vm.continuousMonitoring?.channels?.length ? (
                 <div className="mt-6 border-t border-white/10 pt-4">
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fuchsia-200/85">
                     Striscia monitoraggio continuo (24 h)
@@ -668,15 +526,6 @@ export default function BioenergeticsPageView() {
                     Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5 minuti,
                     deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono con ciò che
                     ti aspetti, verifica timestamp diario e calendario (non il modello che &quot;indovina&quot; i pasti).
-                    {predictorChannels?.length ? (
-                      <>
-                        {" "}
-                        <span className="text-fuchsia-200/90">
-                          Alcune strisce possono essere in modalità predittore AI (andamento illustrativo, non valore
-                          vero).
-                        </span>
-                      </>
-                    ) : null}
                   </p>
                   {timelineModelStimuli.length ? (
                     <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
@@ -731,131 +580,7 @@ export default function BioenergeticsPageView() {
                       sonno e default — aggiungi voci in Diario o sessioni in Calendario con la data corretta.
                     </p>
                   ) : null}
-                  <div className="mb-4 flex flex-wrap items-start gap-3">
-                    <Pro2Button
-                      type="button"
-                      variant="secondary"
-                      className="!text-xs shrink-0"
-                      disabled={!athleteId || athleteLoading || predictorLoading || curveHintsLoading}
-                      onClick={() => void fetchPredictorCurves()}
-                    >
-                      {predictorLoading ? "Predittore AI…" : "Curve predittore (AI)"}
-                    </Pro2Button>
-                    {predictorChannels?.length ? (
-                      <Pro2Button
-                        type="button"
-                        variant="ghost"
-                        className="!text-xs shrink-0"
-                        onClick={() => {
-                          setPredictorChannels(null);
-                          setPredictorDisclaimer(null);
-                          setPredictorNote(null);
-                          setPredictorError(null);
-                          setPredictorDemoLocal(false);
-                        }}
-                      >
-                        Ripristina motore
-                      </Pro2Button>
-                    ) : null}
-                    <p className="min-w-[12rem] flex-1 text-[0.65rem] leading-relaxed text-gray-500">
-                      Con <code className="text-gray-400">OPENAI_API_KEY</code> il caricamento giornata applica già OpenAI sulla striscia (dopo raccolta dati). Qui rigenera le curve partendo dal sim deterministico
-                      (stesso endpoint POST) per un refresh interpretativo. Non sostituisce misure dense CGM né lab a valore unico.
-                    </p>
-                  </div>
-                  {predictorError ? (
-                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/95">
-                      {predictorError}
-                    </p>
-                  ) : null}
-                  {predictorDemoLocal && predictorChannels?.length ? (
-                    <p className="mb-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-[0.65rem] text-cyan-100/95">
-                      Stai vedendo la <strong className="text-white">demo locale</strong> (dati sintetici fissi, nessuna chiamata OpenAI).
-                    </p>
-                  ) : null}
-                  {predictorDisclaimer && (predictorChannels?.length || predictorError) ? (
-                    <p className="mb-3 rounded-lg border border-fuchsia-500/35 bg-fuchsia-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-fuchsia-50/95">
-                      {predictorDisclaimer}
-                    </p>
-                  ) : null}
-                  {predictorNote && predictorChannels?.length ? (
-                    <p className="mb-3 text-[0.65rem] leading-snug text-gray-500">{predictorNote}</p>
-                  ) : null}
-                  <div className="mb-4 flex flex-wrap items-start gap-3">
-                    <Pro2Button
-                      type="button"
-                      variant="secondary"
-                      className="!text-xs shrink-0"
-                      disabled={!athleteId || athleteLoading || curveHintsLoading || predictorLoading}
-                      onClick={() => void fetchCurveDirectionHints()}
-                    >
-                      {curveHintsLoading ? "Analisi AI…" : "Analisi AI: dove sale / scende (fasce)"}
-                    </Pro2Button>
-                    {curveDirectionHints?.length ? (
-                      <Pro2Button
-                        type="button"
-                        variant="ghost"
-                        className="!text-xs shrink-0"
-                        onClick={() => {
-                          setCurveDirectionHints(null);
-                          setCurveHintsSummary(null);
-                          setCurveHintsNote(null);
-                          setCurveHintsError(null);
-                        }}
-                      >
-                        Rimuovi fasce
-                      </Pro2Button>
-                    ) : null}
-                    <p className="min-w-[12rem] flex-1 text-[0.65rem] leading-relaxed text-gray-500">
-                      Legge la stessa giornata del motore (timeline, kernel, serie 5 min sottocampionate) e restituisce
-                      solo <strong className="text-gray-300">direzioni attese</strong> (verde salita, ciano discesa,
-                      grigio plateau). I numeri sulla linea restano deterministici. Richiede{" "}
-                      <code className="text-gray-400">OPENAI_API_KEY</code>.
-                    </p>
-                  </div>
-                  {curveHintsError ? (
-                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/95">
-                      {curveHintsError}
-                    </p>
-                  ) : null}
-                  {curveHintsSummary ? (
-                    <div className="mb-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] px-3 py-2">
-                      <p className="text-[0.65rem] font-medium uppercase tracking-wide text-violet-200/90">
-                        Sintesi interpretazione
-                      </p>
-                      <p className="mt-1 text-sm leading-relaxed text-gray-200">{curveHintsSummary}</p>
-                      {curveHintsNote ? (
-                        <p className="mt-2 text-[0.65rem] leading-snug text-gray-500">{curveHintsNote}</p>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {curveDirectionHints?.length ? (
-                    <details className="mb-4 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
-                      <summary className="cursor-pointer text-[0.7rem] text-gray-300">
-                        Dettaglio segmenti ({curveDirectionHints.length})
-                      </summary>
-                      <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto text-[0.68rem] text-gray-400">
-                        {curveDirectionHints.map((s) => (
-                          <li key={`${s.channel}-${s.startObservedAt}-${s.endObservedAt}`} className="border-b border-white/5 pb-2 last:border-0">
-                            <span className="font-mono text-fuchsia-200/90">{s.channel}</span>{" "}
-                            <span className="text-gray-500">
-                              {s.trend === "rise" ? "↑" : s.trend === "fall" ? "↓" : "→"}
-                            </span>{" "}
-                            <span className="text-gray-500">
-                              {s.startObservedAt.slice(11, 16)}–{s.endObservedAt.slice(11, 16)}
-                            </span>
-                            <p className="mt-0.5 text-gray-300">{s.rationaleIt}</p>
-                            {s.drivers.length ? (
-                              <p className="mt-0.5 text-gray-500">{s.drivers.join(" · ")}</p>
-                            ) : null}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  ) : null}
-                  <BioenergeticsContinuousMonitoringGrid
-                    monitoring={monitoringForStrip}
-                    curveDirectionHints={curveDirectionHints}
-                  />
+                  <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
                 </div>
               ) : null}
               <div className="mt-6 border-t border-white/10 pt-4">

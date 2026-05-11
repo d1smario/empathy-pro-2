@@ -68,8 +68,7 @@ function monitoringPlaneForGluLac(
 
 /**
  * Traccia nativa per grafico continuo: stream CGM reale **oppure** modello diurno sub-orario deterministico
- * (`sim_diurnal_v1_*m`). Dopo `buildBioenergeticDayPresentation`, l'assembler può sostituire le serie modello con
- * OpenAI (`applyOpenAiContinuousMonitoringStrip`) senza duplicare ingest o query memoria.
+ * (`sim_diurnal_v1_*m`). Solo motore deterministico + presentazione; nessuna curva LLM come `source` di questi punti.
  */
 function monitoringStreamTraceFromPoints(
   provenance: BioenergeticChannelProvenance,

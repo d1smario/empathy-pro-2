@@ -1,10 +1,9 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type {
   BioenergeticChannelCurveResolutionV1,
   BioenergeticContinuousMonitoringDay,
-  BioenergeticCurveDirectionSegmentV1,
   BioenergeticMetricTileCategory,
   BioenergeticMonitoringChannel24,
   BioenergeticMonitoringDataPlane,
@@ -23,14 +22,12 @@ const CATEGORY_ORDER: BioenergeticMetricTileCategory[] = [
 function planeLabel(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "Stream";
   if (plane === "sparse_lab_hold") return "Lab tenuto";
-  if (plane === "model_predictor_ai") return "Predittore AI";
   return "Modello";
 }
 
 function planeBadgeClass(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "border-emerald-400/40 text-emerald-200/90";
   if (plane === "sparse_lab_hold") return "border-sky-400/40 text-sky-200/90";
-  if (plane === "model_predictor_ai") return "border-fuchsia-400/45 text-fuchsia-100/90";
   return "border-amber-400/40 text-amber-200/90";
 }
 
@@ -56,8 +53,6 @@ type StreamChartRow = {
 
 type Props = {
   monitoring: BioenergeticContinuousMonitoringDay;
-  /** Interpretazione AI: fasce temporali salita/discesa/piatta (non sostituisce i valori del motore). */
-  curveDirectionHints?: BioenergeticCurveDirectionSegmentV1[] | null;
 };
 
 const CHART_H = 92;
@@ -118,19 +113,7 @@ function formatStreamAxisTick(ms: number): string {
   return new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 }
 
-function directionHintFill(trend: BioenergeticCurveDirectionSegmentV1["trend"]): string {
-  if (trend === "rise") return "rgba(52, 211, 153, 0.32)";
-  if (trend === "fall") return "rgba(56, 189, 248, 0.3)";
-  return "rgba(148, 163, 184, 0.22)";
-}
-
-function directionHintStroke(trend: BioenergeticCurveDirectionSegmentV1["trend"]): string {
-  if (trend === "rise") return "rgba(52, 211, 153, 0.45)";
-  if (trend === "fall") return "rgba(56, 189, 248, 0.42)";
-  return "rgba(148, 163, 184, 0.35)";
-}
-
-export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirectionHints }: Props) {
+export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
   const sorted = [...monitoring.channels].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
   );
@@ -144,9 +127,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
           streamTrace &&
           (ch.dataPlane === "measured_stream"
             ? streamTrace.length >= 4
-            : ch.dataPlane === "model_predictor_ai" && streamTrace.length >= 72
-              ? true
-              : Boolean(isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
+            : Boolean(isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
         const streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
 
         const rows = ch.hourly.map((v, hour) => ({
@@ -159,10 +140,6 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
         if (!hasData) return null;
 
         const yDomain = streamRows?.length ? yDomainFromHourly(streamRows.map((r) => r.v)) : yDomainFromHourly(ch.hourly);
-        const hintsForChannel =
-          streamRows?.length && curveDirectionHints?.length
-            ? curveDirectionHints.filter((h) => h.channel === ch.id)
-            : [];
 
         return (
           <div
@@ -185,7 +162,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
                 ) : null}
               </div>
             </div>
-            {ch.curveResolution && ch.dataPlane !== "model_predictor_ai" ? (
+            {ch.curveResolution ? (
               <p className="mb-2 text-[0.58rem] leading-snug text-gray-400">
                 {fusionSummary(ch.curveResolution)}
                 <span className="text-gray-500"> · </span>
@@ -196,11 +173,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
               {streamRows?.length
                 ? ch.dataPlane === "measured_stream"
                   ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
-                  : ch.dataPlane === "model_predictor_ai"
-                    ? "Asse: predittore AI (passo 5 min da serie 15 min) — andamento illustrativo da dati giornata, non valore clinico."
-                    : hintsForChannel.length
-                      ? "Asse: tempo reale del modello (5 min). Fasce colorate = analisi AI direzione (salita verde, discesa ciano, grigio plateau) — i numeri restano dal motore."
-                      : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
+                  : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
@@ -246,25 +219,6 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
                         return "Orario";
                       }}
                     />
-                    {hintsForChannel.map((h, hi) => {
-                      const x1 = Date.parse(h.startObservedAt);
-                      const x2 = Date.parse(h.endObservedAt);
-                      if (!Number.isFinite(x1) || !Number.isFinite(x2) || x2 <= x1) return null;
-                      return (
-                        <ReferenceArea
-                          key={`hint-${ch.id}-${hi}-${h.startObservedAt}`}
-                          x1={x1}
-                          x2={x2}
-                          y1={yDomain[0]}
-                          y2={yDomain[1]}
-                          fill={directionHintFill(h.trend)}
-                          stroke={directionHintStroke(h.trend)}
-                          strokeWidth={1}
-                          strokeOpacity={0.55}
-                          ifOverflow="visible"
-                        />
-                      );
-                    })}
                     <Line
                       type="linear"
                       dataKey="v"
