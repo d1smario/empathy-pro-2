@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { AccessMagicLinkForm } from "@/components/access/AccessMagicLinkForm";
 import { AccessPasswordForm } from "@/components/access/AccessPasswordForm";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
@@ -16,6 +17,7 @@ type Props = {
  * Ruolo app (atleta vs coach) applicato a bootstrap profilo dopo autenticazione.
  */
 export function AccessAuthPanel({ redirectAfterLogin }: Props) {
+  const t = useTranslations("Access");
   const [mode, setMode] = useState<Mode>("password");
   const [appRole, setAppRole] = useState<PendingAppRole>("private");
 
@@ -23,7 +25,7 @@ export function AccessAuthPanel({ redirectAfterLogin }: Props) {
     <div className="flex w-full max-w-sm flex-col gap-4">
       <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2.5">
         <p className="mb-2 text-center font-mono text-[0.55rem] uppercase tracking-[0.18em] text-gray-500">
-          Tipo di account
+          {t("accountTypeTitle")}
         </p>
         <div className="flex rounded-lg border border-white/10 bg-black/40 p-1">
           <button
@@ -33,7 +35,7 @@ export function AccessAuthPanel({ redirectAfterLogin }: Props) {
               appRole === "private" ? "bg-purple-600/40 text-white" : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            Atleta
+            {t("roleAthlete")}
           </button>
           <button
             type="button"
@@ -42,13 +44,11 @@ export function AccessAuthPanel({ redirectAfterLogin }: Props) {
               appRole === "coach" ? "bg-purple-600/40 text-white" : "text-gray-500 hover:text-gray-300"
             }`}
           >
-            Coach
+            {t("roleCoach")}
           </button>
         </div>
         <p className="mt-2 text-center text-[0.65rem] leading-snug text-gray-500">
-          {appRole === "coach"
-            ? "Dopo l’accesso potrai generare link invito atleti da Impostazioni o dalla pagina Atleti."
-            : "Profilo personale e dati atleta collegati al tuo account."}
+          {appRole === "coach" ? t("hintCoach") : t("hintAthlete")}
         </p>
       </div>
       <div className="flex rounded-xl border border-white/10 bg-black/40 p-1">
@@ -59,7 +59,7 @@ export function AccessAuthPanel({ redirectAfterLogin }: Props) {
             mode === "password" ? "bg-purple-600/40 text-white" : "text-gray-500 hover:text-gray-300"
           }`}
         >
-          Email e password
+          {t("modePassword")}
         </button>
         <button
           type="button"
@@ -68,7 +68,7 @@ export function AccessAuthPanel({ redirectAfterLogin }: Props) {
             mode === "otp" ? "bg-purple-600/40 text-white" : "text-gray-500 hover:text-gray-300"
           }`}
         >
-          Link email
+          {t("modeMagicLink")}
         </button>
       </div>
       {mode === "password" ? (

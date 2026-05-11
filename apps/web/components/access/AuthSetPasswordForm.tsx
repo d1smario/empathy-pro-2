@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 
@@ -11,6 +12,7 @@ import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
  */
 export function AuthSetPasswordForm() {
   const router = useRouter();
+  const t = useTranslations("AccessForm");
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -21,31 +23,31 @@ export function AuthSetPasswordForm() {
     const supabase = createEmpathyBrowserSupabase();
     if (!supabase) {
       setSessionOk(false);
-      setMsg("Supabase non configurato.");
+      setMsg(t("msgSupabaseMissing"));
       return;
     }
     void supabase.auth.getSession().then(({ data: { session } }) => {
       setSessionOk(Boolean(session));
       if (!session) {
-        setMsg("Sessione non valida o link scaduto. Richiedi un nuovo link da Access → Password dimenticata.");
+        setMsg(t("msgSessionInvalid"));
       }
     });
-  }, []);
+  }, [t]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     const supabase = createEmpathyBrowserSupabase();
     if (!supabase) {
-      setMsg("Supabase non configurato.");
+      setMsg(t("msgSupabaseMissing"));
       return;
     }
     if (password.length < 8) {
-      setMsg("Password minimo 8 caratteri.");
+      setMsg(t("msgPasswordMin8"));
       return;
     }
     if (password !== password2) {
-      setMsg("Le password non coincidono.");
+      setMsg(t("msgPasswordsMismatch"));
       return;
     }
     setBusy(true);
@@ -63,7 +65,7 @@ export function AuthSetPasswordForm() {
       <div className="flex w-full max-w-sm flex-col items-center gap-4 rounded-2xl border border-white/10 bg-black/30 p-6">
         {msg ? <p className="text-center text-sm text-amber-200/90">{msg}</p> : null}
         <Pro2Link href="/access" variant="primary" className="justify-center">
-          Torna ad Access
+          {t("btnBackAccess")}
         </Pro2Link>
       </div>
     );
@@ -71,7 +73,7 @@ export function AuthSetPasswordForm() {
 
   if (sessionOk === null) {
     return (
-      <div className="rounded-2xl border border-white/10 bg-black/30 px-8 py-6 text-sm text-gray-400">Caricamento…</div>
+      <div className="rounded-2xl border border-white/10 bg-black/30 px-8 py-6 text-sm text-gray-400">{t("loadingRecovery")}</div>
     );
   }
 
@@ -79,10 +81,10 @@ export function AuthSetPasswordForm() {
     <form
       onSubmit={(e) => void onSubmit(e)}
       className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-white/10 bg-black/30 p-6 backdrop-blur-md"
-      aria-label="Imposta nuova password"
+      aria-label={t("ariaSetPassword")}
     >
       <label className="text-left">
-        <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Nuova password</span>
+        <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldNewPassword")}</span>
         <input
           type="password"
           autoComplete="new-password"
@@ -93,7 +95,7 @@ export function AuthSetPasswordForm() {
         />
       </label>
       <label className="text-left">
-        <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Ripeti password</span>
+        <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldRepeatPassword")}</span>
         <input
           type="password"
           autoComplete="new-password"
@@ -104,7 +106,7 @@ export function AuthSetPasswordForm() {
         />
       </label>
       <Pro2Button type="submit" disabled={busy} className="w-full justify-center">
-        {busy ? "Salvataggio…" : "Salva password e continua"}
+        {busy ? t("btnSavePasswordBusy") : t("btnSavePassword")}
       </Pro2Button>
       <button
         type="button"
@@ -112,7 +114,7 @@ export function AuthSetPasswordForm() {
         onClick={() => router.push("/access")}
         className="text-center text-xs text-gray-500 hover:text-gray-300"
       >
-        Annulla
+        {t("btnCancel")}
       </button>
       {msg ? (
         <p className="text-center text-xs text-amber-200/90" role="alert">

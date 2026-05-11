@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { AccessAuthPanel } from "@/components/access/AccessAuthPanel";
 import { AccessRedirectIfSession } from "@/components/access/AccessRedirectIfSession";
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
@@ -26,6 +27,7 @@ export default async function AccessPage({
   const err = typeof searchParams?.error === "string" ? searchParams.error : null;
   const nextRaw = typeof searchParams?.next === "string" ? searchParams.next : null;
   const safeNext = safeAppInternalPath(nextRaw, "/dashboard");
+  const t = await getTranslations("Access");
 
   if (getSupabasePublicConfig()) {
     const sb = createSupabaseCookieClient();
@@ -46,7 +48,7 @@ export default async function AccessPage({
         className="flex min-h-screen scroll-mt-0 flex-col items-center justify-center gap-8 px-6 py-16 outline-none"
       >
         <div className="text-center">
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.35em] text-gray-500">Access</p>
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.35em] text-gray-500">{t("eyebrow")}</p>
           <p className="mt-4 text-2xl font-black tracking-[0.12em] text-white sm:text-3xl">EMPATHY</p>
           <h1 className="mt-2 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
             Pro 2.0
@@ -55,24 +57,24 @@ export default async function AccessPage({
         </div>
         {err === "auth" ? (
           <p className="max-w-sm text-center text-sm text-amber-300/90" role="alert">
-            Accesso non completato (link scaduto o non valido). Riprova con un nuovo link.
+            {t("errLinkInvalid")}
           </p>
         ) : null}
         {err === "config" ? (
           <p className="max-w-sm text-center text-sm text-amber-300/90" role="alert">
-            Supabase non configurato sul server.
+            {t("errSupabaseServer")}
           </p>
         ) : null}
         <AccessAuthPanel redirectAfterLogin={safeNext} />
         <div className="flex w-full max-w-xs flex-col gap-3">
           <Pro2Link href={safeNext} variant="primary" className="justify-center">
-            Vai al prodotto
+            {t("goToProduct")}
           </Pro2Link>
           <Pro2Link href="/#piani" variant="secondary" className="justify-center">
-            Piani e abbonamento
+            {t("goToPlans")}
           </Pro2Link>
           <Pro2Link href="/" variant="ghost" className="justify-center">
-            Home
+            {t("goToHome")}
           </Pro2Link>
         </div>
       </main>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
@@ -12,26 +13,30 @@ type Props = {
   appRole: PendingAppRole;
 };
 
-function formatAuthErrorMessage(message: string): string {
+type MsgTone = "info" | "success" | "warning";
+
+type AccessFormTranslator = (key: string) => string;
+
+function formatAuthErrorMessage(t: AccessFormTranslator, message: string): string {
   const m = message.toLowerCase();
   if (m.includes("invalid api key") || m.includes("invalid api")) {
-    return "Chiavi Supabase non valide o assenti nel client: controlla NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY in apps/web/.env.local (nessuno spazio extra), poi riavvia il dev server.";
+    return t("errSupabaseKeysClient");
   }
   if (m.includes("redirect") && (m.includes("not allowed") || m.includes("disallowed") || m.includes("url"))) {
-    return "Redirect non consentito da Supabase: in Dashboard → Authentication → URL aggiungi esattamente questa origine (es. http://192.168.1.109:3020/** e …/auth/callback).";
+    return t("errRedirectNotAllowed");
   }
   if (m.includes("invalid login credentials") || m.includes("invalid credentials")) {
-    return "Email o password non corretti. Se l’account esiste solo con magic link, crea una password da “Password dimenticata?” oppure usa la scheda Link email.";
+    return t("errInvalidCredentials");
   }
   if (m.includes("email not confirmed")) {
-    return "Devi ancora confermare l’email (link da Supabase). In progetto di test puoi disattivare “Confirm email” in Authentication → Providers → Email.";
+    return t("errEmailNotConfirmed");
   }
   if (
     m.includes("already registered") ||
     m.includes("already been registered") ||
     m.includes("user already exists")
   ) {
-    return "Questa email ha già un account (es. da magic link). Non serve “Registrati”: torna ad Accedi oppure usa “Password dimenticata?” per impostare la password.";
+    return t("errAlreadyRegistered");
   }
   return message;
 }
@@ -76,32 +81,38 @@ async function bootstrapProfileAfterSession(appRole: PendingAppRole): Promise<bo
 }
 
 export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
+  const t = useTranslations("AccessForm");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
+  const [msgTone, setMsgTone] = useState<MsgTone>("warning");
   const [busy, setBusy] = useState(false);
   const [showSignup, setShowSignup] = useState(false);
   const [password2, setPassword2] = useState("");
-  const [resetSent, setResetSent] = useState(false);
+
+  function notify(text: string, tone: MsgTone = "warning") {
+    setMsg(text);
+    setMsgTone(tone);
+  }
 
   async function onSignIn(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     const supabase = createEmpathyBrowserSupabase();
     if (!supabase) {
-      setMsg("Supabase non configurato.");
+      notify(t("msgSupabaseMissing"));
       return;
     }
     const em = email.trim();
     if (!em || !password) {
-      setMsg("Inserisci email e password.");
+      notify(t("msgEnterEmailAndPassword"));
       return;
     }
     setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email: em, password });
     if (error) {
       setBusy(false);
-      setMsg(formatAuthErrorMessage(error.message));
+      notify(formatAuthErrorMessage(t, error.message));
       return;
     }
     await bootstrapProfileAfterSession(appRole);
@@ -115,16 +126,16 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     setMsg(null);
     const supabase = createEmpathyBrowserSupabase();
     if (!supabase) {
-      setMsg("Supabase non configurato.");
+      notify(t("msgSupabaseMissing"));
       return;
     }
     const em = email.trim();
     if (!em || !password || password.length < 8) {
-      setMsg("Email e password (min. 8 caratteri).");
+      notify(t("msgEmailPasswordMin8"));
       return;
     }
     if (password !== password2) {
-      setMsg("Le password non coincidono.");
+      notify(t("msgPasswordsMismatch"));
       return;
     }
     setBusy(true);
@@ -139,7 +150,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     });
     setBusy(false);
     if (error) {
-      setMsg(formatAuthErrorMessage(error.message));
+      notify(formatAuthErrorMessage(t, error.message));
       return;
     }
     if (data.session) {
@@ -148,20 +159,19 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
       window.location.assign(postAuthRedirectPath(redirectAfterLogin, appRole));
       return;
     }
-    setMsg("Controlla la posta per confermare l’account (se la conferma email è attiva in Supabase).");
+    notify(t("msgConfirmEmailSent"), "success");
   }
 
   async function onResetPassword() {
     setMsg(null);
-    setResetSent(false);
     const supabase = createEmpathyBrowserSupabase();
     if (!supabase) {
-      setMsg("Supabase non configurato.");
+      notify(t("msgSupabaseMissing"));
       return;
     }
     const em = email.trim();
     if (!em) {
-      setMsg("Inserisci l’email per ricevere il link di reset.");
+      notify(t("msgEnterEmailForReset"));
       return;
     }
     setBusy(true);
@@ -171,19 +181,16 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
       redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/auth/set-password")}`,
     });
     setBusy(false);
-    if (error) setMsg(error.message);
-    else {
-      setResetSent(true);
-      setMsg("Se l’email è registrata, riceverai un link per reimpostare la password.");
-    }
+    if (error) notify(error.message);
+    else notify(t("msgResetSent"), "success");
   }
 
   return (
     <div className="flex w-full max-w-sm flex-col gap-3 rounded-2xl border border-white/10 bg-black/30 p-5 backdrop-blur-md">
       {!showSignup ? (
-        <form onSubmit={onSignIn} className="flex flex-col gap-3" aria-label="Accesso con email e password">
+        <form onSubmit={onSignIn} className="flex flex-col gap-3" aria-label={t("ariaSignIn")}>
           <label className="text-left">
-            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Email</span>
+            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldEmail")}</span>
             <input
               type="email"
               name="email"
@@ -192,11 +199,11 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
               onChange={(e) => setEmail(e.target.value)}
               disabled={busy}
               className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-purple-500/50 focus:outline-none"
-              placeholder="nome@esempio.it"
+              placeholder={t("emailPlaceholder")}
             />
           </label>
           <label className="text-left">
-            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Password</span>
+            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldPassword")}</span>
             <input
               type="password"
               name="password"
@@ -205,11 +212,11 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
               onChange={(e) => setPassword(e.target.value)}
               disabled={busy}
               className="w-full rounded-xl border border-white/15 bg-white/5 px-4 py-2.5 text-sm text-white placeholder:text-gray-600 focus:border-purple-500/50 focus:outline-none"
-              placeholder="••••••••"
+              placeholder={t("passwordPlaceholder")}
             />
           </label>
           <Pro2Button type="submit" disabled={busy} className="w-full justify-center">
-            {busy ? "Accesso…" : "Accedi"}
+            {busy ? t("btnSignInBusy") : t("btnSignIn")}
           </Pro2Button>
           <button
             type="button"
@@ -217,14 +224,14 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
             onClick={() => void onResetPassword()}
             className="text-center text-xs font-medium text-cyan-300/90 underline-offset-2 hover:underline"
           >
-            Password dimenticata?
+            {t("forgotPassword")}
           </button>
         </form>
       ) : (
-        <form onSubmit={onSignUp} className="flex flex-col gap-3" aria-label="Registrazione con email e password">
-          <p className="text-center text-xs text-gray-400">Crea account (stessa email che usi per Empathy).</p>
+        <form onSubmit={onSignUp} className="flex flex-col gap-3" aria-label={t("ariaSignUp")}>
+          <p className="text-center text-xs text-gray-400">{t("signUpIntro")}</p>
           <label className="text-left">
-            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Email</span>
+            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldEmail")}</span>
             <input
               type="email"
               autoComplete="email"
@@ -235,7 +242,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
             />
           </label>
           <label className="text-left">
-            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Password</span>
+            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldPassword")}</span>
             <input
               type="password"
               autoComplete="new-password"
@@ -246,7 +253,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
             />
           </label>
           <label className="text-left">
-            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">Ripeti password</span>
+            <span className="mb-1.5 block font-mono text-[0.6rem] uppercase tracking-[0.2em] text-gray-500">{t("fieldRepeatPassword")}</span>
             <input
               type="password"
               autoComplete="new-password"
@@ -257,7 +264,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
             />
           </label>
           <Pro2Button type="submit" disabled={busy} className="w-full justify-center">
-            {busy ? "Registrazione…" : "Registrati"}
+            {busy ? t("btnSignUpBusy") : t("btnSignUp")}
           </Pro2Button>
         </form>
       )}
@@ -268,16 +275,15 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
         onClick={() => {
           setShowSignup((v) => !v);
           setMsg(null);
-          setResetSent(false);
         }}
         className="text-center text-xs text-gray-500 hover:text-gray-300"
       >
-        {showSignup ? "Ho già un account — torna ad accedi" : "Prima volta? Crea un account con password"}
+        {showSignup ? t("switchToSignIn") : t("switchToSignUp")}
       </button>
 
       {msg ? (
         <p
-          className={`text-center text-xs leading-relaxed ${resetSent || msg.includes("Controlla la posta") ? "text-emerald-300/90" : "text-amber-300/90"}`}
+          className={`text-center text-xs leading-relaxed ${msgTone === "success" ? "text-emerald-300/90" : "text-amber-300/90"}`}
           role="status"
         >
           {msg}
