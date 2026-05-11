@@ -123,6 +123,38 @@ function readAllTagNumbers(xml: string, tag: string): number[] {
   return out;
 }
 
+/**
+ * Valore in estensioni GPX dentro un singolo `<trkpt>…</trkpt>` (namespace variabile:
+ * `gpxtpx:hr`, `ns3:hr`, Polar `gpxdata:heartRate`, ecc.). La scansione globale
+ * `readAllTagNumbers(xml, "hr")` spesso fallisce perché i tag sono annidati.
+ */
+function extractGpxExtensionScalar(inner: string, localNames: string[]): number | null {
+  const tryFullTag = (tagExpr: string) => {
+    const re = new RegExp(`<${tagExpr}\\s*>([^<]+)</${tagExpr}>`, "i");
+    const m = inner.match(re);
+    if (!m) return null;
+    return asNumber(m[1]);
+  };
+
+  for (const name of localNames) {
+    if (name.includes(":")) {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const v = tryFullTag(escaped);
+      if (v != null) return v;
+      continue;
+    }
+    const prefixed = new RegExp(`<([a-zA-Z][a-zA-Z0-9._-]*):${name}\\s*>([^<]+)</\\1:${name}>`, "i");
+    const mp = inner.match(prefixed);
+    if (mp) {
+      const v = asNumber(mp[2]);
+      if (v != null) return v;
+    }
+    const plain = tryFullTag(name);
+    if (plain != null) return plain;
+  }
+  return null;
+}
+
 function average(list: number[]) {
   if (!list.length) return null;
   return list.reduce((s, v) => s + v, 0) / list.length;
@@ -268,7 +300,16 @@ function parseGpx(xml: string): ParsedTrainingFile {
 
   /** `lat` / `lon` in qualsiasi ordine (Garmin e altri exporter variano). Supporta anche `<trkpt ... />`. */
   const trkptBlock = /<trkpt\s+([^>]+?)\s*(?:\/>|>([\s\S]*?)<\/trkpt\s*>)/gi;
-  const pointRows: Array<{ lat: number; lon: number; ele: number | null; ts: number | null }> = [];
+  const pointRows: Array<{
+    lat: number;
+    lon: number;
+    ele: number | null;
+    ts: number | null;
+    hr: number | null;
+    cad: number | null;
+    power: number | null;
+    atemp: number | null;
+  }> = [];
   let tm: RegExpExecArray | null;
   while ((tm = trkptBlock.exec(xml)) !== null) {
     const attrs = tm[1] ?? "";
@@ -280,26 +321,51 @@ function parseGpx(xml: string): ParsedTrainingFile {
     const ts = t ? new Date(t).getTime() : NaN;
     if (lat == null || lon == null) continue;
     if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    pointRows.push({ lat, lon, ele, ts: Number.isFinite(ts) ? ts : null });
+    const hrPt = extractGpxExtensionScalar(inner, [
+      "hr",
+      "heartrate",
+      "HeartRate",
+      "heart_rate",
+      "gpxdata:heartRate",
+    ]);
+    const cadPt = extractGpxExtensionScalar(inner, ["cad", "cadence", "runCadence", "rpm", "gpxdata:cadence"]);
+    const powPt = extractGpxExtensionScalar(inner, ["power", "watts", "Watts", "gpxdata:power"]);
+    const tempPt = extractGpxExtensionScalar(inner, ["atemp", "temperature", "temp", "gpxdata:temp"]);
+    pointRows.push({
+      lat,
+      lon,
+      ele,
+      ts: Number.isFinite(ts) ? ts : null,
+      hr: hrPt,
+      cad: cadPt,
+      power: powPt,
+      atemp: tempPt,
+    });
   }
 
   const points = pointRows.map((r) => [r.lat, r.lon] as const);
   const routeDistanceSeriesKm = cumulativeDistanceKm(pointRows);
   const routeAltitudeSeriesM = fillMissingLinear(pointRows.map((r) => r.ele));
 
-  const hrs = [
-    ...readAllTagNumbers(xml, "gpxtpx:hr"),
-    ...readAllTagNumbers(xml, "hr"),
-  ];
-  const cads = [
-    ...readAllTagNumbers(xml, "gpxtpx:cad"),
-    ...readAllTagNumbers(xml, "cad"),
-  ];
-  const atemps = [
-    ...readAllTagNumbers(xml, "gpxtpx:atemp"),
-    ...readAllTagNumbers(xml, "atemp"),
-  ];
-  const power = readAllTagNumbers(xml, "power");
+  const hrFromPoints = pointRows.map((r) => r.hr).filter((v): v is number => v != null && Number.isFinite(v));
+  const cadFromPoints = pointRows.map((r) => r.cad).filter((v): v is number => v != null && Number.isFinite(v));
+  const powerFromPoints = pointRows.map((r) => r.power).filter((v): v is number => v != null && Number.isFinite(v));
+  const tempFromPoints = pointRows.map((r) => r.atemp).filter((v): v is number => v != null && Number.isFinite(v));
+
+  const hrs =
+    hrFromPoints.length > 0
+      ? hrFromPoints
+      : [...readAllTagNumbers(xml, "gpxtpx:hr"), ...readAllTagNumbers(xml, "hr")];
+  const cads =
+    cadFromPoints.length > 0
+      ? cadFromPoints
+      : [...readAllTagNumbers(xml, "gpxtpx:cad"), ...readAllTagNumbers(xml, "cad")];
+  const atemps =
+    tempFromPoints.length > 0
+      ? tempFromPoints
+      : [...readAllTagNumbers(xml, "gpxtpx:atemp"), ...readAllTagNumbers(xml, "atemp")];
+  const power =
+    powerFromPoints.length > 0 ? powerFromPoints : readAllTagNumbers(xml, "power");
   const powerAvg = average(power);
   const hrAvg = average(hrs);
   const cadenceAvg = average(cads);
@@ -335,6 +401,64 @@ function parseGpx(xml: string): ParsedTrainingFile {
     .filter((v): v is number => v != null && Number.isFinite(v));
   const tss = estimateTss(durationMinutes, powerAvg);
 
+  const hasHrPoints = pointRows.some((r) => r.hr != null && Number.isFinite(r.hr));
+  const hrSeriesFilled = hasHrPoints ? fillMissingLinear(pointRows.map((r) => r.hr)) : [];
+  const hasCadPoints = pointRows.some((r) => r.cad != null && Number.isFinite(r.cad));
+  const cadSeriesFilled = hasCadPoints ? fillMissingLinear(pointRows.map((r) => r.cad)) : [];
+  const hasPowerPoints = pointRows.some((r) => r.power != null && Number.isFinite(r.power));
+  const powerSeriesFilled = hasPowerPoints ? fillMissingLinear(pointRows.map((r) => r.power)) : [];
+  const hasTempPoints = pointRows.some((r) => r.atemp != null && Number.isFinite(r.atemp));
+  const tempSeriesFilled = hasTempPoints ? fillMissingLinear(pointRows.map((r) => r.atemp)) : [];
+
+  const traceSummary: Record<string, unknown> = {
+    source_format: "gpx",
+    parser_engine: "gpx_native_parser",
+    parser_version: "v2",
+    route_points: sampleEvenly(points, 1800).map(([lat, lon]) => ({ lat, lon })),
+    route_distance_series_km: sampleEvenly(routeDistanceSeriesKm, 1200),
+    route_altitude_series_m: sampleEvenly(routeAltitudeSeriesM, 1200),
+    distance_km: distanceKm > 0 ? round(distanceKm, 3) : null,
+    power_avg: powerAvg != null ? round(powerAvg, 1) : null,
+    hr_avg_bpm: hrAvg != null ? round(hrAvg, 1) : null,
+    speed_avg_kmh: speedAvgKmh != null ? round(speedAvgKmh, 2) : null,
+    cadence_avg_rpm: cadenceAvg != null ? round(cadenceAvg, 1) : null,
+    temperature_avg_c: tempAvg != null ? round(tempAvg, 1) : null,
+    altitude_gain_m: altitudeGainM != null ? round(altitudeGainM, 1) : null,
+    altitude_series_m: sampleEvenly(altitudeSeries, 1200),
+    speed_series_kmh: sampleEvenly(speedSeriesKmh, 1200),
+    trackpoint_count: points.length,
+    raw_counts: {
+      points: pointRows.length,
+      power: power.length,
+      hr: hrs.length,
+      speed: speedSeriesKmh.length,
+      cadence: cads.length,
+      altitude: altitudeSeries.length,
+      temperature: atemps.length,
+    },
+    channels_available: {
+      power: power.length > 0 || powerAvg != null,
+      hr: hrs.length > 0 || hrAvg != null,
+      speed: speedSeriesKmh.length > 0 || speedAvgKmh != null,
+      cadence: cads.length > 0 || cadenceAvg != null,
+      altitude: altitudeSeries.length > 0,
+      temperature: atemps.length > 0 || tempAvg != null,
+    },
+  };
+
+  if (hrSeriesFilled.length > 0) {
+    traceSummary.hr_series_bpm = sampleEvenly(hrSeriesFilled, 1200);
+  }
+  if (cadSeriesFilled.length > 0) {
+    traceSummary.cadence_series_rpm = sampleEvenly(cadSeriesFilled, 1200);
+  }
+  if (powerSeriesFilled.length > 0) {
+    traceSummary.power_series_w = sampleEvenly(powerSeriesFilled, 1200);
+  }
+  if (tempSeriesFilled.length > 0) {
+    traceSummary.temperature_series_c = sampleEvenly(tempSeriesFilled, 1200);
+  }
+
   return {
     format: "gpx",
     date,
@@ -342,41 +466,7 @@ function parseGpx(xml: string): ParsedTrainingFile {
     tss,
     kcal: null,
     kj: powerAvg != null ? round((powerAvg * durationMinutes * 60) / 1000, 1) : null,
-    traceSummary: {
-      source_format: "gpx",
-        parser_engine: "gpx_native_parser",
-        parser_version: "v2",
-      route_points: sampleEvenly(points, 1800).map(([lat, lon]) => ({ lat, lon })),
-      route_distance_series_km: sampleEvenly(routeDistanceSeriesKm, 1200),
-      route_altitude_series_m: sampleEvenly(routeAltitudeSeriesM, 1200),
-      distance_km: distanceKm > 0 ? round(distanceKm, 3) : null,
-      power_avg: powerAvg != null ? round(powerAvg, 1) : null,
-      hr_avg_bpm: hrAvg != null ? round(hrAvg, 1) : null,
-      speed_avg_kmh: speedAvgKmh != null ? round(speedAvgKmh, 2) : null,
-      cadence_avg_rpm: cadenceAvg != null ? round(cadenceAvg, 1) : null,
-      temperature_avg_c: tempAvg != null ? round(tempAvg, 1) : null,
-      altitude_gain_m: altitudeGainM != null ? round(altitudeGainM, 1) : null,
-      altitude_series_m: sampleEvenly(altitudeSeries, 1200),
-      speed_series_kmh: sampleEvenly(speedSeriesKmh, 1200),
-      trackpoint_count: points.length,
-      raw_counts: {
-        points: pointRows.length,
-        power: power.length,
-        hr: hrs.length,
-        speed: speedSeriesKmh.length,
-        cadence: cads.length,
-        altitude: altitudeSeries.length,
-        temperature: atemps.length,
-      },
-        channels_available: {
-          power: power.length > 0,
-          hr: hrs.length > 0,
-          speed: speedSeriesKmh.length > 0 || speedAvgKmh != null,
-          cadence: cads.length > 0,
-          altitude: altitudeSeries.length > 0,
-          temperature: atemps.length > 0,
-        },
-    },
+    traceSummary,
   };
 }
 

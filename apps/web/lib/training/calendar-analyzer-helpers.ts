@@ -71,6 +71,74 @@ export function traceRecord(w: ExecutedWorkout): Record<string, unknown> | null 
   return null;
 }
 
+function rawCountPositive(trace: Record<string, unknown>, key: string): boolean {
+  const rc = trace.raw_counts;
+  if (!rc || typeof rc !== "object" || Array.isArray(rc)) return false;
+  const v = (rc as Record<string, unknown>)[key];
+  const num = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(num) && num > 0;
+}
+
+/**
+ * Unisce `channels_available` persistito con serie/medie effettive in `trace_summary`
+ * (evita `hr:no` quando FC c’è ma il GPX usava tag prefissati non letti al persist).
+ */
+export function mergeTraceChannelAvailability(trace: Record<string, unknown> | null): Record<string, boolean> | null {
+  if (!trace) return null;
+  const base = trace.channels_available;
+  const baseOn = (k: string): boolean => {
+    if (!base || typeof base !== "object") return false;
+    const v = (base as Record<string, unknown>)[k];
+    return v === true || v === 1 || v === "1";
+  };
+
+  const hr =
+    baseOn("hr") ||
+    pickSeries(trace, ["hr_series_bpm", "heart_rate_series_bpm", "heart_rate_series", "hr_stream_bpm", "hr_series"])
+      .length >= 1 ||
+    pickMetric(trace, ["hr_avg_bpm", "heart_rate_avg", "avg_hr", "hrAvg"]) != null ||
+    rawCountPositive(trace, "hr");
+
+  const power =
+    baseOn("power") ||
+    pickSeries(trace, ["power_series_w", "power_stream_w", "power_series"]).length >= 1 ||
+    pickMetric(trace, [
+      "power_avg_w",
+      "power_avg",
+      "avg_power",
+      "powerAvg",
+      "normalized_power_w",
+    ]) != null ||
+    rawCountPositive(trace, "power");
+
+  const cadence =
+    baseOn("cadence") ||
+    pickSeries(trace, ["cadence_series_rpm", "cadence_series"]).length >= 1 ||
+    pickMetric(trace, ["cadence_avg_rpm", "avg_cadence_rpm", "cadence_avg_spm", "cadence"]) != null ||
+    rawCountPositive(trace, "cadence");
+
+  const speed =
+    baseOn("speed") ||
+    pickSeries(trace, ["speed_series_kmh", "speed_stream_kmh", "speed_series"]).length >= 1 ||
+    pickMetric(trace, ["speed_avg_kmh", "avg_speed_kmh", "speedAvg"]) != null ||
+    rawCountPositive(trace, "speed");
+
+  const altitude =
+    baseOn("altitude") ||
+    pickSeries(trace, ["route_altitude_series_m", "altitude_series_m", "elevation_series_m", "altitude_series"]).length >=
+      1 ||
+    pickMetric(trace, ["elevation_gain_m", "altitude_gain_m", "elev_gain", "elevationGain"]) != null ||
+    rawCountPositive(trace, "altitude");
+
+  const temperature =
+    baseOn("temperature") ||
+    pickSeries(trace, ["temperature_series_c", "temp_series_c"]).length >= 1 ||
+    pickMetric(trace, ["temperature_avg_c", "temp_avg_c", "temperature"]) != null ||
+    rawCountPositive(trace, "temperature");
+
+  return { hr, power, speed, cadence, altitude, temperature };
+}
+
 /** Allinea la cella al `date` persistito (stesso filtro API calendario); trace solo se `date` assente. */
 export function workoutDayKey(row: ExecutedWorkout): string {
   const dbKey = normalizeDateKey(row.date);

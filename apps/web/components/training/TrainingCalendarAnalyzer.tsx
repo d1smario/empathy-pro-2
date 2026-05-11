@@ -9,6 +9,7 @@ import {
   computeFitQuality,
   deriveSpeedKmh,
   formatElapsedLabel,
+  mergeTraceChannelAvailability,
   monthPeakMetricProfile,
   n,
   parseRoute,
@@ -419,11 +420,14 @@ export function TrainingCalendarAnalyzer({
     let totalMin = 0;
     let powerWeighted = 0;
     for (const w of dayExecuted) {
-      tss += n(w.tss) ?? 0;
+      const tr = traceRecord(w);
+      const tssCol = n(w.tss);
+      const tssTrace = pickMetric(tr, ["tss"]);
+      tss += (tssCol != null && tssCol > 0 ? tssCol : tssTrace) ?? 0;
       kcal += n(w.kcal) ?? 0;
       const m = n(w.durationMinutes) ?? 0;
       totalMin += m;
-      const p = pickMetric(traceRecord(w), ["power_avg_w", "power_avg", "avg_power", "powerAvg", "normalized_power_w"]);
+      const p = pickMetric(tr, ["power_avg_w", "power_avg", "avg_power", "powerAvg", "normalized_power_w"]);
       const wt = m > 0 ? m : 1;
       if (p != null) powerWeighted += p * wt;
     }
@@ -532,10 +536,9 @@ export function TrainingCalendarAnalyzer({
     const w = primaryExecuted ?? dayExecuted[0];
     if (!w) return null;
     const trace = traceRecord(w);
-    if (!trace) return null;
-    const c = trace.channels_available;
-    if (!c || typeof c !== "object") return null;
-    return c as Record<string, unknown>;
+    const merged = mergeTraceChannelAvailability(trace);
+    if (!merged) return null;
+    return merged as Record<string, unknown>;
   }, [dayExecuted, primaryExecuted]);
 
   const plannedOnly = dayExecuted.length === 0 && dayPlanned.length > 0;
