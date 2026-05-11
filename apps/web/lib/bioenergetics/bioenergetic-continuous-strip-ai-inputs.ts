@@ -9,9 +9,6 @@ import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 const N15 = 96;
 const N288 = 288;
 
-const STRIP_AI_DISCLAIMER_TAG =
-  "Striscia monitoraggio continuo (24 h): OpenAI legge solo pasti (diario), sedute (pianificate/eseguite), conteggi stream e metadati serie — niente kernel/tile/hint del motore legacy sulla striscia.";
-
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
 }
@@ -316,127 +313,7 @@ export function buildMonitoringChannelsFromStripAiParse(
   return out;
 }
 
-export async function requestOpenAiBioenergeticStripFromInputs(
-  compact: Record<string, unknown>,
-  opts: { apiKey: string; model: string },
-): Promise<{ ok: true; text: string } | { ok: false; error: string }> {
-  const skipGlu = Boolean(compact.skip_glucose_predictor);
-  const system = [
-    "Sei il generatore curve EMPATHY Pro 2 — BioEnergetic Intelligence.",
-    "Ricevi il JSON `bioenergetic_strip_ai_reality_inputs_v2`: pasti da diario (`meals`), sedute eseguite/pianificate (`executed_workouts`, `planned_workouts`), totali giorno (`day_rollup`), conteggi campioni stream (`canonical_stream_sample_counts`), metadati serie glucosio/lattato senza valori (`glucose_series_meta`, `lactate_series_meta`).",
-    "Non ricevi kernel metabolico, tile lab/sim, hint interpretativi né timeline arricchita: ignora ogni conoscenza di «motore» Empathy eliminato; le curve devono seguire solo quei campi.",
-    "Non ricevi serie numeriche pre-calcolate per la striscia: proponi tu andamenti plausibili coerenti con pasti, CHO/kcal, orari, TSS/durate sedute e note soggettive se presenti.",
-    "Risposta: SOLO JSON valido (nessun testo fuori dal JSON).",
-    skipGlu
-      ? "NON includere glucose_mmol_15m (glucosio già da misura densa quel giorno — molti punti nella serie)."
-      : "Includi glucose_mmol_15m: esattamente 96 numeri (mmol/L), uno ogni 15 min da 00:00 a 23:45 della `date`.",
-    "Includi lactate_mmol_15m: 96 numeri (mmol/L) coerenti con sedute e pasti.",
-    "Includi cortisol_ug_dl_24 e acth_pg_ml_24: 24 numeri (ore 0–23).",
-    "Includi insulin_proxy_score_24: 24 numeri 0–100 (domanda insulinica qualitativa).",
-    "disclaimer_it obbligatorio in italiano: curve illustrative da input, non diagnosi, non sostituiscono laboratorio o CGM.",
-    "Opzionale: note_it.",
-  ].join(" ");
-
-  const user = `Genera le serie per questa giornata (solo da input realtà v2 — pasti e training, niente kernel/tile):\n\n${JSON.stringify(compact)}`;
-
-  let response: Response;
-  try {
-    response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${opts.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: opts.model,
-        temperature: 0.35,
-        max_tokens: 9000,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-    });
-  } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : "network" };
-  }
-
-  if (!response.ok) {
-    const t = await response.text().catch(() => "");
-    return { ok: false, error: `OpenAI HTTP ${response.status}: ${t.slice(0, 200)}` };
-  }
-
-  const payload = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
-  const text = payload.choices?.[0]?.message?.content?.trim();
-  if (!text) return { ok: false, error: "empty_response" };
-  return { ok: true, text };
-}
-
-function shouldSkipGlucosePredictor(vm: BioenergeticsDayViewModel): boolean {
+export function shouldSkipGlucosePredictor(vm: BioenergeticsDayViewModel): boolean {
   const n = vm.channels.glucose?.length ?? 0;
   return vm.provenance.glucose === "measured" && n >= 48;
-}
-
-/**
- * Sostituisce la striscia «monitoraggio continuo» con canali costruiti **solo** da OpenAI
- * sul compact degli input (`omitMonitoringStrip` lascia la striscia vuota in presentation).
- */
-export async function fillContinuousMonitoringStripFromOpenAiInputs(
-  vm: BioenergeticsDayViewModel,
-  slice: BioenergeticDayMemorySlice,
-): Promise<BioenergeticsDayViewModel> {
-  const disclaimersBase = vm.disclaimers.includes(STRIP_AI_DISCLAIMER_TAG)
-    ? vm.disclaimers
-    : [...vm.disclaimers, STRIP_AI_DISCLAIMER_TAG];
-
-  const apiKey = (process.env.OPENAI_API_KEY ?? "").trim();
-  if (!apiKey) {
-    return {
-      ...vm,
-      disclaimers: [
-        ...disclaimersBase,
-        "Imposta OPENAI_API_KEY sul server per generare le curve della striscia dagli input (nessun fallback deterministico sulla striscia).",
-      ],
-      continuousMonitoring: { layer: "ai_from_inputs_v1", channels: [] },
-    };
-  }
-
-  const skipGlucose = shouldSkipGlucosePredictor(vm);
-  const compact = buildOpenAiStripRealityCompact(vm, slice, skipGlucose);
-  const model = (process.env.OPENAI_BIOENERGETIC_MODEL ?? "").trim() || "gpt-4o-mini";
-  const ai = await requestOpenAiBioenergeticStripFromInputs(compact, { apiKey, model });
-  if (!ai.ok) {
-    return {
-      ...vm,
-      disclaimers: [...disclaimersBase, `OpenAI striscia: ${ai.error}`],
-      continuousMonitoring: { layer: "ai_from_inputs_v1", channels: [] },
-    };
-  }
-
-  const parsed = parseStripAiOpenAiContent(ai.text);
-  if (!parsed) {
-    return {
-      ...vm,
-      disclaimers: [...disclaimersBase, "OpenAI striscia: JSON non interpretabile."],
-      continuousMonitoring: { layer: "ai_from_inputs_v1", channels: [] },
-    };
-  }
-
-  const channels = buildMonitoringChannelsFromStripAiParse(vm, parsed);
-  if (!channels.length) {
-    return {
-      ...vm,
-      disclaimers: [...disclaimersBase, "OpenAI striscia: nessun canale costruito (controlla la risposta)."],
-      continuousMonitoring: { layer: "ai_from_inputs_v1", channels: [] },
-    };
-  }
-
-  const noteLine = parsed.noteIt ? ` OpenAI nota: ${parsed.noteIt}` : "";
-  const discLine = parsed.disclaimerIt && parsed.disclaimerIt !== "—" ? ` ${parsed.disclaimerIt}` : "";
-  return {
-    ...vm,
-    disclaimers: [...disclaimersBase, `Modello striscia:${discLine}${noteLine}`.trim()],
-    continuousMonitoring: { layer: "ai_from_inputs_v1", channels },
-  };
 }

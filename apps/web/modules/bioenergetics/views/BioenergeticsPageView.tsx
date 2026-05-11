@@ -2,55 +2,31 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, CalendarRange, GitBranch, LineChart, Timer } from "lucide-react";
+import { Activity, LineChart, Timer } from "lucide-react";
 import type {
-  BioenergeticBiaLiteratureSummaryV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
   BioenergeticPathwayImpact,
   BioenergeticTimelineEvent,
   BioenergeticsDayViewModel,
-  BioenergeticsTimeSeriesStreamResponseV1,
-  BioenergeticsWindowViewModel,
 } from "@/api/bioenergetics/contracts";
 import { GenerativeModuleSubnav } from "@/components/navigation/GenerativeModuleSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
-import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
+import { Pro2Link } from "@/components/ui/empathy";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import {
   readPersistedNutritionPlanDate,
   writePersistedNutritionPlanDate,
 } from "@/lib/nutrition/persisted-nutrition-plan-date";
-import {
-  evidenceLinkCountForSkeletonEdge,
-  evidenceLinkCountForSkeletonNode,
-} from "@/lib/bioenergetics/bioenergetic-evidence-skeleton-bridge";
-import { BIOENERGETIC_WINDOW_MAX_DAYS, enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-window-range";
-import {
-  buildBioenergeticWindowStreamChartRows,
-  buildBioenergeticWindowStreamDailyRollups,
-  computeBioenergeticWindowStreamStats,
-  computeBioenergeticWindowStreamVariability,
-} from "@/lib/bioenergetics/window-stream-stats";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsContinuousMonitoringGrid } from "@/modules/bioenergetics/components/BioenergeticsContinuousMonitoringGrid";
-import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
-import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
-import { BioenergeticsWindowStreamChart } from "@/modules/bioenergetics/components/BioenergeticsWindowStreamChart";
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
-}
-
-function addDaysIsoDate(dateIso: string, deltaDays: number): string {
-  const base = new Date(`${dateIso.slice(0, 10)}T12:00:00.000Z`);
-  if (Number.isNaN(base.getTime())) return dateIso.slice(0, 10);
-  base.setUTCDate(base.getUTCDate() + deltaDays);
-  return base.toISOString().slice(0, 10);
 }
 
 function coerceIsoDate(s: string | null | undefined): string | null {
@@ -80,20 +56,6 @@ function provenanceLabel(p: BioenergeticMetricTile["provenance"]): string {
   return "Assente";
 }
 
-function biaCellularBandIt(b: BioenergeticBiaLiteratureSummaryV1["cellularGeometry"]["band"]): string {
-  if (b === "low_support_cue") return "Geometria cellulare: segnale basso (letteratura)";
-  if (b === "mid") return "Geometria cellulare: intermedio";
-  if (b === "favourable_geometry_cue") return "Geometria cellulare: segnale favorevole (contesto)";
-  return "Geometria cellulare: dati insufficienti";
-}
-
-function biaFluidBandIt(b: BioenergeticBiaLiteratureSummaryV1["extracellularFluid"]["band"]): string {
-  if (b === "favourable_balance") return "ECW vs TBW: bilanciamento favorevole";
-  if (b === "neutral") return "ECW vs TBW: neutro";
-  if (b === "extracellular_shift_cue") return "ECW vs TBW: spostamento extracellulare (letteratura)";
-  return "ECW vs TBW: dati insufficienti";
-}
-
 const TIMELINE_MODEL_TYPES = new Set<BioenergeticTimelineEvent["type"]>(["meal", "planned_session", "executed_session"]);
 
 export default function BioenergeticsPageView() {
@@ -103,13 +65,6 @@ export default function BioenergeticsPageView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vm, setVm] = useState<BioenergeticsDayViewModel | null>(null);
-  const [windowFrom, setWindowFrom] = useState(() => addDaysIsoDate(toIsoDate(new Date()), -6));
-  const [windowTo, setWindowTo] = useState(() => toIsoDate(new Date()));
-  const [windowVm, setWindowVm] = useState<BioenergeticsWindowViewModel | null>(null);
-  const [windowStream, setWindowStream] = useState<BioenergeticsTimeSeriesStreamResponseV1 | null>(null);
-  const [windowStreamError, setWindowStreamError] = useState<string | null>(null);
-  const [windowLoading, setWindowLoading] = useState(false);
-  const [windowError, setWindowError] = useState<string | null>(null);
   const seededFromContext = useRef(false);
   const genBodyRef = useRef<HTMLElement | null>(null);
 
@@ -131,74 +86,6 @@ export default function BioenergeticsPageView() {
     if (persisted) setDate((d) => (d === persisted ? d : persisted));
   }, [searchParams, athleteId, athleteLoading]);
 
-  useEffect(() => {
-    setWindowTo(date);
-    setWindowFrom(addDaysIsoDate(date, -6));
-    setWindowVm(null);
-    setWindowStream(null);
-    setWindowStreamError(null);
-    setWindowError(null);
-  }, [date]);
-
-  const loadBioenergeticWindow = useCallback(async () => {
-    if (!athleteId) return;
-    const range = enumerateInclusiveIsoDates(windowFrom, windowTo);
-    if (!range.ok) {
-      setWindowError(
-        range.error === `window_max_${BIOENERGETIC_WINDOW_MAX_DAYS}_days`
-          ? `Intervallo troppo lungo (massimo ${BIOENERGETIC_WINDOW_MAX_DAYS} giorni inclusi).`
-          : "Intervallo date non valido.",
-      );
-      setWindowVm(null);
-      setWindowStream(null);
-      setWindowStreamError(null);
-      return;
-    }
-    setWindowLoading(true);
-    setWindowError(null);
-    setWindowStreamError(null);
-    setWindowStream(null);
-    try {
-      const headers = await buildSupabaseAuthHeaders();
-      const q = new URLSearchParams({ athleteId, from: range.dates[0]!, to: range.dates[range.dates.length - 1]! });
-      const qs = q.toString();
-      const [winRes, streamRes] = await Promise.all([
-        fetch(`/api/bioenergetics/window?${qs}`, { cache: "no-store", credentials: "same-origin", headers }),
-        fetch(`/api/bioenergetics/streams?${qs}&channel=all`, { cache: "no-store", credentials: "same-origin", headers }),
-      ]);
-      const winJson = (await winRes.json()) as BioenergeticsWindowViewModel & { error?: string };
-      if (!winRes.ok) {
-        setWindowVm(null);
-        setWindowStream(null);
-        setWindowStreamError(null);
-        setWindowError(winJson.error ?? "Caricamento finestra non riuscito.");
-        return;
-      }
-      setWindowVm(winJson);
-      setWindowError(null);
-      const streamJson = (await streamRes.json()) as BioenergeticsTimeSeriesStreamResponseV1 & { error?: string };
-      if (!streamRes.ok) {
-        setWindowStream(null);
-        setWindowStreamError(streamJson.error ?? "Caricamento serie misurata non riuscito.");
-        return;
-      }
-      if (streamJson.streamContractVersion !== 1) {
-        setWindowStream(null);
-        setWindowStreamError("Risposta serie non valida.");
-        return;
-      }
-      setWindowStream(streamJson);
-      setWindowStreamError(null);
-    } catch {
-      setWindowVm(null);
-      setWindowStream(null);
-      setWindowStreamError(null);
-      setWindowError("Errore di rete durante il caricamento della finestra.");
-    } finally {
-      setWindowLoading(false);
-    }
-  }, [athleteId, windowFrom, windowTo]);
-
   const setDateAndPersist = useCallback(
     (next: string) => {
       const k = coerceIsoDate(next);
@@ -213,16 +100,6 @@ export default function BioenergeticsPageView() {
       }
     },
     [athleteId],
-  );
-
-  const openWindowDayInBody = useCallback(
-    (dayIso: string) => {
-      setDateAndPersist(dayIso);
-      requestAnimationFrame(() => {
-        genBodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    },
-    [setDateAndPersist],
   );
 
   useEffect(() => {
@@ -283,55 +160,17 @@ export default function BioenergeticsPageView() {
     };
   }, [athleteId, athleteLoading, date]);
 
-  /** Solo glucosio/lattato da CGM o lab quel giorno (non include potenza/trace né piano). */
-  const measuredGluLacBadge = useMemo(() => {
-    if (!vm) return "—";
-    const measuredCount = [vm.provenance.glucose, vm.provenance.lactate].filter((p) => p === "measured").length;
-    return `${measuredCount}/2`;
-  }, [vm]);
-
-  const canonicalStreamSummary = useMemo(() => {
-    if (!vm) return null;
-    const g = vm.canonicalStreamCounts.glucoseSampleCount;
-    const l = vm.canonicalStreamCounts.lactateSampleCount;
-    if (g === 0 && l === 0) return null;
-    return `Serie canonica (055): ${g} campioni glucosio · ${l} lattato`;
-  }, [vm]);
-
-  const traceSeriesCount = useMemo(() => {
-    if (!vm?.series?.length) return 0;
-    const traceIds = new Set(["power_w", "hr_bpm", "speed_kmh", "cadence_rpm", "altitude_m", "temperature_c"]);
-    return vm.series.filter((s) => traceIds.has(s.id) && s.provenance === "measured" && s.points.length >= 2).length;
-  }, [vm]);
-
-  const windowStreamStats = useMemo(
-    () => computeBioenergeticWindowStreamStats(windowStream?.samples ?? []),
-    [windowStream],
-  );
-  const windowStreamRows = useMemo(() => buildBioenergeticWindowStreamChartRows(windowStream?.samples ?? []), [windowStream]);
-  const windowDailyRollups = useMemo(
-    () => buildBioenergeticWindowStreamDailyRollups(windowStream?.samples ?? []),
-    [windowStream],
-  );
-  const windowStreamVariability = useMemo(
-    () => computeBioenergeticWindowStreamVariability(windowDailyRollups),
-    [windowDailyRollups],
-  );
-
   const timelineModelStimuli = useMemo(() => {
     if (!vm?.timeline?.length) return [];
     return [...vm.timeline].filter((e) => TIMELINE_MODEL_TYPES.has(e.type)).sort((a, b) => a.ts.localeCompare(b.ts));
   }, [vm?.timeline]);
-
-  const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
-  const evidenceLinkCount = resolvedEvidenceLinks.length;
 
   return (
     <Pro2ModulePageShell
       eyebrow="BioEnergetic Intelligence · Focus"
       eyebrowClassName="text-lime-400"
       title="BioEnergetic Intelligence"
-      description="Monitoraggio continuo (modello v1) sulla giornata: timeline training/nutrizione/device, strisce 24 h per analita, pathway supportivo o inibitorio — contratto pronto a integrazione stream device."
+      description="Generativo giornaliero: OpenAI legge diario, allenamenti e timeline; produce le tile (neuromodulatori, ormoni, metabolismo) e la striscia 24 h. Nessun pathway deterministico, grafi legacy né finestra multi-giorno in questa vista."
       headerActions={
         <>
           <Pro2Link href="/nutrition" variant="secondary" className="justify-center border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15">
@@ -364,127 +203,16 @@ export default function BioenergeticsPageView() {
         </Pro2SectionCard>
       </section>
 
-      <section id="gen-window" className="scroll-mt-28">
-        <Pro2SectionCard
-          accent="violet"
-          title="Finestra multi-giorno"
-          subtitle={`Tabella giornaliera + grafico serie misurate (055) su asse tempo; fino a ${BIOENERGETIC_WINDOW_MAX_DAYS} giorni inclusi; evidenza DB una volta per finestra.`}
-          icon={CalendarRange}
-        >
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="flex flex-col gap-1 text-xs text-gray-400">
-              Da
-              <input
-                type="date"
-                value={windowFrom}
-                onChange={(e) => setWindowFrom(e.currentTarget.value.slice(0, 10))}
-                className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-xs text-gray-400">
-              A
-              <input
-                type="date"
-                value={windowTo}
-                onChange={(e) => setWindowTo(e.currentTarget.value.slice(0, 10))}
-                className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
-              />
-            </label>
-            <Pro2Button
-              type="button"
-              variant="primary"
-              onClick={() => void loadBioenergeticWindow()}
-              disabled={!athleteId || athleteLoading || windowLoading}
-              className="shrink-0"
-            >
-              {windowLoading ? "Carico…" : "Carica finestra"}
-            </Pro2Button>
-          </div>
-          {windowError ? <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{windowError}</p> : null}
-          {windowVm?.days?.length ? (
-            <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-white/10">
-              <table className="w-full text-left text-sm text-gray-200">
-                <thead className="sticky top-0 bg-black/90 text-[0.65rem] uppercase tracking-wide text-gray-500">
-                  <tr>
-                    <th className="px-3 py-2">Data</th>
-                    <th className="px-3 py-2">Pathway</th>
-                    <th className="px-3 py-2">Timeline</th>
-                    <th className="px-3 py-2">TS 055</th>
-                    <th className="px-3 py-2 w-[1%] whitespace-nowrap" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {windowVm.days.map((d) => (
-                    <tr key={d.date} className="border-t border-white/5">
-                      <td className="px-3 py-2 font-mono text-xs text-white">{d.date}</td>
-                      <td className="px-3 py-2 capitalize">{d.kernel.pathwayState}</td>
-                      <td className="px-3 py-2">{d.timeline.length}</td>
-                      <td className="px-3 py-2 text-xs text-violet-200/90">
-                        glu {d.canonicalStreamCounts.glucoseSampleCount} · lac {d.canonicalStreamCounts.lactateSampleCount}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <Pro2Button
-                          type="button"
-                          variant="ghost"
-                          className="shrink-0 !px-3 !py-1.5 text-xs font-semibold"
-                          onClick={() => openWindowDayInBody(d.date)}
-                        >
-                          Giorno
-                        </Pro2Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : null}
-          {windowVm?.days?.length ? (
-            <>
-              {windowStreamError ? (
-                <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{windowStreamError}</p>
-              ) : null}
-              {windowStream ? (
-                <BioenergeticsWindowStreamChart
-                  rows={windowStreamRows}
-                  stats={windowStreamStats}
-                  variability={windowStreamVariability}
-                  dailyRollups={windowDailyRollups}
-                  truncated={windowStream.truncated}
-                  skippedSchema={windowStream.skippedSchema}
-                />
-              ) : null}
-            </>
-          ) : null}
-        </Pro2SectionCard>
-      </section>
-
       <section id="gen-body" ref={genBodyRef} className="scroll-mt-28 space-y-6">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div className="rounded-2xl border border-cyan-500/25 bg-black/35 px-4 py-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-cyan-300">Eventi timeline</p>
-            <p className="mt-1 text-xl font-semibold text-white">{vm?.timeline.length ?? 0}</p>
-          </div>
-          <div className="rounded-2xl border border-lime-500/25 bg-black/35 px-4 py-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-lime-300">Glicemia / lattato (CGM o lab)</p>
-            <p className="mt-1 text-xl font-semibold text-white">{measuredGluLacBadge}</p>
-            {canonicalStreamSummary ? (
-              <p className="mt-1 text-[0.65rem] leading-snug text-lime-200/75">{canonicalStreamSummary}</p>
-            ) : null}
-            <p className="mt-1 text-[0.65rem] leading-snug text-gray-500">
-              Serie da trace allenamento:{" "}
-              <span className="text-lime-200/90">{traceSeriesCount > 0 ? `${traceSeriesCount} con ≥2 punti` : "nessuna"}</span>
-            </p>
+            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-cyan-300">Giorno</p>
+            <p className="mt-1 font-mono text-lg font-semibold text-white">{vm?.date ?? "—"}</p>
           </div>
           <div className="rounded-2xl border border-fuchsia-500/25 bg-black/35 px-4 py-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-fuchsia-300">Pathway state</p>
-            <p className="mt-1 text-xl font-semibold capitalize text-white">{vm?.kernel.pathwayState ?? "—"}</p>
-          </div>
-          <div className="rounded-2xl border border-orange-500/25 bg-black/35 px-4 py-3">
-            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-orange-300">Link evidenza assi ↔ fluidi</p>
-            <p className="mt-1 text-xl font-semibold text-white">{vm ? evidenceLinkCount : "—"}</p>
-            <p className="mt-1 text-[0.65rem] leading-snug text-gray-500">
-              Da DB curato <span className="text-orange-200/90">051 + 052</span>; non è modello curva giornaliera.
-            </p>
+            <p className="font-mono text-[0.6rem] uppercase tracking-wider text-fuchsia-300">Eventi timeline</p>
+            <p className="mt-1 text-xl font-semibold text-white">{vm?.timeline.length ?? 0}</p>
+            <p className="mt-1 text-[0.65rem] text-gray-500">Pasti, sedute, export e lab usati come contesto per OpenAI.</p>
           </div>
         </div>
 
@@ -498,388 +226,26 @@ export default function BioenergeticsPageView() {
 
         {vm && vm.timeline.length === 0 ? (
           <p className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-            Per <strong className="text-white">{vm.date}</strong> non risultano ancora eventi in timeline (sessioni pianificate/eseguite nel range, voci diario, export device o lab con
-            quella data). I grafici mostrano comunque il modello kernel; per arricchire i dati usa{" "}
+            Per <strong className="text-white">{vm.date}</strong> la timeline è vuota: OpenAI riceve meno contesto. Aggiungi pasti in{" "}
             <Pro2Link href="/nutrition/diary" className="text-cyan-200 underline-offset-2 hover:text-white">
               Diario
             </Pro2Link>{" "}
-            e{" "}
+            e sedute in{" "}
             <Pro2Link href="/training/calendar" className="text-cyan-200 underline-offset-2 hover:text-white">
               Calendario
-            </Pro2Link>{" "}
-            con la stessa data.
+            </Pro2Link>
+            .
           </p>
         ) : null}
 
         {vm ? (
           <>
             <Pro2SectionCard
-              accent="fuchsia"
-              title="Via metabolica · 24 h"
-              subtitle={
-                vm.continuousMonitoring?.layer === "ai_from_inputs_v1"
-                  ? "Monitoraggio continuo (striscia): curve da OpenAI solo dagli input giornata assemblati; grafico pathway 24 h resta dal modello kernel."
-                  : "Monitoraggio continuo (modello): bilancio pathway, glucosio e lattato; fascia = impatto orario. Stesso paradigma UI sostituibile da stream device."
-              }
+              accent="amber"
+              title="Metabolismo, infiammazione, ormoni e neuromodulatori"
+              subtitle="Valori «Stimato» da un’unica generazione OpenAI sulla memoria del giorno (diario, training, timeline)."
               icon={LineChart}
             >
-              <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
-              {vm.continuousMonitoring &&
-              (vm.continuousMonitoring.channels.length > 0 || vm.continuousMonitoring.layer === "ai_from_inputs_v1") ? (
-                <div className="mt-6 border-t border-white/10 pt-4">
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fuchsia-200/85">
-                    Striscia monitoraggio continuo (24 h)
-                  </p>
-                  <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
-                    {vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
-                      <>
-                        Glucosio, lattato, domanda insulinica, cortisolo e ACTH: passo 5 minuti da OpenAI su diario
-                        pasti e sedute (training), più metadati serie e stream — senza kernel/tile del motore sulla
-                        richiesta. Non è CGM, non è il sim diurno v1 sulla striscia. Se manca
-                        la chiave server o la risposta fallisce, la striscia resta vuota — vedi disclaimer in fondo.
-                      </>
-                    ) : (
-                      <>
-                        Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5
-                        minuti, deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono
-                        con ciò che ti aspetti, verifica timestamp diario e calendario (non il modello che
-                        &quot;indovina&quot; i pasti).
-                      </>
-                    )}
-                  </p>
-                  {vm.continuousMonitoring.channels.length === 0 &&
-                  vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
-                    <p className="mb-4 rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-fuchsia-100/95">
-                      Nessun canale sulla striscia: serve <code className="text-fuchsia-200/90">OPENAI_API_KEY</code> sul
-                      server e una risposta JSON valida. Controlla anche i disclaimer sotto per messaggi di errore.
-                    </p>
-                  ) : null}
-                  {timelineModelStimuli.length ? (
-                    <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
-                      <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-fuchsia-200/90">
-                        {vm.continuousMonitoring.layer === "ai_from_inputs_v1"
-                          ? "Stimoli nella timeline (input per la striscia)"
-                          : "Stimoli nella timeline usati dal motore"}
-                      </p>
-                      <p className="mb-2 text-[0.65rem] leading-relaxed text-gray-500">
-                        Pasti: orario da <code className="text-gray-400">entry_time</code> / data voce diario. Sedute:
-                        esecuzione (<code className="text-gray-400">started_at</code>) o slot pianificato se manca
-                        l&apos;esecuzione.
-                      </p>
-                      <ul className="max-h-40 space-y-1.5 overflow-y-auto text-[0.7rem] text-gray-200">
-                        {timelineModelStimuli.map((e) => (
-                          <li
-                            key={e.id}
-                            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0"
-                          >
-                            <span className="shrink-0 font-mono text-[0.65rem] text-fuchsia-200/90">{e.ts}</span>
-                            <span className="shrink-0 text-gray-500">
-                              {e.type === "meal"
-                                ? "Pasto"
-                                : e.type === "executed_session"
-                                  ? "Seduta eseguita"
-                                  : "Seduta pianificata"}
-                            </span>
-                            <span className="min-w-0 flex-1 text-gray-100">{e.title}</span>
-                            {e.type === "meal" ? (
-                              <span className="shrink-0 text-gray-500">
-                                {typeof e.payload?.carbsG === "number" && Number.isFinite(e.payload.carbsG)
-                                  ? `${Math.round(e.payload.carbsG)} g CHO`
-                                  : "CHO n/d"}
-                                {typeof e.payload?.glycemic_index_estimate === "number" &&
-                                Number.isFinite(e.payload.glycemic_index_estimate)
-                                  ? ` · GI ~${Math.round(e.payload.glycemic_index_estimate)}`
-                                  : ""}
-                              </span>
-                            ) : (
-                              <span className="shrink-0 text-gray-500">
-                                {typeof e.payload?.durationMinutes === "number" &&
-                                Number.isFinite(e.payload.durationMinutes)
-                                  ? `${Math.round(e.payload.durationMinutes)} min`
-                                  : ""}
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : vm.timeline.length ? (
-                    <p className="mb-4 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-amber-100/95">
-                      {vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
-                        <>
-                          Nessun pasto o seduta in timeline: la striscia OpenAI riceve comunque kernel e altri input;
-                          arricchisci il giorno da{" "}
-                          <Pro2Link href="/nutrition/diary" className="text-amber-200 underline-offset-2 hover:text-white">
-                            Diario
-                          </Pro2Link>{" "}
-                          e{" "}
-                          <Pro2Link href="/training/calendar" className="text-amber-200 underline-offset-2 hover:text-white">
-                            Calendario
-                          </Pro2Link>{" "}
-                          per contesto più fedele.
-                        </>
-                      ) : (
-                        <>
-                          Nessun pasto o seduta in timeline per questo giorno: le curve usano solo modulazioni diurne /
-                          sonno e default — aggiungi voci in Diario o sessioni in Calendario con la data corretta.
-                        </>
-                      )}
-                    </p>
-                  ) : null}
-                  {vm.continuousMonitoring.channels.length > 0 ? (
-                    <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
-                  ) : null}
-                </div>
-              ) : null}
-              <div className="mt-6 border-t border-white/10 pt-4">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-fuchsia-200/80">Serie da memoria giorno</p>
-                <BioenergeticsDaySeriesPanel series={vm.series ?? []} />
-              </div>
-            </Pro2SectionCard>
-
-            {vm.interactionSkeleton ? (
-              <div id="bioenergetic-skeleton-layer" className="scroll-mt-24">
-              <Pro2SectionCard
-                accent="slate"
-                title="Rete metabolico-endocrina · scheletro v1"
-                subtitle={
-                  evidenceLinkCount > 0
-                    ? "Grafo dichiarativo (nutrizione, training, stress, sonno, lab). Badge arancione «DB»: link curati assi–fluidi (051/052) mappati a quel nodo o arco — vedi sezione evidenza sotto."
-                    : "Un solo grafo di interazioni (nutrizione, training, stress, lab): si espande nel tempo; oggi dichiara cosa è osservabile e cosa manca."
-                }
-                icon={GitBranch}
-              >
-                {evidenceLinkCount > 0 ? (
-                  <p className="mb-2 text-[0.7rem] text-orange-200/90">
-                    <a
-                      href="#bioenergetic-evidence-layer"
-                      className="underline decoration-orange-400/50 underline-offset-2 hover:text-orange-100"
-                    >
-                      Salta all’evidenza letteratura (assi–fluidi)
-                    </a>{" "}
-                    · {evidenceLinkCount} link caricati
-                  </p>
-                ) : null}
-                <p className="text-sm leading-relaxed text-gray-300">{vm.interactionSkeleton.northStarIt}</p>
-                {vm.interactionSkeleton.longestInterMealGapHoursEstimate != null ? (
-                  <p className="mt-2 font-mono text-[0.7rem] text-gray-500">
-                    Max intervallo inter-prandiale stimato (timeline):{" "}
-                    <span className="text-gray-300">{vm.interactionSkeleton.longestInterMealGapHoursEstimate} h</span>
-                  </p>
-                ) : null}
-                <ul className="mt-4 space-y-2">
-                  {vm.interactionSkeleton.nodes.map((n) => {
-                    const dbN = evidenceLinkCount > 0 ? evidenceLinkCountForSkeletonNode(n.nodeId, resolvedEvidenceLinks) : 0;
-                    return (
-                      <li key={n.nodeId} className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-xs">
-                        <span className="font-medium text-white">{n.labelIt}</span>
-                        <span
-                          className={`ml-2 rounded px-1.5 py-0.5 text-[0.6rem] uppercase tracking-wide ${
-                            n.observability === "high"
-                              ? "bg-emerald-500/20 text-emerald-200"
-                              : n.observability === "partial"
-                                ? "bg-amber-500/20 text-amber-200"
-                                : "bg-rose-500/20 text-rose-200"
-                          }`}
-                        >
-                          {n.observability}
-                        </span>
-                        {dbN > 0 ? (
-                          <span
-                            className="ml-2 inline-flex items-center rounded border border-orange-500/35 bg-orange-500/10 px-1.5 py-0.5 font-mono text-[0.6rem] text-orange-200/95"
-                            title="Almeno un link assi–fluidi in banco mappato a questo nodo (curato DB)"
-                          >
-                            DB {dbN}
-                          </span>
-                        ) : null}
-                        <p className="mt-1 text-gray-400">{n.rationaleIt}</p>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <details className="mt-4 rounded-xl border border-white/10 bg-black/25 px-3 py-2 text-xs text-gray-500">
-                  <summary className="cursor-pointer text-gray-300">Archi canonic (v1, in espansione)</summary>
-                  <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto text-[0.65rem] leading-snug">
-                    {vm.interactionSkeleton.edges.map((e, i) => {
-                      const dbE =
-                        evidenceLinkCount > 0 ? evidenceLinkCountForSkeletonEdge(e.from, e.to, resolvedEvidenceLinks) : 0;
-                      return (
-                        <li key={`${e.from}-${e.to}-${i}`} className="font-mono text-gray-400">
-                          <span className="text-fuchsia-200/90">{e.from}</span> → <span className="text-violet-200/90">{e.to}</span>
-                          {dbE > 0 ? (
-                            <span className="ml-2 inline-block rounded border border-orange-500/35 bg-orange-500/10 px-1 font-mono text-[0.6rem] text-orange-200/95">
-                              DB {dbE}
-                            </span>
-                          ) : null}
-                          <span className="mt-0.5 block text-gray-500">{e.mechanismIt}</span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </details>
-              </Pro2SectionCard>
-              </div>
-            ) : null}
-
-            {vm.biaLiteratureSummary ? (
-              <Pro2SectionCard
-                accent="violet"
-                title="BIA · modello letteratura (v1)"
-                subtitle={`Prior deterministico · confidenza ${Math.round(vm.biaLiteratureSummary.confidence01 * 100)}% · non diagnosi clinica`}
-                icon={Activity}
-              >
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[0.65rem] font-medium uppercase tracking-wide text-violet-200/90">Geometria (PhA)</p>
-                    <p className="mt-1 text-sm text-white">{biaCellularBandIt(vm.biaLiteratureSummary.cellularGeometry.band)}</p>
-                    <p className="mt-1 font-mono text-xs text-gray-400">
-                      supportIndex01={vm.biaLiteratureSummary.cellularGeometry.supportIndex01.toFixed(2)}
-                      {vm.biaLiteratureSummary.cellularGeometry.phaseAngleDegUsed != null
-                        ? ` · PhA ${vm.biaLiteratureSummary.cellularGeometry.phaseAngleDegUsed.toFixed(1)}°`
-                        : null}
-                    </p>
-                  </div>
-                  <div className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2">
-                    <p className="text-[0.65rem] font-medium uppercase tracking-wide text-orange-200/90">Comparti fluidi (ECW/TBW)</p>
-                    <p className="mt-1 text-sm text-white">{biaFluidBandIt(vm.biaLiteratureSummary.extracellularFluid.band)}</p>
-                    <p className="mt-1 font-mono text-xs text-gray-400">
-                      loadBias01={vm.biaLiteratureSummary.extracellularFluid.loadBias01.toFixed(2)}
-                      {vm.biaLiteratureSummary.extracellularFluid.ecwTbwRatioUsed != null
-                        ? ` · ratio ${vm.biaLiteratureSummary.extracellularFluid.ecwTbwRatioUsed.toFixed(3)}`
-                        : null}
-                    </p>
-                  </div>
-                </div>
-                <details className="mt-4 text-xs text-gray-400">
-                  <summary className="cursor-pointer text-violet-200/90">Disclaimer e ancore metodologiche</summary>
-                  <ul className="mt-2 space-y-2">
-                    {vm.biaLiteratureSummary.disclaimersIt.map((d) => (
-                      <li key={d} className="rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-gray-300">
-                        {d}
-                      </li>
-                    ))}
-                    {vm.biaLiteratureSummary.literatureAnchorsIt.map((a) => (
-                      <li key={a} className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2 py-1.5 text-gray-300">
-                        {a}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </Pro2SectionCard>
-            ) : null}
-
-            {vm.evidenceConditionedLayer && evidenceLinkCount > 0 ? (
-              <div id="bioenergetic-evidence-layer" className="scroll-mt-24">
-              <Pro2SectionCard
-                accent="orange"
-                title="Evidenza letteratura · assi e fluidi"
-                subtitle={`Banco ${vm.evidenceConditionedLayer.bankRef.bankId} · ${vm.evidenceConditionedLayer.bankRef.bankVersion} · ${evidenceLinkCount} link · badge «DB» nel grafo skeleton = link mappati a quel contesto`}
-                icon={BookOpen}
-              >
-                <p className="mb-2 text-[0.7rem] text-orange-200/85">
-                  <a
-                    href="#bioenergetic-skeleton-layer"
-                    className="underline decoration-orange-400/50 underline-offset-2 hover:text-orange-100"
-                  >
-                    Torna al grafo skeleton
-                  </a>
-                </p>
-                <p className="text-sm leading-relaxed text-gray-300">
-                  Grafo curato (ormoni / neuro / renale ↔ processi di fluido). Serve al synthesizer evidenza e alla UI
-                  «perché»; le curve sopra restano kernel / misura.
-                </p>
-                <ul className="mt-3 space-y-2 text-xs text-gray-400">
-                  {vm.evidenceConditionedLayer.disclaimersIt.map((d) => (
-                    <li key={d} className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-gray-300">
-                      {d}
-                    </li>
-                  ))}
-                </ul>
-                {vm.evidenceConditionedLayer.series.length > 0 ? (
-                  <div className="mt-4 border-t border-white/10 pt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-orange-200/85">
-                      Serie evidenza condizionata (24 h, indice 0–100)
-                    </p>
-                    <ul className="mt-2 space-y-2">
-                      {vm.evidenceConditionedLayer.series.map((s) => {
-                        const lo = Math.min(...s.hourlyMean24);
-                        const hi = Math.max(...s.hourlyMean24);
-                        return (
-                          <li
-                            key={s.analyteId}
-                            className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-gray-300"
-                          >
-                            <span className="font-mono text-orange-200/90">{s.analyteId}</span> · {s.unit} · fascia{" "}
-                            {lo.toFixed(1)}–{hi.toFixed(1)}
-                            <span className="mt-1 block truncate font-mono text-[0.6rem] text-gray-500">
-                              digest contesto {s.contextDigest.slice(0, 14)}…
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ) : null}
-                {vm.evidenceConditionedLayer.contributionGraph ? (
-                  <details className="mt-3 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
-                    <summary className="cursor-pointer text-sm font-medium text-orange-200/90">
-                      Grafo contributi ({vm.evidenceConditionedLayer.contributionGraph.edges.length} archi,{" "}
-                      {vm.evidenceConditionedLayer.contributionGraph.nodes.length} nodi)
-                    </summary>
-                    <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-[0.65rem] text-gray-500">
-                      {vm.evidenceConditionedLayer.contributionGraph.edges.map((e, i) => (
-                        <li key={`${e.from}-${e.to}-${i}`} className="font-mono">
-                          {e.from} → {e.to}
-                          {e.weight01 != null ? ` · w ${e.weight01.toFixed(2)}` : ""}
-                          {e.evidenceLinkId ? ` · link ${e.evidenceLinkId.slice(0, 8)}…` : ""}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
-                <details className="mt-4 rounded-xl border border-white/10 bg-black/30 px-3 py-2">
-                  <summary className="cursor-pointer text-sm font-medium text-orange-200/95">
-                    Mostra link ({evidenceLinkCount})
-                  </summary>
-                  <ul className="mt-3 max-h-72 space-y-3 overflow-y-auto pr-1">
-                    {resolvedEvidenceLinks.map((lk) => (
-                      <li key={lk.linkId} className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2">
-                        <p className="text-[0.65rem] font-mono uppercase tracking-wide text-orange-300/90">
-                          {lk.axis.labelIt} → {lk.fluidProcess.labelIt}
-                        </p>
-                        <p className="mt-1 text-[0.7rem] text-gray-500">
-                          {lk.relationKind} · {lk.strength}
-                          {lk.ontologyRefs?.length ? ` · ontology ${lk.ontologyRefs.length}` : null}
-                        </p>
-                        <p className="mt-1 text-xs leading-snug text-gray-300">{lk.narrativeIt}</p>
-                        {lk.documents.length ? (
-                          <p className="mt-1 text-[0.65rem] text-gray-500">
-                            Fonti:{" "}
-                            {lk.documents
-                              .map((doc) => `${doc.sourceDb}:${doc.externalId}`)
-                              .slice(0, 4)
-                              .join(" · ")}
-                            {lk.documents.length > 4 ? ` · +${lk.documents.length - 4}` : ""}
-                          </p>
-                        ) : null}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              </Pro2SectionCard>
-              </div>
-            ) : vm ? (
-              <Pro2SectionCard accent="slate" title="Evidenza letteratura · assi e fluidi" subtitle="Nessun link caricato" icon={BookOpen}>
-                <p className="text-sm text-gray-400">
-                  Il layer opzionale è vuoto se le migrazioni <code className="text-gray-300">051</code> /{" "}
-                  <code className="text-gray-300">052</code> non sono sul progetto Supabase collegato, oppure se la query fallisce
-                  (permessi). Con seed applicato dovresti vedere <strong className="text-white">8</strong> link e la tile arancione con
-                  conteggio.
-                </p>
-              </Pro2SectionCard>
-            ) : null}
-
-            <Pro2SectionCard accent="amber" title="Segnali & biomarker" subtitle="Da lab e canali del giorno; assenza dati non implica valore clinico" icon={LineChart}>
               {(() => {
                 const tiles = vm.metricTiles ?? [];
                 const byCat = tiles.reduce<Record<string, BioenergeticMetricTile[]>>((acc, t) => {
@@ -931,35 +297,56 @@ export default function BioenergeticsPageView() {
               })()}
             </Pro2SectionCard>
 
-            <Pro2SectionCard accent="cyan" title="Kernel v1" subtitle="Contrasto domanda energetica vs esposizione CHO" icon={Activity}>
-              <p className="text-sm text-gray-300">
-                Glucose handling {vm.kernel.glucoseHandlingScore} · Insulin demand {vm.kernel.insulinDemandScore} ·
-                Oxidation drive {vm.kernel.oxidationDriveScore}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {vm.kernel.keyDrivers.map((d) => (
-                  <span key={d} className="rounded-full border border-white/15 bg-white/5 px-2 py-1 text-xs text-gray-300">
-                    {d}
-                  </span>
-                ))}
-              </div>
-            </Pro2SectionCard>
-          </>
-        ) : null}
-      </section>
-
-      <section id="gen-cross" className="scroll-mt-28">
-        {vm?.interpretationHints?.length ? (
-          <Pro2SectionCard accent="violet" title="Interpretation" subtitle="Hint multiscala (non diagnostici)" icon={LineChart}>
-            <div className="space-y-2">
-              {vm.interpretationHints.map((h) => (
-                <div key={h.pathwayId} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                  <p className="text-sm font-semibold text-white">{h.title}</p>
-                  <p className="text-xs text-gray-400">{h.detail}</p>
+            <Pro2SectionCard
+              accent="fuchsia"
+              title="Striscia 24 h (curve)"
+              subtitle="Glucosio, lattato, domanda insulinica, cortisolo e ACTH — stessa chiamata OpenAI; passo 5 min, illustrativo."
+              icon={LineChart}
+            >
+              {vm.continuousMonitoring &&
+              (vm.continuousMonitoring.channels.length > 0 || vm.continuousMonitoring.layer === "ai_from_inputs_v1") ? (
+                <div className="space-y-4">
+                  {vm.continuousMonitoring.channels.length === 0 &&
+                  vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
+                    <p className="rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-fuchsia-100/95">
+                      Nessuna curva: verifica <code className="text-fuchsia-200/90">OPENAI_API_KEY</code> e la risposta JSON (vedi disclaimer).
+                    </p>
+                  ) : null}
+                  {timelineModelStimuli.length ? (
+                    <div className="rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
+                      <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-fuchsia-200/90">
+                        Contesto inviato (estratto timeline)
+                      </p>
+                      <ul className="max-h-36 space-y-1.5 overflow-y-auto text-[0.7rem] text-gray-200">
+                        {timelineModelStimuli.map((e) => (
+                          <li
+                            key={e.id}
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0"
+                          >
+                            <span className="shrink-0 font-mono text-[0.65rem] text-fuchsia-200/90">{e.ts}</span>
+                            <span className="shrink-0 text-gray-500">
+                              {e.type === "meal"
+                                ? "Pasto"
+                                : e.type === "executed_session"
+                                  ? "Seduta eseguita"
+                                  : "Seduta pianificata"}
+                            </span>
+                            <span className="min-w-0 flex-1 text-gray-100">{e.title}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {vm.continuousMonitoring.channels.length > 0 ? (
+                    <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          </Pro2SectionCard>
+              ) : (
+                <p className="text-sm text-gray-500">Nessun dato striscia per questa giornata.</p>
+              )}
+            </Pro2SectionCard>
+
+          </>
         ) : null}
       </section>
 
