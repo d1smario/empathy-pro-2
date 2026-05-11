@@ -32,6 +32,8 @@ export type {
   SimGluLacDiurnalModulationV1,
   SimSeriesPointV1,
 } from "./day-simulator-v1";
+export type { CgmSurfaceKernelV1Input, CgmSurfaceSeriesPointV1, CgmSurfaceRealismClamp } from "./cgm-surface-realism-v1";
+export { applyCgmLikeSurfaceToSubhourlyGluLac } from "./cgm-surface-realism-v1";
 export {
   SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX,
   SIM_LAB_TILE_PARTIAL_SCALE_V1,

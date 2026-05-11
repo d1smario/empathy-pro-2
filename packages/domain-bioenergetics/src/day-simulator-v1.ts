@@ -1,3 +1,4 @@
+import { applyCgmLikeSurfaceToSubhourlyGluLac } from "./cgm-surface-realism-v1";
 import {
   SIM_CORTISOL_MEAL_MOD_V1,
   SIM_DIURNAL_GLUCOSE_V1,
@@ -187,7 +188,14 @@ export function buildSimulatedGluLacDiurnalSubHourly(
     glucose.push({ ts, value: Math.round(g * 1000) / 1000, source: src });
     lactate.push({ ts, value: Math.round(lac * 1000) / 1000, source: src });
   }
-  return { glucose, lactate };
+  return applyCgmLikeSurfaceToSubhourlyGluLac({
+    glucose,
+    lactate,
+    date: day,
+    kernel,
+    glucoseClamp: { lo: gCfg.clampLo, hi: gCfg.clampHi },
+    lactateClamp: { lo: lCfg.clampLo, hi: lCfg.clampHi },
+  });
 }
 
 /**
