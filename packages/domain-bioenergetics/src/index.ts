@@ -53,6 +53,7 @@ export {
   simBlendDeterministicWeightFromRichness01,
 } from "./curve-fusion-arbitration-v1";
 export type { ArbitrationTimelineEventV1 } from "./curve-fusion-arbitration-v1";
+export { mergeHourlyBioenergeticCurvesV1 } from "./numeric-curve-fusion-hourly-v1";
 export {
   METABOLIC_ENDOCRINE_INTERACTION_CONTRACT_VERSION,
   METABOLIC_ENDOCRINE_INTERACTION_EDGES_V1,

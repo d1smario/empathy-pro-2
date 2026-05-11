@@ -2,18 +2,20 @@
 
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, BookOpen, GitBranch, LineChart, Timer } from "lucide-react";
+import { Activity, BookOpen, CalendarRange, GitBranch, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticBiaLiteratureSummaryV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
   BioenergeticPathwayImpact,
   BioenergeticsDayViewModel,
+  BioenergeticsTimeSeriesStreamResponseV1,
+  BioenergeticsWindowViewModel,
 } from "@/api/bioenergetics/contracts";
 import { GenerativeModuleSubnav } from "@/components/navigation/GenerativeModuleSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
-import { Pro2Link } from "@/components/ui/empathy";
+import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import {
   readPersistedNutritionPlanDate,
@@ -23,16 +25,31 @@ import {
   evidenceLinkCountForSkeletonEdge,
   evidenceLinkCountForSkeletonNode,
 } from "@/lib/bioenergetics/bioenergetic-evidence-skeleton-bridge";
+import { BIOENERGETIC_WINDOW_MAX_DAYS, enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-window-range";
+import {
+  buildBioenergeticWindowStreamChartRows,
+  buildBioenergeticWindowStreamDailyRollups,
+  computeBioenergeticWindowStreamStats,
+  computeBioenergeticWindowStreamVariability,
+} from "@/lib/bioenergetics/window-stream-stats";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsContinuousMonitoringGrid } from "@/modules/bioenergetics/components/BioenergeticsContinuousMonitoringGrid";
 import { BioenergeticsDaySeriesPanel } from "@/modules/bioenergetics/components/BioenergeticsDaySeriesPanel";
 import { BioenergeticsPathway24Chart } from "@/modules/bioenergetics/components/BioenergeticsPathway24Chart";
+import { BioenergeticsWindowStreamChart } from "@/modules/bioenergetics/components/BioenergeticsWindowStreamChart";
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+function addDaysIsoDate(dateIso: string, deltaDays: number): string {
+  const base = new Date(`${dateIso.slice(0, 10)}T12:00:00.000Z`);
+  if (Number.isNaN(base.getTime())) return dateIso.slice(0, 10);
+  base.setUTCDate(base.getUTCDate() + deltaDays);
+  return base.toISOString().slice(0, 10);
 }
 
 function coerceIsoDate(s: string | null | undefined): string | null {
@@ -83,7 +100,15 @@ export default function BioenergeticsPageView() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [vm, setVm] = useState<BioenergeticsDayViewModel | null>(null);
+  const [windowFrom, setWindowFrom] = useState(() => addDaysIsoDate(toIsoDate(new Date()), -6));
+  const [windowTo, setWindowTo] = useState(() => toIsoDate(new Date()));
+  const [windowVm, setWindowVm] = useState<BioenergeticsWindowViewModel | null>(null);
+  const [windowStream, setWindowStream] = useState<BioenergeticsTimeSeriesStreamResponseV1 | null>(null);
+  const [windowStreamError, setWindowStreamError] = useState<string | null>(null);
+  const [windowLoading, setWindowLoading] = useState(false);
+  const [windowError, setWindowError] = useState<string | null>(null);
   const seededFromContext = useRef(false);
+  const genBodyRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     seededFromContext.current = false;
@@ -103,6 +128,74 @@ export default function BioenergeticsPageView() {
     if (persisted) setDate((d) => (d === persisted ? d : persisted));
   }, [searchParams, athleteId, athleteLoading]);
 
+  useEffect(() => {
+    setWindowTo(date);
+    setWindowFrom(addDaysIsoDate(date, -6));
+    setWindowVm(null);
+    setWindowStream(null);
+    setWindowStreamError(null);
+    setWindowError(null);
+  }, [date]);
+
+  const loadBioenergeticWindow = useCallback(async () => {
+    if (!athleteId) return;
+    const range = enumerateInclusiveIsoDates(windowFrom, windowTo);
+    if (!range.ok) {
+      setWindowError(
+        range.error === `window_max_${BIOENERGETIC_WINDOW_MAX_DAYS}_days`
+          ? `Intervallo troppo lungo (massimo ${BIOENERGETIC_WINDOW_MAX_DAYS} giorni inclusi).`
+          : "Intervallo date non valido.",
+      );
+      setWindowVm(null);
+      setWindowStream(null);
+      setWindowStreamError(null);
+      return;
+    }
+    setWindowLoading(true);
+    setWindowError(null);
+    setWindowStreamError(null);
+    setWindowStream(null);
+    try {
+      const headers = await buildSupabaseAuthHeaders();
+      const q = new URLSearchParams({ athleteId, from: range.dates[0]!, to: range.dates[range.dates.length - 1]! });
+      const qs = q.toString();
+      const [winRes, streamRes] = await Promise.all([
+        fetch(`/api/bioenergetics/window?${qs}`, { cache: "no-store", credentials: "same-origin", headers }),
+        fetch(`/api/bioenergetics/streams?${qs}&channel=all`, { cache: "no-store", credentials: "same-origin", headers }),
+      ]);
+      const winJson = (await winRes.json()) as BioenergeticsWindowViewModel & { error?: string };
+      if (!winRes.ok) {
+        setWindowVm(null);
+        setWindowStream(null);
+        setWindowStreamError(null);
+        setWindowError(winJson.error ?? "Caricamento finestra non riuscito.");
+        return;
+      }
+      setWindowVm(winJson);
+      setWindowError(null);
+      const streamJson = (await streamRes.json()) as BioenergeticsTimeSeriesStreamResponseV1 & { error?: string };
+      if (!streamRes.ok) {
+        setWindowStream(null);
+        setWindowStreamError(streamJson.error ?? "Caricamento serie misurata non riuscito.");
+        return;
+      }
+      if (streamJson.streamContractVersion !== 1) {
+        setWindowStream(null);
+        setWindowStreamError("Risposta serie non valida.");
+        return;
+      }
+      setWindowStream(streamJson);
+      setWindowStreamError(null);
+    } catch {
+      setWindowVm(null);
+      setWindowStream(null);
+      setWindowStreamError(null);
+      setWindowError("Errore di rete durante il caricamento della finestra.");
+    } finally {
+      setWindowLoading(false);
+    }
+  }, [athleteId, windowFrom, windowTo]);
+
   const setDateAndPersist = useCallback(
     (next: string) => {
       const k = coerceIsoDate(next);
@@ -117,6 +210,16 @@ export default function BioenergeticsPageView() {
       }
     },
     [athleteId],
+  );
+
+  const openWindowDayInBody = useCallback(
+    (dayIso: string) => {
+      setDateAndPersist(dayIso);
+      requestAnimationFrame(() => {
+        genBodyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    },
+    [setDateAndPersist],
   );
 
   useEffect(() => {
@@ -181,11 +284,33 @@ export default function BioenergeticsPageView() {
     return `${measuredCount}/2`;
   }, [vm]);
 
+  const canonicalStreamSummary = useMemo(() => {
+    if (!vm) return null;
+    const g = vm.canonicalStreamCounts.glucoseSampleCount;
+    const l = vm.canonicalStreamCounts.lactateSampleCount;
+    if (g === 0 && l === 0) return null;
+    return `Serie canonica (055): ${g} campioni glucosio · ${l} lattato`;
+  }, [vm]);
+
   const traceSeriesCount = useMemo(() => {
     if (!vm?.series?.length) return 0;
     const traceIds = new Set(["power_w", "hr_bpm", "speed_kmh", "cadence_rpm", "altitude_m", "temperature_c"]);
     return vm.series.filter((s) => traceIds.has(s.id) && s.provenance === "measured" && s.points.length >= 2).length;
   }, [vm]);
+
+  const windowStreamStats = useMemo(
+    () => computeBioenergeticWindowStreamStats(windowStream?.samples ?? []),
+    [windowStream],
+  );
+  const windowStreamRows = useMemo(() => buildBioenergeticWindowStreamChartRows(windowStream?.samples ?? []), [windowStream]);
+  const windowDailyRollups = useMemo(
+    () => buildBioenergeticWindowStreamDailyRollups(windowStream?.samples ?? []),
+    [windowStream],
+  );
+  const windowStreamVariability = useMemo(
+    () => computeBioenergeticWindowStreamVariability(windowDailyRollups),
+    [windowDailyRollups],
+  );
 
   const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
   const evidenceLinkCount = resolvedEvidenceLinks.length;
@@ -228,7 +353,101 @@ export default function BioenergeticsPageView() {
         </Pro2SectionCard>
       </section>
 
-      <section id="gen-body" className="scroll-mt-28 space-y-6">
+      <section id="gen-window" className="scroll-mt-28">
+        <Pro2SectionCard
+          accent="violet"
+          title="Finestra multi-giorno"
+          subtitle={`Tabella giornaliera + grafico serie misurate (055) su asse tempo; fino a ${BIOENERGETIC_WINDOW_MAX_DAYS} giorni inclusi; evidenza DB una volta per finestra.`}
+          icon={CalendarRange}
+        >
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs text-gray-400">
+              Da
+              <input
+                type="date"
+                value={windowFrom}
+                onChange={(e) => setWindowFrom(e.currentTarget.value.slice(0, 10))}
+                className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs text-gray-400">
+              A
+              <input
+                type="date"
+                value={windowTo}
+                onChange={(e) => setWindowTo(e.currentTarget.value.slice(0, 10))}
+                className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+              />
+            </label>
+            <Pro2Button
+              type="button"
+              variant="primary"
+              onClick={() => void loadBioenergeticWindow()}
+              disabled={!athleteId || athleteLoading || windowLoading}
+              className="shrink-0"
+            >
+              {windowLoading ? "Carico…" : "Carica finestra"}
+            </Pro2Button>
+          </div>
+          {windowError ? <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{windowError}</p> : null}
+          {windowVm?.days?.length ? (
+            <div className="mt-4 max-h-64 overflow-y-auto rounded-xl border border-white/10">
+              <table className="w-full text-left text-sm text-gray-200">
+                <thead className="sticky top-0 bg-black/90 text-[0.65rem] uppercase tracking-wide text-gray-500">
+                  <tr>
+                    <th className="px-3 py-2">Data</th>
+                    <th className="px-3 py-2">Pathway</th>
+                    <th className="px-3 py-2">Timeline</th>
+                    <th className="px-3 py-2">TS 055</th>
+                    <th className="px-3 py-2 w-[1%] whitespace-nowrap" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {windowVm.days.map((d) => (
+                    <tr key={d.date} className="border-t border-white/5">
+                      <td className="px-3 py-2 font-mono text-xs text-white">{d.date}</td>
+                      <td className="px-3 py-2 capitalize">{d.kernel.pathwayState}</td>
+                      <td className="px-3 py-2">{d.timeline.length}</td>
+                      <td className="px-3 py-2 text-xs text-violet-200/90">
+                        glu {d.canonicalStreamCounts.glucoseSampleCount} · lac {d.canonicalStreamCounts.lactateSampleCount}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        <Pro2Button
+                          type="button"
+                          variant="ghost"
+                          className="shrink-0 !px-3 !py-1.5 text-xs font-semibold"
+                          onClick={() => openWindowDayInBody(d.date)}
+                        >
+                          Giorno
+                        </Pro2Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+          {windowVm?.days?.length ? (
+            <>
+              {windowStreamError ? (
+                <p className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{windowStreamError}</p>
+              ) : null}
+              {windowStream ? (
+                <BioenergeticsWindowStreamChart
+                  rows={windowStreamRows}
+                  stats={windowStreamStats}
+                  variability={windowStreamVariability}
+                  dailyRollups={windowDailyRollups}
+                  truncated={windowStream.truncated}
+                  skippedSchema={windowStream.skippedSchema}
+                />
+              ) : null}
+            </>
+          ) : null}
+        </Pro2SectionCard>
+      </section>
+
+      <section id="gen-body" ref={genBodyRef} className="scroll-mt-28 space-y-6">
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-2xl border border-cyan-500/25 bg-black/35 px-4 py-3">
             <p className="font-mono text-[0.6rem] uppercase tracking-wider text-cyan-300">Eventi timeline</p>
@@ -237,6 +456,9 @@ export default function BioenergeticsPageView() {
           <div className="rounded-2xl border border-lime-500/25 bg-black/35 px-4 py-3">
             <p className="font-mono text-[0.6rem] uppercase tracking-wider text-lime-300">Glicemia / lattato (CGM o lab)</p>
             <p className="mt-1 text-xl font-semibold text-white">{measuredGluLacBadge}</p>
+            {canonicalStreamSummary ? (
+              <p className="mt-1 text-[0.65rem] leading-snug text-lime-200/75">{canonicalStreamSummary}</p>
+            ) : null}
             <p className="mt-1 text-[0.65rem] leading-snug text-gray-500">
               Serie da trace allenamento:{" "}
               <span className="text-lime-200/90">{traceSeriesCount > 0 ? `${traceSeriesCount} con ≥2 punti` : "nessuna"}</span>

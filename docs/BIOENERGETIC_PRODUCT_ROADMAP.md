@@ -71,15 +71,15 @@ Obiettivo: **non solo testi** in `interactionSkeleton`, ma **modulazione coerent
 | 3.1 | Contratto storage time-series per CGM / futuri campioni ormonali | ✅ Migration `055` + contracts; scrittura campioni convogliata in `persistRealityDeviceExport` (`athlete-time-series-from-device-export.ts`); **no** route ingest duplicata |
 | 3.2 | `measured_stream` popolato da lettura canonica sugli stessi `athlete_id` / giorno | ✅ `loadBioenergeticDayMemorySlice` + `extractMeasuredGluLacFromSlice` (merge + priorita su export) |
 | 3.3 | Versioning / audit risposta `GET …/day` senza moltiplicare query string | ✅ `dayContractVersion` + `canonicalStreamCounts` nel body (`BioenergeticsDayViewModel`); nessun query param nuovo obbligatorio |
-| 3.4 | Merge numerico AI (seconda curva) **solo** con endpoint + schema + governance esistente | `curve-fusion-arbitration-v1` |
+| 3.4 | Merge numerico AI (seconda curva) **solo** con endpoint + schema + governance esistente | ✅ `POST /api/bioenergetics/merge-hourly-curve` + `parseBioenergeticAiCurveProposalV1` + `mergeHourlyBioenergeticCurvesV1` (governance da `assembleBioenergeticDay`) |
 
-🎯 **Uscita fase 3:** almeno un canale con stream denso end-to-end (CGM o equivalente) con `measurement_wins` in produzione.
+🎯 **Uscita fase 3:** stack end-to-end (DDL 055 + ingest convogliato + lettura/merge + VM + merge AI opzionale) pronto; stream denso **in produzione** quando gli adapter inviano export `cgm` (o campioni diretti futuri) — governance `measurement_wins` già attiva su stream denso.
 
 ---
 
 ## Fase 4 — Orizzonte (non iniziare prima di 1–3)
 
-- Finestra **multi-giorno** (`assembleBioenergeticWindow`) che riusa slice + skeleton senza duplicare query.
+- Finestra **multi-giorno** (`assembleBioenergeticWindow` + `GET …/bioenergetics/window`) — ✅ slice parallele + **una** query evidenza assi↔fluidi; VM giorno = stesso builder `buildBioenergeticDayViewModelFromSlice`.
 - Coaching / export PDF del grafo giornaliero.
 - Integrazione esplicita **Nutrition module** ↔ skeleton (stesso `athleteId`, stessa data).
 
@@ -89,7 +89,7 @@ Obiettivo: **non solo testi** in `interactionSkeleton`, ma **modulazione coerent
 
 1. ~~**1.1–1.5–1.6**~~ (fatto: bridge tile, sim gated, partial scale, sonno→snapshot+grafo, test).  
 2. ~~**Fase 2.1–2.4**~~ (leptina/energia, cortisolo+pasto, GH/IGF-1 lab, UI evidenza↔skeleton).  
-3. **Fase 3** (stream CGM / contratti time-series) quando priorità prodotto lo richiede.
+3. ~~**Fase 3**~~ (stream CGM / time-series 055 + API giornata + merge orario AI) — **chiusa** lato repo; prossimo filo consigliato: **Fase 4** (finestra multi-giorno / export) o integrazione CGM vendor su `persistRealityDeviceExport`.
 
 ---
 
@@ -104,3 +104,7 @@ Obiettivo: **non solo testi** in `interactionSkeleton`, ma **modulazione coerent
 | 2026-05-09 | Fase 3.1–3.2: tabella `athlete_time_series_samples`, lettura in slice giorno e merge curve gluc/lac (priorita vs export). |
 | 2026-05-10 | Fase 3.1 ingest: dopo insert/update `device_sync_exports`, sync idempotente verso `athlete_time_series_samples` (delete per `source_ref.device_sync_export_id` + insert); skip silenzioso se tabella assente (migrazione non applicata). |
 | 2026-05-10 | Fase 3.3: `dayContractVersion` (1) e `canonicalStreamCounts` nel JSON giornata bioenergetica; test `canonical-time-series-summary`. |
+| 2026-05-10 | Fase 3.4: merge orario AI sotto arbitration server (`merge-hourly-curve`), schema proposta e test contratto. |
+| 2026-05-10 | Migrazione **055** applicata su DB target: time-series canonico operativo in lettura/scrittura (convoglio `device_sync_exports`). |
+| 2026-05-10 | Fase 4 avvio: `assembleBioenergeticWindow`, `GET /api/bioenergetics/window`, limite 14 giorni, test range date. |
+| 2026-05-10 | UI Bioenergetics: sezione «Finestra multi-giorno» (date da/a + Carica + tabella riepilogo giorni). |

@@ -113,8 +113,11 @@ Ordine di valore per **interconnessione** (indicativo):
 | Endpoint / uso | File | Output rilevante |
 |----------------|------|-------------------|
 | `GET` bioenergetics day | `apps/web/app/api/bioenergetics/day/route.ts` | JSON da `assembleBioenergeticDay`: **`dayContractVersion`**, **`canonicalStreamCounts`** (campioni tabella 055 in slice), `timeline`, `channels`, `kernel`, `chart24h`, `continuousMonitoring`, `series`, `evidenceConditionedLayer`, `biaLiteratureSummary`, **`interactionSkeleton`**. |
+| `POST` bioenergetics merge-hourly-curve | `apps/web/app/api/bioenergetics/merge-hourly-curve/route.ts` | Body: `athleteId`, `date`, `channelId` (`glucose`|`lactate`), `aiProposal` (schema `bioenergetic-ai-curve-proposal-v1`). Ricalcola giornata, applica `mergeHourlyBioenergeticCurvesV1` con `curveResolution` server-side (`measurement_wins` → nessun blend AI). |
+| `GET` bioenergetics window | `apps/web/app/api/bioenergetics/window/route.ts` | Query `athleteId`, `from`, `to` (max 14 giorni inclusi). `assembleBioenergeticWindow`: slice per giorno in parallelo, **un** caricamento link evidenza DB; body `BioenergeticsWindowViewModel` (`days[]` = stesso contratto del giorno singolo). |
+| `GET` bioenergetics streams | `apps/web/app/api/bioenergetics/streams/route.ts` | Query `athleteId`, `from`, `to`, opz. `channel` (`all` default). `loadAthleteTimeSeriesSamplesForRange` → body `BioenergeticsTimeSeriesStreamResponseV1` (`streamContractVersion`, `samples[]`, `truncated`, `skippedSchema?`). |
 
-Il client (`BioenergeticsPageView`) consuma questo payload; **non** duplicare la composizione lato browser.
+Il client (`BioenergeticsPageView`) consuma il payload giorno/finestra; al **Carica finestra** richiede in parallelo `GET …/streams` per grafico e statistiche sui campioni 055 nella stessa sezione (solo presentazione, nessuna seconda pipeline). **Non** duplicare la composizione VM giorno lato browser.
 
 ### 7.2 Evoluzione monitoring continuo (linee guida API)
 
@@ -127,7 +130,8 @@ Obiettivo: **stesso contratto** `BioenergeticMonitoringChannel24` (`hourly` 0–
 **Estensioni API (direzioni, non obbligo immediato):**
 
 - `GET /api/bioenergetics/day` — resta il **aggregatore**; versioning nel body (`dayContractVersion`); parametri query aggiuntivi (`?include=…`) solo se strettamente necessari e backward-compatible.
-- Eventuale `GET /api/bioenergetics/streams?athleteId=&from=&to=&channel=` — **thin**, legge storage time-series canonico, **non** seconda pipeline di decodifica ingest.
+- `GET /api/bioenergetics/window` — finestra multi-giorno (max 14) con VM giornata ripetuta; **non** sostituisce lettura time-series raw (per drill-down / export usare `streams` sotto).
+- `GET /api/bioenergetics/streams?athleteId=&from=&to=&channel=` — **thin**, legge `athlete_time_series_samples` (055) nell’intervallo (stesso limite giorni della finestra), opz. `channel` = `all` \| `glucose_mmol_l` \| `lactate_mmol_l`; **nessuna** seconda pipeline di decodifica ingest.
 - Webhook / job ingest — restano negli adapter ingest; la bioenergetica **legge** proiezioni già normalizzate.
 
 Tutte le nuove route devono **chiamare** librerie condivise (`bioenergetic-day-assembler` / `health-document-pipeline` pattern) invece di reimplementare query.

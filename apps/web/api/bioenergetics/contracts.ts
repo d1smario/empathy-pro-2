@@ -1,8 +1,20 @@
 import type {
+  AthleteTimeSeriesSampleRowV1,
   BioenergeticBiaLiteratureSummaryV1,
   BioenergeticChannelCurveResolutionV1,
   BioenergeticDayEvidenceConditionedLayerV1,
 } from "@empathy/contracts";
+
+/** Risposta `POST /api/bioenergetics/merge-hourly-curve` (merge numerico sotto governance server). */
+export type BioenergeticHourlyCurveMergeResponseV1 = {
+  mergeContractVersion: 1;
+  channelId: "glucose" | "lactate";
+  mergedHourly: (number | null)[];
+  curveResolution: BioenergeticChannelCurveResolutionV1;
+  appliedAiBlend: boolean;
+  /** Eco dalla giornata assemblata (stesso `GET …/day`). */
+  dayContractVersion?: number;
+};
 
 export type BioenergeticChannelProvenance = "measured" | "estimated" | "absent" | "planned";
 
@@ -178,4 +190,26 @@ export type BioenergeticsDayViewModel = {
   biaLiteratureSummary?: BioenergeticBiaLiteratureSummaryV1 | null;
   /** Rete interazioni metabolico-endocrine: scheletro v1 + buchi dati (es. ghrelina senza diario). */
   interactionSkeleton?: BioenergeticInteractionSkeletonVmV1 | null;
+};
+
+/** `GET …/bioenergetics/window`: array di VM giornata (stesso contratto del singolo giorno per elemento). */
+export type BioenergeticsWindowViewModel = {
+  windowContractVersion: 1;
+  dayContractVersion: 1;
+  athleteId: string;
+  from: string;
+  to: string;
+  days: BioenergeticsDayViewModel[];
+};
+
+/** `GET …/bioenergetics/streams`: campioni time-series (glucosio / lattato) su intervallo date. */
+export type BioenergeticsTimeSeriesStreamResponseV1 = {
+  streamContractVersion: 1;
+  athleteId: string;
+  from: string;
+  to: string;
+  channel: string;
+  samples: AthleteTimeSeriesSampleRowV1[];
+  truncated: boolean;
+  skippedSchema?: boolean;
 };

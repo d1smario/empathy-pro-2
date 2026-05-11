@@ -13,7 +13,7 @@ Un nuovo dispositivo o formato = **nuovo adapter + mapping a contract** in `pack
 | Categoria | Esempi | Note architetturali |
 |-----------|--------|---------------------|
 | **Wearable / sport** | Garmin, Polar, Apple Health, Wahoo, … | Spesso cloud OAuth o export file; normalizzazione verso eventi sessione / giornalieri |
-| **Sensori continui** | CGM glicemia; futuri flussi ormonali dove esistono | Serie temporali ad alta frequenza: storage dedicato, downsampling, retention; twin consuma **aggregati** definiti dai motori |
+| **Sensori continui** | CGM glicemia; futuri flussi ormonali dove esistono | Serie temporali ad alta frequenza: storage dedicato (`public.athlete_time_series_samples`, migrazione **055**), downsampling, retention; twin consuma **aggregati** definiti dai motori |
 | **Laboratorio / metabolic cart** | Cosmed, analizzatori VO₂ max, protocolli cardiopolmonari | Import file (CSV/XML/PDF strutturato se possibile) o API vendor; parser **versionati** |
 | **Periferica ossigenazione / muscolo** | SmO₂ (es. Moxy), analoghi | BLE, vendor cloud o file; stesso envelope |
 | **Manuale / coach** | Inserimento, correzione | Stessi gate di validazione della memoria atleta |
@@ -45,6 +45,17 @@ Le righe seguenti sono **obiettivi di integrazione**, non architetture separate.
 
 Dopo ingest validato → **compute** → **twin**; moduli e generatori leggono dalla **memoria canonica** per `athlete_id` (`docs/ATHLETE_MEMORY_AND_COACH_SCOPE.md`).
 
+## 7. Time-series denso atleta (`athlete_time_series_samples`, Pro 2)
+
+| Aspetto | Implementazione |
+|---------|-------------------|
+| **Tabella** | `public.athlete_time_series_samples` — canali v1: `glucose_mmol_l`, `lactate_mmol_l` (CHECK in DDL). |
+| **Contratto** | `packages/contracts` → `athlete-time-series-sample-v1`, `bioenergetic-ai-curve-proposal-v1` (merge orario separato). |
+| **Scrittura** | Convogliata in **`persistRealityDeviceExport`** (`apps/web/lib/reality/athlete-time-series-from-device-export.ts`): dopo insert/update `device_sync_exports`, sync idempotente per `source_ref.device_sync_export_id` (nessuna seconda rotta ingest parallela). |
+| **Lettura** | `loadBioenergeticDayMemorySlice` → merge in `extractMeasuredGluLacFromSlice`; VM giornata espone `canonicalStreamCounts` e `dayContractVersion` (`GET /api/bioenergetics/day`). |
+
+Nuovi vendor CGM: estendere **adapter** che già produce payload verso `device_sync_exports` con `provider: "cgm"` (o normalizzazione provider in registry), più eventuale arricchimento colonne `channel` solo via **migration ordinata** + contratto.
+
 ---
 
-*Versione 1.0 — matrice viva: aggiornare quando si aggiunge un adapter.*
+*Versione 1.1 — matrice viva: aggiornare quando si aggiunge un adapter.*

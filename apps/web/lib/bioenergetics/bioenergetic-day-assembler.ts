@@ -11,7 +11,7 @@ import {
   synthesizeEvidenceConditionedLayerV1,
 } from "@empathy/domain-bioenergetics";
 import type { BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
-import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
+import type { BioenergeticsDayViewModel, BioenergeticsWindowViewModel } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { loadBioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { buildBioenergeticDaySeries, extractMeasuredGluLacFromSlice } from "@/lib/bioenergetics/day-curves-assembler";
@@ -23,7 +23,11 @@ import { metabolicSleepContextFromConditioningContext } from "@/lib/bioenergetic
 import { somatoaxisLabFlagsFromBiomarkerRows } from "@/lib/bioenergetics/metabolic-somatoaxis-lab-flags";
 import { sha256BioenergeticConditioningContext } from "@/lib/bioenergetics/canonical-conditioning-digest";
 import { summarizeCanonicalTimeSeriesRows } from "@/lib/bioenergetics/canonical-time-series-summary";
-import { loadBioenergeticEvidenceAxisFluidLinks } from "@/lib/bioenergetics/load-bioenergetic-evidence-links";
+import {
+  loadBioenergeticEvidenceAxisFluidLinks,
+  type LoadBioenergeticEvidenceLinksResult,
+} from "@/lib/bioenergetics/load-bioenergetic-evidence-links";
+import { enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-window-range";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 
 function toDateKey(value: string): string {
@@ -141,19 +145,20 @@ export type AssembleBioenergeticDayResult =
   | { ok: true; body: BioenergeticsDayViewModel }
   | { ok: false; status: number; error: string };
 
+export type AssembleBioenergeticWindowResult =
+  | { ok: true; body: BioenergeticsWindowViewModel }
+  | { ok: false; status: number; error: string };
+
 /**
- * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation.
+ * Costruisce la VM giornata da slice già caricata e link evidenza già risolti (evita N query su finestra multi-giorno).
  */
-export async function assembleBioenergeticDay(
-  db: SupabaseClient,
-  athleteId: string,
-  dateRaw: string,
-): Promise<AssembleBioenergeticDayResult> {
-  const date = dateRaw.trim().slice(0, 10);
-  const { slice, queryError } = await loadBioenergeticDayMemorySlice(db, athleteId, date);
-  if (queryError) {
-    return { ok: false, status: 500, error: queryError };
-  }
+export function buildBioenergeticDayViewModelFromSlice(input: {
+  athleteId: string;
+  date: string;
+  slice: BioenergeticDayMemorySlice;
+  evidenceLinks: LoadBioenergeticEvidenceLinksResult;
+}): BioenergeticsDayViewModel {
+  const { athleteId, date, slice, evidenceLinks } = input;
 
   const { glucoseMeasured, lactateMeasured } = extractMeasuredGluLacFromSlice(slice);
   const timeline = buildTimeline(date, slice);
@@ -241,7 +246,6 @@ export async function assembleBioenergeticDay(
   });
   const contextDigest = sha256BioenergeticConditioningContext(conditioningContext);
 
-  const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
   const evidenceConditionedLayer =
     evidenceLinks.ok && evidenceLinks.links.length > 0
       ? (() => {
@@ -327,5 +331,62 @@ export async function assembleBioenergeticDay(
     interactionSkeleton,
   };
 
+  return body;
+}
+
+/**
+ * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation.
+ */
+export async function assembleBioenergeticDay(
+  db: SupabaseClient,
+  athleteId: string,
+  dateRaw: string,
+): Promise<AssembleBioenergeticDayResult> {
+  const date = dateRaw.trim().slice(0, 10);
+  const { slice, queryError } = await loadBioenergeticDayMemorySlice(db, athleteId, date);
+  if (queryError) {
+    return { ok: false, status: 500, error: queryError };
+  }
+  const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
+  const body = buildBioenergeticDayViewModelFromSlice({ athleteId, date, slice, evidenceLinks });
+  return { ok: true, body };
+}
+
+/**
+ * Finestra multi-giorno: una sola query evidenza assi↔fluidi; slice per giorno in parallelo; stessa VM per giorno del singolo GET.
+ */
+export async function assembleBioenergeticWindow(
+  db: SupabaseClient,
+  athleteId: string,
+  fromRaw: string,
+  toRaw: string,
+): Promise<AssembleBioenergeticWindowResult> {
+  const range = enumerateInclusiveIsoDates(fromRaw, toRaw);
+  if (!range.ok) {
+    return { ok: false, status: 400, error: range.error };
+  }
+  const dates = range.dates;
+  const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
+  const sliceResults = await Promise.all(dates.map((d) => loadBioenergeticDayMemorySlice(db, athleteId, d)));
+  const failed = sliceResults.find((r) => r.queryError);
+  if (failed?.queryError) {
+    return { ok: false, status: 500, error: failed.queryError };
+  }
+  const days = dates.map((d, i) =>
+    buildBioenergeticDayViewModelFromSlice({
+      athleteId,
+      date: d,
+      slice: sliceResults[i]!.slice,
+      evidenceLinks,
+    }),
+  );
+  const body: BioenergeticsWindowViewModel = {
+    windowContractVersion: 1,
+    dayContractVersion: 1,
+    athleteId,
+    from: dates[0]!,
+    to: dates[dates.length - 1]!,
+    days,
+  };
   return { ok: true, body };
 }
