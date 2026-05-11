@@ -55,7 +55,7 @@ type StreamChartRow = {
 
 type Props = {
   monitoring: BioenergeticContinuousMonitoringDay;
-  /** Confronto simulatore: curva interpretazione AI (stessi timestamp del glucosio deterministico 10 min). */
+  /** Confronto simulatore: curva interpretazione AI (stessi timestamp del glucosio deterministico 5 min). */
   glucoseAiOverlay?: BioenergeticMonitoringStreamPoint[] | null;
 };
 
@@ -73,8 +73,10 @@ const STROKE_BY_CHANNEL_ID: Record<string, string> = {
 function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
   const nums = hourly.filter((x): x is number => x != null && Number.isFinite(x));
   if (!nums.length) return [0, 1];
-  const mn = Math.min(...nums);
-  const mx = Math.max(...nums);
+  let mn = Math.min(...nums);
+  let mx = Math.max(...nums);
+  if (!Number.isFinite(mn) || !Number.isFinite(mx)) return [0, 1];
+  if (mn > mx) [mn, mx] = [mx, mn];
   if (mn === mx) {
     const pad = Math.max(Math.abs(mn) * 0.06, 0.02);
     return [mn - pad, mx + pad];
@@ -84,7 +86,17 @@ function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
   return [mn - pad, mx + pad];
 }
 
-function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["streamTrace"]>): StreamChartRow[] {
+function streamValuePlausible(channelId: string, v: number): boolean {
+  if (!Number.isFinite(v)) return false;
+  if (channelId === "glucose") return v >= 1.8 && v <= 16;
+  if (channelId === "lactate") return v >= 0.12 && v <= 28;
+  return true;
+}
+
+function streamChartRows(
+  trace: NonNullable<BioenergeticMonitoringChannel24["streamTrace"]>,
+  channelId: string,
+): StreamChartRow[] {
   return [...trace]
     .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
     .map((p) => {
@@ -99,7 +111,7 @@ function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["str
           : "—",
       };
     })
-    .filter((r) => Number.isFinite(r.tsMs));
+    .filter((r) => Number.isFinite(r.tsMs) && streamValuePlausible(channelId, r.v));
 }
 
 function attachGlucoseAiOverlay(rows: StreamChartRow[], ai: BioenergeticMonitoringStreamPoint[] | null | undefined): StreamChartRow[] {
@@ -132,7 +144,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
           streamTrace.length >= 4 &&
           (ch.dataPlane === "measured_stream" ||
             (isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
-        let streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace) : null;
+        let streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
         if (streamRows?.length && ch.id === "glucose" && glucoseAiOverlay?.length) {
           streamRows = attachGlucoseAiOverlay(streamRows, glucoseAiOverlay);
         }
@@ -186,8 +198,8 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
                 ? ch.dataPlane === "measured_stream"
                   ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
                   : hasAiGlucoseOverlay && ch.id === "glucose"
-                    ? "Asse tempo: fucsia = motore deterministico (10 min, pasti/IG/sedute); giallo tratteggio = interpretazione AI (simulatore confronto — non canonica)."
-                    : "Asse: tempo reale del modello (passo 10 min, deterministico da pasti/sedute in timeline — non è CGM)."
+                    ? "Asse tempo: fucsia = motore deterministico (5 min, stimoli pasto/IG + sedute + alba/sonno); giallo tratteggio = interpretazione AI (simulatore confronto — non canonica)."
+                    : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>

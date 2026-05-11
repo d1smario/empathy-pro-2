@@ -17,11 +17,14 @@ export {
 } from "./sim-bank-v1";
 export type { SimTimelineEventV1 } from "./sim-timeline-v1";
 export {
+  activityStepIntensity01V2,
   activitySupportHours,
   hourFromIsoTs,
   mealGlycemicHourWeights24,
+  mealGlycemicStepImpulseV2,
   mealInhibitoryHours,
   mealPostprandialDecayWeightsForGi,
+  minutesFromMidnightLocalTs,
 } from "./sim-timeline-v1";
 export type {
   NominalCortisolActhModulationV1,

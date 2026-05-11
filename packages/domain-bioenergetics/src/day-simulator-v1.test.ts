@@ -35,6 +35,28 @@ test("buildSimulatedGluLacDiurnalSubHourly (10m) emette 144 punti e sorgente sim
   assert.ok(glucose.every((p) => p.value >= 3.9 && p.value <= 9.8));
 });
 
+test("buildSimulatedGluLacDiurnalSubHourly (5m) emette 288 punti e sorgente sim_diurnal_v1_5m", () => {
+  const { glucose, lactate } = buildSimulatedGluLacDiurnalSubHourly("2026-05-10", kernel, [], {}, 5);
+  assert.equal(glucose.length, 288);
+  assert.equal(lactate.length, 288);
+  assert.ok(glucose.every((p) => p.source === "sim_diurnal_v1_5m"));
+  assert.ok(glucose.every((p) => p.value >= 3.9 && p.value <= 9.8));
+});
+
+test("buildSimulatedGluLacDiurnalSubHourly 5m: pasto 7:30 + allenamento 9–13 modulano glucosio vs baseline", () => {
+  const tl = [
+    { ts: "2026-05-10T07:30:00", type: "meal", payload: { carbsG: 80, kcal: 420, glycemicIndex: 75 } },
+    { ts: "2026-05-10T09:00:00", type: "executed_session", payload: { durationMinutes: 240, tss: 95 } },
+  ];
+  const empty = buildSimulatedGluLacDiurnalSubHourly("2026-05-10", kernel, [], {}, 5);
+  const withCtx = buildSimulatedGluLacDiurnalSubHourly("2026-05-10", kernel, tl, { mealResponseScale01: 1, activityResponseScale01: 1 }, 5);
+  const maxEmpty = Math.max(...empty.glucose.map((p) => p.value));
+  const maxCtx = Math.max(...withCtx.glucose.map((p) => p.value));
+  assert.ok(maxCtx > maxEmpty + 0.12, "pasti+seduta devono alzare il picco glucosio rispetto a baseline");
+  const idx10h = 10 * 12;
+  assert.ok(withCtx.lactate[idx10h]!.value > empty.lactate[idx10h]!.value + 0.08, "lattato durante blocco endurance > baseline");
+});
+
 test("buildNominalCortisolActhHourly24: mealLoad01 aumenta cortisolo pomeridiano vs baseline", () => {
   const k = {
     insulinDemandScore: 38,

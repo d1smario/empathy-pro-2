@@ -308,6 +308,9 @@ export function applyTimelineContextToGluLacHourly24(input: {
   activityH: ReadonlySet<number>;
   glucoseDenseStream: boolean;
   lactateDenseStream: boolean;
+  /** Serie 5/10 min da sim v1 già modellata: non duplicare bump pasto/orario su aggregato orario. */
+  skipMealGlucoseHourlyBecauseSubhourlySim?: boolean;
+  skipLactateTrainHourlyBecauseSubhourlySim?: boolean;
   insulinDemandScore: number;
   oxidationDriveScore: number;
 }): { glucose: (number | null)[]; lactate: (number | null)[] } {
@@ -315,8 +318,13 @@ export function applyTimelineContextToGluLacHourly24(input: {
   const lOut = [...input.lactate];
   const insK = clamp(input.insulinDemandScore / 100, 0, 1);
   const oxK = clamp(input.oxidationDriveScore / 100, 0, 1);
-  const mealGlucoseScale = input.glucoseDenseStream ? 0 : 1;
-  const lactateTrainScale = input.lactateDenseStream ? 0.22 : 1;
+  const mealGlucoseScale =
+    input.glucoseDenseStream || input.skipMealGlucoseHourlyBecauseSubhourlySim ? 0 : 1;
+  const lactateTrainScale = input.lactateDenseStream
+    ? 0.22
+    : input.skipLactateTrainHourlyBecauseSubhourlySim
+      ? 0
+      : 1;
 
   for (let h = 0; h < 24; h += 1) {
     const mw = input.mealW[h] ?? 0;
@@ -450,6 +458,15 @@ export function buildBioenergeticDayPresentation(input: {
     );
   }
 
+  const skipMealGlucoseHourlyBecauseSubhourlySim =
+    Boolean(glucosePointsForInterp?.length) &&
+    isDenseSimDiurnalSeries(glucosePointsForInterp) &&
+    input.provenance.glucose === "estimated";
+  const skipLactateTrainHourlyBecauseSubhourlySim =
+    Boolean(lactatePointsForInterp?.length) &&
+    isDenseSimDiurnalSeries(lactatePointsForInterp) &&
+    input.provenance.lactate === "estimated";
+
   const gluLacMod = applyTimelineContextToGluLacHourly24({
     glucose: glucoseHourly,
     lactate: lactateHourly,
@@ -457,6 +474,8 @@ export function buildBioenergeticDayPresentation(input: {
     activityH,
     glucoseDenseStream: glucoseDense,
     lactateDenseStream: lacDense,
+    skipMealGlucoseHourlyBecauseSubhourlySim,
+    skipLactateTrainHourlyBecauseSubhourlySim,
     insulinDemandScore: k.insulinDemandScore,
     oxidationDriveScore: k.oxidationDriveScore,
   });

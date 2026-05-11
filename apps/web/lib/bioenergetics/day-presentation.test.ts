@@ -60,7 +60,7 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
 });
 
-test("buildBioenergeticDayPresentation: sim diurno 10m espone streamTrace su glucosio stimato", () => {
+test("buildBioenergeticDayPresentation: sim diurno 5m espone streamTrace su glucosio stimato", () => {
   const simKernel = {
     insulinDemandScore: 45,
     anabolicSuppressionScore: 30,
@@ -68,7 +68,7 @@ test("buildBioenergeticDayPresentation: sim diurno 10m espone streamTrace su glu
     oxidationDriveScore: 48,
     pathwayState: "mixed" as const,
   };
-  const sim = buildSimulatedGluLacDiurnalSubHourly("2026-05-01", simKernel, [], {}, 10);
+  const sim = buildSimulatedGluLacDiurnalSubHourly("2026-05-01", simKernel, [], {}, 5);
   const { continuousMonitoring } = buildBioenergeticDayPresentation({
     date: "2026-05-01",
     kernel: {
@@ -87,7 +87,7 @@ test("buildBioenergeticDayPresentation: sim diurno 10m espone streamTrace su glu
     biomarkerRows: [],
   });
   const glu = continuousMonitoring.channels.find((c) => c.id === "glucose");
-  assert.ok(glu?.streamTrace && glu.streamTrace.length === 144);
+  assert.ok(glu?.streamTrace && glu.streamTrace.length === 288);
   assert.equal(glu?.dataPlane, "model_continuous");
 });
 

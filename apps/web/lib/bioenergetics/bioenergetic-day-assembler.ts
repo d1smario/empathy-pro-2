@@ -88,7 +88,7 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
       ? buildSimulatedGluLacDiurnalSubHourly(date, kernel, arbTl, {
           mealResponseScale01,
           activityResponseScale01,
-        }, 10)
+        }, 5)
       : null;
   const glucoseEstimated = glucoseMeasured.length > 0 ? null : simGluLac?.glucose ?? null;
   const lactateEstimated = lactateMeasured.length > 0 ? null : simGluLac?.lactate ?? null;
@@ -219,7 +219,7 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
       "Le serie aggiuntive (FC, CHO cumulativi, potenza da trace) dipendono da trace/diario disponibili per la data.",
       "La curva «Potenza (target da piano kJ/kcal)» è un vincolo energetico deterministico da `planned_workouts`, non una prescrizione FTP.",
       "Striscia monitoraggio continuo: policy fusione v1 — fase iniziale con peso maggiore al canale AI supervisionato sui sim; con contesto Empathy più ricco i pesi tendono al pareggio col motore. Merge numerico AI solo con endpoint e schema validati.",
-      "Sim diurna glucosio/lattato: orari pasti dal diario; sedute eseguite usano started_at quando presente; piani senza orario usano fasce fisse deterministiche. Picchi post-prandiali scalati da CHO/kcal e da indice glicemico (`glycemic_index_estimate` in diario quando presente; default IG 52), più contesto fusione v1 — senza LLM sulla curva canonica.",
+      "Sim diurna glucosio/lattato (passo 5 min): impulsi post-prandiali centrati su orario pasto (minuto) da CHO/kcal e IG diario; sedute su finestra start+durata con ramp; modulazione alba/sonno leggera sul glucosio. Piani senza orario usano slot fissi. Contesto fusione v1 — senza LLM sulla curva canonica. Passi/FC continui da trace: roadmap ingest (non duplicare serie parallele).",
     ],
     metricTiles,
     chart24h,

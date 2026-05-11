@@ -5,7 +5,12 @@ import {
   SIM_PATHWAY_SCALE_V1,
   SIM_STRESS_V1,
 } from "./sim-bank-v1";
-import { activitySupportHours, mealGlycemicHourWeights24 } from "./sim-timeline-v1";
+import {
+  activitySupportHours,
+  activityStepIntensity01V2,
+  mealGlycemicHourWeights24,
+  mealGlycemicStepImpulseV2,
+} from "./sim-timeline-v1";
 import type { SimTimelineEventV1 } from "./sim-timeline-v1";
 
 export type SimDayKernelV1Input = {
@@ -106,9 +111,25 @@ export function buildSimulatedGluLacDiurnal(
 /** Sorgente serie diurna ad alta risoluzione (solo modello; non sostituisce misura device). */
 export const SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX = "sim_diurnal_v1_" as const;
 
+/** Alba / sonno: piccolo modulatore glucosio (non clinico; auditabile). */
+function circadianWakeSleepGlucoseDeltaMmol(fh: number, mealScale: number): number {
+  const f = ((fh % 24) + 24) % 24;
+  let d = 0;
+  if (f >= 6 && f < 8.6) {
+    const t = Math.max(0, Math.min(1, (f - 6) / 2.6));
+    d += 0.13 * Math.sin(Math.PI * t) * (0.45 + 0.55 * mealScale);
+  }
+  if (f >= 13 && f < 14.75) d -= 0.042 * Math.sin(Math.PI * ((f - 13) / 1.75));
+  if (f >= 22.35 || f <= 5.85) {
+    const night = f >= 22.35 ? Math.min(1, (f - 22.35) / 1.85) : Math.min(1, (5.85 - f) / 5.85);
+    d -= 0.088 * night;
+  }
+  return d;
+}
+
 /**
- * Stessa logica di `buildSimulatedGluLacDiurnal` ma con passo temporale (5 o 10 min) per forma più «continua»
- * e reazione pasti/sedute allineata alla timeline (diario, pianificato/eseguito). Deterministico, auditabile.
+ * Glucosio/lattato con passo 5 o 10 min: impulsi pasto centrati al minuto (CHO+IG), allenamento su finestra
+ * start+durata con ramp, modulazione alba/sonno sul glucosio. Deterministico, auditabile.
  */
 export function buildSimulatedGluLacDiurnalSubHourly(
   date: string,
@@ -121,8 +142,6 @@ export function buildSimulatedGluLacDiurnalSubHourly(
   if (stepMinutes !== 5 && stepMinutes !== 10) {
     throw new Error("buildSimulatedGluLacDiurnalSubHourly: stepMinutes must be 5 or 10");
   }
-  const mealW = mealGlycemicHourWeights24(timeline);
-  const act = activitySupportHours(timeline);
   const mealScale = modulation?.mealResponseScale01 != null ? clamp(modulation.mealResponseScale01, 0.35, 1.2) : 1;
   const actScale = modulation?.activityResponseScale01 != null ? clamp(modulation.activityResponseScale01, 0.35, 1.2) : 1;
   const s = stress01(kernel);
@@ -132,31 +151,36 @@ export function buildSimulatedGluLacDiurnalSubHourly(
   const lacBase = lCfg.baseMmol + kernel.oxidationDriveScore * lCfg.oxidationLinear + s * lCfg.stressLinear;
   const steps = (24 * 60) / stepMinutes;
   const src = `${SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX}${stepMinutes}m` as const;
+  const mealI = mealGlycemicStepImpulseV2(steps, stepMinutes, timeline);
+  const actI = activityStepIntensity01V2(steps, stepMinutes, timeline);
   const glucose: SimSeriesPointV1[] = [];
   const lactate: SimSeriesPointV1[] = [];
 
   for (let i = 0; i < steps; i += 1) {
-    const totalMin = i * stepMinutes;
-    const hh = Math.floor(totalMin / 60);
-    const mm = totalMin % 60;
-    const fh = totalMin / 60;
-    const h0 = hh % 24;
-    const frac = fh - h0;
-    const h1 = (h0 + 1) % 24;
-    const mw = mealW[h0]! * (1 - frac) + mealW[h1]! * frac;
+    const tStart = i * stepMinutes;
+    const hh = Math.floor(tStart / 60) % 24;
+    const mm = tStart % 60;
+    const fhMid = (tStart + stepMinutes / 2) / 60;
 
-    const circG = gCfg.circAmp * Math.sin(((fh - gCfg.circPhaseHour) * Math.PI) / 12);
-    let g = gBase + circG;
+    const mw = mealI[i] ?? 0;
+    const aInt = actI[i] ?? 0;
+
+    const circG = gCfg.circAmp * Math.sin(((fhMid - gCfg.circPhaseHour) * Math.PI) / 12);
+    let g = gBase + circG + circadianWakeSleepGlucoseDeltaMmol(fhMid, mealScale);
     if (mw > 0) g += gCfg.mealBumpMmol * mw * mealScale;
-    if (act.has(h0)) g -= gCfg.activityDipMmol * actScale;
-    const jitterG = Math.sin(fh * 6.2 + day.length * 0.13) * 0.048 * mealScale + Math.cos(mm * 0.21) * 0.014;
+    if (aInt > 0) g -= gCfg.activityDipMmol * actScale * (0.5 * aInt + 0.5 * aInt * aInt);
+    const jitterG =
+      Math.sin(fhMid * 6.2 + day.length * 0.13) * 0.042 * mealScale + Math.cos((tStart % 60) * 0.21) * 0.012;
     g = clamp(g + jitterG, gCfg.clampLo, gCfg.clampHi);
 
-    const circL = lCfg.circAmp * Math.sin(((fh - lCfg.circPhaseHour) * Math.PI) / 12);
+    const circL = lCfg.circAmp * Math.sin(((fhMid - lCfg.circPhaseHour) * Math.PI) / 12);
     let lac = lacBase + circL;
-    if (act.has(h0)) lac += (lCfg.activityBumpMmol + kernel.oxidationDriveScore * lCfg.oxidationActivityK) * actScale;
+    if (aInt > 0) {
+      const lt = aInt * actScale;
+      lac += (lCfg.activityBumpMmol + kernel.oxidationDriveScore * lCfg.oxidationActivityK) * (0.22 + 0.78 * lt);
+    }
     if (mw > 0) lac -= lCfg.mealDipMmol * Math.min(1.15, mw * 0.55) * mealScale;
-    const jitterL = Math.sin(fh * 5.1 + 1.7) * 0.024 * actScale + Math.sin(mm * 0.17) * 0.008;
+    const jitterL = Math.sin(fhMid * 5.1 + 1.7) * 0.022 * actScale + Math.sin((tStart % 55) * 0.17) * 0.007;
     lac = clamp(lac + jitterL, lCfg.clampLo, lCfg.clampHi);
 
     const ts = `${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
