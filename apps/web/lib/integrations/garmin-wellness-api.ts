@@ -11,6 +11,8 @@ import "server-only";
  *   `uploadStartTimeInSeconds` + `uploadEndTimeInSeconds` (se usati, **sempre in coppia**).
  * - **GET `/rest/activityFile`** → query `id`, `token`; **200** spesso `application/octet-stream` (FIT/TCX/GPX).
  *   Garmin: i file **non** arrivano via Push; solo in risposta a **Ping** chiamando il `callbackURL` indicato.
+ *   Dopo un pull `activities`, Empathy accoda anche GET `activityDetails` + `activityFile` con lo stesso `token=`
+ *   (`garmin-activity-follow-up-pull-queue` + `garmin-pull-runner`) finché il portale non invia push dedicati.
  * - **GET `/rest/dailies` (e molti altri summary)** → la URL operativa arriva dalla **Ping/Push** con **`token=`** (pull token)
  *   nell’query string; il solo `Authorization: Bearer` dell’OAuth2 utente **non** sostituisce quel token →
  *   errore tipico `InvalidPullTokenException`. OAuth2 serve a collegare l’utente e a `user/id`, `user/permissions`; il pull verso

@@ -9,6 +9,7 @@ import {
 } from "./garmin-activity-blob-storage";
 import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
+import { queueGarminActivityEnrichmentAfterActivitiesPull } from "./garmin-activity-follow-up-pull-queue";
 import { tryEnrichExecutedWorkoutFromGarminBinaryBlob } from "./garmin-binary-route-enrich";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
@@ -24,6 +25,7 @@ type PullJobRow = {
   athlete_id: string | null;
   endpoint_kind: string;
   stream_key: string | null;
+  receipt_id: string | null;
 };
 
 function nowIso() {
@@ -59,7 +61,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   const supabase = createServerSupabaseClient();
   const { data: jobs, error } = await supabase
     .from("garmin_pull_jobs")
-    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key")
+    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key, receipt_id")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -202,6 +204,18 @@ export async function runGarminPullJobs(limit: number): Promise<{
             wellnessExportsUpserted += persisted;
           } catch {
             /* wellness export best-effort */
+          }
+        }
+
+        if (ok && !binaryPersist) {
+          try {
+            await queueGarminActivityEnrichmentAfterActivitiesPull({
+              supabase,
+              job,
+              responseBody: body,
+            });
+          } catch {
+            /* follow-up queue best-effort */
           }
         }
       }

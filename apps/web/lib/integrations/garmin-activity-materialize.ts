@@ -60,6 +60,13 @@ function collectActivityRecords(node: unknown, sink: Record<string, unknown>[]):
   }
 }
 
+/** Per follow-up pull (`activityFile` / `activityDetails`) dopo `activities` — stessa euristica del materializer. */
+export function listGarminActivitySummariesFromWellnessBody(body: unknown): Record<string, unknown>[] {
+  const sink: Record<string, unknown>[] = [];
+  collectActivityRecords(body, sink);
+  return sink;
+}
+
 /**
  * Se il summary espone già medie canoniche (anche senza `samples[]`), la copertura qualità
  * non deve restare a zero: altrimenti l’UI segnala “tutto mancante” pur avendo FC/distanza ok.
