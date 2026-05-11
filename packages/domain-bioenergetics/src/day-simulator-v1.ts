@@ -93,7 +93,7 @@ export function buildSimulatedGluLacDiurnal(
   const glucose: SimSeriesPointV1[] = [];
   const lactate: SimSeriesPointV1[] = [];
   for (let h = 0; h < 24; h += 1) {
-    const circ = gCfg.circAmp * Math.sin(((h - gCfg.circPhaseHour) * Math.PI) / 12);
+    const circ = glucoseCircadianSleepDayEnvelopeMmol(h + 0.5, mealScale, gCfg.circAmp);
     let g = gBase + circ;
     if (mealW[h] > 0) g += gCfg.mealBumpMmol * mealW[h] * mealScale;
     if (act.has(h)) g -= gCfg.activityDipMmol * actScale;
@@ -112,18 +112,34 @@ export function buildSimulatedGluLacDiurnal(
 /** Sorgente serie diurna ad alta risoluzione (solo modello; non sostituisce misura device). */
 export const SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX = "sim_diurnal_v1_" as const;
 
-/** Alba / sonno: piccolo modulatore glucosio (non clinico; auditabile). */
-function circadianWakeSleepGlucoseDeltaMmol(fh: number, mealScale: number): number {
+/**
+ * Soppressione notturna 0–1: cresce da sera tarda a mezzanotte e decade verso le 6:30,
+ * senza la risalita artificiale 22→4 del vecchio sin((h−4)·π/12) (che alzava il glucosio tutta la notte).
+ */
+function glucoseSleepSuppression01(fh: number): number {
   const f = ((fh % 24) + 24) % 24;
-  let d = 0;
-  if (f >= 6 && f < 8.6) {
-    const t = Math.max(0, Math.min(1, (f - 6) / 2.6));
-    d += 0.17 * Math.sin(Math.PI * t) * (0.45 + 0.55 * mealScale);
+  if (f >= 21.5) return clamp((f - 21.5) / 2.5, 0, 1);
+  if (f < 6.5) return clamp((6.5 - f) / 6.5, 0, 1);
+  return 0;
+}
+
+/**
+ * Envelope circadiano glucosio (solo modello educativo): notte stabile/basso, niente rampa notturna lunga;
+ * alba breve in veglia precoce; giorno onda morbida centrata ~14h. Pasti restano sugli impulsi `mealI`.
+ */
+export function glucoseCircadianSleepDayEnvelopeMmol(
+  fh: number,
+  mealScale: number,
+  circAmp: number,
+): number {
+  const f = ((fh % 24) + 24) % 24;
+  let d = -0.22 * glucoseSleepSuppression01(f);
+  if (f >= 6 && f < 8.25) {
+    const t = clamp((f - 6) / 2.25, 0, 1);
+    d += 0.07 * Math.sin(Math.PI * t) * (0.45 + 0.55 * mealScale);
   }
-  if (f >= 13 && f < 14.75) d -= 0.052 * Math.sin(Math.PI * ((f - 13) / 1.75));
-  if (f >= 22.35 || f <= 5.85) {
-    const night = f >= 22.35 ? Math.min(1, (f - 22.35) / 1.85) : Math.min(1, (5.85 - f) / 5.85);
-    d -= 0.105 * night;
+  if (f >= 8.25 && f < 21.25) {
+    d += circAmp * 0.68 * Math.sin(((f - 14) * Math.PI) / 12);
   }
   return d;
 }
@@ -166,8 +182,8 @@ export function buildSimulatedGluLacDiurnalSubHourly(
     const mw = mealI[i] ?? 0;
     const aInt = actI[i] ?? 0;
 
-    const circG = gCfg.circAmp * Math.sin(((fhMid - gCfg.circPhaseHour) * Math.PI) / 12);
-    let g = gBase + circG + circadianWakeSleepGlucoseDeltaMmol(fhMid, mealScale);
+    const circG = glucoseCircadianSleepDayEnvelopeMmol(fhMid, mealScale, gCfg.circAmp);
+    let g = gBase + circG;
     if (mw > 0) g += gCfg.mealBumpMmol * mw * mealScale;
     if (aInt > 0) g -= gCfg.activityDipMmol * actScale * (0.5 * aInt + 0.5 * aInt * aInt);
     const jitterG =

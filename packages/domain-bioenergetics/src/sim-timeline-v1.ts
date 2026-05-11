@@ -118,8 +118,11 @@ export function mealGlycemicStepImpulseV2(
       if (u < -stepMinutes || u > 360) continue;
 
       let w = 0;
-      if (u <= peakDelayMin) w = (Math.max(0, u) / peakDelayMin) * choLoad;
-      else w = choLoad * Math.exp(-(u - peakDelayMin) / tailHalfLife);
+      if (u <= peakDelayMin) {
+        const ramp = (Math.max(0, u) / peakDelayMin) * choLoad;
+        /* Evita w≈0 sullo step del pasto (solo rampa → sembrava «calo al morso»). */
+        w = Math.max(choLoad * 0.11, ramp);
+      } else w = choLoad * Math.exp(-(u - peakDelayMin) / tailHalfLife);
       impulse[i] += w;
     }
   }

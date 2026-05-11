@@ -9,8 +9,9 @@ export const SIM_DIURNAL_GLUCOSE_V1 = {
   baseMmol: 5.15,
   insulinLinear: 0.011,
   stressLinear: 0.25,
-  /** Ampiezza circadiana diurna (legata a veglia/cortisolo proxy): più leggibile vs pasti. */
+  /** Ampiezza onda diurna (8–21h) in `glucoseCircadianSleepDayEnvelopeMmol`; notte gestita a parte. */
   circAmp: 0.46,
+  /** @deprecated per glucosio (resta nei tipi per compatibilità lettura banca); fase non più usata nel sim sub-orario. */
   circPhaseHour: 4,
   /** Moltiplicatore su impulso pasto (CHO+IG): enfatizza fattore nutrizionale sulla curva. */
   mealBumpMmol: 0.58,

@@ -43,6 +43,25 @@ test("buildSimulatedGluLacDiurnalSubHourly (5m) emette 288 punti e sorgente sim_
   assert.ok(glucose.every((p) => p.value >= 3.9 && p.value <= 9.8));
 });
 
+test("glucosio sim senza pasti: notte non sta sopra il plateau diurno (no rampa artificiale 22→4)", () => {
+  const empty = buildSimulatedGluLacDiurnalSubHourly("2026-05-10", kernel, [], {}, 5);
+  const nightVals = empty.glucose
+    .filter((_, i) => {
+      const fh = (i * 5 + 2.5) / 60;
+      return fh >= 23 || fh <= 4;
+    })
+    .map((p) => p.value);
+  const dayVals = empty.glucose
+    .filter((_, i) => {
+      const fh = (i * 5 + 2.5) / 60;
+      return fh >= 10 && fh <= 13;
+    })
+    .map((p) => p.value);
+  const maxNight = Math.max(...nightVals);
+  const maxDay = Math.max(...dayVals);
+  assert.ok(maxNight <= maxDay + 0.08, "notte senza stimoli non deve essere più alta del giorno");
+});
+
 test("buildSimulatedGluLacDiurnalSubHourly 5m: pasto 7:30 + allenamento 9–13 modulano glucosio vs baseline", () => {
   const tl = [
     { ts: "2026-05-10T07:30:00", type: "meal", payload: { carbsG: 80, kcal: 420, glycemicIndex: 75 } },
