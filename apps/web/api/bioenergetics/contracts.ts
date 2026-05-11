@@ -222,13 +222,26 @@ export type BioenergeticsTimeSeriesStreamResponseV1 = {
   skippedSchema?: boolean;
 };
 
-/** `POST …/bioenergetics/simulator-glucose-compare`: curva AI sovrapponibile al deterministico (solo laboratorio). */
-export type BioenergeticGlucoseSimulatorCompareResponseV1 = {
-  compareContractVersion: 1;
+export type BioenergeticCurveDirectionTrendV1 = "rise" | "fall" | "plateau";
+
+/** Segmento qualitativo (interpretazione): non contiene mmol/L; si sovrappone al grafico come fascia temporale. */
+export type BioenergeticCurveDirectionSegmentV1 = {
+  channel: "glucose" | "lactate" | "insulin_proxy" | "cortisol" | "acth";
+  startObservedAt: string;
+  endObservedAt: string;
+  trend: BioenergeticCurveDirectionTrendV1;
+  rationaleIt: string;
+  drivers: string[];
+};
+
+/** `POST …/bioenergetics/curve-direction-hints`: analisi LLM sui dati giornata → dove sale/scende la curva (non sostituisce il motore). */
+export type BioenergeticCurveDirectionHintsResponseV1 = {
+  hintsContractVersion: 1;
   athleteId: string;
   date: string;
-  aiTrace: BioenergeticMonitoringStreamPoint[];
+  summaryIt: string;
+  segments: BioenergeticCurveDirectionSegmentV1[];
   noteIt: string | null;
-  /** Presente se la richiesta non ha prodotto punti (es. mancanza API key). */
-  skippedReason?: "no_openai" | "measured_glucose_day" | "no_sim_curve" | "bad_openai_response" | "network";
+  skippedReason?: "no_openai" | "assemble_failed" | "bad_openai_response" | "network";
 };
+

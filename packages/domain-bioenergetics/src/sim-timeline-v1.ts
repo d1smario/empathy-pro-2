@@ -72,7 +72,7 @@ export function activityStepIntensity01V2(
       const rampDn = Math.min(1, relEnd / 12);
       const shape = rampUp * rampDn;
       const frac = Math.min(1, om / stepMinutes);
-      out[i] = Math.min(1, out[i] + frac * (0.35 + 0.65 * shape));
+      out[i] = Math.min(1, out[i] + frac * (0.28 + 0.72 * shape));
     }
   }
 

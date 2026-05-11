@@ -1,13 +1,13 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type {
   BioenergeticChannelCurveResolutionV1,
   BioenergeticContinuousMonitoringDay,
+  BioenergeticCurveDirectionSegmentV1,
   BioenergeticMetricTileCategory,
   BioenergeticMonitoringChannel24,
   BioenergeticMonitoringDataPlane,
-  BioenergeticMonitoringStreamPoint,
 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticCurveGovernanceHintV1 } from "@empathy/contracts";
 
@@ -49,14 +49,13 @@ type StreamChartRow = {
   tsMs: number;
   observedAt: string;
   v: number;
-  vAi: number | null;
   timeLabel: string;
 };
 
 type Props = {
   monitoring: BioenergeticContinuousMonitoringDay;
-  /** Confronto simulatore: curva interpretazione AI (stessi timestamp del glucosio deterministico 5 min). */
-  glucoseAiOverlay?: BioenergeticMonitoringStreamPoint[] | null;
+  /** Interpretazione AI: fasce temporali salita/discesa/piatta (non sostituisce i valori del motore). */
+  curveDirectionHints?: BioenergeticCurveDirectionSegmentV1[] | null;
 };
 
 const CHART_H = 92;
@@ -105,7 +104,6 @@ function streamChartRows(
         tsMs,
         observedAt: p.observedAt,
         v: p.value,
-        vAi: null as number | null,
         timeLabel: Number.isFinite(tsMs)
           ? new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(tsMs))
           : "—",
@@ -114,22 +112,23 @@ function streamChartRows(
     .filter((r) => Number.isFinite(r.tsMs) && streamValuePlausible(channelId, r.v));
 }
 
-function attachGlucoseAiOverlay(rows: StreamChartRow[], ai: BioenergeticMonitoringStreamPoint[] | null | undefined): StreamChartRow[] {
-  if (!ai?.length || !rows.length) return rows;
-  const m = new Map(ai.map((p) => [p.observedAt, p.value]));
-  return rows.map((r) => ({ ...r, vAi: m.has(r.observedAt) ? (m.get(r.observedAt) as number) : null }));
-}
-
-function yDomainFromMergedStream(rows: StreamChartRow[]): [number, number] {
-  const nums = rows.flatMap((r) => [r.v, r.vAi].filter((x): x is number => x != null && Number.isFinite(x)));
-  return yDomainFromHourly(nums);
-}
-
 function formatStreamAxisTick(ms: number): string {
   return new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
 }
 
-export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOverlay }: Props) {
+function directionHintFill(trend: BioenergeticCurveDirectionSegmentV1["trend"]): string {
+  if (trend === "rise") return "rgba(52, 211, 153, 0.32)";
+  if (trend === "fall") return "rgba(56, 189, 248, 0.3)";
+  return "rgba(148, 163, 184, 0.22)";
+}
+
+function directionHintStroke(trend: BioenergeticCurveDirectionSegmentV1["trend"]): string {
+  if (trend === "rise") return "rgba(52, 211, 153, 0.45)";
+  if (trend === "fall") return "rgba(56, 189, 248, 0.42)";
+  return "rgba(148, 163, 184, 0.35)";
+}
+
+export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirectionHints }: Props) {
   const sorted = [...monitoring.channels].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
   );
@@ -144,11 +143,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
           streamTrace.length >= 4 &&
           (ch.dataPlane === "measured_stream" ||
             (isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
-        let streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
-        if (streamRows?.length && ch.id === "glucose" && glucoseAiOverlay?.length) {
-          streamRows = attachGlucoseAiOverlay(streamRows, glucoseAiOverlay);
-        }
-        const hasAiGlucoseOverlay = Boolean(streamRows?.some((r) => r.vAi != null && Number.isFinite(r.vAi)));
+        const streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
 
         const rows = ch.hourly.map((v, hour) => ({
           hour,
@@ -159,11 +154,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
         const hasData = streamRows?.length ? true : rows.some((r) => r.v != null);
         if (!hasData) return null;
 
-        const yDomain = streamRows?.length
-          ? hasAiGlucoseOverlay
-            ? yDomainFromMergedStream(streamRows)
-            : yDomainFromHourly(streamRows.map((r) => r.v))
-          : yDomainFromHourly(ch.hourly);
+        const yDomain = streamRows?.length ? yDomainFromHourly(streamRows.map((r) => r.v)) : yDomainFromHourly(ch.hourly);
+        const hintsForChannel =
+          streamRows?.length && curveDirectionHints?.length
+            ? curveDirectionHints.filter((h) => h.channel === ch.id)
+            : [];
 
         return (
           <div
@@ -197,8 +192,8 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
               {streamRows?.length
                 ? ch.dataPlane === "measured_stream"
                   ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
-                  : hasAiGlucoseOverlay && ch.id === "glucose"
-                    ? "Asse tempo: fucsia = motore deterministico (5 min, stimoli pasto/IG + sedute + alba/sonno); giallo tratteggio = interpretazione AI (simulatore confronto — non canonica)."
+                  : hintsForChannel.length
+                    ? "Asse: tempo reale del modello (5 min). Fasce colorate = analisi AI direzione (salita verde, discesa ciano, grigio plateau) — i numeri restano dal motore."
                     : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
@@ -233,11 +228,9 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
                         borderRadius: 10,
                         fontSize: 11,
                       }}
-                      formatter={(value, name) => {
+                      formatter={(value) => {
                         const v = typeof value === "number" ? value : Number(value);
-                        if (!Number.isFinite(v)) return ["—", String(name)];
-                        const label = name === "vAi" ? "AI (sim.)" : "Motore";
-                        return [`${v.toFixed(3)} ${ch.unit}`, label];
+                        return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, ch.labelIt] : ["—", ch.labelIt];
                       }}
                       labelFormatter={(_label, payload) => {
                         const row = payload?.[0]?.payload as { tsMs?: number } | undefined;
@@ -247,29 +240,34 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, glucoseAiOve
                         return "Orario";
                       }}
                     />
+                    {hintsForChannel.map((h, hi) => {
+                      const x1 = Date.parse(h.startObservedAt);
+                      const x2 = Date.parse(h.endObservedAt);
+                      if (!Number.isFinite(x1) || !Number.isFinite(x2) || x2 <= x1) return null;
+                      return (
+                        <ReferenceArea
+                          key={`hint-${ch.id}-${hi}-${h.startObservedAt}`}
+                          x1={x1}
+                          x2={x2}
+                          y1={yDomain[0]}
+                          y2={yDomain[1]}
+                          fill={directionHintFill(h.trend)}
+                          stroke={directionHintStroke(h.trend)}
+                          strokeWidth={1}
+                          strokeOpacity={0.55}
+                          ifOverflow="visible"
+                        />
+                      );
+                    })}
                     <Line
                       type="linear"
                       dataKey="v"
-                      name="v"
                       stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
                       strokeWidth={1.5}
                       dot={false}
                       connectNulls={false}
                       isAnimationActive={false}
                     />
-                    {hasAiGlucoseOverlay && ch.id === "glucose" ? (
-                      <Line
-                        type="linear"
-                        dataKey="vAi"
-                        name="vAi"
-                        stroke="#fbbf24"
-                        strokeWidth={1.25}
-                        strokeDasharray="5 4"
-                        dot={false}
-                        connectNulls={false}
-                        isAnimationActive={false}
-                      />
-                    ) : null}
                   </LineChart>
                 ) : (
                   <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 18 }}>

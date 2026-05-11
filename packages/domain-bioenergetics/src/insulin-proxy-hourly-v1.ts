@@ -24,7 +24,7 @@ export function buildInsulinProxyHourly24(
   const actH = activitySupportHours(timeline);
   const hourly = Array.from({ length: 24 }, (_, h) => {
     let v = base * circadianInsulinMod(h);
-    if (actH.has(h)) v *= 0.9;
+    if (actH.has(h)) v *= 0.82;
     return v;
   });
 
@@ -36,9 +36,9 @@ export function buildInsulinProxyHourly24(
     const insulinLoad = (ev.payload?.insulinLoad as number | undefined) ?? 0;
     const c = typeof carbs === "number" && Number.isFinite(carbs) ? Math.max(0, carbs) : 0;
     const il = typeof insulinLoad === "number" && Number.isFinite(insulinLoad) ? Math.max(0, insulinLoad) : 0;
-    const mealPush = il * 0.9 + c * 0.14;
+    const mealPush = il * 1.08 + c * 0.2;
     if (mealPush <= 0) continue;
-    const sigma = 2.35;
+    const sigma = 2.05;
     for (let h = 0; h < 24; h += 1) {
       const d = Math.min(Math.abs(h - mh), Math.abs(h - mh + 24), Math.abs(h - mh - 24));
       const g = Math.exp(-(d * d) / (2 * sigma * sigma));

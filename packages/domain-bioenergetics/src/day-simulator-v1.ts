@@ -118,12 +118,12 @@ function circadianWakeSleepGlucoseDeltaMmol(fh: number, mealScale: number): numb
   let d = 0;
   if (f >= 6 && f < 8.6) {
     const t = Math.max(0, Math.min(1, (f - 6) / 2.6));
-    d += 0.13 * Math.sin(Math.PI * t) * (0.45 + 0.55 * mealScale);
+    d += 0.17 * Math.sin(Math.PI * t) * (0.45 + 0.55 * mealScale);
   }
-  if (f >= 13 && f < 14.75) d -= 0.042 * Math.sin(Math.PI * ((f - 13) / 1.75));
+  if (f >= 13 && f < 14.75) d -= 0.052 * Math.sin(Math.PI * ((f - 13) / 1.75));
   if (f >= 22.35 || f <= 5.85) {
     const night = f >= 22.35 ? Math.min(1, (f - 22.35) / 1.85) : Math.min(1, (5.85 - f) / 5.85);
-    d -= 0.088 * night;
+    d -= 0.105 * night;
   }
   return d;
 }
@@ -171,7 +171,7 @@ export function buildSimulatedGluLacDiurnalSubHourly(
     if (mw > 0) g += gCfg.mealBumpMmol * mw * mealScale;
     if (aInt > 0) g -= gCfg.activityDipMmol * actScale * (0.5 * aInt + 0.5 * aInt * aInt);
     const jitterG =
-      Math.sin(fhMid * 6.2 + day.length * 0.13) * 0.042 * mealScale + Math.cos((tStart % 60) * 0.21) * 0.012;
+      Math.sin(fhMid * 6.2 + day.length * 0.13) * 0.048 * mealScale + Math.cos((tStart % 60) * 0.21) * 0.015;
     g = clamp(g + jitterG, gCfg.clampLo, gCfg.clampHi);
 
     const circL = lCfg.circAmp * Math.sin(((fhMid - lCfg.circPhaseHour) * Math.PI) / 12);
@@ -181,7 +181,7 @@ export function buildSimulatedGluLacDiurnalSubHourly(
       lac += (lCfg.activityBumpMmol + kernel.oxidationDriveScore * lCfg.oxidationActivityK) * (0.22 + 0.78 * lt);
     }
     if (mw > 0) lac -= lCfg.mealDipMmol * Math.min(1.15, mw * 0.55) * mealScale;
-    const jitterL = Math.sin(fhMid * 5.1 + 1.7) * 0.022 * actScale + Math.sin((tStart % 55) * 0.17) * 0.007;
+    const jitterL = Math.sin(fhMid * 5.1 + 1.7) * 0.028 * actScale + Math.sin((tStart % 55) * 0.17) * 0.009;
     lac = clamp(lac + jitterL, lCfg.clampLo, lCfg.clampHi);
 
     const ts = `${day}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
@@ -291,7 +291,7 @@ export function buildNominalCortisolActhHourly24(
     const cortStressAfternoon = st * 0.38 * Math.exp(-0.5 * ((h - 14.25) / 3.1) ** 2);
     const cortMealAfternoon =
       meal01 * SIM_CORTISOL_MEAL_MOD_V1.afternoonCortisolMaxUgdL * Math.exp(-0.5 * ((h - 15.25) / 2.85) ** 2);
-    const cortRaw = 3.2 + cortPrimary * (13.5 + st * 7) + cortStressAfternoon * 4.2 + (ps - 1) * 2.0 + cortMealAfternoon;
+    const cortRaw = 3.2 + cortPrimary * (13.5 + st * 7) + cortStressAfternoon * 4.2 + (ps - 1) * 2.0 + cortMealAfternoon * 1.22;
     cortisolUgdL.push(Math.round(clamp(cortRaw, 2, 26) * 10) / 10);
   }
   return { cortisolUgdL, acthPgMl };

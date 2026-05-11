@@ -9,10 +9,13 @@ export const SIM_DIURNAL_GLUCOSE_V1 = {
   baseMmol: 5.15,
   insulinLinear: 0.011,
   stressLinear: 0.25,
-  circAmp: 0.38,
+  /** Ampiezza circadiana diurna (legata a veglia/cortisolo proxy): più leggibile vs pasti. */
+  circAmp: 0.46,
   circPhaseHour: 4,
-  mealBumpMmol: 0.42,
-  activityDipMmol: 0.1,
+  /** Moltiplicatore su impulso pasto (CHO+IG): enfatizza fattore nutrizionale sulla curva. */
+  mealBumpMmol: 0.58,
+  /** Riduzione glucosio sotto sforzo (muscolo): più visibile con allenamenti lunghi. */
+  activityDipMmol: 0.16,
   clampLo: 3.9,
   clampHi: 9.8,
 } as const;
@@ -21,11 +24,11 @@ export const SIM_DIURNAL_LACTATE_V1 = {
   baseMmol: 1.02,
   oxidationLinear: 0.007,
   stressLinear: 0.15,
-  circAmp: 0.12,
+  circAmp: 0.16,
   circPhaseHour: 15,
-  activityBumpMmol: 0.55,
-  oxidationActivityK: 0.004,
-  mealDipMmol: 0.04,
+  activityBumpMmol: 0.78,
+  oxidationActivityK: 0.0055,
+  mealDipMmol: 0.055,
   clampLo: 0.75,
   clampHi: 5.2,
 } as const;
@@ -49,7 +52,7 @@ export const SIM_PATHWAY_SCALE_V1 = {
  */
 export const SIM_CORTISOL_MEAL_MOD_V1 = {
   /** Incremento massimo µg/dL (h≈15) quando `postprandialMealLoad01` = 1 */
-  afternoonCortisolMaxUgdL: 1.35,
+  afternoonCortisolMaxUgdL: 1.68,
   /** Anticipo massimo centro gaussiano ACTH (ore) quando mealLoad01 = 1 */
   acthPeakAdvanceHoursMax: 0.32,
 } as const;

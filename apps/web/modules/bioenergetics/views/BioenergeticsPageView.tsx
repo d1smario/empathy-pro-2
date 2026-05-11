@@ -5,11 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, BookOpen, CalendarRange, GitBranch, LineChart, Timer } from "lucide-react";
 import type {
   BioenergeticBiaLiteratureSummaryV1,
-  BioenergeticGlucoseSimulatorCompareResponseV1,
+  BioenergeticCurveDirectionHintsResponseV1,
+  BioenergeticCurveDirectionSegmentV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
-  BioenergeticMonitoringStreamPoint,
   BioenergeticPathwayImpact,
+  BioenergeticTimelineEvent,
   BioenergeticsDayViewModel,
   BioenergeticsTimeSeriesStreamResponseV1,
   BioenergeticsWindowViewModel,
@@ -95,6 +96,8 @@ function biaFluidBandIt(b: BioenergeticBiaLiteratureSummaryV1["extracellularFlui
   return "ECW vs TBW: dati insufficienti";
 }
 
+const TIMELINE_MODEL_TYPES = new Set<BioenergeticTimelineEvent["type"]>(["meal", "planned_session", "executed_session"]);
+
 export default function BioenergeticsPageView() {
   const searchParams = useSearchParams();
   const { athleteId, loading: athleteLoading } = useActiveAthlete();
@@ -109,15 +112,19 @@ export default function BioenergeticsPageView() {
   const [windowStreamError, setWindowStreamError] = useState<string | null>(null);
   const [windowLoading, setWindowLoading] = useState(false);
   const [windowError, setWindowError] = useState<string | null>(null);
-  const [glucoseAiOverlay, setGlucoseAiOverlay] = useState<BioenergeticMonitoringStreamPoint[] | null>(null);
-  const [compareLoading, setCompareLoading] = useState(false);
-  const [compareBanner, setCompareBanner] = useState<string | null>(null);
+  const [curveDirectionHints, setCurveDirectionHints] = useState<BioenergeticCurveDirectionSegmentV1[] | null>(null);
+  const [curveHintsSummary, setCurveHintsSummary] = useState<string | null>(null);
+  const [curveHintsNote, setCurveHintsNote] = useState<string | null>(null);
+  const [curveHintsLoading, setCurveHintsLoading] = useState(false);
+  const [curveHintsError, setCurveHintsError] = useState<string | null>(null);
   const seededFromContext = useRef(false);
   const genBodyRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
-    setGlucoseAiOverlay(null);
-    setCompareBanner(null);
+    setCurveDirectionHints(null);
+    setCurveHintsSummary(null);
+    setCurveHintsNote(null);
+    setCurveHintsError(null);
   }, [athleteId, date]);
 
   useEffect(() => {
@@ -232,47 +239,46 @@ export default function BioenergeticsPageView() {
     [setDateAndPersist],
   );
 
-  const fetchGlucoseSimulatorCompare = useCallback(async () => {
+  const fetchCurveDirectionHints = useCallback(async () => {
     if (!athleteId) return;
-    setCompareLoading(true);
-    setCompareBanner(null);
+    setCurveHintsLoading(true);
+    setCurveHintsError(null);
     try {
       const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
-      const res = await fetch("/api/bioenergetics/simulator-glucose-compare", {
+      const res = await fetch("/api/bioenergetics/curve-direction-hints", {
         method: "POST",
         cache: "no-store",
         credentials: "same-origin",
         headers,
         body: JSON.stringify({ athleteId, date }),
       });
-      const j = (await res.json()) as BioenergeticGlucoseSimulatorCompareResponseV1 & { error?: string };
-      if (!res.ok) {
-        setGlucoseAiOverlay(null);
-        setCompareBanner(j.error ?? `HTTP ${res.status}`);
+      const j = (await res.json()) as BioenergeticCurveDirectionHintsResponseV1 & { error?: string };
+      if (!("hintsContractVersion" in j) || j.hintsContractVersion !== 1) {
+        setCurveDirectionHints(null);
+        setCurveHintsSummary(null);
+        setCurveHintsNote(null);
+        setCurveHintsError(j.error ?? `HTTP ${res.status}`);
         return;
       }
-      if (j.compareContractVersion !== 1) {
-        setGlucoseAiOverlay(null);
-        setCompareBanner("Risposta confronto non valida.");
-        return;
+      const segments = Array.isArray(j.segments) ? j.segments : [];
+      setCurveDirectionHints(segments);
+      const rawSum = typeof j.summaryIt === "string" ? j.summaryIt.trim() : "";
+      setCurveHintsSummary(rawSum && rawSum !== "—" ? rawSum : null);
+      setCurveHintsNote(j.noteIt ?? null);
+      if (j.skippedReason === "no_openai" || j.skippedReason === "assemble_failed") {
+        setCurveHintsError(j.noteIt ?? j.skippedReason);
+      } else if (!segments.length && (j.noteIt || j.skippedReason)) {
+        setCurveHintsError(j.noteIt ?? String(j.skippedReason));
+      } else {
+        setCurveHintsError(null);
       }
-      if (j.skippedReason) {
-        setGlucoseAiOverlay(null);
-        setCompareBanner(j.noteIt ?? j.skippedReason);
-        return;
-      }
-      if (!j.aiTrace?.length) {
-        setGlucoseAiOverlay(null);
-        setCompareBanner(j.noteIt ?? "Nessun punto nella curva AI.");
-        return;
-      }
-      setGlucoseAiOverlay(j.aiTrace);
-      setCompareBanner(j.noteIt ?? null);
     } catch {
-      setGlucoseAiOverlay(null);
-      setCompareBanner("Errore di rete durante il confronto simulatore.");
+      setCurveDirectionHints(null);
+      setCurveHintsSummary(null);
+      setCurveHintsNote(null);
+      setCurveHintsError("Errore di rete durante l’analisi AI.");
     } finally {
-      setCompareLoading(false);
+      setCurveHintsLoading(false);
     }
   }, [athleteId, date]);
 
@@ -365,6 +371,11 @@ export default function BioenergeticsPageView() {
     () => computeBioenergeticWindowStreamVariability(windowDailyRollups),
     [windowDailyRollups],
   );
+
+  const timelineModelStimuli = useMemo(() => {
+    if (!vm?.timeline?.length) return [];
+    return [...vm.timeline].filter((e) => TIMELINE_MODEL_TYPES.has(e.type)).sort((a, b) => a.ts.localeCompare(b.ts));
+  }, [vm?.timeline]);
 
   const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
   const evidenceLinkCount = resolvedEvidenceLinks.length;
@@ -569,45 +580,138 @@ export default function BioenergeticsPageView() {
                     Striscia monitoraggio continuo (24 h)
                   </p>
                   <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
-                    Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH: niente curve
-                    «tutte uguali» per riempire. Gli altri biomarker restano nelle tile finché non c&apos;è un modello
-                    serio legato a timeline e fisiologia.
+                    Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5 minuti,
+                    deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono con ciò che
+                    ti aspetti, verifica timestamp diario e calendario (non il modello che &quot;indovina&quot; i pasti).
                   </p>
-                  {compareBanner ? (
-                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs leading-relaxed text-amber-100/95">
-                      {compareBanner}
+                  {timelineModelStimuli.length ? (
+                    <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
+                      <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-fuchsia-200/90">
+                        Stimoli nella timeline usati dal motore
+                      </p>
+                      <p className="mb-2 text-[0.65rem] leading-relaxed text-gray-500">
+                        Pasti: orario da <code className="text-gray-400">entry_time</code> / data voce diario. Sedute:
+                        esecuzione (<code className="text-gray-400">started_at</code>) o slot pianificato se manca
+                        l&apos;esecuzione.
+                      </p>
+                      <ul className="max-h-40 space-y-1.5 overflow-y-auto text-[0.7rem] text-gray-200">
+                        {timelineModelStimuli.map((e) => (
+                          <li
+                            key={e.id}
+                            className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 border-b border-white/5 pb-1.5 last:border-0 last:pb-0"
+                          >
+                            <span className="shrink-0 font-mono text-[0.65rem] text-fuchsia-200/90">{e.ts}</span>
+                            <span className="shrink-0 text-gray-500">
+                              {e.type === "meal"
+                                ? "Pasto"
+                                : e.type === "executed_session"
+                                  ? "Seduta eseguita"
+                                  : "Seduta pianificata"}
+                            </span>
+                            <span className="min-w-0 flex-1 text-gray-100">{e.title}</span>
+                            {e.type === "meal" ? (
+                              <span className="shrink-0 text-gray-500">
+                                {typeof e.payload?.carbsG === "number" && Number.isFinite(e.payload.carbsG)
+                                  ? `${Math.round(e.payload.carbsG)} g CHO`
+                                  : "CHO n/d"}
+                                {typeof e.payload?.glycemic_index_estimate === "number" &&
+                                Number.isFinite(e.payload.glycemic_index_estimate)
+                                  ? ` · GI ~${Math.round(e.payload.glycemic_index_estimate)}`
+                                  : ""}
+                              </span>
+                            ) : (
+                              <span className="shrink-0 text-gray-500">
+                                {typeof e.payload?.durationMinutes === "number" &&
+                                Number.isFinite(e.payload.durationMinutes)
+                                  ? `${Math.round(e.payload.durationMinutes)} min`
+                                  : ""}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : vm.timeline.length ? (
+                    <p className="mb-4 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-amber-100/95">
+                      Nessun pasto o seduta in timeline per questo giorno: le curve usano solo modulazioni diurne /
+                      sonno e default — aggiungi voci in Diario o sessioni in Calendario con la data corretta.
                     </p>
                   ) : null}
-                  <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <div className="mb-4 flex flex-wrap items-start gap-3">
                     <Pro2Button
                       type="button"
                       variant="secondary"
-                      disabled={!vm || athleteLoading || compareLoading}
-                      onClick={() => void fetchGlucoseSimulatorCompare()}
-                      className="!text-xs"
+                      className="!text-xs shrink-0"
+                      disabled={!athleteId || athleteLoading || curveHintsLoading}
+                      onClick={() => void fetchCurveDirectionHints()}
                     >
-                      {compareLoading ? "Curva AI…" : "Confronta curva AI (simulatore)"}
+                      {curveHintsLoading ? "Analisi AI…" : "Analisi AI: dove sale / scende (fasce)"}
                     </Pro2Button>
-                    {glucoseAiOverlay?.length ? (
+                    {curveDirectionHints?.length ? (
                       <Pro2Button
                         type="button"
                         variant="ghost"
-                        className="!text-xs"
+                        className="!text-xs shrink-0"
                         onClick={() => {
-                          setGlucoseAiOverlay(null);
-                          setCompareBanner(null);
+                          setCurveDirectionHints(null);
+                          setCurveHintsSummary(null);
+                          setCurveHintsNote(null);
+                          setCurveHintsError(null);
                         }}
                       >
-                        Rimuovi overlay AI
+                        Rimuovi fasce
                       </Pro2Button>
                     ) : null}
-                    <span className="text-[0.65rem] leading-snug text-gray-500">
-                      Richiede <code className="text-gray-400">OPENAI_API_KEY</code> sul server. Con glucosio misurato (CGM/lab) quel giorno il confronto non è proposto.
-                    </span>
+                    <p className="min-w-[12rem] flex-1 text-[0.65rem] leading-relaxed text-gray-500">
+                      Legge la stessa giornata del motore (timeline, kernel, serie 5 min sottocampionate) e restituisce
+                      solo <strong className="text-gray-300">direzioni attese</strong> (verde salita, ciano discesa,
+                      grigio plateau). I numeri sulla linea restano deterministici. Richiede{" "}
+                      <code className="text-gray-400">OPENAI_API_KEY</code>.
+                    </p>
                   </div>
+                  {curveHintsError ? (
+                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/95">
+                      {curveHintsError}
+                    </p>
+                  ) : null}
+                  {curveHintsSummary ? (
+                    <div className="mb-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.07] px-3 py-2">
+                      <p className="text-[0.65rem] font-medium uppercase tracking-wide text-violet-200/90">
+                        Sintesi interpretazione
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-gray-200">{curveHintsSummary}</p>
+                      {curveHintsNote ? (
+                        <p className="mt-2 text-[0.65rem] leading-snug text-gray-500">{curveHintsNote}</p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {curveDirectionHints?.length ? (
+                    <details className="mb-4 rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+                      <summary className="cursor-pointer text-[0.7rem] text-gray-300">
+                        Dettaglio segmenti ({curveDirectionHints.length})
+                      </summary>
+                      <ul className="mt-2 max-h-48 space-y-2 overflow-y-auto text-[0.68rem] text-gray-400">
+                        {curveDirectionHints.map((s) => (
+                          <li key={`${s.channel}-${s.startObservedAt}-${s.endObservedAt}`} className="border-b border-white/5 pb-2 last:border-0">
+                            <span className="font-mono text-fuchsia-200/90">{s.channel}</span>{" "}
+                            <span className="text-gray-500">
+                              {s.trend === "rise" ? "↑" : s.trend === "fall" ? "↓" : "→"}
+                            </span>{" "}
+                            <span className="text-gray-500">
+                              {s.startObservedAt.slice(11, 16)}–{s.endObservedAt.slice(11, 16)}
+                            </span>
+                            <p className="mt-0.5 text-gray-300">{s.rationaleIt}</p>
+                            {s.drivers.length ? (
+                              <p className="mt-0.5 text-gray-500">{s.drivers.join(" · ")}</p>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
                   <BioenergeticsContinuousMonitoringGrid
                     monitoring={vm.continuousMonitoring}
-                    glucoseAiOverlay={glucoseAiOverlay}
+                    curveDirectionHints={curveDirectionHints}
                   />
                 </div>
               ) : null}

@@ -95,11 +95,12 @@ export function applyCgmLikeSurfaceToSubhourlyGluLac(input: {
     return { glucose: glucose.map((p) => ({ ...p })), lactate: lactate.map((p) => ({ ...p })) };
   }
 
-  let gSm = smoothInterior3Tap(gv, 2);
+  /* Un solo passaggio sul glucosio: meno appiattimento così pasti/alba restano più leggibili. */
+  let gSm = smoothInterior3Tap(gv, 1);
   let lSm = smoothInterior3Tap(lv, 1);
 
-  const gNoise = ar1CorrelatedNoise(n, rnd, 0.88, 0.052);
-  const lNoise = ar1CorrelatedNoise(n, rnd, 0.84, 0.022);
+  const gNoise = ar1CorrelatedNoise(n, rnd, 0.88, 0.045);
+  const lNoise = ar1CorrelatedNoise(n, rnd, 0.84, 0.026);
 
   const stressHint = clamp(
     (kernel.insulinDemandScore + (100 - kernel.glucoseHandlingScore) * 0.35 + kernel.anabolicSuppressionScore * 0.25) /

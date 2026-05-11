@@ -68,7 +68,7 @@ function monitoringPlaneForGluLac(
 
 /**
  * Traccia nativa per grafico continuo: stream CGM reale **oppure** modello diurno sub-orario deterministico
- * (`sim_diurnal_v1_*m`). Curva AI confronto (simulatore) è **separata** (`POST …/simulator-glucose-compare`), mai come `source` di questi punti.
+ * (`sim_diurnal_v1_*m`). Solo motore deterministico + presentazione; nessuna curva LLM come `source` di questi punti.
  */
 function monitoringStreamTraceFromPoints(
   provenance: BioenergeticChannelProvenance,
@@ -486,8 +486,8 @@ export function buildBioenergeticDayPresentation(input: {
   for (let hour = 0; hour < 24; hour += 1) {
     const circ = 12 * Math.sin(((hour - 6) * Math.PI) / 12);
     let bal = baseBalance + circ;
-    if (mealW[hour] > 0.1) bal -= 22 * Math.min(1.15, mealW[hour] * 0.52);
-    if (activityH.has(hour)) bal += 18;
+    if (mealW[hour] > 0.1) bal -= 30 * Math.min(1.15, mealW[hour] * 0.52);
+    if (activityH.has(hour)) bal += 24;
     bal = clamp(bal, -100, 100);
     let impact: BioenergeticPathwayImpact;
     if (bal >= 18) impact = "supportive";
