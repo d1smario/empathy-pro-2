@@ -533,8 +533,9 @@ export default function BioenergeticsPageView() {
                   <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
                     {vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
                       <>
-                        Glucosio, lattato, domanda insulinica, cortisolo e ACTH: passo 5 minuti da OpenAI sugli input
-                        (timeline, kernel, provenance, tile). Non è CGM, non è il sim diurno v1 sulla striscia. Se manca
+                        Glucosio, lattato, domanda insulinica, cortisolo e ACTH: passo 5 minuti da OpenAI su diario
+                        pasti e sedute (training), più metadati serie e stream — senza kernel/tile del motore sulla
+                        richiesta. Non è CGM, non è il sim diurno v1 sulla striscia. Se manca
                         la chiave server o la risposta fallisce, la striscia resta vuota — vedi disclaimer in fondo.
                       </>
                     ) : (

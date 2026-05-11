@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
+import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import {
   buildMonitoringChannelsFromStripAiParse,
+  buildOpenAiStripRealityCompact,
   expandHourly24ToFiveMinuteStream,
   interpolateFifteenMinuteSeriesToFiveMinuteStream,
   parseStripAiOpenAiContent,
@@ -19,6 +21,41 @@ test("expandHourly24ToFiveMinuteStream produce 288 campioni", () => {
   const h24 = Array.from({ length: 24 }, (_, i) => 10 + i * 0.1);
   const st = expandHourly24ToFiveMinuteStream("2026-05-09", h24, 0, 100);
   assert.equal(st.length, 288);
+});
+
+test("buildOpenAiStripRealityCompact: pasti/sedute, niente kernel/tile", () => {
+  const vm = {
+    date: "2026-05-09",
+    athleteId: "a1",
+    provenance: { glucose: "absent", lactate: "absent" },
+    channels: { glucose: null, lactate: null },
+    canonicalStreamCounts: { glucoseSampleCount: 0, lactateSampleCount: 0 },
+  } as unknown as BioenergeticsDayViewModel;
+  const slice: BioenergeticDayMemorySlice = {
+    athleteId: "a1",
+    date: "2026-05-09",
+    planned: [],
+    executed: [],
+    diaryRows: [
+      {
+        entry_time: "08:30",
+        meal_slot: "breakfast",
+        food_label: "Porridge",
+        carbs_g: 45,
+        kcal: 320,
+      },
+    ],
+    biomarkerRows: [],
+    deviceExportRows: [],
+    timeSeriesSamplesRows: [],
+  };
+  const c = buildOpenAiStripRealityCompact(vm, slice, false);
+  assert.equal(c.contract, "bioenergetic_strip_ai_reality_inputs_v2");
+  assert.ok(Array.isArray(c.meals));
+  assert.equal((c.meals as unknown[]).length, 1);
+  assert.equal(c.kernel, undefined);
+  assert.equal(c.metricTiles, undefined);
+  assert.equal(c.interpretationHints, undefined);
 });
 
 test("parseStripAiOpenAiContent legge JSON OpenAI", () => {

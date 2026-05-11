@@ -287,10 +287,10 @@ export async function assembleBioenergeticDay(
     ...body,
     disclaimers: [
       ...body.disclaimers.filter((d) => !stripDeterministicBullets.has(d)),
-      "Striscia «monitoraggio continuo»: curve generate da OpenAI solo dagli input giornata assemblati (timeline, kernel, provenance, tile, stream counts). Senza OPENAI_API_KEY o se la chiamata fallisce la striscia resta vuota; qui non si usa il sim diurno v1.",
+      "Striscia «monitoraggio continuo»: curve generate da OpenAI da diario (pasti), sedute pianificate/eseguite, totali giornata e metadati stream — senza kernel, tile né hint del motore legacy sulla richiesta. Senza OPENAI_API_KEY o se la chiamata fallisce la striscia resta vuota; qui non si usa il sim diurno v1.",
     ],
   };
-  body = await fillContinuousMonitoringStripFromOpenAiInputs(body);
+  body = await fillContinuousMonitoringStripFromOpenAiInputs(body, slice);
   return { ok: true, body };
 }
 

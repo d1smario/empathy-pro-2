@@ -3,12 +3,14 @@ import type {
   BioenergeticMonitoringStreamPoint,
   BioenergeticsDayViewModel,
 } from "@/api/bioenergetics/contracts";
+import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 
 const N15 = 96;
 const N288 = 288;
 
 const STRIP_AI_DISCLAIMER_TAG =
-  "Striscia monitoraggio continuo (24 h): generata solo da OpenAI dagli input giornata assemblati (non dal sim diurno v1 sulla striscia).";
+  "Striscia monitoraggio continuo (24 h): OpenAI legge solo pasti (diario), sedute (pianificate/eseguite), conteggi stream e metadati serie — niente kernel/tile/hint del motore legacy sulla striscia.";
 
 function clamp(n: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, n));
@@ -100,39 +102,91 @@ export type StripAiParseResult = {
   noteIt: string | null;
 };
 
-export function compactBioenergeticStripAiInputs(
+function numField(row: Record<string, unknown>, key: string): number | null {
+  return num(row[key]);
+}
+
+/**
+ * Payload OpenAI per la striscia: **solo** realtà giornata (diario + training da memoria)
+ * e metadati serie (provenance / conteggi), senza kernel, tile, hint interpretativi né timeline arricchita.
+ */
+export function buildOpenAiStripRealityCompact(
   vm: BioenergeticsDayViewModel,
+  slice: BioenergeticDayMemorySlice,
   skipGlucosePredictor: boolean,
 ): Record<string, unknown> {
-  const timeline = [...vm.timeline]
-    .sort((a, b) => a.ts.localeCompare(b.ts))
-    .slice(0, 100)
-    .map((e) => ({
-      ts: e.ts,
-      type: e.type,
-      title: e.title.slice(0, 180),
-      payload: e.payload ?? undefined,
-    }));
+  const meals = slice.diaryRows.slice(0, 48).map((row) => ({
+    entry_time: typeof row.entry_time === "string" ? row.entry_time : null,
+    meal_slot: typeof row.meal_slot === "string" ? row.meal_slot : null,
+    food_label: String(row.food_label ?? "").slice(0, 160),
+    quantity_g: numField(row, "quantity_g"),
+    carbs_g: numField(row, "carbs_g"),
+    protein_g: numField(row, "protein_g"),
+    fat_g: numField(row, "fat_g"),
+    kcal: numField(row, "kcal"),
+    sodium_mg: numField(row, "sodium_mg"),
+    insulin_load: numField(row, "insulin_load"),
+    glycemic_index_estimate: numField(row, "glycemic_index_estimate"),
+    glycemic_load: numField(row, "glycemic_load"),
+  }));
+
+  const executed_workouts = slice.executed.slice(0, 32).map((w) => ({
+    started_at: w.startedAt ?? null,
+    ended_at: w.endedAt ?? null,
+    duration_minutes: w.durationMinutes,
+    tss: w.tss,
+    kj: w.kj ?? null,
+    kcal: w.kcal ?? null,
+    source: w.source ?? null,
+    lactate_mmol_from_device: w.lactateMmoll ?? null,
+    glucose_mmol_from_device: w.glucoseMmol ?? null,
+    subjective_notes_excerpt: w.subjectiveNotes ? String(w.subjectiveNotes).slice(0, 200) : null,
+  }));
+
+  const planned_workouts = slice.planned.slice(0, 32).map((p) => ({
+    date: p.date,
+    session_type: String(p.type ?? "").slice(0, 80),
+    duration_minutes: p.durationMinutes,
+    tss_target: p.tssTarget,
+    kj_target: p.kjTarget ?? null,
+    kcal_target: p.kcalTarget ?? null,
+    adaptive_goal: p.adaptiveGoal ? String(p.adaptiveGoal).slice(0, 120) : null,
+    notes_excerpt: p.notes ? String(p.notes).slice(0, 200) : null,
+  }));
+
+  const totalCarbs = slice.diaryRows.reduce((s, r) => s + (numField(r, "carbs_g") ?? 0), 0);
+  const totalKcal = slice.diaryRows.reduce((s, r) => s + (numField(r, "kcal") ?? 0), 0);
+  const executedTss = slice.executed.reduce((s, w) => s + Math.max(0, Number(w.tss ?? 0)), 0);
+  const plannedTss = slice.planned.reduce((s, p) => s + Math.max(0, Number(p.tssTarget ?? 0)), 0);
 
   return {
-    contract: "bioenergetic_strip_ai_inputs_v1",
+    contract: "bioenergetic_strip_ai_reality_inputs_v2",
     date: vm.date,
-    athleteId: vm.athleteId,
+    athlete_id: vm.athleteId,
     skip_glucose_predictor: skipGlucosePredictor,
-    provenance: vm.provenance,
-    kernel: vm.kernel,
-    canonicalStreamCounts: vm.canonicalStreamCounts,
-    glucoseSeriesPointCount: vm.channels.glucose?.length ?? 0,
-    lactateSeriesPointCount: vm.channels.lactate?.length ?? 0,
-    timeline,
-    interpretationHints: vm.interpretationHints?.slice(0, 20) ?? [],
-    metricTiles: vm.metricTiles.slice(0, 24).map((t) => ({
-      id: t.id,
-      labelIt: t.labelIt,
-      displayValue: t.displayValue,
-      numericValue: t.numericValue,
-      provenance: t.provenance,
-    })),
+    /** Nessun valore campionato della serie (né sim né misura) — solo contesto qualitativo. */
+    glucose_series_meta: {
+      provenance: vm.provenance.glucose,
+      point_count: vm.channels.glucose?.length ?? 0,
+    },
+    lactate_series_meta: {
+      provenance: vm.provenance.lactate,
+      point_count: vm.channels.lactate?.length ?? 0,
+    },
+    canonical_stream_sample_counts: vm.canonicalStreamCounts,
+    day_rollup: {
+      diary_entry_count: slice.diaryRows.length,
+      total_carbs_g_day: Math.round(totalCarbs * 10) / 10,
+      total_kcal_day: Math.round(totalKcal),
+      executed_session_count: slice.executed.length,
+      planned_session_count: slice.planned.length,
+      executed_tss_sum: Math.round(executedTss * 10) / 10,
+      planned_tss_target_sum: Math.round(plannedTss * 10) / 10,
+      biomarker_panel_rows_on_date: slice.biomarkerRows.length,
+    },
+    meals,
+    executed_workouts,
+    planned_workouts,
   };
 }
 
@@ -269,8 +323,9 @@ export async function requestOpenAiBioenergeticStripFromInputs(
   const skipGlu = Boolean(compact.skip_glucose_predictor);
   const system = [
     "Sei il generatore curve EMPATHY Pro 2 — BioEnergetic Intelligence.",
-    "Ricevi SOLO input giornata (timeline pasti/sedute, kernel, provenance serie, tile riassunte, conteggi stream).",
-    "Non ricevi curve pre-calcolate del simulatore: devi proporre tu andamenti plausibili coerenti con quegli input.",
+    "Ricevi il JSON `bioenergetic_strip_ai_reality_inputs_v2`: pasti da diario (`meals`), sedute eseguite/pianificate (`executed_workouts`, `planned_workouts`), totali giorno (`day_rollup`), conteggi campioni stream (`canonical_stream_sample_counts`), metadati serie glucosio/lattato senza valori (`glucose_series_meta`, `lactate_series_meta`).",
+    "Non ricevi kernel metabolico, tile lab/sim, hint interpretativi né timeline arricchita: ignora ogni conoscenza di «motore» Empathy eliminato; le curve devono seguire solo quei campi.",
+    "Non ricevi serie numeriche pre-calcolate per la striscia: proponi tu andamenti plausibili coerenti con pasti, CHO/kcal, orari, TSS/durate sedute e note soggettive se presenti.",
     "Risposta: SOLO JSON valido (nessun testo fuori dal JSON).",
     skipGlu
       ? "NON includere glucose_mmol_15m (glucosio già da misura densa quel giorno — molti punti nella serie)."
@@ -282,7 +337,7 @@ export async function requestOpenAiBioenergeticStripFromInputs(
     "Opzionale: note_it.",
   ].join(" ");
 
-  const user = `Genera le serie per questa giornata (solo da input):\n\n${JSON.stringify(compact)}`;
+  const user = `Genera le serie per questa giornata (solo da input realtà v2 — pasti e training, niente kernel/tile):\n\n${JSON.stringify(compact)}`;
 
   let response: Response;
   try {
@@ -329,6 +384,7 @@ function shouldSkipGlucosePredictor(vm: BioenergeticsDayViewModel): boolean {
  */
 export async function fillContinuousMonitoringStripFromOpenAiInputs(
   vm: BioenergeticsDayViewModel,
+  slice: BioenergeticDayMemorySlice,
 ): Promise<BioenergeticsDayViewModel> {
   const disclaimersBase = vm.disclaimers.includes(STRIP_AI_DISCLAIMER_TAG)
     ? vm.disclaimers
@@ -347,7 +403,7 @@ export async function fillContinuousMonitoringStripFromOpenAiInputs(
   }
 
   const skipGlucose = shouldSkipGlucosePredictor(vm);
-  const compact = compactBioenergeticStripAiInputs(vm, skipGlucose);
+  const compact = buildOpenAiStripRealityCompact(vm, slice, skipGlucose);
   const model = (process.env.OPENAI_BIOENERGETIC_MODEL ?? "").trim() || "gpt-4o-mini";
   const ai = await requestOpenAiBioenergeticStripFromInputs(compact, { apiKey, model });
   if (!ai.ok) {
