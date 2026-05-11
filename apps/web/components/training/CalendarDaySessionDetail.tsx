@@ -163,7 +163,9 @@ function SessionDetailCard({
           const nums = Array.isArray(c.samples)
             ? (c.samples.filter((v) => typeof v === "number" && Number.isFinite(v)) as number[])
             : [];
-          if (nums.length < 2) continue;
+          if (nums.length < 1) continue;
+          /** Recharts line/area: almeno 2 punti; con 1 campione (sessioni brevi) duplichiamo costante. */
+          const chartValues = nums.length >= 2 ? nums : [nums[0]!, nums[0]!];
           if (c.channel === "distance") {
             const last = nums[nums.length - 1];
             if (typeof last === "number" && Number.isFinite(last)) setDistanceMeters(last);
@@ -171,7 +173,7 @@ function SessionDetailCard({
           merged.push({
             channel: c.channel as ChartChannel,
             unit: c.unit,
-            values: nums,
+            values: chartValues,
           });
         }
         if (merged.length) setDbSeries(merged);

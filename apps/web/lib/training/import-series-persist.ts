@@ -27,7 +27,7 @@ function pickScalarSeries(trace: Record<string, unknown>, keys: string[]): numbe
       const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
       if (Number.isFinite(n)) out.push(n);
     }
-    if (out.length > 1) return out;
+    if (out.length >= 1) return out;
   }
   return null;
 }
@@ -38,7 +38,17 @@ function pickGeoSeries(trace: Record<string, unknown>, keys: string[]): GeoPoint
     if (!Array.isArray(raw)) continue;
     const out: GeoPoint[] = [];
     for (const v of raw) {
-      if (isGeoPoint(v)) out.push({ lat: v.lat, lon: v.lon, ...(typeof v.alt === "number" ? { alt: v.alt } : {}) });
+      if (isGeoPoint(v)) {
+        out.push({ lat: v.lat, lon: v.lon, ...(typeof v.alt === "number" ? { alt: v.alt } : {}) });
+        continue;
+      }
+      if (Array.isArray(v) && v.length >= 2) {
+        const lat = typeof v[0] === "number" ? v[0] : Number(v[0]);
+        const lon = typeof v[1] === "number" ? v[1] : Number(v[1]);
+        if (Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180) {
+          out.push({ lat, lon });
+        }
+      }
     }
     if (out.length >= 1) return out;
   }

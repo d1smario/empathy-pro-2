@@ -53,7 +53,13 @@ export const SERIES_CHANNEL_REGISTRY: SeriesChannelSpec[] = [
     label: "Quota",
   },
   { channel: "temperature", unit: "°C", shape: "scalar", traceKeys: ["temperature_series_c"], label: "Temperatura" },
-  { channel: "route", unit: "lat,lon", shape: "geo_point", traceKeys: ["route_series_geo"], label: "Percorso" },
+  {
+    channel: "route",
+    unit: "lat,lon",
+    shape: "geo_point",
+    traceKeys: ["route_series_geo", "route_points"],
+    label: "Percorso",
+  },
   { channel: "distance", unit: "m", shape: "scalar", traceKeys: ["distance_series_m"], label: "Distanza" },
   { channel: "time_elapsed", unit: "s", shape: "scalar", traceKeys: ["time_series_s"], label: "Tempo" },
   {

@@ -251,6 +251,11 @@ function parseTcx(xml: string): ParsedTrainingFile {
   };
 }
 
+function readGpxTrkptCoord(attrs: string, coord: "lat" | "lon"): number | null {
+  const m = attrs.match(new RegExp(`\\b${coord}\\s*=\\s*["']([^"']+)["']`, "i"));
+  return m?.[1] != null ? asNumber(m[1]) : null;
+}
+
 function parseGpx(xml: string): ParsedTrainingFile {
   const times = Array.from(xml.matchAll(/<time>([^<]+)<\/time>/gi)).map((m) => m[1]);
   const start = times.length ? new Date(times[0]) : null;
@@ -261,20 +266,23 @@ function parseGpx(xml: string): ParsedTrainingFile {
       : 0;
   const date = asDateOnly(start?.toISOString() ?? null);
 
-  const pointRegex = /<trkpt[^>]*lat="([^"]+)"[^>]*lon="([^"]+)"[^>]*>([\s\S]*?)<\/trkpt>/gi;
-  const pointMatches = Array.from(xml.matchAll(pointRegex));
-  const pointRows = pointMatches
-    .map((m) => {
-      const lat = asNumber(m[1]);
-      const lon = asNumber(m[2]);
-      const inner = m[3] ?? "";
-      const ele = asNumber((inner.match(/<ele>([^<]+)<\/ele>/i)?.[1] ?? null) as unknown);
-      const t = inner.match(/<time>([^<]+)<\/time>/i)?.[1] ?? null;
-      const ts = t ? new Date(t).getTime() : NaN;
-      if (lat == null || lon == null) return null;
-      return { lat, lon, ele, ts: Number.isFinite(ts) ? ts : null };
-    })
-    .filter((r): r is { lat: number; lon: number; ele: number | null; ts: number | null } => r != null);
+  /** `lat` / `lon` in qualsiasi ordine (Garmin e altri exporter variano). Supporta anche `<trkpt ... />`. */
+  const trkptBlock = /<trkpt\s+([^>]+?)\s*(?:\/>|>([\s\S]*?)<\/trkpt\s*>)/gi;
+  const pointRows: Array<{ lat: number; lon: number; ele: number | null; ts: number | null }> = [];
+  let tm: RegExpExecArray | null;
+  while ((tm = trkptBlock.exec(xml)) !== null) {
+    const attrs = tm[1] ?? "";
+    const inner = tm[2] ?? "";
+    const lat = readGpxTrkptCoord(attrs, "lat");
+    const lon = readGpxTrkptCoord(attrs, "lon");
+    const ele = asNumber(inner.match(/<ele>([^<]+)<\/ele>/i)?.[1] ?? null);
+    const t = inner.match(/<time>([^<]+)<\/time>/i)?.[1] ?? null;
+    const ts = t ? new Date(t).getTime() : NaN;
+    if (lat == null || lon == null) continue;
+    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
+    pointRows.push({ lat, lon, ele, ts: Number.isFinite(ts) ? ts : null });
+  }
+
   const points = pointRows.map((r) => [r.lat, r.lon] as const);
   const routeDistanceSeriesKm = cumulativeDistanceKm(pointRows);
   const routeAltitudeSeriesM = fillMissingLinear(pointRows.map((r) => r.ele));

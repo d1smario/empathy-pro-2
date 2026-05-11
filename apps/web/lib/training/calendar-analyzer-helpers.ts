@@ -60,7 +60,7 @@ export function pickSeries(trace: Record<string, unknown> | null, keys: string[]
     const raw = trace[k];
     if (!Array.isArray(raw)) continue;
     const values = raw.map((v) => n(v)).filter((v): v is number => v != null && Number.isFinite(v));
-    if (values.length > 1) return values;
+    if (values.length >= 1) return values;
   }
   return [];
 }

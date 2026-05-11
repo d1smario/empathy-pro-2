@@ -164,7 +164,7 @@ function buildGarminCanonicalSummary(r: Record<string, unknown>): Record<string,
 type GarminGeoSample = { lat: number; lon: number; alt?: number };
 
 function extractGarminActivitySeries(samples: unknown): Record<string, unknown> {
-  if (!Array.isArray(samples) || samples.length < 2) return {};
+  if (!Array.isArray(samples) || samples.length < 1) return {};
   const power: number[] = [];
   const hr: number[] = [];
   const speedKmh: number[] = [];
@@ -193,7 +193,7 @@ function extractGarminActivitySeries(samples: unknown): Record<string, unknown> 
     const p = s.powerInWatts;
     if (typeof p === "number" && Number.isFinite(p)) power.push(p);
 
-    const h = s.heartRate;
+    const h = s.heartRate ?? s.heartRateInBeatsPerMinute ?? s.averageHeartRateInBeatsPerMinute;
     if (typeof h === "number" && Number.isFinite(h)) hr.push(h);
 
     const v = s.speedMetersPerSecond;
@@ -247,7 +247,7 @@ function extractGarminActivitySeries(samples: unknown): Record<string, unknown> 
 
   /** Pace istantaneo (min/km) derivato da speed; evitiamo divisione per zero quando fermo. */
   const paceMinPerKm: number[] = [];
-  if (speedMs.length > 1) {
+  if (speedMs.length >= 1) {
     for (const v of speedMs) {
       if (v >= 0.3) paceMinPerKm.push(1000 / v / 60);
     }
@@ -255,7 +255,7 @@ function extractGarminActivitySeries(samples: unknown): Record<string, unknown> 
 
   /** Velocità verticale m/s derivata da altitude e time_s; richiede entrambe stessa lunghezza. */
   const verticalMps: number[] = [];
-  if (altitude.length > 2 && altitude.length === timeS.length) {
+  if (altitude.length >= 2 && altitude.length === timeS.length) {
     for (let i = 1; i < altitude.length; i += 1) {
       const dh = altitude[i] - altitude[i - 1];
       const dt = timeS[i] - timeS[i - 1];
@@ -263,18 +263,19 @@ function extractGarminActivitySeries(samples: unknown): Record<string, unknown> 
     }
   }
 
+  /** Sessioni brevi (es. camminata 2–5 min): anche 1 campione/canale alimenta grafico + persistenza. */
   const out: Record<string, unknown> = {};
-  if (power.length > 1) out.power_series_w = power;
-  if (hr.length > 1) out.hr_series_bpm = hr;
-  if (speedKmh.length > 1) out.speed_series_kmh = speedKmh;
-  if (cadence.length > 1) out.cadence_series_rpm = cadence;
-  if (altitude.length > 1) out.altitude_series_m = altitude;
-  if (tempC.length > 1) out.temperature_series_c = tempC;
-  if (route.length > 1) out.route_series_geo = route;
-  if (distanceM.length > 1) out.distance_series_m = distanceM;
-  if (timeS.length > 1) out.time_series_s = timeS;
-  if (paceMinPerKm.length > 1) out.pace_series_min_per_km = paceMinPerKm;
-  if (verticalMps.length > 1) out.vertical_speed_series_mps = verticalMps;
+  if (power.length >= 1) out.power_series_w = power;
+  if (hr.length >= 1) out.hr_series_bpm = hr;
+  if (speedKmh.length >= 1) out.speed_series_kmh = speedKmh;
+  if (cadence.length >= 1) out.cadence_series_rpm = cadence;
+  if (altitude.length >= 1) out.altitude_series_m = altitude;
+  if (tempC.length >= 1) out.temperature_series_c = tempC;
+  if (route.length >= 1) out.route_series_geo = route;
+  if (distanceM.length >= 1) out.distance_series_m = distanceM;
+  if (timeS.length >= 1) out.time_series_s = timeS;
+  if (paceMinPerKm.length >= 1) out.pace_series_min_per_km = paceMinPerKm;
+  if (verticalMps.length >= 1) out.vertical_speed_series_mps = verticalMps;
   return out;
 }
 

@@ -116,7 +116,7 @@ function pickStatsTriple(
   series: number[],
   keys: { avg: string[]; min?: string[]; max?: string[] },
 ): { min: number | null; avg: number | null; max: number | null } {
-  const seriesStats = series.length > 1 ? statsFromSeries(series) : null;
+  const seriesStats = series.length > 0 ? statsFromSeries(series) : null;
   const avg = pickMetric(trace, keys.avg) ?? seriesStats?.avg ?? null;
   const max = (keys.max ? pickMetric(trace, keys.max) : null) ?? seriesStats?.max ?? null;
   const min = (keys.min ? pickMetric(trace, keys.min) : null) ?? seriesStats?.min ?? null;
@@ -297,7 +297,7 @@ function buildSecondaryTable(trace: Record<string, unknown> | null): {
       min: def.min ? [...def.min] : undefined,
       max: def.max ? [...def.max] : undefined,
     });
-    const hasAny = stats.min != null || stats.avg != null || stats.max != null || ser.length > 1;
+    const hasAny = stats.min != null || stats.avg != null || stats.max != null || ser.length >= 1;
     if (!hasAny) continue;
     rows.push({
       channel: def.channel,
@@ -307,11 +307,20 @@ function buildSecondaryTable(trace: Record<string, unknown> | null): {
       avg: roundForDisplay(stats.avg, def.digits),
       max: roundForDisplay(stats.max, def.digits),
     });
-    if (ser.length > 1 && (def.channel === "power" || def.channel === "hr" || def.channel === "speed" || def.channel === "cadence" || def.channel === "altitude" || def.channel === "temperature")) {
+    if (
+      ser.length >= 1 &&
+      (def.channel === "power" ||
+        def.channel === "hr" ||
+        def.channel === "speed" ||
+        def.channel === "cadence" ||
+        def.channel === "altitude" ||
+        def.channel === "temperature")
+    ) {
+      const chartValues = ser.length >= 2 ? ser : [ser[0]!, ser[0]!];
       series.push({
         channel: def.channel as SeriesChannel,
         unit: def.unit,
-        values: ser,
+        values: chartValues,
       });
     }
   }

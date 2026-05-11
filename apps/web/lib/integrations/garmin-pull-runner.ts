@@ -9,6 +9,7 @@ import {
 } from "./garmin-activity-blob-storage";
 import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
+import { tryEnrichExecutedWorkoutFromGarminBinaryBlob } from "./garmin-binary-route-enrich";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
 import {
@@ -128,6 +129,20 @@ export async function runGarminPullJobs(limit: number): Promise<{
           throw new Error(`garmin_pull_binary_archive: ${persisted.reason}`);
         }
         activityBlobsStored += 1;
+        if (job.athlete_id) {
+          try {
+            await tryEnrichExecutedWorkoutFromGarminBinaryBlob({
+              supabase,
+              athleteId: job.athlete_id,
+              callbackUrl: job.callback_url,
+              buffer: buf,
+              extension: persisted.extension,
+              contentType: persisted.upload_content_type,
+            });
+          } catch {
+            /* route enrich best-effort */
+          }
+        }
         body = {
           garminWellnessBinaryResponse: true as const,
           stored: true as const,
