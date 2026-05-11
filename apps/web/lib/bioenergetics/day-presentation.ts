@@ -258,6 +258,61 @@ function interpolateNumericSeriesByHour(
   return byHour;
 }
 
+/**
+ * Deforma le serie orarie glucosio/lattato in base a timeline pasti / sedute (stessi pesi di `mealGlycemicHourWeights24` e `activitySupportHours`).
+ * Con stream denso (CGM molti punti) il bump pasto su glucosio è attenuato per non duplicare ciò che il device cattura già; il lattato in allenamento resta leggermente modulabile.
+ */
+export function applyTimelineContextToGluLacHourly24(input: {
+  glucose: (number | null)[];
+  lactate: (number | null)[];
+  mealW: readonly number[];
+  activityH: ReadonlySet<number>;
+  glucoseDenseStream: boolean;
+  lactateDenseStream: boolean;
+  insulinDemandScore: number;
+  oxidationDriveScore: number;
+}): { glucose: (number | null)[]; lactate: (number | null)[] } {
+  const gOut = [...input.glucose];
+  const lOut = [...input.lactate];
+  const insK = clamp(input.insulinDemandScore / 100, 0, 1);
+  const oxK = clamp(input.oxidationDriveScore / 100, 0, 1);
+  const mealGlucoseScale = input.glucoseDenseStream ? 0 : 1;
+  const lactateTrainScale = input.lactateDenseStream ? 0.22 : 1;
+
+  for (let h = 0; h < 24; h += 1) {
+    const mw = input.mealW[h] ?? 0;
+    let g = gOut[h];
+    if (g != null && Number.isFinite(g) && mealGlucoseScale > 0 && mw > 0.04) {
+      const clearance = 1 - 0.24 * insK;
+      const bump = 0.58 * Math.min(1.2, mw * 0.5) * clearance;
+      g = clamp(g + bump, 2.8, 14);
+      gOut[h] = Math.round(g * 1000) / 1000;
+    }
+  }
+
+  for (let h = 0; h < 24; h += 1) {
+    const mw = input.mealW[h] ?? 0;
+    let g = gOut[h];
+    if (g != null && Number.isFinite(g) && input.activityH.has(h) && mw < 0.1) {
+      const dipScale = input.glucoseDenseStream ? 0.25 : 1;
+      const dip = (0.1 + oxK * 0.18) * dipScale;
+      g = clamp(g - dip, 2.8, 14);
+      gOut[h] = Math.round(g * 1000) / 1000;
+    }
+  }
+
+  for (let h = 0; h < 24; h += 1) {
+    let l = lOut[h];
+    if (l != null && Number.isFinite(l) && input.activityH.has(h)) {
+      const bumpL = (0.38 + oxK * 1.05) * lactateTrainScale;
+      l = clamp(l + bumpL, 0.35, 18);
+      lOut[h] = Math.round(l * 1000) / 1000;
+    }
+  }
+
+  return { glucose: gOut, lactate: lOut };
+}
+
 export function buildBioenergeticDayPresentation(input: {
   date: string;
   kernel: BioenergeticDayKernelOutput;
@@ -317,6 +372,8 @@ export function buildBioenergeticDayPresentation(input: {
         : lactatePoints?.length
           ? lactatePoints
           : null;
+  const glucoseDense = isHighFrequencyStream(input.provenance.glucose, chG);
+  const lacDense = isHighFrequencyStream(input.provenance.lactate, lactatePoints);
   const lFromLab = pickNum(lab, ["lactate_mmol_l", "lactate_mmoll", "lactate"]);
   const chL = latestSeriesValue(lactatePoints);
   let lVal: number | null;
@@ -332,17 +389,30 @@ export function buildBioenergeticDayPresentation(input: {
     lTileProv = input.provenance.lactate;
   }
 
-  const glucoseHourly = interpolateNumericSeriesByHour(
+  let glucoseHourly = interpolateNumericSeriesByHour(
     input.date,
     glucosePointsForInterp,
     gLatest ?? (gTileProv === "estimated" ? 5.4 + k.insulinDemandScore * 0.015 : null),
   );
 
-  const lactateHourly = interpolateNumericSeriesByHour(
+  let lactateHourly = interpolateNumericSeriesByHour(
     input.date,
     lactatePointsForInterp,
     lVal ?? (lTileProv === "estimated" ? 1.1 + k.oxidationDriveScore * 0.01 : null),
   );
+
+  const gluLacMod = applyTimelineContextToGluLacHourly24({
+    glucose: glucoseHourly,
+    lactate: lactateHourly,
+    mealW,
+    activityH,
+    glucoseDenseStream: glucoseDense,
+    lactateDenseStream: lacDense,
+    insulinDemandScore: k.insulinDemandScore,
+    oxidationDriveScore: k.oxidationDriveScore,
+  });
+  glucoseHourly = gluLacMod.glucose;
+  lactateHourly = gluLacMod.lactate;
 
   const chart24h: BioenergeticHour24Point[] = [];
   for (let hour = 0; hour < 24; hour += 1) {
@@ -700,7 +770,6 @@ export function buildBioenergeticDayPresentation(input: {
   });
 
   const internalRichness = computeInternalContextRichness01(input.timeline, input.biomarkerRows.length);
-  const glucoseDense = isHighFrequencyStream(input.provenance.glucose, chG);
   const glucoseSparseLabPoint =
     !glucoseDense &&
     (gLabMerged != null ||
@@ -712,7 +781,6 @@ export function buildBioenergeticDayPresentation(input: {
     internalContextRichness01: internalRichness,
   });
 
-  const lacDense = isHighFrequencyStream(input.provenance.lactate, lactatePoints);
   const lacSparseLabPoint =
     !lacDense &&
     (lFromLab != null ||

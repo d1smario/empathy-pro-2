@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { MetabolicNodeCoherenceV1 } from "@empathy/domain-bioenergetics";
-import { buildBioenergeticDayPresentation, pickGlucoseMmolFromLab } from "@/lib/bioenergetics/day-presentation";
+import { applyTimelineContextToGluLacHourly24, buildBioenergeticDayPresentation, pickGlucoseMmolFromLab } from "@/lib/bioenergetics/day-presentation";
 
 const kernelFixture = {
   modelVersion: 1,
@@ -324,4 +324,73 @@ test("buildBioenergeticDayPresentation legge valori da panel values fusi", () =>
   const te = metricTiles.find((t) => t.id === "testosterone");
   assert.notEqual(tsh?.displayValue, "—");
   assert.notEqual(te?.displayValue, "—");
+});
+
+test("applyTimelineContextToGluLacHourly24: pasto aumenta glucosio nelle ore pesate", () => {
+  const flat = Array.from({ length: 24 }, () => 5.0);
+  const mealW = Array.from({ length: 24 }, () => 0);
+  mealW[12] = 1.1;
+  mealW[13] = 0.4;
+  const { glucose } = applyTimelineContextToGluLacHourly24({
+    glucose: flat,
+    lactate: flat.map(() => 1.2),
+    mealW,
+    activityH: new Set(),
+    glucoseDenseStream: false,
+    lactateDenseStream: false,
+    insulinDemandScore: 40,
+    oxidationDriveScore: 50,
+  });
+  assert.ok((glucose[12] ?? 0) > 5.25, "bump post-prandiale su glucosio");
+  assert.ok((glucose[8] ?? 0) >= 4.99 && (glucose[8] ?? 0) <= 5.01, "ore senza pasto inalterate");
+});
+
+test("buildBioenergeticDayPresentation: glucosio e lattato in chart24h rispondono a pasto e seduta in timeline", () => {
+  const { chart24h } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 52,
+      insulinDemandScore: 42,
+      oxidationDriveScore: 55,
+      anabolicSuppressionScore: 22,
+      efficiencyBand: "moderate",
+      pathwayState: "mixed",
+      keyDrivers: [],
+    },
+    provenance: { glucose: "estimated", lactate: "estimated" },
+    channels: {
+      glucose: [
+        { ts: "2026-05-01T08:00:00", value: 5.0, source: "sim" },
+        { ts: "2026-05-01T20:00:00", value: 5.0, source: "sim" },
+      ],
+      lactate: [
+        { ts: "2026-05-01T08:00:00", value: 1.2, source: "sim" },
+        { ts: "2026-05-01T20:00:00", value: 1.2, source: "sim" },
+      ],
+    },
+    timeline: [
+      {
+        id: "m1",
+        ts: "2026-05-01T12:15:00",
+        type: "meal",
+        title: "Pranzo",
+        payload: { carbsG: 85, kcal: 720 },
+      },
+      {
+        id: "s1",
+        ts: "2026-05-01T15:00:00",
+        type: "executed_session",
+        title: "Bike",
+        payload: { durationMinutes: 75 },
+      },
+    ],
+    biomarkerRows: [],
+  });
+  const g12 = chart24h[12]?.glucoseMmol;
+  const g5 = chart24h[5]?.glucoseMmol;
+  assert.ok(g12 != null && g5 != null && g12 > g5 + 0.08, "glicemia a pranzo sopra baseline pomeriggio pre-seduta");
+  const lac15 = chart24h[15]?.lactateMmol;
+  const lac5 = chart24h[5]?.lactateMmol;
+  assert.ok(lac15 != null && lac5 != null && lac15 > lac5 + 0.05, "lattato durante finestra allenamento sopra baseline");
 });
