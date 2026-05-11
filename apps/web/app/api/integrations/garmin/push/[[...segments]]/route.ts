@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 
 import { runGarminPartnerAdminEffects } from "@/lib/integrations/garmin-admin-webhooks";
 import { verifyGarminPushWebhookAuth } from "@/lib/integrations/garmin-push-webhook-auth";
 import { persistGarminPushReceipt } from "@/lib/integrations/garmin-push-persist";
 import { scheduleGarminImmediatePullAfterPush } from "@/lib/integrations/garmin-push-schedule-immediate-pull";
+import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,6 +51,11 @@ export async function HEAD() {
   return new NextResponse(null, { status: 200 });
 }
 
+/** Config Garmin / supporto: alcuni checker accettano solo 200; default 202 = “accepted, processing async”. */
+function pushAcceptedHttpStatus(): 200 | 202 {
+  return process.env.GARMIN_PUSH_ACCEPTED_HTTP_STATUS === "200" ? 200 : 202;
+}
+
 /**
  * POST: riceve notifiche push Garmin (metadata + callbackURL per pull).
  *
@@ -56,7 +63,12 @@ export async function HEAD() {
  * Su **Vercel Serverless** il limite tipico richiesta è **~4.5 MB**: sopra quella soglia il runtime può rispondere **413 prima** che questo handler legga il body.
  * Se Partner Verification fallisce per 413: ingress dedicato (reverse proxy / VM / cloud con `client_max_body_size` alto) oppure piano Vercel che permetta payload maggiori — contattare support Vercel/Garmin.
  *
- * Dopo l’inserimento in coda, avvia automaticamente `runGarminPullJobs` in background (Vercel `waitUntil`), senza attendere il cron.
+ * **Risposta rapida (richiesta Garmin Partner — Elena K., 2026-05-11):** dopo auth + parse JSON, la persistenza
+ * (`garmin_push_receipts` / `garmin_pull_jobs`), gli effetti admin e il pull immediato girano in **`waitUntil`**.
+ * Il client riceve subito **202 Accepted**. Inoltre il top-level try/catch converte **qualunque** errore
+ * pre-ack in 202 con log — Garmin **non deve mai** vedere HTTP 500 qui (l’investigazione avviene su log Vercel).
+ *
+ * Dopo l’inserimento in coda, `scheduleGarminImmediatePullAfterPush` avvia `runGarminPullJobs` in background.
  *
  * Esempio URL per riga nel portale:
  *   https://<host>/api/integrations/garmin/push/dailies
@@ -72,49 +84,116 @@ export async function POST(
   context: { params: { segments?: string[] } },
 ) {
   const kind = endpointKindFromParams(context.params.segments);
-  const contentType = req.headers.get("content-type");
-  const raw = await req.text();
+  const acceptedStatus = pushAcceptedHttpStatus();
 
-  if (!verifyGarminPushWebhookAuth(req, raw)) {
-    return NextResponse.json(
-      {
-        error:
-          "Push non autorizzato. Con GARMIN_PUSH_WEBHOOK_SECRET: ?token= / x-empathy-garmin-secret, oppure firma OAuth1 HMAC-SHA1 valida (consumer key+secret come in Vercel), oppure garmin-client-id. Se la firma fallisce per URL, imposta GARMIN_PUSH_PUBLIC_BASE_URL=https://<host> (senza slash finale).",
-      },
-      { status: 401 },
-    );
-  }
-  let parsed: unknown = { raw: raw.slice(0, 50_000) };
-  if (raw.trim().length > 0) {
-    try {
-      parsed = JSON.parse(raw) as unknown;
-    } catch {
-      parsed = { parse_error: true, raw_prefix: raw.slice(0, 2000) };
-    }
-  }
-
+  /**
+   * Garmin Partner ha esplicitamente chiesto di **non** rispondere HTTP 500: persist + pull devono
+   * essere asincroni. Qualunque eccezione **prima** del `waitUntil` (body troppo grande, header
+   * malformati, env mancante, ecc.) viene loggata e convertita in **202 Accepted**, così il
+   * checker non vede mai 500. La pipeline interna ha già try/catch propri.
+   */
   try {
-    const admin = await runGarminPartnerAdminEffects({ endpointKind: kind, parsedJson: parsed });
-    const { id, pullJobsQueued } = await persistGarminPushReceipt({
-      endpointKind: kind,
-      contentType,
-      parsedJson: parsed,
-    });
-    scheduleGarminImmediatePullAfterPush(pullJobsQueued);
+    const contentType = req.headers.get("content-type");
+    let raw = "";
+    try {
+      raw = await req.text();
+    } catch (err) {
+      console.error(
+        "[garmin-push] body read failed (probabile payload > limite runtime):",
+        err instanceof Error ? err.message : err,
+      );
+      return NextResponse.json(
+        {
+          ok: true as const,
+          accepted: true as const,
+          endpointKind: kind,
+          hint:
+            "Body non leggibile dal runtime (probabile > limite Vercel ~4.5 MB per Activity Details). Vedi commento route per ingest dedicato.",
+        },
+        { status: acceptedStatus },
+      );
+    }
+
+    if (!verifyGarminPushWebhookAuth(req, raw)) {
+      return NextResponse.json(
+        {
+          error:
+            "Push non autorizzato. Con GARMIN_PUSH_WEBHOOK_SECRET: ?token= / x-empathy-garmin-secret, oppure firma OAuth1 HMAC-SHA1 valida (consumer key+secret come in Vercel), oppure garmin-client-id. Se la firma fallisce per URL, imposta GARMIN_PUSH_PUBLIC_BASE_URL=https://<host> (senza slash finale).",
+        },
+        { status: 401 },
+      );
+    }
+
+    let parsed: unknown = { raw: raw.slice(0, 50_000) };
+    if (raw.trim().length > 0) {
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch {
+        parsed = { parse_error: true, raw_prefix: raw.slice(0, 2000) };
+      }
+    }
+
+    if (!readOptionalServiceRoleKey()) {
+      console.error(
+        "[garmin-push] SUPABASE_SERVICE_ROLE_KEY assente — push accettata ma non persistita (Garmin Partner: niente 500).",
+      );
+      return NextResponse.json(
+        {
+          ok: true as const,
+          accepted: true as const,
+          endpointKind: kind,
+          hint:
+            "SUPABASE_SERVICE_ROLE_KEY mancante su Vercel: notifica accettata ma non persistita. Configurare il secret.",
+        },
+        { status: acceptedStatus },
+      );
+    }
+
+    const pipeline = (async () => {
+      try {
+        const admin = await runGarminPartnerAdminEffects({ endpointKind: kind, parsedJson: parsed });
+        const { id, pullJobsQueued } = await persistGarminPushReceipt({
+          endpointKind: kind,
+          contentType,
+          parsedJson: parsed,
+        });
+        scheduleGarminImmediatePullAfterPush(pullJobsQueued);
+        console.log(
+          `[garmin-push] receipt=${id} endpointKind=${kind} pullJobsQueued=${pullJobsQueued} dereg=${admin.deregistrationRemoved} permSync=${admin.userPermissionsSynced}`,
+        );
+      } catch (err) {
+        console.error(
+          "[garmin-push] async persist failed:",
+          err instanceof Error ? err.stack ?? err.message : err,
+        );
+      }
+    })();
+
+    waitUntil(pipeline);
+
     return NextResponse.json(
       {
         ok: true as const,
-        id,
+        accepted: true as const,
         endpointKind: kind,
-        pullJobsQueued,
-        deregistrationRemoved: admin.deregistrationRemoved,
-        userPermissionsSynced: admin.userPermissionsSynced,
+        hint:
+          "Elaborazione in background (waitUntil). Per Activity Details con body molto grande usare ingest dedicato; vedi commento in route.",
       },
-      { status: 200 },
+      { status: acceptedStatus },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Persistenza push fallita.";
-    const status = message.includes("SUPABASE_SERVICE_ROLE_KEY") ? 503 : 500;
-    return NextResponse.json({ ok: false as const, error: message }, { status });
+    console.error(
+      "[garmin-push] unexpected pre-ack error (convertito in 202 per Garmin Partner):",
+      err instanceof Error ? err.stack ?? err.message : err,
+    );
+    return NextResponse.json(
+      {
+        ok: true as const,
+        accepted: true as const,
+        endpointKind: kind,
+        hint: "Errore inatteso prima dell’ack: convertito in 202 per non far vedere HTTP 500 a Garmin Partner.",
+      },
+      { status: acceptedStatus },
+    );
   }
 }

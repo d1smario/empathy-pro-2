@@ -21,6 +21,7 @@
  * - GARMIN_PUSH_PUBLIC_BASE_URL=https://<ingest-host>  (deve coincidere con l’URL configurato nel portale, senza slash finale)
  * - GARMIN_PULL_TRIGGER_URL=https://empathy-pro-2-web.vercel.app/api/integrations/garmin/pull/run
  * - GARMIN_PULL_RUN_SECRET (uguale a Vercel)
+ * - Opzionale: `GARMIN_PUSH_ACCEPTED_HTTP_STATUS=200` se un checker richiede solo 200 (default **202** come su Vercel).
  *
  * Avvio (da `apps/web`): npm run garmin-ingest
  * Monorepo root: cd apps/web && npm run garmin-ingest
@@ -143,6 +144,30 @@ async function main() {
   app.post(`${PUSH_PREFIX}/`, textParser, handleGarminPushPost);
   app.post(`${PUSH_PREFIX}/*`, textParser, handleGarminPushPost);
 
+  /**
+   * Express error handler dedicato ai path di push Garmin: qualsiasi eccezione lanciata dal
+   * body parser (es. payload troppo grande, JSON malformato in fase di parsing del middleware)
+   * o da middleware upstream viene convertita in **202 Accepted** con log, come richiesto
+   * dal Partner Verification Garmin (no HTTP 500 visibile lato loro).
+   */
+  app.use(
+    `${PUSH_PREFIX}`,
+    (err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+      console.error(
+        "[garmin-ingest] express middleware error (convertito in 202 per Garmin Partner):",
+        err instanceof Error ? err.stack ?? err.message : err,
+      );
+      if (!res.headersSent) {
+        const pushAcceptedStatus = process.env.GARMIN_PUSH_ACCEPTED_HTTP_STATUS === "200" ? 200 : 202;
+        res.status(pushAcceptedStatus).json({
+          ok: true as const,
+          accepted: true as const,
+          hint: "Errore upstream (body parser / middleware) convertito in 202 — verifica log lato ingest.",
+        });
+      }
+    },
+  );
+
   app.listen(port, () => {
     console.log(
       `[garmin-ingest] listening :${port} body≤${limitMb}MB prefix=${PUSH_PREFIX} publicBase=${process.env.GARMIN_PUSH_PUBLIC_BASE_URL ?? "(forwarded / path only)"}`,
@@ -152,66 +177,98 @@ async function main() {
 
 async function handleGarminPushPost(req: express.Request, res: express.Response) {
   const kind = endpointKind(req);
-  const raw = typeof req.body === "string" ? req.body : "";
-  const fakeHost = req.headers.host || "localhost";
-  const url = new URL(req.originalUrl, `http://${fakeHost}`);
-
-  if (
-    !verifyGarminPushWebhookAuthPlain({
-      pathWithSearch: url.pathname + url.search,
-      forwardedProto: headerGet(req, "x-forwarded-proto"),
-      forwardedHost: headerGet(req, "x-forwarded-host"),
-      rawBody: raw,
-      queryToken: url.searchParams.get("token"),
-      headerGet: (name) => headerGet(req, name) ?? null,
-    })
-  ) {
-    res.status(401).json({
-      error:
-        "Push non autorizzato. Con GARMIN_PUSH_WEBHOOK_SECRET: ?token= / x-empathy-garmin-secret, OAuth1, o garmin-client-id. Per firma OAuth: GARMIN_PUSH_PUBLIC_BASE_URL deve essere l’URL pubblico di questo ingest (come nel portale).",
-    });
-    return;
-  }
-
-  let parsed: unknown = { raw: raw.slice(0, 50_000) };
-  if (raw.trim().length > 0) {
-    try {
-      parsed = JSON.parse(raw) as unknown;
-    } catch {
-      parsed = { parse_error: true, raw_prefix: raw.slice(0, 2000) };
-    }
-  }
+  /**
+   * Stesso vincolo Partner di `app/api/integrations/garmin/push`: non tenere Garmin in attesa
+   * di insert DB + trigger pull (payload grandi → timeout → HTTP 500 lato loro).
+   * Qualunque eccezione prima dell’ack viene convertita in 202 con log, così il checker non vede 500.
+   */
+  const pushAcceptedStatus = process.env.GARMIN_PUSH_ACCEPTED_HTTP_STATUS === "200" ? 200 : 202;
 
   try {
-    const supabase = createIngestSupabase();
-    const contentType = headerGet(req, "content-type") ?? null;
-    const { id, pullJobsQueued } = await persistGarminPushReceipt({
-      endpointKind: kind,
-      contentType,
-      parsedJson: parsed,
-      supabase,
-    });
+    const raw = typeof req.body === "string" ? req.body : "";
+    const fakeHost = req.headers.host || "localhost";
+    const url = new URL(req.originalUrl, `http://${fakeHost}`);
 
-    const pullHint = await triggerPullOnVercel(pullJobsQueued);
+    if (
+      !verifyGarminPushWebhookAuthPlain({
+        pathWithSearch: url.pathname + url.search,
+        forwardedProto: headerGet(req, "x-forwarded-proto"),
+        forwardedHost: headerGet(req, "x-forwarded-host"),
+        rawBody: raw,
+        queryToken: url.searchParams.get("token"),
+        headerGet: (name) => headerGet(req, name) ?? null,
+      })
+    ) {
+      res.status(401).json({
+        error:
+          "Push non autorizzato. Con GARMIN_PUSH_WEBHOOK_SECRET: ?token= / x-empathy-garmin-secret, OAuth1, o garmin-client-id. Per firma OAuth: GARMIN_PUSH_PUBLIC_BASE_URL deve essere l’URL pubblico di questo ingest (come nel portale).",
+      });
+      return;
+    }
 
-    const activityDataHint =
-      kind.toLowerCase() === "activitydetails"
-        ? "activityDetails=JSON (serie/campioni). FIT/TCX/GPX=GET activityFile in coda pull (non nel body di questa push)."
-        : null;
+    let parsed: unknown = { raw: raw.slice(0, 50_000) };
+    if (raw.trim().length > 0) {
+      try {
+        parsed = JSON.parse(raw) as unknown;
+      } catch {
+        parsed = { parse_error: true, raw_prefix: raw.slice(0, 2000) };
+      }
+    }
 
-    res.status(200).json({
+    if (!readOptionalServiceRoleKey()) {
+      console.error(
+        "[garmin-ingest] SUPABASE_SERVICE_ROLE_KEY assente — push accettata ma non persistita (Garmin Partner: niente 500).",
+      );
+      res.status(pushAcceptedStatus).json({
+        ok: true as const,
+        accepted: true as const,
+        endpointKind: kind,
+        hint:
+          "SUPABASE_SERVICE_ROLE_KEY mancante sull’ingest: notifica accettata ma non persistita. Configurare il secret.",
+      });
+      return;
+    }
+
+    res.status(pushAcceptedStatus).json({
       ok: true as const,
-      id,
+      accepted: true as const,
       endpointKind: kind,
-      pullJobsQueued,
-      pullTrigger: pullHint,
+      hint:
+        "Elaborazione in background dopo risposta. FIT nativo: GET activityFile in coda pull su Vercel, non nel body activityDetails.",
       note: "Webhook amministrativi (deregistration, userPermissions) restano consigliati su Vercel (payload piccoli).",
-      ...(activityDataHint ? { activityDataHint } : {}),
     });
+
+    void (async () => {
+      try {
+        const supabase = createIngestSupabase();
+        const contentType = headerGet(req, "content-type") ?? null;
+        const { id, pullJobsQueued } = await persistGarminPushReceipt({
+          endpointKind: kind,
+          contentType,
+          parsedJson: parsed,
+          supabase,
+        });
+        const pullHint = await triggerPullOnVercel(pullJobsQueued);
+        console.log(
+          `[garmin-ingest] receipt=${id} endpointKind=${kind} pullJobsQueued=${pullJobsQueued} pullTrigger=${JSON.stringify(pullHint)}`,
+        );
+      } catch (err) {
+        console.error("[garmin-ingest] async persist failed:", err instanceof Error ? err.stack ?? err.message : err);
+      }
+    })();
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Persistenza push fallita.";
-    const status = message.includes("SUPABASE_SERVICE_ROLE_KEY") ? 503 : 500;
-    res.status(status).json({ ok: false as const, error: message });
+    console.error(
+      "[garmin-ingest] unexpected pre-ack error (convertito in 202 per Garmin Partner):",
+      err instanceof Error ? err.stack ?? err.message : err,
+    );
+    if (!res.headersSent) {
+      res.status(pushAcceptedStatus).json({
+        ok: true as const,
+        accepted: true as const,
+        endpointKind: kind,
+        hint: "Errore inatteso prima dell’ack: convertito in 202 per non far vedere HTTP 500 a Garmin Partner.",
+      });
+    }
   }
 }
 

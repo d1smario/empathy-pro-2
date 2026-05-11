@@ -4,6 +4,8 @@ Scope: Empathy Pro 2 only (`empathy-pro-2-cursor`), production host `https://emp
 
 ## What Garmin clarified
 
+- **Push webhooks (incl. Activity Details):** Garmin Partner Services expects the HTTP response **without long synchronous processing**; persist to your store and trigger pull/materialization **asynchronously** so the webhook does not return **HTTP 500** (timeouts / heavy JSON insert before ACK). Pro 2: `POST …/api/integrations/garmin/push/*` returns **202 Accepted** by default (`waitUntil` on Vercel); set **`GARMIN_PUSH_ACCEPTED_HTTP_STATUS=200`** only if a checker strictly requires 200. The Fly **`garmin-ingest`** server uses the same pattern (202 + background persist).
+- **No-500 guarantee:** the Vercel route and the Fly ingest both wrap the pre-ack path in a top-level try/catch that **converts any unexpected exception into 202 Accepted** with a server log — body read failures, missing `SUPABASE_SERVICE_ROLE_KEY`, malformed headers, body-parser overflow, etc. all become 202 (never 500) so Partner Verification sees a healthy webhook even while we investigate the cause in logs.
 - Request Signing in the Garmin portal is for OAuth1 only.
 - Empathy Pro 2 uses OAuth2 PKCE, so Garmin data requests use `Authorization: Bearer <access_token>`.
 - A few personal Garmin Connect accounts can be used for testing before production approval.
