@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import type { HostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import type {
@@ -51,6 +52,7 @@ export function HomeStripePricing({
   hideSectionTitle,
   sectionId = "piani",
 }: HomeStripePricingProps) {
+  const t = useTranslations("Checkout");
   const [basePlanId, setBasePlanId] = useState<EmpathyBasePlanId>("silver");
   const [coachAddOnId, setCoachAddOnId] = useState<EmpathyCoachAddOnId | null>(null);
   const [email, setEmail] = useState("");
@@ -65,9 +67,7 @@ export function HomeStripePricing({
   async function goCheckout(withTrial: boolean) {
     setErr(null);
     if (!payReady) {
-      setErr(
-        "Abbonamento online non ancora abilitato su questo ambiente. Chiedi al team di completare la configurazione oppure usa Access se hai già un account.",
-      );
+      setErr(t("errPayNotReady"));
       return;
     }
     setLoading(withTrial ? "trial" : "subscribe");
@@ -89,8 +89,8 @@ export function HomeStripePricing({
         stripeKeyKind?: string;
       };
       if (!res.ok) {
-        const parts = [data.error ?? `Errore ${res.status}`];
-        if (data.stripeKeyKind) parts.push(`Chiave Stripe: ${data.stripeKeyKind}`);
+        const parts = [data.error ?? t("errGenericWithStatus", { status: res.status })];
+        if (data.stripeKeyKind) parts.push(t("errStripeKeyKind", { kind: data.stripeKeyKind }));
         if (data.hint) parts.push(data.hint);
         setErr(parts.join(" — "));
         return;
@@ -99,9 +99,9 @@ export function HomeStripePricing({
         window.location.href = data.url;
         return;
       }
-      setErr("URL di pagamento non disponibile.");
+      setErr(t("errNoUrl"));
     } catch {
-      setErr("Richiesta non riuscita.");
+      setErr(t("errRequestFailed"));
     } finally {
       setLoading(false);
     }
@@ -126,7 +126,7 @@ export function HomeStripePricing({
           className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
           role="status"
         >
-          Operazione completata. Puoi entrare in app da Access o dalla dashboard.
+          {t("billingSuccess")}
         </p>
       ) : null}
       {billingFlash === "cancel" ? (
@@ -134,14 +134,13 @@ export function HomeStripePricing({
           className="mt-6 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-200"
           role="status"
         >
-          Pagamento non completato. Puoi riprovare quando vuoi.
+          {t("billingCancel")}
         </p>
       ) : null}
 
       {!payReady ? (
         <p className="mt-6 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3 text-sm text-amber-100/90">
-          Puoi sempre selezionare pacchetto e coach. Il pulsante di pagamento si attiva quando l&apos;ambiente è configurato
-          per l&apos;abbonamento.
+          {t("payNotReady")}
         </p>
       ) : null}
 
@@ -168,7 +167,7 @@ export function HomeStripePricing({
               <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-orange-300/90">{plan.label}</span>
               <span className="mt-2 text-3xl font-black text-white sm:text-4xl">
                 {plan.monthlyPrice} €
-                <span className="text-sm font-semibold text-gray-500 sm:text-base"> / mese</span>
+                <span className="text-sm font-semibold text-gray-500 sm:text-base">{t("perMonthSuffix")}</span>
               </span>
               <span className="mt-3 text-sm leading-relaxed text-gray-400">{plan.summary}</span>
               <ul className="mt-4 list-inside list-disc space-y-1.5 text-xs text-gray-500">
@@ -177,12 +176,12 @@ export function HomeStripePricing({
                 ))}
               </ul>
               {selected ? (
-                <span className="mt-4 text-xs font-medium text-purple-300">Selezionato</span>
+                <span className="mt-4 text-xs font-medium text-purple-300">{t("selected")}</span>
               ) : (
-                <span className="mt-4 text-xs text-gray-600">Clic per selezionare</span>
+                <span className="mt-4 text-xs text-gray-600">{t("selectHint")}</span>
               )}
               {!priceOk && payReady ? (
-                <span className="mt-2 text-xs text-amber-400/80">Prezzo non collegato in questo ambiente.</span>
+                <span className="mt-2 text-xs text-amber-400/80">{t("priceNotConnected")}</span>
               ) : null}
             </button>
           );
@@ -190,8 +189,8 @@ export function HomeStripePricing({
       </div>
 
       <div className="mt-12">
-        <h3 className="text-lg font-bold text-white">Coach performance (opzionale)</h3>
-        <p className="mt-1 text-sm text-gray-500">Aggiungi un livello di supporto sul pacchetto scelto.</p>
+        <h3 className="text-lg font-bold text-white">{t("coachHeading")}</h3>
+        <p className="mt-1 text-sm text-gray-500">{t("coachSub")}</p>
         <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <button
             type="button"
@@ -203,8 +202,8 @@ export function HomeStripePricing({
                 : "border-white/10 bg-black/20 hover:border-white/20",
             )}
           >
-            <span className="font-semibold text-white">Nessun coach</span>
-            <p className="mt-2 text-xs leading-relaxed text-gray-500">Solo piattaforma e pacchetto base.</p>
+            <span className="font-semibold text-white">{t("noCoach")}</span>
+            <p className="mt-2 text-xs leading-relaxed text-gray-500">{t("noCoachBody")}</p>
           </button>
           {coachAddOns.map((a) => {
             const aid = a.id as EmpathyCoachAddOnId;
@@ -223,14 +222,14 @@ export function HomeStripePricing({
                 )}
               >
                 <span className="font-semibold text-white">{a.label}</span>
-                <span className="mt-1 block text-sm text-gray-400">+{a.monthlyPrice} € / mese</span>
+                <span className="mt-1 block text-sm text-gray-400">+{a.monthlyPrice} €{t("perMonthSuffix")}</span>
                 <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-gray-500">
                   {a.features.map((f) => (
                     <li key={f}>{f}</li>
                   ))}
                 </ul>
                 {!priceOk && payReady ? (
-                  <p className="mt-2 text-xs text-amber-400/80">Add-on non collegato in questo ambiente.</p>
+                  <p className="mt-2 text-xs text-amber-400/80">{t("coachPriceNotConnected")}</p>
                 ) : null}
               </button>
             );
@@ -240,7 +239,7 @@ export function HomeStripePricing({
 
       <div className="mt-10 rounded-2xl border border-white/10 bg-white/[0.02] p-6">
         <label htmlFor="checkout-email" className="block text-xs font-medium text-gray-500">
-          Email (opzionale)
+          {t("emailLabel")}
         </label>
         <input
           id="checkout-email"
@@ -249,7 +248,7 @@ export function HomeStripePricing({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="mt-2 w-full max-w-md rounded-xl border border-white/15 bg-black/40 px-3 py-2.5 text-sm text-white outline-none ring-purple-500/30 placeholder:text-gray-600 focus:border-purple-500/40 focus:ring-2"
-          placeholder="nome@esempio.it"
+          placeholder={t("emailPlaceholder")}
           disabled={loading !== false}
         />
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
@@ -260,7 +259,7 @@ export function HomeStripePricing({
             disabled={loading !== false}
             onClick={() => goCheckout(false)}
           >
-            {loading === "subscribe" ? "Reindirizzamento…" : "Abbonati e paga"}
+            {loading === "subscribe" ? t("redirecting") : t("subscribeAndPay")}
           </Pro2Button>
           <Pro2Button
             type="button"
@@ -268,13 +267,17 @@ export function HomeStripePricing({
             className="justify-center px-8"
             disabled={loading !== false || !trialEligible}
             onClick={() => goCheckout(true)}
-            title={!trialEligible ? "Prova non attiva su questo ambiente o piano non idoneo." : undefined}
+            title={!trialEligible ? t("trialNotEligible") : undefined}
           >
-            {loading === "trial" ? "Reindirizzamento…" : `Prova gratuita${trialDaysConfigured ? ` (${trialDaysConfigured} giorni)` : ""}`}
+            {loading === "trial"
+              ? t("redirecting")
+              : trialDaysConfigured
+                ? t("freeTrialWithDays", { days: trialDaysConfigured })
+                : t("freeTrial")}
           </Pro2Button>
         </div>
         {trialDaysConfigured == null ? (
-          <p className="mt-3 text-xs text-gray-600">In questo ambiente la prova gratuita non è attiva.</p>
+          <p className="mt-3 text-xs text-gray-600">{t("trialNotConfigured")}</p>
         ) : null}
         {err ? (
           <p className="mt-4 text-sm text-red-400" role="alert">
@@ -283,10 +286,10 @@ export function HomeStripePricing({
         ) : null}
         <div className="mt-8 flex flex-wrap gap-3 border-t border-white/10 pt-6">
           <Pro2Link href="/access" variant="ghost" className="justify-center px-6">
-            Ho già un account — Access
+            {t("haveAccount")}
           </Pro2Link>
           <Pro2Link href="/dashboard" variant="ghost" className="justify-center px-6">
-            Entra in app
+            {t("enterApp")}
           </Pro2Link>
         </div>
       </div>

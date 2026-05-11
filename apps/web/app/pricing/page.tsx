@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import { EmpathyPublicHome } from "@/components/marketing/EmpathyPublicHome";
 
 export const metadata: Metadata = {
@@ -15,22 +16,21 @@ type PageProps = {
  * Redirect post-checkout: default verso `/?billing=*` (vedi `stripe-app-url`).
  * Quando arrivi da paywall (`?required=athlete_access`) mostriamo banner di contesto.
  */
-export default function PricingPage({ searchParams }: PageProps) {
+export default async function PricingPage({ searchParams }: PageProps) {
   const billingRaw = searchParams?.billing;
   const billing = billingRaw === "success" ? "success" : billingRaw === "cancel" ? "cancel" : undefined;
   const required = typeof searchParams?.required === "string" ? searchParams.required : null;
-
-  const requiredMessage =
-    required === "athlete_access"
-      ? "Per usare la piattaforma Empathy serve un piano attivo o un accesso concesso dall’admin (testimonial / promo). Scegli un piano qui sotto, oppure scrivi a supporto se ritieni di aver diritto a un accesso gratuito."
-      : null;
+  const t = await getTranslations("Pricing");
+  const showPaywallBanner = required === "athlete_access";
 
   return (
     <>
-      {requiredMessage ? (
+      {showPaywallBanner ? (
         <div className="bg-amber-950/40 px-6 py-3 text-center text-xs text-amber-200">
-          <span className="font-semibold uppercase tracking-wider text-amber-300">Accesso richiesto</span>
-          <span className="ml-2 text-amber-100/90">{requiredMessage}</span>
+          <span className="font-semibold uppercase tracking-wider text-amber-300">
+            {t("paywallBannerLabel")}
+          </span>
+          <span className="ml-2 text-amber-100/90">{t("paywallBannerBody")}</span>
         </div>
       ) : null}
       <EmpathyPublicHome billingFlash={billing} variant="pricing-page" />
