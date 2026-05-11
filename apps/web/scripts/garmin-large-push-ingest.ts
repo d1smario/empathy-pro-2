@@ -2,6 +2,14 @@
  * Ingress Garmin push con body grandi (es. Activity Details ~ fino a ~100 MB doc Garmin).
  * Vercel taglia spesso a ~4.5 MB → 413 prima del route handler.
  *
+ * ## Cosa contiene cosa (Health API)
+ *
+ * - **`activityDetails` (POST qui)** = **JSON** (summary + `samples[]` / serie dove Garmin le espone).
+ *   **Non** è il file FIT nativo: non aspettarti bytes `.fit` nel body della push.
+ * - **File FIT / TCX / GPX** = risposta binaria di **`GET …/wellness-api/rest/activityFile`** (pull token + `id`
+ *   summary). Empathy accoda quei GET dal runner (`garmin_pull_jobs` → `garmin-pull-runner` su Vercel) dopo
+ *   il pull `activities`, oppure quando la push include `callbackURL` verso `activityFile` (stessa coda).
+ *
  * Deploy questo processo su Fly/Railway/VM con limite HTTP alto; nel portale Garmin imposta **solo**
  * gli stream con payload pesante (tipicamente `activityDetails`) verso l’URL pubblico di questo host:
  *   https://<ingest-host>/api/integrations/garmin/push/activityDetails
@@ -113,7 +121,7 @@ async function main() {
       ok: true as const,
       service: "empathy-pro2-garmin-ingest",
       endpointKind: kind,
-      hint: "Garmin invia POST con JSON. Activity Details: punta il portale verso questo host + GARMIN_PUSH_PUBLIC_BASE_URL uguale all’URL pubblico.",
+      hint: "Garmin invia POST con JSON. Activity Details: punta il portale verso questo host + GARMIN_PUSH_PUBLIC_BASE_URL uguale all’URL pubblico. FIT nativo: GET activityFile (coda pull su Vercel), non il JSON activityDetails.",
     });
   };
 
@@ -186,6 +194,11 @@ async function handleGarminPushPost(req: express.Request, res: express.Response)
 
     const pullHint = await triggerPullOnVercel(pullJobsQueued);
 
+    const activityDataHint =
+      kind.toLowerCase() === "activitydetails"
+        ? "activityDetails=JSON (serie/campioni). FIT/TCX/GPX=GET activityFile in coda pull (non nel body di questa push)."
+        : null;
+
     res.status(200).json({
       ok: true as const,
       id,
@@ -193,6 +206,7 @@ async function handleGarminPushPost(req: express.Request, res: express.Response)
       pullJobsQueued,
       pullTrigger: pullHint,
       note: "Webhook amministrativi (deregistration, userPermissions) restano consigliati su Vercel (payload piccoli).",
+      ...(activityDataHint ? { activityDataHint } : {}),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Persistenza push fallita.";

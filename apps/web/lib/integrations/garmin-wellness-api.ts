@@ -8,9 +8,12 @@ import "server-only";
  * I path qui sotto sono i **GET** summary + **User API** come da OpenAPI / apiDocs. Lessico utile:
  * - **GET `/rest/user/id`** → JSON `{ "userId": "<hex>" }` (ID Health API stabile sullo stesso utente tra token).
  * - **GET `/rest/activityDetails`** → query `token` (pull token OAuth2 / notifica), opzionale finestra
- *   `uploadStartTimeInSeconds` + `uploadEndTimeInSeconds` (se usati, **sempre in coppia**).
+ *   `uploadStartTimeInSeconds` + `uploadEndTimeInSeconds` (se usati, **sempre in coppia**). Risposta **JSON**
+ *   (serie/campioni), **non** il file FIT nativo.
  * - **GET `/rest/activityFile`** → query `id`, `token`; **200** spesso `application/octet-stream` (FIT/TCX/GPX).
  *   Garmin: i file **non** arrivano via Push; solo in risposta a **Ping** chiamando il `callbackURL` indicato.
+ *   Push **`activityDetails`** su ingest Fly (es. `https://empathy-garmin-ingest.fly.dev/api/integrations/garmin/push/activityDetails`):
+ *   body grande = **solo JSON**; il FIT passa da **questo GET** (job in `garmin_pull_jobs`).
  *   Dopo un pull `activities`, Empathy accoda anche GET `activityDetails` + `activityFile` con lo stesso `token=`
  *   (`garmin-activity-follow-up-pull-queue` + `garmin-pull-runner`) finché il portale non invia push dedicati.
  * - **GET `/rest/dailies` (e molti altri summary)** → la URL operativa arriva dalla **Ping/Push** con **`token=`** (pull token)

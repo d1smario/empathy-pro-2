@@ -83,6 +83,9 @@ async function hasPendingOrFetchingJobWithUrl(supabase: SupabaseClient, callback
  * Dopo GET `activities` (lista summary), Garmin **non** invia da sola `activityFile` / `activityDetails`.
  * Accodiamo pull espliciti verso wellness-api usando lo stesso `token=` del callback `activities`
  * (pull token Health API) + OAuth1/Bearer come il job parent — vedi `garmin-pull-runner`.
+ *
+ * **Ingest Fly (`…/push/activityDetails`)**: riceve solo il **JSON** pesante della push; non contiene il FIT.
+ * Il FIT resta da **`GET /rest/activityFile`** (job accodati qui o da `callbackURL` nel payload Garmin).
  */
 export async function queueGarminActivityEnrichmentAfterActivitiesPull(input: {
   supabase: SupabaseClient;
