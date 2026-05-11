@@ -13,6 +13,15 @@ COPY apps/web ./apps/web
 
 RUN npm ci
 
+# Shim `server-only` per il runtime non-Next dell'ingest Fly.
+# I moduli canonici Garmin (`garmin-wellness-materialize`, `garmin-pull-runner`,
+# `garmin-push-webhook-auth`, ecc.) iniziano con `import "server-only"` come
+# guardia Next.js (impedisce di finire in un client bundle). Su Fly non c'è
+# alcun client bundle: lo stesso import lancia in fase di require e crasha
+# l'ingest. Lo shim qui rende l'import un no-op **solo** in questa immagine
+# Docker; Vercel e Next continuano a usare `server-only` come prima.
+RUN printf 'module.exports = {};\n' > /app/node_modules/server-only/index.js
+
 WORKDIR /app/apps/web
 ENV NODE_ENV=production
 EXPOSE 8790
