@@ -93,8 +93,13 @@ export type BioenergeticHour24Point = {
  * - `model_continuous`: oggi da modello deterministico (sostituibile da stream).
  * - `measured_stream`: serie ad alta frequenza (es. CGM) sul giorno.
  * - `sparse_lab_hold`: singolo referto — valore tenuto costante fino a nuovi campioni/device.
+ * - `model_predictor_ai`: andamento illustrativo generato da LLM sui dati giornata (predittore, non verità clinica).
  */
-export type BioenergeticMonitoringDataPlane = "model_continuous" | "measured_stream" | "sparse_lab_hold";
+export type BioenergeticMonitoringDataPlane =
+  | "model_continuous"
+  | "measured_stream"
+  | "sparse_lab_hold"
+  | "model_predictor_ai";
 
 /** Un canale nello stesso paradigma UI: striscia 24 h, oggi modello o misura; domani stream device ove applicabile. */
 /** Campione continuo (es. 055) per asse tempo nativo nella UI; non sostituisce `hourly` nei contratti downstream. */
@@ -243,5 +248,24 @@ export type BioenergeticCurveDirectionHintsResponseV1 = {
   segments: BioenergeticCurveDirectionSegmentV1[];
   noteIt: string | null;
   skippedReason?: "no_openai" | "assemble_failed" | "bad_openai_response" | "network";
+};
+
+/** `POST …/bioenergetics/predictor-curves`: curve 5 min (da 15 min interpolati) e orari ormoni — predittore AI su memoria giornata. */
+export type BioenergeticPredictorCurvesResponseV1 = {
+  predictorContractVersion: 1;
+  athleteId: string;
+  date: string;
+  disclaimerIt: string;
+  noteIt: string | null;
+  /** Solo canali generati; il client sostituisce questi id in `continuousMonitoring`. */
+  channels: BioenergeticMonitoringChannel24[];
+  skippedReason?:
+    | "no_openai"
+    | "assemble_failed"
+    | "bad_openai_response"
+    | "network"
+    | "empty_predictor"
+    /** Serie sintetiche deterministiche (stesso merge del predittore), solo dev o `EMPATHY_PREDICTOR_DEMO=1`. */
+    | "predictor_demo_local";
 };
 

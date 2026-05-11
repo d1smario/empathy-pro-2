@@ -23,12 +23,14 @@ const CATEGORY_ORDER: BioenergeticMetricTileCategory[] = [
 function planeLabel(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "Stream";
   if (plane === "sparse_lab_hold") return "Lab tenuto";
+  if (plane === "model_predictor_ai") return "Predittore AI";
   return "Modello";
 }
 
 function planeBadgeClass(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "border-emerald-400/40 text-emerald-200/90";
   if (plane === "sparse_lab_hold") return "border-sky-400/40 text-sky-200/90";
+  if (plane === "model_predictor_ai") return "border-fuchsia-400/45 text-fuchsia-100/90";
   return "border-amber-400/40 text-amber-200/90";
 }
 
@@ -140,9 +142,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
         const isGluLac = ch.id === "glucose" || ch.id === "lactate";
         const useStreamChart =
           streamTrace &&
-          streamTrace.length >= 4 &&
-          (ch.dataPlane === "measured_stream" ||
-            (isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
+          (ch.dataPlane === "measured_stream"
+            ? streamTrace.length >= 4
+            : ch.dataPlane === "model_predictor_ai" && streamTrace.length >= 72
+              ? true
+              : Boolean(isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
         const streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
 
         const rows = ch.hourly.map((v, hour) => ({
@@ -181,7 +185,7 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
                 ) : null}
               </div>
             </div>
-            {ch.curveResolution ? (
+            {ch.curveResolution && ch.dataPlane !== "model_predictor_ai" ? (
               <p className="mb-2 text-[0.58rem] leading-snug text-gray-400">
                 {fusionSummary(ch.curveResolution)}
                 <span className="text-gray-500"> · </span>
@@ -192,9 +196,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring, curveDirecti
               {streamRows?.length
                 ? ch.dataPlane === "measured_stream"
                   ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
-                  : hintsForChannel.length
-                    ? "Asse: tempo reale del modello (5 min). Fasce colorate = analisi AI direzione (salita verde, discesa ciano, grigio plateau) — i numeri restano dal motore."
-                    : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
+                  : ch.dataPlane === "model_predictor_ai"
+                    ? "Asse: predittore AI (passo 5 min da serie 15 min) — andamento illustrativo da dati giornata, non valore clinico."
+                    : hintsForChannel.length
+                      ? "Asse: tempo reale del modello (5 min). Fasce colorate = analisi AI direzione (salita verde, discesa ciano, grigio plateau) — i numeri restano dal motore."
+                      : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>

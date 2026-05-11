@@ -9,7 +9,9 @@ import type {
   BioenergeticCurveDirectionSegmentV1,
   BioenergeticMetricTile,
   BioenergeticMetricTileCategory,
+  BioenergeticMonitoringChannel24,
   BioenergeticPathwayImpact,
+  BioenergeticPredictorCurvesResponseV1,
   BioenergeticTimelineEvent,
   BioenergeticsDayViewModel,
   BioenergeticsTimeSeriesStreamResponseV1,
@@ -117,6 +119,12 @@ export default function BioenergeticsPageView() {
   const [curveHintsNote, setCurveHintsNote] = useState<string | null>(null);
   const [curveHintsLoading, setCurveHintsLoading] = useState(false);
   const [curveHintsError, setCurveHintsError] = useState<string | null>(null);
+  const [predictorChannels, setPredictorChannels] = useState<BioenergeticMonitoringChannel24[] | null>(null);
+  const [predictorDisclaimer, setPredictorDisclaimer] = useState<string | null>(null);
+  const [predictorNote, setPredictorNote] = useState<string | null>(null);
+  const [predictorLoading, setPredictorLoading] = useState(false);
+  const [predictorError, setPredictorError] = useState<string | null>(null);
+  const [predictorDemoLocal, setPredictorDemoLocal] = useState(false);
   const seededFromContext = useRef(false);
   const genBodyRef = useRef<HTMLElement | null>(null);
 
@@ -125,6 +133,11 @@ export default function BioenergeticsPageView() {
     setCurveHintsSummary(null);
     setCurveHintsNote(null);
     setCurveHintsError(null);
+    setPredictorChannels(null);
+    setPredictorDisclaimer(null);
+    setPredictorNote(null);
+    setPredictorError(null);
+    setPredictorDemoLocal(false);
   }, [athleteId, date]);
 
   useEffect(() => {
@@ -282,6 +295,64 @@ export default function BioenergeticsPageView() {
     }
   }, [athleteId, date]);
 
+  const fetchPredictorCurves = useCallback(async () => {
+    if (!athleteId) return;
+    setPredictorLoading(true);
+    setPredictorError(null);
+    try {
+      const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+      const res = await fetch("/api/bioenergetics/predictor-curves", {
+        method: "POST",
+        cache: "no-store",
+        credentials: "same-origin",
+        headers,
+        body: JSON.stringify({ athleteId, date }),
+      });
+      const j = (await res.json()) as BioenergeticPredictorCurvesResponseV1 & { error?: string };
+      if (!("predictorContractVersion" in j) || j.predictorContractVersion !== 1) {
+        setPredictorChannels(null);
+        setPredictorDisclaimer(null);
+        setPredictorNote(null);
+        setPredictorDemoLocal(false);
+        setPredictorError(j.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const chans = Array.isArray(j.channels) ? j.channels : [];
+      const rawDisc = typeof j.disclaimerIt === "string" ? j.disclaimerIt.trim() : "";
+      setPredictorDisclaimer(rawDisc && rawDisc !== "—" ? rawDisc : null);
+      setPredictorNote(j.noteIt ?? null);
+      if (!chans.length) {
+        setPredictorChannels(null);
+        setPredictorDemoLocal(false);
+        const skipMsg =
+          j.noteIt?.trim() ||
+          (rawDisc && rawDisc !== "—" ? rawDisc : "") ||
+          (typeof j.skippedReason === "string" ? j.skippedReason : "") ||
+          "Nessuna curva generata.";
+        setPredictorError(skipMsg);
+        if (j.skippedReason === "no_openai") {
+          setPredictorDisclaimer(null);
+        }
+        return;
+      }
+      setPredictorChannels(chans);
+      setPredictorDemoLocal(j.skippedReason === "predictor_demo_local");
+      setPredictorError(null);
+      setCurveDirectionHints(null);
+      setCurveHintsSummary(null);
+      setCurveHintsNote(null);
+      setCurveHintsError(null);
+    } catch {
+      setPredictorChannels(null);
+      setPredictorDisclaimer(null);
+      setPredictorNote(null);
+      setPredictorDemoLocal(false);
+      setPredictorError("Errore di rete durante il predittore AI.");
+    } finally {
+      setPredictorLoading(false);
+    }
+  }, [athleteId, date]);
+
   useEffect(() => {
     if (athleteLoading) return;
     if (!athleteId) {
@@ -376,6 +447,20 @@ export default function BioenergeticsPageView() {
     if (!vm?.timeline?.length) return [];
     return [...vm.timeline].filter((e) => TIMELINE_MODEL_TYPES.has(e.type)).sort((a, b) => a.ts.localeCompare(b.ts));
   }, [vm?.timeline]);
+
+  const monitoringForStrip = useMemo(() => {
+    if (!vm?.continuousMonitoring) return null;
+    if (!predictorChannels?.length) return vm.continuousMonitoring;
+    const pmap = new Map(predictorChannels.map((c) => [c.id, c]));
+    return {
+      ...vm.continuousMonitoring,
+      channels: vm.continuousMonitoring.channels.map((ch) => {
+        const p = pmap.get(ch.id);
+        if (!p) return ch;
+        return { ...ch, ...p };
+      }),
+    };
+  }, [vm?.continuousMonitoring, predictorChannels]);
 
   const resolvedEvidenceLinks = vm?.evidenceConditionedLayer?.resolvedEvidenceLinks ?? [];
   const evidenceLinkCount = resolvedEvidenceLinks.length;
@@ -574,7 +659,7 @@ export default function BioenergeticsPageView() {
               icon={LineChart}
             >
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
-              {vm.continuousMonitoring?.channels?.length ? (
+              {monitoringForStrip?.channels?.length ? (
                 <div className="mt-6 border-t border-white/10 pt-4">
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fuchsia-200/85">
                     Striscia monitoraggio continuo (24 h)
@@ -583,6 +668,15 @@ export default function BioenergeticsPageView() {
                     Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5 minuti,
                     deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono con ciò che
                     ti aspetti, verifica timestamp diario e calendario (non il modello che &quot;indovina&quot; i pasti).
+                    {predictorChannels?.length ? (
+                      <>
+                        {" "}
+                        <span className="text-fuchsia-200/90">
+                          Alcune strisce possono essere in modalità predittore AI (andamento illustrativo, non valore
+                          vero).
+                        </span>
+                      </>
+                    ) : null}
                   </p>
                   {timelineModelStimuli.length ? (
                     <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
@@ -642,7 +736,58 @@ export default function BioenergeticsPageView() {
                       type="button"
                       variant="secondary"
                       className="!text-xs shrink-0"
-                      disabled={!athleteId || athleteLoading || curveHintsLoading}
+                      disabled={!athleteId || athleteLoading || predictorLoading || curveHintsLoading}
+                      onClick={() => void fetchPredictorCurves()}
+                    >
+                      {predictorLoading ? "Predittore AI…" : "Curve predittore (AI)"}
+                    </Pro2Button>
+                    {predictorChannels?.length ? (
+                      <Pro2Button
+                        type="button"
+                        variant="ghost"
+                        className="!text-xs shrink-0"
+                        onClick={() => {
+                          setPredictorChannels(null);
+                          setPredictorDisclaimer(null);
+                          setPredictorNote(null);
+                          setPredictorError(null);
+                          setPredictorDemoLocal(false);
+                        }}
+                      >
+                        Ripristina motore
+                      </Pro2Button>
+                    ) : null}
+                    <p className="min-w-[12rem] flex-1 text-[0.65rem] leading-relaxed text-gray-500">
+                      Legge la stessa giornata assemblata e traccia <strong className="text-gray-300">curve illustrative</strong>{" "}
+                      (salita, discesa, forma d&apos;onda) per orientamento — non sostituisce misure né valori clinici.
+                      Con <code className="text-gray-400">OPENAI_API_KEY</code> usa il modello; in <code className="text-gray-400">npm run dev</code> senza chiave
+                      compaiono curve <strong className="text-gray-300">demo locali</strong> (stessa UI).
+                    </p>
+                  </div>
+                  {predictorError ? (
+                    <p className="mb-3 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/95">
+                      {predictorError}
+                    </p>
+                  ) : null}
+                  {predictorDemoLocal && predictorChannels?.length ? (
+                    <p className="mb-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-[0.65rem] text-cyan-100/95">
+                      Stai vedendo la <strong className="text-white">demo locale</strong> (dati sintetici fissi, nessuna chiamata OpenAI).
+                    </p>
+                  ) : null}
+                  {predictorDisclaimer && (predictorChannels?.length || predictorError) ? (
+                    <p className="mb-3 rounded-lg border border-fuchsia-500/35 bg-fuchsia-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-fuchsia-50/95">
+                      {predictorDisclaimer}
+                    </p>
+                  ) : null}
+                  {predictorNote && predictorChannels?.length ? (
+                    <p className="mb-3 text-[0.65rem] leading-snug text-gray-500">{predictorNote}</p>
+                  ) : null}
+                  <div className="mb-4 flex flex-wrap items-start gap-3">
+                    <Pro2Button
+                      type="button"
+                      variant="secondary"
+                      className="!text-xs shrink-0"
+                      disabled={!athleteId || athleteLoading || curveHintsLoading || predictorLoading}
                       onClick={() => void fetchCurveDirectionHints()}
                     >
                       {curveHintsLoading ? "Analisi AI…" : "Analisi AI: dove sale / scende (fasce)"}
@@ -710,7 +855,7 @@ export default function BioenergeticsPageView() {
                     </details>
                   ) : null}
                   <BioenergeticsContinuousMonitoringGrid
-                    monitoring={vm.continuousMonitoring}
+                    monitoring={monitoringForStrip}
                     curveDirectionHints={curveDirectionHints}
                   />
                 </div>
