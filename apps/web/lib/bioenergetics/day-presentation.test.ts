@@ -59,6 +59,41 @@ test("buildBioenergeticDayPresentation emette 24 punti orari e tile strutturati"
   assert.ok(metricTiles.some((t) => t.id === "lactate"));
 });
 
+test("buildBioenergeticDayPresentation: stream glucosio denso espone streamTrace per grafico tempo reale", () => {
+  const glucosePts = Array.from({ length: 12 }, (_, i) => {
+    const h = 6 + Math.floor(i / 2);
+    const m = (i % 2) * 30;
+    return {
+      ts: `2026-05-01T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`,
+      value: 5.1 + i * 0.04,
+      source: "athlete_time_series_samples",
+    };
+  });
+  const { continuousMonitoring } = buildBioenergeticDayPresentation({
+    date: "2026-05-01",
+    kernel: {
+      modelVersion: 1,
+      glucoseHandlingScore: 50,
+      insulinDemandScore: 45,
+      oxidationDriveScore: 48,
+      anabolicSuppressionScore: 30,
+      efficiencyBand: "moderate",
+      pathwayState: "mixed",
+      keyDrivers: ["test"],
+    },
+    provenance: { glucose: "measured", lactate: "estimated" },
+    channels: {
+      glucose: glucosePts,
+      lactate: [{ ts: "2026-05-01T12:00:00", value: 1.4, source: "sim_diurnal_v1" }],
+    },
+    timeline: [],
+    biomarkerRows: [],
+  });
+  const glu = continuousMonitoring.channels.find((c) => c.id === "glucose");
+  assert.ok(glu?.streamTrace && glu.streamTrace.length === 12);
+  assert.equal(glu?.dataPlane, "measured_stream");
+});
+
 test("buildBioenergeticDayPresentation espone continuousMonitoring essenziale (glu lac insulin cort acth)", () => {
   const { continuousMonitoring } = buildBioenergeticDayPresentation({
     date: "2026-05-01",

@@ -5,6 +5,7 @@ import type {
   BioenergeticChannelCurveResolutionV1,
   BioenergeticContinuousMonitoringDay,
   BioenergeticMetricTileCategory,
+  BioenergeticMonitoringChannel24,
   BioenergeticMonitoringDataPlane,
 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticCurveGovernanceHintV1 } from "@empathy/contracts";
@@ -72,6 +73,26 @@ function yDomainFromHourly(hourly: (number | null)[]): [number, number] {
   return [mn - pad, mx + pad];
 }
 
+function streamChartRows(trace: NonNullable<BioenergeticMonitoringChannel24["streamTrace"]>) {
+  return [...trace]
+    .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
+    .map((p) => {
+      const tsMs = Date.parse(p.observedAt);
+      return {
+        tsMs,
+        v: p.value,
+        timeLabel: Number.isFinite(tsMs)
+          ? new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(tsMs))
+          : "—",
+      };
+    })
+    .filter((r) => Number.isFinite(r.tsMs));
+}
+
+function formatStreamAxisTick(ms: number): string {
+  return new Intl.DateTimeFormat("it-IT", { hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+}
+
 export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
   const sorted = [...monitoring.channels].sort(
     (a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category),
@@ -80,16 +101,23 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {sorted.map((ch) => {
+        const streamTrace = ch.streamTrace;
+        const useStreamChart =
+          ch.dataPlane === "measured_stream" && streamTrace && streamTrace.length >= 4;
+        const streamRows = useStreamChart ? streamChartRows(streamTrace) : null;
+
         const rows = ch.hourly.map((v, hour) => ({
           hour,
           hourLabel: `${String(hour).padStart(2, "0")}:00`,
           hourEndLabel: `${String(hour).padStart(2, "0")}:59`,
           v: v == null || Number.isNaN(v) ? null : v,
         }));
-        const hasData = rows.some((r) => r.v != null);
+        const hasData = streamRows?.length ? true : rows.some((r) => r.v != null);
         if (!hasData) return null;
 
-        const yDomain = yDomainFromHourly(ch.hourly);
+        const yDomain = streamRows?.length
+          ? yDomainFromHourly(streamRows.map((r) => r.v))
+          : yDomainFromHourly(ch.hourly);
 
         return (
           <div
@@ -119,57 +147,114 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
                 <span className="text-violet-200/85">{governanceIt(ch.curveResolution.governance)}</span>
               </p>
             ) : null}
-            <p className="mb-1 text-[0.6rem] text-gray-600">Asse orizzontale: ore del giorno (0–23, locale).</p>
+            <p className="mb-1 text-[0.6rem] text-gray-600">
+              {streamRows?.length
+                ? "Asse: tempo reale del campione (stream misurato; stessi punti della tabella 055 / merge device)."
+                : "Asse orizzontale: ore del giorno (0–23, locale)."}
+            </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>
               <ResponsiveContainer width="100%" height={CHART_H} debounce={50}>
-                <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 18 }}>
-                  <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
-                  <XAxis
-                    dataKey="hourLabel"
-                    tick={{ fill: "#94a3b8", fontSize: 8 }}
-                    axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
-                    tickLine={false}
-                    interval={3}
-                    height={16}
-                  />
-                  <YAxis
-                    width={36}
-                    tick={{ fill: "#94a3b8", fontSize: 9 }}
-                    domain={yDomain}
-                    axisLine={false}
-                    tickLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      background: "rgba(15, 23, 42, 0.95)",
-                      border: "1px solid rgba(167, 139, 250, 0.3)",
-                      borderRadius: 10,
-                      fontSize: 11,
-                    }}
-                    formatter={(value) => {
-                      const v = typeof value === "number" ? value : Number(value);
-                      return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, "Valore"] : ["—", ch.labelIt];
-                    }}
-                    labelFormatter={(_label, payload) => {
-                      const row = payload?.[0]?.payload as
-                        | { hour?: number; hourLabel?: string; hourEndLabel?: string }
-                        | undefined;
-                      if (row && typeof row.hour === "number") {
-                        return `Finestra: ${row.hourLabel}–${row.hourEndLabel}`;
-                      }
-                      return "Orario";
-                    }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="v"
-                    stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
-                    strokeWidth={2}
-                    dot={false}
-                    connectNulls
-                    isAnimationActive={false}
-                  />
-                </LineChart>
+                {streamRows?.length ? (
+                  <LineChart data={streamRows} margin={{ top: 6, right: 4, left: 2, bottom: 22 }}>
+                    <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+                    <XAxis
+                      type="number"
+                      dataKey="tsMs"
+                      domain={["dataMin", "dataMax"]}
+                      scale="time"
+                      tickFormatter={formatStreamAxisTick}
+                      tick={{ fill: "#94a3b8", fontSize: 8 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                      tickLine={false}
+                      minTickGap={32}
+                      height={18}
+                    />
+                    <YAxis
+                      width={36}
+                      tick={{ fill: "#94a3b8", fontSize: 9 }}
+                      domain={yDomain}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "rgba(15, 23, 42, 0.95)",
+                        border: "1px solid rgba(167, 139, 250, 0.3)",
+                        borderRadius: 10,
+                        fontSize: 11,
+                      }}
+                      formatter={(value) => {
+                        const v = typeof value === "number" ? value : Number(value);
+                        return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, "Misura"] : ["—", ch.labelIt];
+                      }}
+                      labelFormatter={(_label, payload) => {
+                        const row = payload?.[0]?.payload as { tsMs?: number } | undefined;
+                        if (row && typeof row.tsMs === "number" && Number.isFinite(row.tsMs)) {
+                          return new Date(row.tsMs).toLocaleString("it-IT");
+                        }
+                        return "Orario";
+                      }}
+                    />
+                    <Line
+                      type="linear"
+                      dataKey="v"
+                      stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
+                      strokeWidth={1.5}
+                      dot={false}
+                      connectNulls={false}
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                ) : (
+                  <LineChart data={rows} margin={{ top: 6, right: 2, left: 2, bottom: 18 }}>
+                    <CartesianGrid strokeDasharray="2 3" stroke="rgba(255,255,255,0.08)" vertical={false} />
+                    <XAxis
+                      dataKey="hourLabel"
+                      tick={{ fill: "#94a3b8", fontSize: 8 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.12)" }}
+                      tickLine={false}
+                      interval={3}
+                      height={16}
+                    />
+                    <YAxis
+                      width={36}
+                      tick={{ fill: "#94a3b8", fontSize: 9 }}
+                      domain={yDomain}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "rgba(15, 23, 42, 0.95)",
+                        border: "1px solid rgba(167, 139, 250, 0.3)",
+                        borderRadius: 10,
+                        fontSize: 11,
+                      }}
+                      formatter={(value) => {
+                        const v = typeof value === "number" ? value : Number(value);
+                        return Number.isFinite(v) ? [`${v.toFixed(3)} ${ch.unit}`, "Valore"] : ["—", ch.labelIt];
+                      }}
+                      labelFormatter={(_label, payload) => {
+                        const row = payload?.[0]?.payload as
+                          | { hour?: number; hourLabel?: string; hourEndLabel?: string }
+                          | undefined;
+                        if (row && typeof row.hour === "number") {
+                          return `Finestra: ${row.hourLabel}–${row.hourEndLabel}`;
+                        }
+                        return "Orario";
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="v"
+                      stroke={STROKE_BY_CHANNEL_ID[ch.id] ?? "#e879f9"}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls
+                      isAnimationActive={false}
+                    />
+                  </LineChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>

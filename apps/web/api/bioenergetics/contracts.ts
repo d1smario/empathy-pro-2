@@ -97,6 +97,12 @@ export type BioenergeticHour24Point = {
 export type BioenergeticMonitoringDataPlane = "model_continuous" | "measured_stream" | "sparse_lab_hold";
 
 /** Un canale nello stesso paradigma UI: striscia 24 h, oggi modello o misura; domani stream device ove applicabile. */
+/** Campione continuo (es. 055) per asse tempo nativo nella UI; non sostituisce `hourly` nei contratti downstream. */
+export type BioenergeticMonitoringStreamPoint = {
+  observedAt: string;
+  value: number;
+};
+
 export type BioenergeticMonitoringChannel24 = {
   id: string;
   labelIt: string;
@@ -104,6 +110,8 @@ export type BioenergeticMonitoringChannel24 = {
   category: BioenergeticMetricTileCategory;
   /** Valore per ore 0–23 (timezone locale implicita nel report giorno). */
   hourly: (number | null)[];
+  /** Se presente (stream misurato denso), la striscia UI usa questi punti su asse tempo reale invece della sola risoluzione oraria. */
+  streamTrace?: BioenergeticMonitoringStreamPoint[];
   dataPlane: BioenergeticMonitoringDataPlane;
   /** Se true, il prodotto intende questo canale come candidato a sostituzione con stream device continuo. */
   replacesWithDeviceStream: boolean;

@@ -4,6 +4,7 @@ import type {
   BioenergeticDayKernelOutput,
   BioenergeticMonitoringChannel24,
   BioenergeticMonitoringDataPlane,
+  BioenergeticMonitoringStreamPoint,
   BioenergeticPathwayImpact,
   BioenergeticSeriesPoint,
   BioenergeticTimelineEvent,
@@ -63,6 +64,17 @@ function monitoringPlaneForGluLac(
   if (isHighFrequencyStream(provenance, points)) return "measured_stream";
   if (provenance === "measured") return "sparse_lab_hold";
   return "model_continuous";
+}
+
+/** Punti misurati per asse tempo nativo nella UI (stesso merge di `extractMeasuredGluLacFromSlice`). */
+function monitoringStreamTraceFromPoints(
+  provenance: BioenergeticChannelProvenance,
+  points: BioenergeticSeriesPoint[] | null,
+): BioenergeticMonitoringStreamPoint[] | undefined {
+  if (!isHighFrequencyStream(provenance, points) || !points?.length) return undefined;
+  return [...points]
+    .sort((a, b) => a.ts.localeCompare(b.ts))
+    .map((p) => ({ observedAt: p.ts, value: p.value }));
 }
 
 function mergeLabSim(
@@ -808,6 +820,7 @@ export function buildBioenergeticDayPresentation(input: {
       unit: "mmol/L",
       category: "metabolic",
       hourly: glucoseHourly,
+      streamTrace: monitoringStreamTraceFromPoints(input.provenance.glucose, chG),
       dataPlane: monitoringPlaneForGluLac(input.provenance.glucose, chG),
       replacesWithDeviceStream: true,
       curveResolution: glucoseCurveResolution,
@@ -818,6 +831,7 @@ export function buildBioenergeticDayPresentation(input: {
       unit: "mmol/L",
       category: "metabolic",
       hourly: lactateHourly,
+      streamTrace: monitoringStreamTraceFromPoints(input.provenance.lactate, lactatePoints),
       dataPlane: monitoringPlaneForGluLac(input.provenance.lactate, lactatePoints),
       replacesWithDeviceStream: true,
       curveResolution: lactateCurveResolution,
