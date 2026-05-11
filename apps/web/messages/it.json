@@ -1,6 +1,39 @@
 {
   "Common": {
-    "skipToContent": "Salta al contenuto"
+    "skipToContent": "Salta al contenuto",
+    "loading": "Caricamento…"
+  },
+  "Nav": {
+    "ariaModules": "Moduli prodotto",
+    "brandTagline": "SYS · NAV",
+    "dashboard": "Dashboard",
+    "athletes": "Coach · Atleti",
+    "profile": "Profilo",
+    "health": "Health & Bio",
+    "physiology": "Fisiologia",
+    "training": "Allenamento",
+    "nutrition": "Nutrizione",
+    "bioenergetics": "BioEnergetic Intelligence",
+    "biomechanics": "Biomeccanica",
+    "aerodynamics": "Aerodinamica",
+    "settings": "Impostazioni",
+    "admin": "Admin · Piattaforma",
+    "pricing": "Piani",
+    "marketingDemo": "Marketing demo"
+  },
+  "Session": {
+    "demoNoSupabase": "Demo: nessun Supabase — moduli accessibili senza login.",
+    "signIn": "Accedi",
+    "signOut": "Esci",
+    "signingOut": "Uscita…"
+  },
+  "AthleteGate": {
+    "loadingContext": "Caricamento contesto atleta…",
+    "noActiveTitle": "Nessun atleta attivo",
+    "noActiveCoach": "Se sei coach già abilitato, seleziona un assistito in Coach · Atleti. Se l'account è in attesa di approvazione piattaforma, i moduli dati restano disattivi fino all'abilitazione.",
+    "noActiveAthlete": "Completa il profilo in Profilo per collegare il tuo atleta, oppure attendi il completamento del bootstrap account.",
+    "goToProfile": "Vai a Profilo",
+    "goToDashboard": "Dashboard"
   },
   "SettingsLocale": {
     "title": "Lingua interfaccia",

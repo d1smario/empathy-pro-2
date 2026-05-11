@@ -1,6 +1,39 @@
 {
   "Common": {
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "loading": "Loading…"
+  },
+  "Nav": {
+    "ariaModules": "Product modules",
+    "brandTagline": "SYS · NAV",
+    "dashboard": "Dashboard",
+    "athletes": "Coach · Athletes",
+    "profile": "Profile",
+    "health": "Health & Bio",
+    "physiology": "Physiology",
+    "training": "Training",
+    "nutrition": "Nutrition",
+    "bioenergetics": "BioEnergetic Intelligence",
+    "biomechanics": "Biomechanics",
+    "aerodynamics": "Aerodynamics",
+    "settings": "Settings",
+    "admin": "Admin · Platform",
+    "pricing": "Plans",
+    "marketingDemo": "Marketing demo"
+  },
+  "Session": {
+    "demoNoSupabase": "Demo: no Supabase — modules accessible without sign-in.",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…"
+  },
+  "AthleteGate": {
+    "loadingContext": "Loading athlete context…",
+    "noActiveTitle": "No active athlete",
+    "noActiveCoach": "If you are an approved coach, pick an athlete in Coach · Athletes. If the account is awaiting platform approval, data modules stay disabled until enabled.",
+    "noActiveAthlete": "Complete your profile in Profile to link your athlete, or wait for the account bootstrap to finish.",
+    "goToProfile": "Go to Profile",
+    "goToDashboard": "Dashboard"
   },
   "SettingsLocale": {
     "title": "Interface language",

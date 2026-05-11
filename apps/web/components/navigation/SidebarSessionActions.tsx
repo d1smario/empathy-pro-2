@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Pro2Button } from "@/components/ui/empathy";
 import { clearPro2ClientSessionKeys } from "@/lib/app-session";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
@@ -13,6 +14,7 @@ import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 export function SidebarSessionActions() {
   const pathname = usePathname() ?? "/dashboard";
   const router = useRouter();
+  const t = useTranslations("Session");
   const [configured, setConfigured] = useState<boolean | null>(null);
   const [signedIn, setSignedIn] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,7 +58,7 @@ export function SidebarSessionActions() {
   if (configured === false) {
     return (
       <p className="px-1 text-[0.65rem] leading-snug text-amber-400/85">
-        Demo: nessun Supabase — moduli accessibili senza login.
+        {t("demoNoSupabase")}
       </p>
     );
   }
@@ -71,7 +73,7 @@ export function SidebarSessionActions() {
         href={`/access?next=${encodeURIComponent(pathname)}`}
         className="flex w-full items-center justify-center rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-gray-300 transition hover:border-purple-500/40 hover:text-white"
       >
-        Accedi
+        {t("signIn")}
       </Link>
     );
   }
@@ -84,7 +86,7 @@ export function SidebarSessionActions() {
       onClick={() => void signOut()}
       className="w-full justify-center text-xs"
     >
-      {busy ? "Uscita…" : "Esci"}
+      {busy ? t("signingOut") : t("signOut")}
     </Pro2Button>
   );
 }
