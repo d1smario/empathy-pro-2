@@ -22,12 +22,14 @@ const CATEGORY_ORDER: BioenergeticMetricTileCategory[] = [
 function planeLabel(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "Stream";
   if (plane === "sparse_lab_hold") return "Lab tenuto";
+  if (plane === "ai_from_inputs") return "AI da input";
   return "Modello";
 }
 
 function planeBadgeClass(plane: BioenergeticMonitoringDataPlane): string {
   if (plane === "measured_stream") return "border-emerald-400/40 text-emerald-200/90";
   if (plane === "sparse_lab_hold") return "border-sky-400/40 text-sky-200/90";
+  if (plane === "ai_from_inputs") return "border-fuchsia-400/45 text-fuchsia-200/90";
   return "border-amber-400/40 text-amber-200/90";
 }
 
@@ -127,7 +129,11 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
           streamTrace &&
           (ch.dataPlane === "measured_stream"
             ? streamTrace.length >= 4
-            : Boolean(isGluLac && ch.dataPlane === "model_continuous" && streamTrace.length >= 72));
+            : Boolean(
+                isGluLac &&
+                  (ch.dataPlane === "model_continuous" || ch.dataPlane === "ai_from_inputs") &&
+                  streamTrace.length >= 72,
+              ));
         const streamRows: StreamChartRow[] | null = useStreamChart ? streamChartRows(streamTrace, ch.id) : null;
 
         const rows = ch.hourly.map((v, hour) => ({
@@ -173,7 +179,9 @@ export function BioenergeticsContinuousMonitoringGrid({ monitoring }: Props) {
               {streamRows?.length
                 ? ch.dataPlane === "measured_stream"
                   ? "Asse: tempo reale del campione (stream misurato; tabella 055 / merge device)."
-                  : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
+                  : ch.dataPlane === "ai_from_inputs"
+                    ? "Asse: tempo reale (passo 5 min; curva da OpenAI sugli input giornata — non è CGM né sim diurno v1)."
+                    : "Asse: tempo reale del modello (passo 5 min, deterministico da timeline — non è CGM)."
                 : "Asse orizzontale: ore del giorno (0–23, locale)."}
             </p>
             <div className="w-full min-w-[160px]" style={{ height: CHART_H }}>

@@ -29,6 +29,7 @@ import {
 import { enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-window-range";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 import { buildBioenergeticDayTimeline } from "@/lib/bioenergetics/bioenergetic-day-timeline";
+import { fillContinuousMonitoringStripFromOpenAiInputs } from "@/lib/bioenergetics/bioenergetic-continuous-strip-ai-inputs";
 
 function diaryMealsWithMacroCount(rows: BioenergeticDayMemorySlice["diaryRows"]): number {
   let n = 0;
@@ -56,8 +57,13 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
   date: string;
   slice: BioenergeticDayMemorySlice;
   evidenceLinks: LoadBioenergeticEvidenceLinksResult;
+  /**
+   * Se true, `buildBioenergeticDayPresentation` non costruisce la striscia deterministico-v1;
+   * `assembleBioenergeticDay` la riempie con OpenAI dagli input (`ai_from_inputs_v1`).
+   */
+  omitMonitoringStrip?: boolean;
 }): BioenergeticsDayViewModel {
-  const { athleteId, date, slice, evidenceLinks } = input;
+  const { athleteId, date, slice, evidenceLinks, omitMonitoringStrip } = input;
 
   const { glucoseMeasured, lactateMeasured } = extractMeasuredGluLacFromSlice(slice);
   const timeline = buildBioenergeticDayTimeline(date, slice);
@@ -142,6 +148,7 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
     timeline,
     biomarkerRows: slice.biomarkerRows,
     interactionNodes: interactionReport.nodes,
+    omitMonitoringStrip: omitMonitoringStrip === true,
   });
   const contextDigest = sha256BioenergeticConditioningContext(conditioningContext);
 
@@ -235,11 +242,16 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
 
 /**
  * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation.
+ *
+ * Default: striscia monitoring da OpenAI sugli input (`omitMonitoringStrip` + fill).
+ * `POST merge-hourly-curve` richiede ancora la striscia deterministico-v1 con `curveResolution`: passare
+ * `{ includeDeterministicMonitoringStripForMergeEndpoint: true }`.
  */
 export async function assembleBioenergeticDay(
   db: SupabaseClient,
   athleteId: string,
   dateRaw: string,
+  options?: { includeDeterministicMonitoringStripForMergeEndpoint?: boolean },
 ): Promise<AssembleBioenergeticDayResult> {
   const date = dateRaw.trim().slice(0, 10);
   const { slice, queryError } = await loadBioenergeticDayMemorySlice(db, athleteId, date);
@@ -247,7 +259,38 @@ export async function assembleBioenergeticDay(
     return { ok: false, status: 500, error: queryError };
   }
   const evidenceLinks = await loadBioenergeticEvidenceAxisFluidLinks(db);
-  const body = buildBioenergeticDayViewModelFromSlice({ athleteId, date, slice, evidenceLinks });
+  const forMerge = options?.includeDeterministicMonitoringStripForMergeEndpoint === true;
+  if (forMerge) {
+    const body = buildBioenergeticDayViewModelFromSlice({
+      athleteId,
+      date,
+      slice,
+      evidenceLinks,
+      omitMonitoringStrip: false,
+    });
+    return { ok: true, body };
+  }
+
+  let body = buildBioenergeticDayViewModelFromSlice({
+    athleteId,
+    date,
+    slice,
+    evidenceLinks,
+    omitMonitoringStrip: true,
+  });
+  const stripDeterministicBullets = new Set([
+    "La striscia «monitoraggio continuo» mostra solo serie difendibili: glucosio/lattato (diario/sim o stream), domanda insulinica da pasti/sedute, cortisolo/ACTH (modello circadiano o lab tenuto). Nessuna curva decorativa per altri biomarker.",
+    "Striscia monitoraggio continuo: policy fusione v1 — fase iniziale con peso maggiore al canale AI supervisionato sui sim; con contesto Empathy più ricco i pesi tendono al pareggio col motore. Merge numerico AI solo con endpoint e schema validati.",
+    "Sim diurna glucosio/lattato (passo 5 min): impulsi post-prandiali centrati su orario pasto (minuto) da CHO/kcal e IG diario; sedute su finestra start+durata con ramp; modulazione alba/sonno leggera sul glucosio. Piani senza orario usano slot fissi. Contesto fusione v1 — senza LLM sulla curva canonica. Passi/FC continui da trace: roadmap ingest (non duplicare serie parallele).",
+  ]);
+  body = {
+    ...body,
+    disclaimers: [
+      ...body.disclaimers.filter((d) => !stripDeterministicBullets.has(d)),
+      "Striscia «monitoraggio continuo»: curve generate da OpenAI solo dagli input giornata assemblati (timeline, kernel, provenance, tile, stream counts). Senza OPENAI_API_KEY o se la chiamata fallisce la striscia resta vuota; qui non si usa il sim diurno v1.",
+    ],
+  };
+  body = await fillContinuousMonitoringStripFromOpenAiInputs(body);
   return { ok: true, body };
 }
 

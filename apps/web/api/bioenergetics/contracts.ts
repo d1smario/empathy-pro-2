@@ -93,8 +93,13 @@ export type BioenergeticHour24Point = {
  * - `model_continuous`: oggi da modello deterministico (sostituibile da stream).
  * - `measured_stream`: serie ad alta frequenza (es. CGM) sul giorno.
  * - `sparse_lab_hold`: singolo referto — valore tenuto costante fino a nuovi campioni/device.
+ * - `ai_from_inputs`: curva generata da LLM solo dagli input giornata assemblati (niente sim diurno v1 sulla striscia).
  */
-export type BioenergeticMonitoringDataPlane = "model_continuous" | "measured_stream" | "sparse_lab_hold";
+export type BioenergeticMonitoringDataPlane =
+  | "model_continuous"
+  | "measured_stream"
+  | "sparse_lab_hold"
+  | "ai_from_inputs";
 
 /** Un canale nello stesso paradigma UI: striscia 24 h, oggi modello o misura; domani stream device ove applicabile. */
 /** Campione continuo (es. 055) per asse tempo nativo nella UI; non sostituisce `hourly` nei contratti downstream. */
@@ -121,7 +126,7 @@ export type BioenergeticMonitoringChannel24 = {
 
 /** Vista giornaliera unificata «monitoraggio continuo» (modello v1 → device quando disponibile). */
 export type BioenergeticContinuousMonitoringDay = {
-  layer: "model_continuous_v1";
+  layer: "model_continuous_v1" | "ai_from_inputs_v1";
   channels: BioenergeticMonitoringChannel24[];
 };
 

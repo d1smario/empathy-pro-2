@@ -261,7 +261,10 @@ export default function BioenergeticsPageView() {
           series: Array.isArray(json.series) ? json.series : [],
           evidenceConditionedLayer: json.evidenceConditionedLayer ?? null,
           continuousMonitoring:
-            cm && typeof cm === "object" && cm.layer === "model_continuous_v1" && Array.isArray(cm.channels)
+            cm &&
+            typeof cm === "object" &&
+            (cm.layer === "model_continuous_v1" || cm.layer === "ai_from_inputs_v1") &&
+            Array.isArray(cm.channels)
               ? cm
               : undefined,
         };
@@ -513,24 +516,49 @@ export default function BioenergeticsPageView() {
             <Pro2SectionCard
               accent="fuchsia"
               title="Via metabolica · 24 h"
-              subtitle="Monitoraggio continuo (modello): bilancio pathway, glucosio e lattato; fascia = impatto orario. Stesso paradigma UI sostituibile da stream device."
+              subtitle={
+                vm.continuousMonitoring?.layer === "ai_from_inputs_v1"
+                  ? "Monitoraggio continuo (striscia): curve da OpenAI solo dagli input giornata assemblati; grafico pathway 24 h resta dal modello kernel."
+                  : "Monitoraggio continuo (modello): bilancio pathway, glucosio e lattato; fascia = impatto orario. Stesso paradigma UI sostituibile da stream device."
+              }
               icon={LineChart}
             >
               <BioenergeticsPathway24Chart data={vm.chart24h ?? []} />
-              {vm.continuousMonitoring?.channels?.length ? (
+              {vm.continuousMonitoring &&
+              (vm.continuousMonitoring.channels.length > 0 || vm.continuousMonitoring.layer === "ai_from_inputs_v1") ? (
                 <div className="mt-6 border-t border-white/10 pt-4">
                   <p className="mb-1 text-xs font-medium uppercase tracking-wide text-fuchsia-200/85">
                     Striscia monitoraggio continuo (24 h)
                   </p>
                   <p className="mb-4 text-[0.7rem] leading-relaxed text-gray-500">
-                    Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5 minuti,
-                    deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono con ciò che
-                    ti aspetti, verifica timestamp diario e calendario (non il modello che &quot;indovina&quot; i pasti).
+                    {vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
+                      <>
+                        Glucosio, lattato, domanda insulinica, cortisolo e ACTH: passo 5 minuti da OpenAI sugli input
+                        (timeline, kernel, provenance, tile). Non è CGM, non è il sim diurno v1 sulla striscia. Se manca
+                        la chiave server o la risposta fallisce, la striscia resta vuota — vedi disclaimer in fondo.
+                      </>
+                    ) : (
+                      <>
+                        Solo glucosio, lattato, domanda insulinica (da diario + sedute), cortisolo e ACTH. Passo 5
+                        minuti, deterministico dalla timeline sotto: non è CGM né clinica. Se gli orari non coincidono
+                        con ciò che ti aspetti, verifica timestamp diario e calendario (non il modello che
+                        &quot;indovina&quot; i pasti).
+                      </>
+                    )}
                   </p>
+                  {vm.continuousMonitoring.channels.length === 0 &&
+                  vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
+                    <p className="mb-4 rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-fuchsia-100/95">
+                      Nessun canale sulla striscia: serve <code className="text-fuchsia-200/90">OPENAI_API_KEY</code> sul
+                      server e una risposta JSON valida. Controlla anche i disclaimer sotto per messaggi di errore.
+                    </p>
+                  ) : null}
                   {timelineModelStimuli.length ? (
                     <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-black/35 p-3">
                       <p className="mb-1 text-[0.65rem] font-medium uppercase tracking-wide text-fuchsia-200/90">
-                        Stimoli nella timeline usati dal motore
+                        {vm.continuousMonitoring.layer === "ai_from_inputs_v1"
+                          ? "Stimoli nella timeline (input per la striscia)"
+                          : "Stimoli nella timeline usati dal motore"}
                       </p>
                       <p className="mb-2 text-[0.65rem] leading-relaxed text-gray-500">
                         Pasti: orario da <code className="text-gray-400">entry_time</code> / data voce diario. Sedute:
@@ -576,11 +604,30 @@ export default function BioenergeticsPageView() {
                     </div>
                   ) : vm.timeline.length ? (
                     <p className="mb-4 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-amber-100/95">
-                      Nessun pasto o seduta in timeline per questo giorno: le curve usano solo modulazioni diurne /
-                      sonno e default — aggiungi voci in Diario o sessioni in Calendario con la data corretta.
+                      {vm.continuousMonitoring.layer === "ai_from_inputs_v1" ? (
+                        <>
+                          Nessun pasto o seduta in timeline: la striscia OpenAI riceve comunque kernel e altri input;
+                          arricchisci il giorno da{" "}
+                          <Pro2Link href="/nutrition/diary" className="text-amber-200 underline-offset-2 hover:text-white">
+                            Diario
+                          </Pro2Link>{" "}
+                          e{" "}
+                          <Pro2Link href="/training/calendar" className="text-amber-200 underline-offset-2 hover:text-white">
+                            Calendario
+                          </Pro2Link>{" "}
+                          per contesto più fedele.
+                        </>
+                      ) : (
+                        <>
+                          Nessun pasto o seduta in timeline per questo giorno: le curve usano solo modulazioni diurne /
+                          sonno e default — aggiungi voci in Diario o sessioni in Calendario con la data corretta.
+                        </>
+                      )}
                     </p>
                   ) : null}
-                  <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
+                  {vm.continuousMonitoring.channels.length > 0 ? (
+                    <BioenergeticsContinuousMonitoringGrid monitoring={vm.continuousMonitoring} />
+                  ) : null}
                 </div>
               ) : null}
               <div className="mt-6 border-t border-white/10 pt-4">

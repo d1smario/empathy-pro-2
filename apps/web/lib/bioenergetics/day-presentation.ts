@@ -369,6 +369,8 @@ export function buildBioenergeticDayPresentation(input: {
   biomarkerRows: Array<Record<string, unknown>>;
   /** Da `buildMetabolicEndocrineInteractionReportV1`; se assente resta il comportamento storico (sim su tile). */
   interactionNodes?: readonly MetabolicNodeCoherenceV1[] | null;
+  /** Se true: non costruisce la striscia monitoring (canali vuoti); va riempita da OpenAI in assembler. */
+  omitMonitoringStrip?: boolean;
 }): {
   metricTiles: BioenergeticMetricTile[];
   chart24h: BioenergeticHour24Point[];
@@ -837,102 +839,107 @@ export function buildBioenergeticDayPresentation(input: {
     category: "gonadal",
   });
 
-  const internalRichness = computeInternalContextRichness01(input.timeline, input.biomarkerRows.length);
-  const glucoseSparseLabPoint =
-    !glucoseDense &&
-    (gLabMerged != null ||
-      labGlucosePoint != null ||
-      (input.provenance.glucose === "measured" && (chG?.length ?? 0) > 0 && (chG?.length ?? 0) <= 3));
-  const glucoseCurveResolution = arbitrateGlucoseCurveFusionV1({
-    hasDenseMeasuredStream: glucoseDense,
-    hasSparseLabPoint: glucoseSparseLabPoint,
-    internalContextRichness01: internalRichness,
-  });
-
-  const lacSparseLabPoint =
-    !lacDense &&
-    (lFromLab != null ||
-      lacLabPoint != null ||
-      (input.provenance.lactate === "measured" && (lactatePoints?.length ?? 0) > 0 && (lactatePoints?.length ?? 0) <= 3));
-  const lactateCurveResolution = arbitrateLactateCurveFusionV1({
-    hasDenseMeasuredStream: lacDense,
-    hasSparseLabPoint: lacSparseLabPoint,
-    internalContextRichness01: internalRichness,
-  });
-
-  const insulinCurveResolution = arbitrateInsulinProxyCurveFusionV1(countTimelineMealsWithMacroSignalsV1(input.timeline));
-
-  const cortisolCurveResolution =
-    cortisolM.provenance === "measured"
-      ? arbitrateLabHoldHormoneCurveFusionV1("cortisol")
-      : arbitrateNominalHormoneCurveFusionV1("cortisol", internalRichness);
-  const acthCurveResolution =
-    acthM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("acth") : arbitrateNominalHormoneCurveFusionV1("acth", internalRichness);
-
-  const monitoringChannels: BioenergeticMonitoringChannel24[] = [
-    {
-      id: "glucose",
-      labelIt: "Glucosio",
-      unit: "mmol/L",
-      category: "metabolic",
-      hourly: glucoseHourly,
-      streamTrace: monitoringStreamTraceFromPoints(input.provenance.glucose, chG),
-      dataPlane: monitoringPlaneForGluLac(input.provenance.glucose, chG),
-      replacesWithDeviceStream: true,
-      curveResolution: glucoseCurveResolution,
-    },
-    {
-      id: "lactate",
-      labelIt: "Lattato",
-      unit: "mmol/L",
-      category: "metabolic",
-      hourly: lactateHourly,
-      streamTrace: monitoringStreamTraceFromPoints(input.provenance.lactate, lactatePoints),
-      dataPlane: monitoringPlaneForGluLac(input.provenance.lactate, lactatePoints),
-      replacesWithDeviceStream: true,
-      curveResolution: lactateCurveResolution,
-    },
-    {
-      id: "insulin_proxy",
-      labelIt: "Domanda insulinica (proxy)",
-      unit: "score 0–100",
-      category: "metabolic",
-      hourly: buildInsulinProxyHourly24(k, input.timeline),
-      dataPlane: "model_continuous",
-      replacesWithDeviceStream: true,
-      curveResolution: insulinCurveResolution,
-    },
-  ];
-
-  if (cortisolM.numeric != null) {
-    monitoringChannels.push({
-      id: "cortisol",
-      labelIt: "Cortisolo",
-      unit: "µg/dL",
-      category: "hormonal",
-      hourly: cortisolM.provenance === "measured" ? hourlyFlat24(cortisolM.numeric) : [...nomH.cortisolUgdL],
-      dataPlane: cortisolM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
-      replacesWithDeviceStream: true,
-      curveResolution: cortisolCurveResolution,
+  let continuousMonitoring: BioenergeticContinuousMonitoringDay;
+  if (input.omitMonitoringStrip) {
+    continuousMonitoring = { layer: "model_continuous_v1", channels: [] };
+  } else {
+    const internalRichness = computeInternalContextRichness01(input.timeline, input.biomarkerRows.length);
+    const glucoseSparseLabPoint =
+      !glucoseDense &&
+      (gLabMerged != null ||
+        labGlucosePoint != null ||
+        (input.provenance.glucose === "measured" && (chG?.length ?? 0) > 0 && (chG?.length ?? 0) <= 3));
+    const glucoseCurveResolution = arbitrateGlucoseCurveFusionV1({
+      hasDenseMeasuredStream: glucoseDense,
+      hasSparseLabPoint: glucoseSparseLabPoint,
+      internalContextRichness01: internalRichness,
     });
-  }
-  if (acthM.numeric != null) {
-    monitoringChannels.push({
-      id: "acth",
-      labelIt: "ACTH",
-      unit: "pg/mL",
-      category: "hormonal",
-      hourly: acthM.provenance === "measured" ? hourlyFlat24(acthM.numeric) : [...nomH.acthPgMl],
-      dataPlane: acthM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
-      replacesWithDeviceStream: true,
-      curveResolution: acthCurveResolution,
-    });
-  }
 
-  const continuousMonitoring: BioenergeticContinuousMonitoringDay = {
-    layer: "model_continuous_v1",
-    channels: monitoringChannels,
-  };
+    const lacSparseLabPoint =
+      !lacDense &&
+      (lFromLab != null ||
+        lacLabPoint != null ||
+        (input.provenance.lactate === "measured" && (lactatePoints?.length ?? 0) > 0 && (lactatePoints?.length ?? 0) <= 3));
+    const lactateCurveResolution = arbitrateLactateCurveFusionV1({
+      hasDenseMeasuredStream: lacDense,
+      hasSparseLabPoint: lacSparseLabPoint,
+      internalContextRichness01: internalRichness,
+    });
+
+    const insulinCurveResolution = arbitrateInsulinProxyCurveFusionV1(countTimelineMealsWithMacroSignalsV1(input.timeline));
+
+    const cortisolCurveResolution =
+      cortisolM.provenance === "measured"
+        ? arbitrateLabHoldHormoneCurveFusionV1("cortisol")
+        : arbitrateNominalHormoneCurveFusionV1("cortisol", internalRichness);
+    const acthCurveResolution =
+      acthM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("acth") : arbitrateNominalHormoneCurveFusionV1("acth", internalRichness);
+
+    const monitoringChannels: BioenergeticMonitoringChannel24[] = [
+      {
+        id: "glucose",
+        labelIt: "Glucosio",
+        unit: "mmol/L",
+        category: "metabolic",
+        hourly: glucoseHourly,
+        streamTrace: monitoringStreamTraceFromPoints(input.provenance.glucose, chG),
+        dataPlane: monitoringPlaneForGluLac(input.provenance.glucose, chG),
+        replacesWithDeviceStream: true,
+        curveResolution: glucoseCurveResolution,
+      },
+      {
+        id: "lactate",
+        labelIt: "Lattato",
+        unit: "mmol/L",
+        category: "metabolic",
+        hourly: lactateHourly,
+        streamTrace: monitoringStreamTraceFromPoints(input.provenance.lactate, lactatePoints),
+        dataPlane: monitoringPlaneForGluLac(input.provenance.lactate, lactatePoints),
+        replacesWithDeviceStream: true,
+        curveResolution: lactateCurveResolution,
+      },
+      {
+        id: "insulin_proxy",
+        labelIt: "Domanda insulinica (proxy)",
+        unit: "score 0–100",
+        category: "metabolic",
+        hourly: buildInsulinProxyHourly24(k, input.timeline),
+        dataPlane: "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: insulinCurveResolution,
+      },
+    ];
+
+    if (cortisolM.numeric != null) {
+      monitoringChannels.push({
+        id: "cortisol",
+        labelIt: "Cortisolo",
+        unit: "µg/dL",
+        category: "hormonal",
+        hourly: cortisolM.provenance === "measured" ? hourlyFlat24(cortisolM.numeric) : [...nomH.cortisolUgdL],
+        dataPlane: cortisolM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: cortisolCurveResolution,
+      });
+    }
+    if (acthM.numeric != null) {
+      monitoringChannels.push({
+        id: "acth",
+        labelIt: "ACTH",
+        unit: "pg/mL",
+        category: "hormonal",
+        hourly: acthM.provenance === "measured" ? hourlyFlat24(acthM.numeric) : [...nomH.acthPgMl],
+        dataPlane: acthM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: acthCurveResolution,
+      });
+    }
+
+    continuousMonitoring = {
+      layer: "model_continuous_v1",
+      channels: monitoringChannels,
+    };
+  }
 
   return { metricTiles: tiles, chart24h, continuousMonitoring };
 }

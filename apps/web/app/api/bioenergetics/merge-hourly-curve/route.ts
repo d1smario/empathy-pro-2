@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const day = await assembleBioenergeticDay(db, athleteId, date);
+    const day = await assembleBioenergeticDay(db, athleteId, date, {
+      includeDeterministicMonitoringStripForMergeEndpoint: true,
+    });
     if (!day.ok) {
       return NextResponse.json({ error: day.error }, { status: day.status, headers: NO_STORE });
     }
