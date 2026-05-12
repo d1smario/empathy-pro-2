@@ -19,6 +19,21 @@ import { garminWellnessAbsoluteUrl } from "@/lib/integrations/garmin-wellness-ap
 
 const MAX_ACTIVITY_FILE_FOLLOW_UPS = 32;
 
+/**
+ * Garmin Developer Program (Partner Services): **Activity Details** may be delivered
+ * via **PUSH** *or* **PING/PULL** (`GET /rest/activityDetails`), but **not both at once**
+ * for the same integration. When the portal is configured to push `activityDetails`
+ * (e.g. Fly ingest), set `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` on the **pull worker**
+ * (Vercel) so we **do not** enqueue `GET …/activityDetails` after `activities`.
+ *
+ * **Activity files** (FIT/GPX/TCX) stay **`GET /rest/activityFile`** only (PING/PULL) —
+ * this flag does **not** skip `activityFile` jobs.
+ */
+function garminActivityDetailsPullDisabledBecausePushDeliversDetails(): boolean {
+  const v = process.env.GARMIN_ACTIVITY_DETAILS_VIA_PUSH?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
 export type GarminPullJobLite = {
   id: string;
   callback_url: string;
@@ -94,6 +109,10 @@ async function hasPendingOrFetchingJobWithUrl(supabase: SupabaseClient, callback
  *
  * **Ingest Fly (`…/push/activityDetails`)**: riceve solo il **JSON** pesante della push; non contiene il FIT.
  * Il FIT resta da **`GET /rest/activityFile`** (job accodati qui o da `callbackURL` nel payload Garmin).
+ *
+ * Se il portale Garmin invia già **Activity Details** via Push, impostare
+ * `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` sul worker pull (Vercel) per non accodare anche
+ * `GET /rest/activityDetails` (vincolo partner Garmin: Push e Pull Details non insieme).
  */
 export async function queueGarminActivityEnrichmentAfterActivitiesPull(input: {
   supabase: SupabaseClient;
@@ -118,7 +137,7 @@ export async function queueGarminActivityEnrichmentAfterActivitiesPull(input: {
 
   const window =
     readUploadWindowFromCallbackUrl(job.callback_url) ?? deriveUploadWindowFromSummaries(needsEnrichment);
-  if (window) {
+  if (window && !garminActivityDetailsPullDisabledBecausePushDeliversDetails()) {
     const u = new URL(garminWellnessAbsoluteUrl("/rest/activityDetails"));
     u.searchParams.set("token", pullToken);
     u.searchParams.set("uploadStartTimeInSeconds", String(Math.floor(window.start)));

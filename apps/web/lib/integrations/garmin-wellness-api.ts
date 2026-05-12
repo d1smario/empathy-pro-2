@@ -14,8 +14,10 @@ import "server-only";
  *   Garmin: i file **non** arrivano via Push; solo in risposta a **Ping** chiamando il `callbackURL` indicato.
  *   Push **`activityDetails`** su ingest Fly (es. `https://empathy-garmin-ingest.fly.dev/api/integrations/garmin/push/activityDetails`):
  *   body grande = **solo JSON**; il FIT passa da **questo GET** (job in `garmin_pull_jobs`).
- *   Dopo un pull `activities`, Empathy accoda anche GET `activityDetails` + `activityFile` con lo stesso `token=`
- *   (`garmin-activity-follow-up-pull-queue` + `garmin-pull-runner`) finché il portale non invia push dedicati.
+ *   Partner Garmin: **Activity Details** = PUSH *oppure* PING/PULL (`GET /rest/activityDetails`), non entrambi.
+ *   Se usi Push per i Details, imposta `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` sul runner così non si accoda anche il GET.
+ *   Dopo un pull `activities`, Empathy accoda GET `activityFile` e, salvo flag sopra, GET `activityDetails`
+ *   (`garmin-activity-follow-up-pull-queue` + `garmin-pull-runner`).
  * - **GET `/rest/dailies` (e molti altri summary)** → la URL operativa arriva dalla **Ping/Push** con **`token=`** (pull token)
  *   nell’query string; il solo `Authorization: Bearer` dell’OAuth2 utente **non** sostituisce quel token →
  *   errore tipico `InvalidPullTokenException`. OAuth2 serve a collegare l’utente e a `user/id`, `user/permissions`; il pull verso
