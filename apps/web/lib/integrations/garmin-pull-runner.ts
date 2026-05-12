@@ -32,6 +32,19 @@ function nowIso() {
   return new Date().toISOString();
 }
 
+/** Garmin risponde 403 con `errorMessage` tipo "Unknown UserAccessToken" quando l’OAuth1 user token della push non è più valido (OAuth2-first, token revocato, ecc.) ma il GET accetta ancora `Bearer` + `token=` sulla URL. */
+function shouldRetryGarminPullWithOAuth2Bearer(
+  httpStatus: number,
+  responseUtf8: string,
+  hadOAuth1UserToken: boolean,
+  athleteId: string | null,
+): boolean {
+  if (!hadOAuth1UserToken || !athleteId?.trim()) return false;
+  if (httpStatus !== 403) return false;
+  const msg = (tryParseGarminApiErrorMessage(responseUtf8) ?? responseUtf8).toLowerCase();
+  return msg.includes("unknown useraccesstoken") || msg.includes("unknown user access token");
+}
+
 async function safeJsonBody(text: string): Promise<unknown> {
   const slice = text.slice(0, 900_000);
   try {
@@ -83,6 +96,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
     try {
       const userTok = job.user_access_token?.trim() ?? "";
       let fetchHeaders: Record<string, string>;
+      const hadOAuth1UserToken = Boolean(userTok);
       if (userTok) {
         fetchHeaders = {
           ...buildGarminSignedGetHeaders({ url: job.callback_url, userAccessToken: userTok }),
@@ -98,14 +112,35 @@ export async function runGarminPullJobs(limit: number): Promise<{
         throw new Error("pull_job_senza_user_access_token né athlete_id");
       }
 
-      const res = await fetch(job.callback_url, {
+      let res = await fetch(job.callback_url, {
         method: "GET",
         headers: fetchHeaders,
         cache: "no-store",
         signal: AbortSignal.timeout(90_000),
       });
-      const ab = await res.arrayBuffer();
-      const buf = Buffer.from(ab);
+      let buf = Buffer.from(await res.arrayBuffer());
+
+      if (
+        !res.ok &&
+        shouldRetryGarminPullWithOAuth2Bearer(
+          res.status,
+          buf.toString("utf8"),
+          hadOAuth1UserToken,
+          job.athlete_id,
+        )
+      ) {
+        const tok = await ensureFreshGarminAccessTokenForAthlete(supabase, job.athlete_id!);
+        if (!("error" in tok)) {
+          res = await fetch(job.callback_url, {
+            method: "GET",
+            headers: { Authorization: `Bearer ${tok.accessToken}`, Accept: "*/*" },
+            cache: "no-store",
+            signal: AbortSignal.timeout(90_000),
+          });
+          buf = Buffer.from(await res.arrayBuffer());
+        }
+      }
+
       const hdrCtRaw = res.headers.get("content-type");
       const contentDispositionRaw = res.headers.get("content-disposition");
       const ok = res.ok;
