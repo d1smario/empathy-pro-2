@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { parseTrainingFile } from "@/lib/training/import-parser";
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
+import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
 import { type GeoPoint, isGeoPoint } from "@/lib/training/series-channel-registry";
 
 /** Chiavi serie HD da file (FIT/GPX/TCX) da fondere su `trace_summary` senza sovrascrivere il summary Garmin. */
@@ -31,9 +32,10 @@ export type GarminBinaryEnrichRunSummary = {
   candidate_ids: string[];
   resolved_external_id: string | null;
   executed_workout_id: string | null;
-  match?: "external_id_exact" | "trace_summary_fallback";
+  match?: "external_id_exact" | "trace_summary_fallback" | "inserted_from_activity_file";
   outcome:
     | "merged"
+    | "inserted_from_file"
     | "no_executed_row"
     | "skipped_bad_extension"
     | "skipped_no_activity_id"
@@ -142,6 +144,26 @@ async function locateExecutedWorkoutForGarminBinary(input: {
   return null;
 }
 
+function pickPrimaryBareIdForGarminFileRow(bareIds: string[], callbackUrl: string): string | null {
+  const urlId = extractActivityFileId(callbackUrl);
+  if (urlId) return urlId;
+  return bareIds[0] ?? null;
+}
+
+function coalesceActivityDateForGarminFileInsert(parsed: {
+  date: string | null;
+  traceSummary: Record<string, unknown>;
+}): string {
+  const d = parsed.date?.trim();
+  if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+  const start = parsed.traceSummary.start_time;
+  if (typeof start === "string" && start.length >= 10) {
+    const t = new Date(start);
+    if (Number.isFinite(t.getTime())) return t.toISOString().slice(0, 10);
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
 function normalizeRoutePointsToGeo(trace: Record<string, unknown>): GeoPoint[] {
   const direct = trace.route_series_geo;
   if (Array.isArray(direct)) {
@@ -232,6 +254,8 @@ async function recordGarminBinaryEnrichDiagnostic(input: {
 /**
  * Dopo archiviazione blob `activityFile` (FIT/GPX/TCX), estrae percorso e serie HD
  * e le associa al `executed_workouts` già creato dal summary (`external_id` = `garmin_api:<id>`).
+ * Se la riga non esiste ma il file è decodificabile, **crea** la riga con `upsertExecutedWorkoutByExternalId`
+ * (stesso contratto ingest training), così il FIT non resta orfano.
  * Risolve mismatch id URL vs riga (`query_snapshot`, fallback su `trace_summary.activity_id` / `summary_id`).
  * Restituisce un riepilogo da allegare a `garmin_pull_jobs.response_body`.
  */
@@ -283,21 +307,6 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
     bareIds,
   });
 
-  if (!located) {
-    return {
-      ...baseMeta(),
-      resolved_external_id: null,
-      executed_workout_id: null,
-      outcome: "no_executed_row",
-      message: `Nessuna riga executed_workouts (né external_id né fallback trace, ultime ${GARMIN_TRACE_FALLBACK_SCAN_LIMIT}).`,
-    };
-  }
-
-  const prev =
-    located.trace_summary && typeof located.trace_summary === "object" && !Array.isArray(located.trace_summary)
-      ? (located.trace_summary as Record<string, unknown>)
-      : {};
-
   const parseName =
     ext === ".bin" ? "garmin_activity.fit" : ext === ".xml" ? "garmin_activity.gpx" : `garmin_activity${ext}`;
   const mime =
@@ -316,18 +325,24 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    await recordGarminBinaryEnrichDiagnostic({
-      supabase: input.supabase,
-      workoutId: located.id,
-      prev,
-      status: "parse_error",
-      message: msg,
-    });
+    if (located) {
+      const prev =
+        located.trace_summary && typeof located.trace_summary === "object" && !Array.isArray(located.trace_summary)
+          ? (located.trace_summary as Record<string, unknown>)
+          : {};
+      await recordGarminBinaryEnrichDiagnostic({
+        supabase: input.supabase,
+        workoutId: located.id,
+        prev,
+        status: "parse_error",
+        message: msg,
+      });
+    }
     return {
       ...baseMeta(),
-      resolved_external_id: located.resolvedExternalId,
-      executed_workout_id: located.id,
-      match: located.match,
+      resolved_external_id: located?.resolvedExternalId ?? null,
+      executed_workout_id: located?.id ?? null,
+      match: located?.match,
       outcome: "parse_error",
       message: msg,
     };
@@ -336,22 +351,125 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   const ts = parsed.traceSummary as Record<string, unknown>;
   const routeGeo = normalizeRoutePointsToGeo(ts);
   const hasHd = parsedTraceHasNonRouteHdSeries(ts);
+
   if (routeGeo.length < 1 && !hasHd) {
-    await recordGarminBinaryEnrichDiagnostic({
-      supabase: input.supabase,
-      workoutId: located.id,
-      prev,
-      status: "no_geo_no_hd_series",
-      message: "File parsato senza coordinate percorso né serie HR/potenza/velocità utilizzabili.",
-    });
+    if (located) {
+      const prev =
+        located.trace_summary && typeof located.trace_summary === "object" && !Array.isArray(located.trace_summary)
+          ? (located.trace_summary as Record<string, unknown>)
+          : {};
+      await recordGarminBinaryEnrichDiagnostic({
+        supabase: input.supabase,
+        workoutId: located.id,
+        prev,
+        status: "no_geo_no_hd_series",
+        message: "File parsato senza coordinate percorso né serie HR/potenza/velocità utilizzabili.",
+      });
+      return {
+        ...baseMeta(),
+        resolved_external_id: located.resolvedExternalId,
+        executed_workout_id: located.id,
+        match: located.match,
+        outcome: "no_geo_no_hd_series",
+      };
+    }
     return {
       ...baseMeta(),
-      resolved_external_id: located.resolvedExternalId,
-      executed_workout_id: located.id,
-      match: located.match,
-      outcome: "no_geo_no_hd_series",
+      resolved_external_id: null,
+      executed_workout_id: null,
+      outcome: "no_executed_row",
+      message:
+        "Nessuna riga executed_workouts e file senza percorso né serie HD — impossibile creare sessione da solo binario.",
     };
   }
+
+  if (!located) {
+    const bare = pickPrimaryBareIdForGarminFileRow(bareIds, input.callbackUrl);
+    if (!bare) {
+      return {
+        ...baseMeta(),
+        resolved_external_id: null,
+        executed_workout_id: null,
+        outcome: "skipped_no_activity_id",
+        message: "Impossibile scegliere id attività per nuova riga.",
+      };
+    }
+    const externalId = `garmin_api:${bare}`;
+    const merged = mergeTraceSeriesOverlay({}, ts, routeGeo);
+    merged.garmin_created_from_missing_summary_row = true;
+    if (/^\d+$/.test(bare)) {
+      merged.activity_id = bare;
+    }
+    const ge = merged.garmin_binary_enrich;
+    if (ge && typeof ge === "object" && !Array.isArray(ge)) {
+      (ge as Record<string, unknown>).row_match = "inserted_from_activity_file";
+    }
+
+    let upsertId: string | null = null;
+    try {
+      const up = await upsertExecutedWorkoutByExternalId(input.supabase, {
+        athlete_id: input.athleteId,
+        date: coalesceActivityDateForGarminFileInsert(parsed),
+        duration_minutes: Math.max(0.1, parsed.durationMinutes),
+        tss: parsed.tss,
+        kcal: parsed.kcal,
+        kj: parsed.kj,
+        source: "api_sync:garmin:activityFile",
+        external_id: externalId,
+        subjective_notes: null,
+        trace_summary: merged as Record<string, unknown>,
+      });
+      upsertId = up.id;
+    } catch (insErr) {
+      const m = insErr instanceof Error ? insErr.message : String(insErr);
+      return {
+        ...baseMeta(),
+        resolved_external_id: externalId,
+        executed_workout_id: null,
+        match: "inserted_from_activity_file",
+        outcome: "update_failed",
+        message: `Insert da file fallito: ${m}`,
+      };
+    }
+
+    if (!upsertId) {
+      return {
+        ...baseMeta(),
+        resolved_external_id: externalId,
+        executed_workout_id: null,
+        match: "inserted_from_activity_file",
+        outcome: "update_failed",
+        message: "Insert executed_workouts senza id restituito.",
+      };
+    }
+
+    try {
+      await persistExecutedWorkoutSeriesFromTrace({
+        db: input.supabase,
+        athleteId: input.athleteId,
+        executedWorkoutId: upsertId,
+        traceSummary: merged,
+        parserEngine: "garmin_activity_file_bootstrap",
+        parserVersion: "2",
+        source: "api_sync:garmin:activityFile",
+      });
+    } catch {
+      /* tabella assente / RLS */
+    }
+
+    return {
+      ...baseMeta(),
+      resolved_external_id: externalId,
+      executed_workout_id: upsertId,
+      match: "inserted_from_activity_file",
+      outcome: "inserted_from_file",
+    };
+  }
+
+  const prev =
+    located.trace_summary && typeof located.trace_summary === "object" && !Array.isArray(located.trace_summary)
+      ? (located.trace_summary as Record<string, unknown>)
+      : {};
 
   const merged = mergeTraceSeriesOverlay(prev, ts, routeGeo);
   const ge = merged.garmin_binary_enrich;
