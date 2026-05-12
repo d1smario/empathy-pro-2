@@ -29,13 +29,23 @@ const WELLNESS_ROOT_KEYS = new Set([
   "solarIntensity",
 ]);
 
+/** Chiavi radice che il portale Garmin a volte usa negli URL (`…/BodyCompositions`) ma nel JSON possono differire da Wellness API (`bodyComps`). */
+const WELLNESS_ROOT_ALIASES: Record<string, string> = {
+  bodycompositions: "bodyComps",
+  bodycomposition: "bodyComps",
+  bloodpressure: "bloodPressures",
+};
+
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
 function canonWellnessKey(k: string): string | null {
+  const lower = k.toLowerCase().trim();
+  const viaAlias = WELLNESS_ROOT_ALIASES[lower];
+  if (viaAlias) return viaAlias;
   for (const known of WELLNESS_ROOT_KEYS) {
-    if (known.toLowerCase() === k.toLowerCase()) return known;
+    if (known.toLowerCase() === lower) return known;
   }
   return null;
 }

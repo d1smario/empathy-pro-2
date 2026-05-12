@@ -27,6 +27,9 @@ export const GARMIN_HEALTH_SUMMARY_LIST_KEYS = [
   "healthSnapshot",
   "hrv",
   "bloodPressures",
+  /** Portal URL segment / payload variants (es. `…/BodyCompositions`, `…/BloodPressure`). */
+  "bodyCompositions",
+  "bloodPressure",
   "skinTemp",
   "solarIntensity",
   "activities",
