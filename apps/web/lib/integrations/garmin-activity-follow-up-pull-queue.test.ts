@@ -65,3 +65,13 @@ test("garminActivitySummaryNeedsBinaryFollowUp: 24+ samples and 2+ GPS -> skip b
   assert.equal(samples.length, 24);
   assert.equal(garminActivitySummaryNeedsBinaryFollowUp({ samples }), false);
 });
+
+test("garminActivitySummaryNeedsBinaryFollowUp: duplicate GPS coords still need FIT (no real polyline)", () => {
+  const samples = [
+    ...Array.from({ length: 22 }, () => ({ heartRate: 120 })),
+    { latitudeInDegree: 45.0, longitudeInDegree: 9.0, heartRate: 120 },
+    { latitudeInDegree: 45.0, longitudeInDegree: 9.0, heartRate: 121 },
+  ];
+  assert.equal(samples.length, 24);
+  assert.equal(garminActivitySummaryNeedsBinaryFollowUp({ samples }), true);
+});

@@ -80,17 +80,56 @@ function mergeTraceSeriesOverlay(
 ): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...previous };
   for (const k of TRACE_SERIES_OVERLAY_KEYS) {
+    if (k === "route_series_geo") continue;
     if (k in parsedTrace && parsedTrace[k] != null) merged[k] = parsedTrace[k];
   }
-  merged.route_series_geo = routeGeo;
-  merged.garmin_binary_route_enriched_at = new Date().toISOString();
+  if (routeGeo.length >= 1) {
+    merged.route_series_geo = routeGeo;
+  }
+  const at = new Date().toISOString();
+  merged.garmin_binary_route_enriched_at = at;
+  merged.garmin_binary_enrich = {
+    status: "ok" as const,
+    at,
+    route_points: routeGeo.length,
+  };
   return merged;
 }
 
+function parsedTraceHasNonRouteHdSeries(parsedTrace: Record<string, unknown>): boolean {
+  for (const k of TRACE_SERIES_OVERLAY_KEYS) {
+    if (k === "route_series_geo") continue;
+    const v = parsedTrace[k];
+    if (v == null) continue;
+    if (Array.isArray(v) && v.length === 0) continue;
+    return true;
+  }
+  return false;
+}
+
+async function recordGarminBinaryEnrichDiagnostic(input: {
+  supabase: SupabaseClient;
+  workoutId: string;
+  prev: Record<string, unknown>;
+  status: "parse_error" | "no_geo_no_hd_series" | "update_failed";
+  message?: string;
+}): Promise<void> {
+  const at = new Date().toISOString();
+  const next: Record<string, unknown> = {
+    ...input.prev,
+    garmin_binary_enrich: {
+      status: input.status,
+      at,
+      ...(input.message ? { message: input.message.slice(0, 800) } : {}),
+    },
+  };
+  await input.supabase.from("executed_workouts").update({ trace_summary: next }).eq("id", input.workoutId);
+}
+
 /**
- * Dopo archiviazione blob `activityFile` (FIT/GPX/TCX), estrae il percorso e le serie HD
+ * Dopo archiviazione blob `activityFile` (FIT/GPX/TCX), estrae percorso e serie HD
  * e le associa al `executed_workouts` già creato dal summary (`external_id` = `garmin_api:<id>`).
- * Best-effort: non lancia se manca riga o parse fallisce.
+ * In caso di errore o assenza traccia, scrive `trace_summary.garmin_binary_enrich` per diagnostica (non silenzioso).
  */
 export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   supabase: SupabaseClient;
@@ -135,20 +174,38 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
         ? "application/vnd.garmin.tcx+xml"
         : "application/octet-stream";
 
-  let parsed;
+  let parsed: Awaited<ReturnType<typeof parseTrainingFile>>;
   try {
     parsed = await parseTrainingFile({
       fileName: parseName,
       mimeType: mime,
       buffer: input.buffer,
     });
-  } catch {
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    await recordGarminBinaryEnrichDiagnostic({
+      supabase: input.supabase,
+      workoutId: row.id,
+      prev,
+      status: "parse_error",
+      message: msg,
+    });
     return;
   }
 
   const ts = parsed.traceSummary as Record<string, unknown>;
   const routeGeo = normalizeRoutePointsToGeo(ts);
-  if (routeGeo.length < 1) return;
+  const hasHd = parsedTraceHasNonRouteHdSeries(ts);
+  if (routeGeo.length < 1 && !hasHd) {
+    await recordGarminBinaryEnrichDiagnostic({
+      supabase: input.supabase,
+      workoutId: row.id,
+      prev,
+      status: "no_geo_no_hd_series",
+      message: "File parsato senza coordinate percorso né serie HR/potenza/velocità utilizzabili.",
+    });
+    return;
+  }
 
   const merged = mergeTraceSeriesOverlay(prev, ts, routeGeo);
 
@@ -156,7 +213,16 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
     .from("executed_workouts")
     .update({ trace_summary: merged })
     .eq("id", row.id);
-  if (updErr) return;
+  if (updErr) {
+    await recordGarminBinaryEnrichDiagnostic({
+      supabase: input.supabase,
+      workoutId: row.id,
+      prev,
+      status: "update_failed",
+      message: updErr.message,
+    });
+    return;
+  }
 
   try {
     await persistExecutedWorkoutSeriesFromTrace({

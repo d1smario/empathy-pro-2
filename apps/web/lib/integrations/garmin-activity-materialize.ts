@@ -99,15 +99,40 @@ function countGpsPointsInGarminSamples(samples: unknown): number {
   return n;
 }
 
+/** Punti GPS **distinti** (arrotondati): due campioni sullo stesso punto non costituiscono una polyline. */
+function countDistinctGpsPointsInGarminSamples(samples: unknown): number {
+  if (!Array.isArray(samples)) return 0;
+  const seen = new Set<string>();
+  for (const raw of samples) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const s = raw as Record<string, unknown>;
+    const lat = s.latitudeInDegree;
+    const lon = s.longitudeInDegree;
+    if (
+      typeof lat === "number" &&
+      Number.isFinite(lat) &&
+      Math.abs(lat) <= 90 &&
+      typeof lon === "number" &&
+      Number.isFinite(lon) &&
+      Math.abs(lon) <= 180 &&
+      !(lat === 0 && lon === 0)
+    ) {
+      seen.add(`${lat.toFixed(5)},${lon.toFixed(5)}`);
+    }
+  }
+  return seen.size;
+}
+
 /**
  * Dopo GET `activities`, serve accodare `activityDetails` / `activityFile`?
  * Prima: solo `samples.length < 24` → attività con ≥24 campioni **solo HR** non scaricavano mai FIT/GPX (traccia assente in UI).
- * Ora: anche con molti campioni, se ci sono **meno di 2** punti GPS nei `samples`, restiamo “poveri” di percorso e chiediamo il file.
+ * Ora: anche con molti campioni, se ci sono **meno di 2** punti GPS **distinti** nei `samples`, restiamo “poveri” di percorso e chiediamo il file.
  */
 export function garminActivitySummaryNeedsBinaryFollowUp(r: Record<string, unknown>): boolean {
   const samples = r.samples;
   if (!Array.isArray(samples) || samples.length < GARMIN_RICH_SAMPLE_COUNT) return true;
-  return countGpsPointsInGarminSamples(samples) < 2;
+  if (countGpsPointsInGarminSamples(samples) < 2) return true;
+  return countDistinctGpsPointsInGarminSamples(samples) < 2;
 }
 
 /**
