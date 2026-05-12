@@ -152,7 +152,7 @@ function garminActivityChannelCoverage(r: Record<string, unknown>): Record<strin
 }
 
 function pickExternalId(r: Record<string, unknown>): string {
-  const sid = r.summaryId ?? r.activityId;
+  const sid = r.summaryId ?? r.summaryID ?? r.activityId ?? r.activityID;
   if (typeof sid === "string" && sid.trim()) return `garmin_api:${sid.trim()}`;
   if (typeof sid === "number" && Number.isFinite(sid)) return `garmin_api:${String(Math.trunc(sid))}`;
   const t = activityDateString(r) ?? "unknown";
