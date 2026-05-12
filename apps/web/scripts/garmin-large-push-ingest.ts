@@ -23,6 +23,10 @@
  * - GARMIN_PUSH_PUBLIC_BASE_URL=https://<ingest-host>  (deve coincidere con l’URL configurato nel portale, senza slash finale)
  * - GARMIN_PULL_TRIGGER_URL=https://empathy-pro-2-web.vercel.app/api/integrations/garmin/pull/run
  * - GARMIN_PULL_RUN_SECRET (uguale a Vercel)
+ * - `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` (default in `fly.garmin-ingest.toml`): non accodare GET `/rest/activityDetails`
+ *   dopo persist — Garmin vieta Push+Pull Details insieme; i FIT restano su Vercel (`GET /rest/activityFile`).
+ *   Su **Vercel** imposta lo stesso valore se il portale invia Activity Details verso Fly, così il pull runner dopo
+ *   `activities` non richiede anche il GET Details.
  * - Opzionale: `GARMIN_PUSH_ACCEPTED_HTTP_STATUS=200` se un checker richiede solo 200 (default **202** come su Vercel).
  *
  * Avvio (da `apps/web`): npm run garmin-ingest

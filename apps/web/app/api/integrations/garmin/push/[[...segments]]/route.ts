@@ -79,6 +79,10 @@ function pushAcceptedHttpStatus(): 200 | 202 {
  * `https://<ingest-host>/api/integrations/garmin/push/activityDetails` con `GARMIN_PUSH_PUBLIC_BASE_URL` sull’ingest.
  * Il **FIT** arriva da **`GET /rest/activityFile`** (coda `garmin_pull_jobs` / **runner su Vercel**), non dal body `activityDetails`
  * né tramite stream HTTP sul Fly ingest (Fly accoda e sveglia `pull/run` su Vercel per quel download).
+ *
+ * **Push vs GET Activity Details (Garmin Partner):** se i Details arrivano via push (tipicamente Fly), su **Vercel**
+ * imposta `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` così il pull runner dopo `GET /rest/activities` non accoda anche
+ * `GET /rest/activityDetails`. Fly ingest ha lo stesso default in `fly.garmin-ingest.toml` per `persistGarminPushReceipt`.
  */
 export async function POST(
   req: NextRequest,

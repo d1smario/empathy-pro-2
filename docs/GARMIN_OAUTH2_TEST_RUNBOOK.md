@@ -4,6 +4,7 @@ Scope: Empathy Pro 2 only (`empathy-pro-2-cursor`), production host `https://emp
 
 ## What Garmin clarified
 
+- **Activity Details delivery (Garmin Partner Services, May 2026):** **Activity files** are only via **PING/PULL**. **Activity Details** may use **PUSH *or* PING/PULL**, but **not both at the same time** for the same integration. Pro 2: set **`GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true`** on Vercel (pull runner) and use the Fly ingest default when Details are pushed to Fly — see `garmin-activity-follow-up-pull-queue.ts` and `fly.garmin-ingest.toml`.
 - **Push webhooks (incl. Activity Details):** Garmin Partner Services expects the HTTP response **without long synchronous processing**; persist to your store and trigger pull/materialization **asynchronously** so the webhook does not return **HTTP 500** (timeouts / heavy JSON insert before ACK). Pro 2: `POST …/api/integrations/garmin/push/*` returns **202 Accepted** by default (`waitUntil` on Vercel); set **`GARMIN_PUSH_ACCEPTED_HTTP_STATUS=200`** only if a checker strictly requires 200. The Fly **`garmin-ingest`** server uses the same pattern (202 + background persist).
 - **No-500 guarantee:** the Vercel route and the Fly ingest both wrap the pre-ack path in a top-level try/catch that **converts any unexpected exception into 202 Accepted** with a server log — body read failures, missing `SUPABASE_SERVICE_ROLE_KEY`, malformed headers, body-parser overflow, etc. all become 202 (never 500) so Partner Verification sees a healthy webhook even while we investigate the cause in logs.
 - Request Signing in the Garmin portal is for OAuth1 only.
@@ -22,6 +23,7 @@ Do not paste secret values in chat or commits. Verify presence and exact host/pa
 - `GARMIN_OAUTH_PKCE_SECRET` with at least 16 characters
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `CRON_SECRET` and/or `GARMIN_PULL_RUN_SECRET` for pull workers
+- **`GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true`** quando i **Activity Details** arrivano via **push su Fly** (Garmin: non usare anche `GET /rest/activityDetails` dopo `activities`). Ometti o `false` solo se nel portale i Details sono **solo pull**. L’immagine Fly in `fly.garmin-ingest.toml` imposta questo default in `[env]`.
 - **`GARMIN_ACTIVITY_BLOBS_BUCKET`** (consigliato in produzione): bucket Supabase per archiviare i binari `activityFile` (FIT/TCX/GPX); senza, il download può fallire o non persistere — vedi migration e `garmin-activity-blob-storage.ts`
 - Optional for push signature alignment: `GARMIN_PUSH_PUBLIC_BASE_URL=https://empathy-pro-2-web.vercel.app`
 
@@ -51,6 +53,8 @@ Garmin **non** mette i byte del file `.fit` nel body della push `ACTIVITY_DETAIL
 
 In sintesi: **Fly = ingresso push JSON pesante (Activity Details) + accodamento + wake del pull Vercel**; **Vercel = esecuzione GET `activityFile` e materializzazione** (`garmin-activity-materialize`, archiviazione blob, enrich). Per verificare il FIT end-to-end dopo un’attività reale: controllare job `activityFile` completati e blob/materialize nei log Vercel / tabelle collegate, non solo la risposta HTTP 202 della push Fly.
 
+**Partner rule (Garmin):** Activity Details = **push *or* pull**, not both. Repo default: Fly `fly.garmin-ingest.toml` sets `GARMIN_ACTIVITY_DETAILS_VIA_PUSH=true` so ingest does not enqueue `GET /rest/activityDetails` after persist; **set the same on Vercel** so `garmin-pull-runner` does not enqueue that GET after `GET /rest/activities` when Details already arrive via Fly push.
+
 ## Ora, fuso e “giorno” sessione (vs Garmin Connect)
 
 - Nei payload **Activity** / **Wellness** Garmin, `startTimeInSeconds` è di norma **epoch Unix UTC** (secondi). In Empathy la data usata per bucketizzare la sessione (`executed_workouts.date`, ecc.) deriva da quell’istante tramite `.toISOString().slice(0, 10)` → **giorno di calendario in UTC**, non il giorno locale del dispositivo o del runner.
@@ -63,7 +67,7 @@ In sintesi: **Fly = ingresso push JSON pesante (Activity Details) + accodamento 
 1. **Permessi / capability:** attività con GPS richiedono permesso appropriato in Connect + capability nel portale; HTTP **412** su summary indica spesso dato disabilitato lato utente.
 2. **Job `activityFile`:** in Supabase tabella **`garmin_pull_jobs`**, cerca `stream_key = 'activityFile'` (o `garmin_follow_up:activityFile`): status `failed` e messaggio errore → log Vercel sul `garmin-pull-runner`.
 3. **Storage blob:** variabile **`GARMIN_ACTIVITY_BLOBS_BUCKET`** su Vercel deve puntare al bucket creato con la migration dedicata; se assente, l’archiviazione binaria fallisce (vedi log `garmin_pull_binary_archive`).
-4. **Euristica follow-up (dopo GET `activities`):** finché il summary non ha **≥24** campioni in `samples` **e** **≥2** punti GPS (`latitudeInDegree` / `longitudeInDegree`), Pro 2 accoda ancora **`activityFile`** / finestra **`activityDetails`** — altrimenti molti summary “solo HR” non avviavano mai il download del file (traccia assente). Codice: `garminActivitySummaryNeedsBinaryFollowUp` in `garmin-activity-materialize.ts`, usato da `garmin-activity-follow-up-pull-queue.ts`.
+4. **Euristica follow-up (dopo GET `activities`):** finché il summary non ha **≥24** campioni in `samples` **e** **≥2** punti GPS (`latitudeInDegree` / `longitudeInDegree`), Pro 2 accoda ancora **`activityFile`** e, se non è attivo `GARMIN_ACTIVITY_DETAILS_VIA_PUSH`, anche una finestra **`activityDetails`** via GET — altrimenti molti summary “solo HR” non avviavano mai il download del file (traccia assente). Codice: `garminActivitySummaryNeedsBinaryFollowUp` in `garmin-activity-materialize.ts`, usato da `garmin-activity-follow-up-pull-queue.ts`.
 5. **Formato file:** Garmin può rispondere a `activityFile` con **FIT** (tipico), **TCX** o **GPX**; il parser interno (`parseTrainingFile` / `garmin-binary-route-enrich`) normalizza in `trace_summary` per la UI — non sempre il marchio “GPX” se il vendor manda FIT.
 
 ## Documentazione Garmin ufficiale (lettura payload)

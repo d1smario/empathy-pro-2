@@ -1,6 +1,8 @@
 # Fly.io — rinominare `app` dopo `fly launch` oppure impostare `flyctl apps create empathy-garmin-ingest`.
 # Secrets/env su Fly: stesse chiavi Supabase + Garmin + GARMIN_PUSH_PUBLIC_BASE_URL (origine pubblica ingest)
 # + GARMIN_PULL_TRIGGER_URL + GARMIN_PULL_RUN_SECRET (allineati a Vercel).
+# Activity Details su questo host = PUSH (Garmin: non usare anche GET /rest/activityDetails in parallelo).
+# Default sotto: `garmin-push-persist` non accoda GET activityDetails dopo ingest (restano i GET activityFile su Vercel).
 
 app = "empathy-garmin-ingest"
 primary_region = "fra"
@@ -11,6 +13,7 @@ primary_region = "fra"
 [env]
   GARMIN_INGEST_PORT = "8790"
   GARMIN_INGEST_BODY_LIMIT_MB = "96"
+  GARMIN_ACTIVITY_DETAILS_VIA_PUSH = "true"
 
 [http_service]
   internal_port = 8790
