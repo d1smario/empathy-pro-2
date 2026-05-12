@@ -6,7 +6,10 @@ import {
   extractGarminPullTokenFromCallbackUrl,
   readUploadWindowFromCallbackUrl,
 } from "@/lib/integrations/garmin-activity-follow-up-url";
-import { listGarminActivitySummariesFromWellnessBody } from "@/lib/integrations/garmin-activity-materialize";
+import {
+  garminActivitySummaryNeedsBinaryFollowUp,
+  listGarminActivitySummariesFromWellnessBody,
+} from "@/lib/integrations/garmin-activity-materialize";
 import { garminWellnessAbsoluteUrl } from "@/lib/integrations/garmin-wellness-api";
 
 const MAX_ACTIVITY_FILE_FOLLOW_UPS = 32;
@@ -57,11 +60,6 @@ function pickGarminSummaryOrActivityId(r: Record<string, unknown>): string | nul
   return null;
 }
 
-function activityHasRichSamples(r: Record<string, unknown>): boolean {
-  const s = r.samples;
-  return Array.isArray(s) && s.length >= 24;
-}
-
 function isBinaryPullResponseWrapper(body: unknown): boolean {
   const o = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>) : null;
   return Boolean(o?.garminWellnessBinaryResponse === true);
@@ -105,7 +103,7 @@ export async function queueGarminActivityEnrichmentAfterActivitiesPull(input: {
   if (!pullToken) return { queuedActivityDetails, queuedActivityFiles };
 
   const rows = listGarminActivitySummariesFromWellnessBody(responseBody);
-  const needsEnrichment = rows.filter((r) => !activityHasRichSamples(r));
+  const needsEnrichment = rows.filter((r) => garminActivitySummaryNeedsBinaryFollowUp(r));
   if (needsEnrichment.length === 0) return { queuedActivityDetails, queuedActivityFiles };
 
   const window =

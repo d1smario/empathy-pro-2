@@ -12,6 +12,11 @@ function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
 }
 
+/**
+ * Giorno **ISO calendario (UTC)** dell’attività per indici Empathy (`executed_workouts.date`).
+ * Garmin espone `startTimeInSeconds` come epoch **UTC**; `toISOString().slice(0,10)` è quindi il giorno UTC,
+ * non necessariamente il “giorno locale” mostrato da Garmin Connect in fuso atleta (es. sera in Italia → può cadere sul giorno gregoriano UTC successivo).
+ */
 function activityDateString(r: Record<string, unknown>): string | null {
   const sec = r.startTimeInSeconds;
   if (typeof sec === "number" && Number.isFinite(sec)) {
@@ -65,6 +70,43 @@ export function listGarminActivitySummariesFromWellnessBody(body: unknown): Reco
   const sink: Record<string, unknown>[] = [];
   collectActivityRecords(body, sink);
   return sink;
+}
+
+/** Soglia legacy: molti summary Garmin sparano molti `samples` HR-only senza GPS → non bastava `length`. */
+const GARMIN_RICH_SAMPLE_COUNT = 24;
+
+function countGpsPointsInGarminSamples(samples: unknown): number {
+  if (!Array.isArray(samples)) return 0;
+  let n = 0;
+  for (const raw of samples) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+    const s = raw as Record<string, unknown>;
+    const lat = s.latitudeInDegree;
+    const lon = s.longitudeInDegree;
+    if (
+      typeof lat === "number" &&
+      Number.isFinite(lat) &&
+      Math.abs(lat) <= 90 &&
+      typeof lon === "number" &&
+      Number.isFinite(lon) &&
+      Math.abs(lon) <= 180 &&
+      !(lat === 0 && lon === 0)
+    ) {
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/**
+ * Dopo GET `activities`, serve accodare `activityDetails` / `activityFile`?
+ * Prima: solo `samples.length < 24` → attività con ≥24 campioni **solo HR** non scaricavano mai FIT/GPX (traccia assente in UI).
+ * Ora: anche con molti campioni, se ci sono **meno di 2** punti GPS nei `samples`, restiamo “poveri” di percorso e chiediamo il file.
+ */
+export function garminActivitySummaryNeedsBinaryFollowUp(r: Record<string, unknown>): boolean {
+  const samples = r.samples;
+  if (!Array.isArray(samples) || samples.length < GARMIN_RICH_SAMPLE_COUNT) return true;
+  return countGpsPointsInGarminSamples(samples) < 2;
 }
 
 /**
