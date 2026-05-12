@@ -131,7 +131,11 @@ function garminActivityChannelCoverage(r: Record<string, unknown>): Record<strin
   const hr =
     typeof r.averageHeartRateInBeatsPerMinute === "number" ||
     typeof r.averageHeartRate === "number" ||
-    typeof r.maxHeartRateInBeatsPerMinute === "number";
+    typeof r.avgHeartRate === "number" ||
+    typeof r.averageHR === "number" ||
+    typeof r.meanHeartRate === "number" ||
+    typeof r.maxHeartRateInBeatsPerMinute === "number" ||
+    typeof r.maxHeartRate === "number";
   const power = typeof r.averagePower === "number" || typeof r.maxPower === "number";
   const speed =
     typeof r.averageSpeedInMetersPerSecond === "number" ||
@@ -188,6 +192,8 @@ function buildGarminCanonicalSummary(r: Record<string, unknown>): Record<string,
       "averageHeartRateInBeatsPerMinute",
       "averageHeartRate",
       "avgHeartRate",
+      "averageHR",
+      "meanHeartRate",
     ]),
     hr_max_bpm: pickNumber(r, ["maxHeartRateInBeatsPerMinute", "maxHeartRate"]),
     cadence_avg_rpm: pickNumber(r, [
