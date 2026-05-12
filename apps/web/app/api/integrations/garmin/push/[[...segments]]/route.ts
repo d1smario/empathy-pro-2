@@ -77,7 +77,8 @@ function pushAcceptedHttpStatus(): 200 | 202 {
  * **activityDetails** (body molto grande, **solo JSON** — non il FIT): su Vercel spesso 413; usa ingest dedicato
  * (`npm run garmin-ingest` su Fly/VM) e nel portale punta solo quello stream a
  * `https://<ingest-host>/api/integrations/garmin/push/activityDetails` con `GARMIN_PUSH_PUBLIC_BASE_URL` sull’ingest.
- * Il **FIT** arriva da **`GET /rest/activityFile`** (coda `garmin_pull_jobs` / runner), non dal body `activityDetails`.
+ * Il **FIT** arriva da **`GET /rest/activityFile`** (coda `garmin_pull_jobs` / **runner su Vercel**), non dal body `activityDetails`
+ * né tramite stream HTTP sul Fly ingest (Fly accoda e sveglia `pull/run` su Vercel per quel download).
  */
 export async function POST(
   req: NextRequest,

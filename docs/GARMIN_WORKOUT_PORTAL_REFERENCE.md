@@ -2,7 +2,7 @@
 
 **Stato:** documentazione di supporto raccolta dal team. **Non** fa parte della pipeline Garmin attiva in Empathy Pro 2.0.
 
-**Pipeline attuale Pro 2 (Garmin):** Garmin Connect Developer **Health API** — push notifiche → `garmin_pull_jobs` → pull `activities` / `activityDetails` / `activityFile` (FIT) → `garmin-activity-materialize.ts` → `executed_workouts` / wellness. Vedi `apps/web/lib/integrations/garmin-*.ts` e `docs/GARMIN_OAUTH2_TEST_RUNBOOK.md`.
+**Pipeline attuale Pro 2 (Garmin):** Garmin Connect Developer **Health API** — push notifiche → `garmin_push_receipts` / `garmin_pull_jobs` → pull REST (`activities`, `activityDetails` JSON, **`activityFile` per FIT/TCX/GPX**: download **sul worker Vercel**, non nel body push Fly) → `garmin-activity-materialize.ts` → `executed_workouts` / wellness. Vedi `apps/web/lib/integrations/garmin-*.ts` e `docs/GARMIN_OAUTH2_TEST_RUNBOOK.md` (sezione *Activity Details su Fly vs file FIT*).
 
 **Workout Portal:** API per **workout prescrittivi** (definizione strutturata, step, segmenti) e **schedule** sul dispositivo/account Garmin. È un asse **piano prescritto ↔ Garmin**, ortogonale all’ingest delle **sessioni eseguite**.
 

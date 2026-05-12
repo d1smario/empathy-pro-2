@@ -36,6 +36,20 @@ Do not paste secret values in chat or commits. Verify presence and exact host/pa
 - **Capability / permissions**: in the Garmin Developer portal, enable the Health API capabilities your app needs (activities, dailies, sleeps, etc.). After linking, Pro 2 Profile → Devices shows **OAuth scope** and **user permissions granted** (from Garmin `GET /rest/user/permissions`). If a stream stays empty, compare that list with the portal capability toggles — Garmin does not expose “denied” items, only what was granted.
 - **State parameter**: authorize now sends `state=<athlete_uuid>` (plain UUID string, spec-aligned). Callback parser remains backward compatible with old JSON/base64 JSON state. If the user returns with `error` and no usable `state`, callback redirects to `/profile?garmin=error&reason=…&detail=callback_state_missing_athlete`.
 
+## Activity Details su Fly vs file FIT (pull su Vercel)
+
+Garmin **non** mette i byte del file `.fit` nel body della push `ACTIVITY_DETAIL`. Quella push è **solo JSON** (summary + campioni dove inclusi), spesso molto grande — per questo nel portale si punta lo stream **`ACTIVITY_DETAIL`** a **`https://empathy-garmin-ingest.fly.dev/api/integrations/garmin/push/activityDetails`** (limite body alto, stessa pipeline `persistGarminPushReceipt`).
+
+**Il FIT (o TCX/GPX) arriva sempre da una GET autenticata**, non dal webhook push:
+
+- Endpoint Garmin: **`GET …/wellness-api/rest/activityFile`** con query tipo `id` + `token` (come restituiti da summary / callbackURL nelle notifiche).
+- In Pro 2 i job sono in **`garmin_pull_jobs`** e il worker che esegue il download è sul progetto **`empathy-pro-2-web` (Vercel)** — `garmin-pull-runner`, cron `GET /api/integrations/garmin/pull/cron`, e trigger **`POST /api/integrations/garmin/pull/run`** (segreto `GARMIN_PULL_RUN_SECRET`).
+- Dopo una push su **Fly**, l’ingest (se configurato) invoca proprio quel **`GARMIN_PULL_TRIGGER_URL`** su Vercel così il runner parte subito e può scaricare **`activityFile`** / altri callback accodati.
+
+**Notifica `ACTIVITY_FILE_DATA` nel portale:** di solito l’URL è su **Vercel** (es. `…/push/activityFiles`) perché il payload è piccolo; anche lì il body **non** è il binario FIT — solo metadata che portano a mettere in coda il `GET activityFile`, sempre servito dal runner su Vercel.
+
+In sintesi: **Fly = ingresso push JSON pesante (Activity Details) + accodamento + wake del pull Vercel**; **Vercel = esecuzione GET `activityFile` e materializzazione** (`garmin-activity-materialize`, archiviazione blob, enrich). Per verificare il FIT end-to-end dopo un’attività reale: controllare job `activityFile` completati e blob/materialize nei log Vercel / tabelle collegate, non solo la risposta HTTP 202 della push Fly.
+
 ## Test sequence
 
 1. Open Pro 2 production and sign in.
@@ -63,7 +77,8 @@ flowchart LR
   LinkTable --> Backfill["Summary Backfill"]
   Backfill --> PushReceipt["garmin_push_receipts"]
   PushReceipt --> PullJobs["garmin_pull_jobs"]
-  PullJobs --> Materialize["executed_workouts / adaptive structure"]
+  PullJobs --> GetFile["GET activityFile FIT/TCX/GPX su Vercel"]
+  GetFile --> Materialize["executed_workouts / blob / enrich"]
 ```
 
 ## First failure codes to inspect

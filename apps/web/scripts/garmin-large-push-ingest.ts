@@ -7,8 +7,10 @@
  * - **`activityDetails` (POST qui)** = **JSON** (summary + `samples[]` / serie dove Garmin le espone).
  *   **Non** è il file FIT nativo: non aspettarti bytes `.fit` nel body della push.
  * - **File FIT / TCX / GPX** = risposta binaria di **`GET …/wellness-api/rest/activityFile`** (pull token + `id`
- *   summary). Empathy accoda quei GET dal runner (`garmin_pull_jobs` → `garmin-pull-runner` su Vercel) dopo
+ *   summary). Empathy accoda quei GET dal runner (`garmin_pull_jobs` → `garmin-pull-runner` su **Vercel**) dopo
  *   il pull `activities`, oppure quando la push include `callbackURL` verso `activityFile` (stessa coda).
+ *   **Fly non esegue il download del FIT**: questo host risponde 202 e persiste la push; poi (se configurato)
+ *   invoca `GARMIN_PULL_TRIGGER_URL` su Vercel perché sia il runner a fare `GET activityFile` e materializzare.
  *
  * Deploy questo processo su Fly/Railway/VM con limite HTTP alto; nel portale Garmin imposta **solo**
  * gli stream con payload pesante (tipicamente `activityDetails`) verso l’URL pubblico di questo host:
