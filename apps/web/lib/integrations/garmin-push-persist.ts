@@ -41,6 +41,11 @@ function fingerprintToken(raw: string): string {
   return createHash("sha256").update(raw, "utf8").digest("hex").slice(0, 24);
 }
 
+function formatSupabaseInsertError(e: { message?: string; code?: string; details?: string; hint?: string }): string {
+  const parts = [e.message, e.code, e.details, e.hint].filter((x) => typeof x === "string" && x.trim().length > 0);
+  return parts.length > 0 ? parts.join(" | ") : "Insert garmin_push_receipts failed (no error fields)";
+}
+
 /** Rimuove segreti Garmin dal JSON prima del salvataggio (userAccessToken, ecc.). */
 export function redactGarminPushPayload(node: unknown, fingerprints: string[]): unknown {
   if (node === null || node === undefined) return node;
@@ -89,13 +94,21 @@ export async function persistGarminPushReceipt(input: {
       payload: payload as Record<string, unknown>,
       token_fingerprints: Array.from(new Set(fingerprints)),
     })
-    .select("id")
-    .single();
+    .select("id");
 
-  if (error) throw new Error(error.message);
-  if (!data?.id) throw new Error("Insert Garmin push senza id.");
+  if (error) throw new Error(formatSupabaseInsertError(error));
 
-  const receiptId = data.id as string;
+  const row = Array.isArray(data) ? data[0] : data;
+  const receiptId =
+    row && typeof row === "object" && "id" in row && typeof (row as { id: unknown }).id === "string"
+      ? (row as { id: string }).id
+      : null;
+  if (!receiptId) {
+    const kind = Array.isArray(data) ? `array(len=${data.length})` : typeof data;
+    throw new Error(
+      `Insert Garmin push senza id (data=${kind}). Su Fly serve SUPABASE_SERVICE_ROLE_KEY (anon + RLS su garmin_push_receipts non espone id in RETURNING).`,
+    );
+  }
   let queued = 0;
   const rootUid = extractRootGarminUserId(input.parsedJson);
 

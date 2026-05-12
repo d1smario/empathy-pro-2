@@ -38,11 +38,7 @@ import express from "express";
 
 import { persistGarminPushReceipt } from "@/lib/integrations/garmin-push-persist";
 import { verifyGarminPushWebhookAuthPlain } from "@/lib/integrations/garmin-push-webhook-auth-plain";
-import {
-  readOptionalServiceRoleKey,
-  readSupabaseAnonKey,
-  readSupabasePublicUrl,
-} from "@/lib/supabase-env";
+import { readOptionalServiceRoleKey, readSupabasePublicUrl } from "@/lib/supabase-env";
 
 const PUSH_PREFIX = "/api/integrations/garmin/push";
 
@@ -63,9 +59,13 @@ function headerGet(req: express.Request, name: string): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
-function createIngestSupabase() {
+/** Solo service role: `garmin_push_receipts` ha RLS senza policy anon. */
+function createIngestSupabaseServiceRole() {
   const url = readSupabasePublicUrl();
-  const key = readOptionalServiceRoleKey() ?? readSupabaseAnonKey();
+  const key = readOptionalServiceRoleKey();
+  if (!key) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY assente (obbligatoria per persist Fly ingest).");
+  }
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -246,7 +246,7 @@ async function handleGarminPushPost(req: express.Request, res: express.Response)
 
     void (async () => {
       try {
-        const supabase = createIngestSupabase();
+        const supabase = createIngestSupabaseServiceRole();
         const contentType = headerGet(req, "content-type") ?? null;
         const { id, pullJobsQueued } = await persistGarminPushReceipt({
           endpointKind: kind,
