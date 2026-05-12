@@ -14,6 +14,7 @@ import {
   garminActivitySummaryNeedsBinaryFollowUp,
   listGarminActivitySummariesFromWellnessBody,
 } from "@/lib/integrations/garmin-activity-materialize";
+import { pickGarminActivityStableId } from "@/lib/integrations/garmin-activity-stable-id";
 import { garminWellnessAbsoluteUrl } from "@/lib/integrations/garmin-wellness-api";
 
 const MAX_ACTIVITY_FILE_FOLLOW_UPS = 32;
@@ -66,10 +67,7 @@ function deriveUploadWindowFromSummaries(rows: Record<string, unknown>[]): { sta
 }
 
 function pickGarminSummaryOrActivityId(r: Record<string, unknown>): string | null {
-  const sid = r.summaryId ?? r.summaryID ?? r.activityId ?? r.activityID;
-  if (typeof sid === "string" && sid.trim()) return sid.trim();
-  if (typeof sid === "number" && Number.isFinite(sid)) return String(Math.trunc(sid));
-  return null;
+  return pickGarminActivityStableId(r);
 }
 
 function isBinaryPullResponseWrapper(body: unknown): boolean {

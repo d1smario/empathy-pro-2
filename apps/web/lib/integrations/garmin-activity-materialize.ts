@@ -6,6 +6,7 @@ import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-d
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
+import { pickGarminActivityStableId } from "@/lib/integrations/garmin-activity-stable-id";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -152,9 +153,8 @@ function garminActivityChannelCoverage(r: Record<string, unknown>): Record<strin
 }
 
 function pickExternalId(r: Record<string, unknown>): string {
-  const sid = r.summaryId ?? r.summaryID ?? r.activityId ?? r.activityID;
-  if (typeof sid === "string" && sid.trim()) return `garmin_api:${sid.trim()}`;
-  if (typeof sid === "number" && Number.isFinite(sid)) return `garmin_api:${String(Math.trunc(sid))}`;
+  const stable = pickGarminActivityStableId(r);
+  if (stable) return `garmin_api:${stable}`;
   const t = activityDateString(r) ?? "unknown";
   const d = durationSeconds(r) ?? 0;
   return `garmin_api:hash:${t}:${Math.trunc(d)}:${String(r.activityType ?? "act")}`;
