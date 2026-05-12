@@ -1,10 +1,14 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   extractGarminPullTokenFromCallbackUrl,
   readUploadWindowFromCallbackUrl,
+  scanJsonForGarminActivityUserAccessToken,
+  scanJsonForGarminPullToken,
 } from "@/lib/integrations/garmin-activity-follow-up-url";
 import {
   garminActivitySummaryNeedsBinaryFollowUp,
@@ -35,6 +39,14 @@ function isGarminActivitiesListPull(job: GarminPullJobLite): boolean {
   } catch {
     return false;
   }
+}
+
+function deriveMinimalUploadWindowFromSummary(r: Record<string, unknown>): { start: number; end: number } | null {
+  const s = r.startTimeInSeconds;
+  const d = r.durationInSeconds ?? r.duration;
+  if (typeof s !== "number" || !Number.isFinite(s)) return null;
+  const dur = typeof d === "number" && Number.isFinite(d) && d > 0 ? d : 600;
+  return { start: s, end: s + dur };
 }
 
 function deriveUploadWindowFromSummaries(rows: Record<string, unknown>[]): { start: number; end: number } | null {
@@ -162,4 +174,55 @@ export async function queueGarminActivityEnrichmentAfterActivitiesPull(input: {
   }
 
   return { queuedActivityDetails, queuedActivityFiles };
+}
+
+/**
+ * Push Health API **inline** (nessun `callbackURL` → `garmin_pull_jobs` vuota): se nel JSON esiste un URL Garmin
+ * con `token=` e il summary chiede FIT/GPX, costruiamo una GET `activities` sintetica e riusiamo la stessa coda
+ * follow-up di {@link queueGarminActivityEnrichmentAfterActivitiesPull}.
+ */
+export async function queueGarminActivityEnrichmentAfterInlineActivityPush(input: {
+  supabase: SupabaseClient;
+  receiptId: string;
+  athleteId: string;
+  endpointKind: string;
+  parsedJson: unknown;
+}): Promise<{ queuedActivityDetails: boolean; queuedActivityFiles: number }> {
+  const rows = listGarminActivitySummariesFromWellnessBody(input.parsedJson);
+  const needs = rows.filter((r) => garminActivitySummaryNeedsBinaryFollowUp(r));
+  if (needs.length === 0) return { queuedActivityDetails: false, queuedActivityFiles: 0 };
+
+  const pullToken = scanJsonForGarminPullToken(input.parsedJson);
+  if (!pullToken) return { queuedActivityDetails: false, queuedActivityFiles: 0 };
+
+  let window = deriveUploadWindowFromSummaries(needs);
+  if (!window) {
+    const w0 = deriveMinimalUploadWindowFromSummary(needs[0]);
+    if (!w0) return { queuedActivityDetails: false, queuedActivityFiles: 0 };
+    window = w0;
+  }
+
+  const u = new URL(garminWellnessAbsoluteUrl("/rest/activities"));
+  u.searchParams.set("token", pullToken);
+  u.searchParams.set("uploadStartTimeInSeconds", String(Math.floor(window.start)));
+  u.searchParams.set("uploadEndTimeInSeconds", String(Math.ceil(window.end)));
+  const activitiesUrl = u.toString();
+
+  const oauthTok = scanJsonForGarminActivityUserAccessToken(input.parsedJson);
+
+  const job: GarminPullJobLite = {
+    id: randomUUID(),
+    callback_url: activitiesUrl,
+    user_access_token: oauthTok,
+    athlete_id: input.athleteId,
+    receipt_id: input.receiptId,
+    endpoint_kind: input.endpointKind,
+    stream_key: "activities",
+  };
+
+  return queueGarminActivityEnrichmentAfterActivitiesPull({
+    supabase: input.supabase,
+    job,
+    responseBody: input.parsedJson,
+  });
 }

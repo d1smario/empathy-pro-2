@@ -19,6 +19,7 @@ import {
   extractGarminPullItems,
   extractRootGarminUserId,
 } from "./garmin-extract-pull-items";
+import { queueGarminActivityEnrichmentAfterInlineActivityPush } from "./garmin-activity-follow-up-pull-queue";
 
 async function resolveAthleteIdForGarminUser(
   supabase: SupabaseClient,
@@ -152,6 +153,20 @@ export async function persistGarminPushReceipt(input: {
         } catch {
           /* best-effort */
         }
+      }
+
+      try {
+        const enq = await queueGarminActivityEnrichmentAfterInlineActivityPush({
+          supabase,
+          receiptId,
+          athleteId,
+          endpointKind: input.endpointKind,
+          parsedJson: input.parsedJson,
+        });
+        queued +=
+          (enq.queuedActivityDetails ? 1 : 0) + enq.queuedActivityFiles;
+      } catch {
+        /* follow-up best-effort */
       }
     }
   }
