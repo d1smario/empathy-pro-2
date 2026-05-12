@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import {
+  authorizeGarminPullEndpointBearer,
+  garminPullEndpointSecretConfigured,
+} from "@/lib/integrations/garmin-pull-endpoint-auth";
 import { runGarminPullJobs } from "@/lib/integrations/garmin-pull-runner";
 
 export const runtime = "nodejs";
@@ -14,7 +18,7 @@ export const dynamic = "force-dynamic";
  * - **OAuth2 User Authorization** → redirect `/api/integrations/garmin/callback`
  * - **Summary Backfill** → anche `POST /api/integrations/garmin/backfill` (range UTC + `stream`) oltre agli strumenti portale
  *
- * Chiamata esempio:
+ * Chiamata esempio (Bearer = `GARMIN_PULL_RUN_SECRET` **oppure** lo stesso `CRON_SECRET` usato da GET …/pull/cron):
  *   curl -X POST https://<host>/api/integrations/garmin/pull/run \
  *     -H "Authorization: Bearer $GARMIN_PULL_RUN_SECRET" \
  *     -H "Content-Type: application/json" \
@@ -33,9 +37,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.GARMIN_PULL_RUN_SECRET?.trim();
-  const auth = req.headers.get("authorization")?.trim();
-  if (!secret || auth !== `Bearer ${secret}`) {
+  if (
+    !garminPullEndpointSecretConfigured() ||
+    !authorizeGarminPullEndpointBearer(req)
+  ) {
     return NextResponse.json({ ok: false as const, error: "Non autorizzato." }, { status: 401 });
   }
 

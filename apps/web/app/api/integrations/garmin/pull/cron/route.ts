@@ -1,5 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server";
 
+import {
+  authorizeGarminPullEndpointBearer,
+  garminPullEndpointSecretConfigured,
+} from "@/lib/integrations/garmin-pull-endpoint-auth";
 import { runGarminPullJobs } from "@/lib/integrations/garmin-pull-runner";
 
 export const runtime = "nodejs";
@@ -8,20 +12,13 @@ export const dynamic = "force-dynamic";
 /**
  * **Vercel Cron** invoca solo **GET** con `Authorization: Bearer <CRON_SECRET>` (variabile `CRON_SECRET` nel progetto Vercel).
  * Rete di sicurezza sulla coda: le push avviano anche un pull immediato in background (vedi push route + `waitUntil`).
- * Stessa logica di `POST …/pull/run`: accetta anche `Bearer <GARMIN_PULL_RUN_SECRET>` per test manuali.
+ * Stessa logica di `POST …/pull/run`: `Bearer <CRON_SECRET>` o `Bearer <GARMIN_PULL_RUN_SECRET>`.
  */
-function authorizeCron(req: NextRequest): boolean {
-  const auth = req.headers.get("authorization")?.trim();
-  const cronSecret = process.env.CRON_SECRET?.trim();
-  const pullSecret = process.env.GARMIN_PULL_RUN_SECRET?.trim();
-  if (!auth?.startsWith("Bearer ")) return false;
-  if (cronSecret && auth === `Bearer ${cronSecret}`) return true;
-  if (pullSecret && auth === `Bearer ${pullSecret}`) return true;
-  return false;
-}
-
 export async function GET(req: NextRequest) {
-  if (!authorizeCron(req)) {
+  if (
+    !garminPullEndpointSecretConfigured() ||
+    !authorizeGarminPullEndpointBearer(req)
+  ) {
     return NextResponse.json({ ok: false as const, error: "Non autorizzato." }, { status: 401 });
   }
 
