@@ -24,6 +24,25 @@ const TRACE_SERIES_OVERLAY_KEYS = [
   "route_altitude_series_m",
 ] as const;
 
+const GARMIN_TRACE_FALLBACK_SCAN_LIMIT = 100;
+
+export type GarminBinaryEnrichRunSummary = {
+  callback_activity_id: string | null;
+  candidate_ids: string[];
+  resolved_external_id: string | null;
+  executed_workout_id: string | null;
+  match?: "external_id_exact" | "trace_summary_fallback";
+  outcome:
+    | "merged"
+    | "no_executed_row"
+    | "skipped_bad_extension"
+    | "skipped_no_activity_id"
+    | "parse_error"
+    | "no_geo_no_hd_series"
+    | "update_failed";
+  message?: string;
+};
+
 function extractActivityFileId(callbackUrl: string): string | null {
   try {
     const u = new URL(callbackUrl);
@@ -37,6 +56,90 @@ function extractActivityFileId(callbackUrl: string): string | null {
   } catch {
     return null;
   }
+}
+
+function collectBareGarminActivityIdsForEnrich(
+  callbackUrl: string,
+  querySnapshot: Record<string, unknown> | null | undefined,
+): string[] {
+  const out: string[] = [];
+  const push = (raw: unknown) => {
+    if (raw == null) return;
+    const s = String(raw).trim();
+    if (s.length > 0 && !out.includes(s)) out.push(s);
+  };
+  push(extractActivityFileId(callbackUrl));
+  if (querySnapshot && typeof querySnapshot === "object") {
+    push(querySnapshot.summary_or_activity_id);
+    push(querySnapshot.activityId);
+    push(querySnapshot.activityID);
+    push(querySnapshot.summaryId);
+    push(querySnapshot.summaryID);
+  }
+  return out;
+}
+
+function traceSummaryReferencesBareGarminId(ts: Record<string, unknown>, bare: string): boolean {
+  const norm = (v: unknown) => (v == null ? "" : String(v).trim());
+  return norm(ts.activity_id) === bare || norm(ts.summary_id) === bare;
+}
+
+async function locateExecutedWorkoutForGarminBinary(input: {
+  supabase: SupabaseClient;
+  athleteId: string;
+  bareIds: string[];
+}): Promise<{
+  id: string;
+  trace_summary: unknown;
+  resolvedExternalId: string;
+  match: "external_id_exact" | "trace_summary_fallback";
+} | null> {
+  for (const bare of input.bareIds) {
+    const externalId = `garmin_api:${bare}`;
+    const { data: row, error } = await input.supabase
+      .from("executed_workouts")
+      .select("id, trace_summary, external_id")
+      .eq("athlete_id", input.athleteId)
+      .eq("external_id", externalId)
+      .maybeSingle();
+    if (!error && row?.id && row.external_id) {
+      return {
+        id: row.id,
+        trace_summary: row.trace_summary,
+        resolvedExternalId: String(row.external_id),
+        match: "external_id_exact",
+      };
+    }
+  }
+
+  const { data: recent, error: e2 } = await input.supabase
+    .from("executed_workouts")
+    .select("id, trace_summary, external_id")
+    .eq("athlete_id", input.athleteId)
+    .like("external_id", "garmin_api:%")
+    .order("created_at", { ascending: false })
+    .limit(GARMIN_TRACE_FALLBACK_SCAN_LIMIT);
+
+  if (e2 || !recent?.length) return null;
+
+  for (const row of recent) {
+    const ts =
+      row.trace_summary && typeof row.trace_summary === "object" && !Array.isArray(row.trace_summary)
+        ? (row.trace_summary as Record<string, unknown>)
+        : {};
+    for (const bare of input.bareIds) {
+      if (traceSummaryReferencesBareGarminId(ts, bare) && row.id && row.external_id) {
+        return {
+          id: row.id,
+          trace_summary: row.trace_summary,
+          resolvedExternalId: String(row.external_id),
+          match: "trace_summary_fallback",
+        };
+      }
+    }
+  }
+
+  return null;
 }
 
 function normalizeRoutePointsToGeo(trace: Record<string, unknown>): GeoPoint[] {
@@ -129,7 +232,8 @@ async function recordGarminBinaryEnrichDiagnostic(input: {
 /**
  * Dopo archiviazione blob `activityFile` (FIT/GPX/TCX), estrae percorso e serie HD
  * e le associa al `executed_workouts` già creato dal summary (`external_id` = `garmin_api:<id>`).
- * In caso di errore o assenza traccia, scrive `trace_summary.garmin_binary_enrich` per diagnostica (non silenzioso).
+ * Risolve mismatch id URL vs riga (`query_snapshot`, fallback su `trace_summary.activity_id` / `summary_id`).
+ * Restituisce un riepilogo da allegare a `garmin_pull_jobs.response_body`.
  */
 export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   supabase: SupabaseClient;
@@ -138,31 +242,60 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   buffer: Buffer;
   extension: string;
   contentType: string | null;
-}): Promise<void> {
-  const extRaw = input.extension.trim().toLowerCase();
-  const activityId = extractActivityFileId(input.callbackUrl);
-  if (!activityId) return;
+  querySnapshot?: Record<string, unknown> | null;
+}): Promise<GarminBinaryEnrichRunSummary> {
+  const bareIds = collectBareGarminActivityIdsForEnrich(input.callbackUrl, input.querySnapshot);
+  const callbackActivityId = extractActivityFileId(input.callbackUrl);
 
+  const baseMeta = (): Pick<GarminBinaryEnrichRunSummary, "callback_activity_id" | "candidate_ids"> => ({
+    callback_activity_id: callbackActivityId,
+    candidate_ids: bareIds,
+  });
+
+  if (bareIds.length === 0) {
+    return {
+      ...baseMeta(),
+      resolved_external_id: null,
+      executed_workout_id: null,
+      outcome: "skipped_no_activity_id",
+      message: "Nessun id attività in callback URL né in query_snapshot del job.",
+    };
+  }
+
+  const extRaw = input.extension.trim().toLowerCase();
   const ext =
     extRaw === ".gpx" || extRaw === ".tcx" || extRaw === ".fit" || extRaw === ".xml" || extRaw === ".bin"
       ? extRaw
       : null;
-  if (!ext) return;
+  if (!ext) {
+    return {
+      ...baseMeta(),
+      resolved_external_id: null,
+      executed_workout_id: null,
+      outcome: "skipped_bad_extension",
+      message: `Estensione non supportata: ${extRaw || "(vuoto)"}`,
+    };
+  }
 
-  const externalId = `garmin_api:${activityId}`;
+  const located = await locateExecutedWorkoutForGarminBinary({
+    supabase: input.supabase,
+    athleteId: input.athleteId,
+    bareIds,
+  });
 
-  const { data: row, error } = await input.supabase
-    .from("executed_workouts")
-    .select("id, trace_summary")
-    .eq("athlete_id", input.athleteId)
-    .eq("external_id", externalId)
-    .maybeSingle();
-
-  if (error || !row?.id) return;
+  if (!located) {
+    return {
+      ...baseMeta(),
+      resolved_external_id: null,
+      executed_workout_id: null,
+      outcome: "no_executed_row",
+      message: `Nessuna riga executed_workouts (né external_id né fallback trace, ultime ${GARMIN_TRACE_FALLBACK_SCAN_LIMIT}).`,
+    };
+  }
 
   const prev =
-    row.trace_summary && typeof row.trace_summary === "object" && !Array.isArray(row.trace_summary)
-      ? (row.trace_summary as Record<string, unknown>)
+    located.trace_summary && typeof located.trace_summary === "object" && !Array.isArray(located.trace_summary)
+      ? (located.trace_summary as Record<string, unknown>)
       : {};
 
   const parseName =
@@ -185,12 +318,19 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
     const msg = e instanceof Error ? e.message : String(e);
     await recordGarminBinaryEnrichDiagnostic({
       supabase: input.supabase,
-      workoutId: row.id,
+      workoutId: located.id,
       prev,
       status: "parse_error",
       message: msg,
     });
-    return;
+    return {
+      ...baseMeta(),
+      resolved_external_id: located.resolvedExternalId,
+      executed_workout_id: located.id,
+      match: located.match,
+      outcome: "parse_error",
+      message: msg,
+    };
   }
 
   const ts = parsed.traceSummary as Record<string, unknown>;
@@ -199,36 +339,53 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   if (routeGeo.length < 1 && !hasHd) {
     await recordGarminBinaryEnrichDiagnostic({
       supabase: input.supabase,
-      workoutId: row.id,
+      workoutId: located.id,
       prev,
       status: "no_geo_no_hd_series",
       message: "File parsato senza coordinate percorso né serie HR/potenza/velocità utilizzabili.",
     });
-    return;
+    return {
+      ...baseMeta(),
+      resolved_external_id: located.resolvedExternalId,
+      executed_workout_id: located.id,
+      match: located.match,
+      outcome: "no_geo_no_hd_series",
+    };
   }
 
   const merged = mergeTraceSeriesOverlay(prev, ts, routeGeo);
+  const ge = merged.garmin_binary_enrich;
+  if (ge && typeof ge === "object" && !Array.isArray(ge)) {
+    (ge as Record<string, unknown>).row_match = located.match;
+  }
 
   const { error: updErr } = await input.supabase
     .from("executed_workouts")
     .update({ trace_summary: merged })
-    .eq("id", row.id);
+    .eq("id", located.id);
   if (updErr) {
     await recordGarminBinaryEnrichDiagnostic({
       supabase: input.supabase,
-      workoutId: row.id,
+      workoutId: located.id,
       prev,
       status: "update_failed",
       message: updErr.message,
     });
-    return;
+    return {
+      ...baseMeta(),
+      resolved_external_id: located.resolvedExternalId,
+      executed_workout_id: located.id,
+      match: located.match,
+      outcome: "update_failed",
+      message: updErr.message,
+    };
   }
 
   try {
     await persistExecutedWorkoutSeriesFromTrace({
       db: input.supabase,
       athleteId: input.athleteId,
-      executedWorkoutId: row.id,
+      executedWorkoutId: located.id,
       traceSummary: merged,
       parserEngine: (typeof prev.parser_engine === "string" ? prev.parser_engine : null) ?? "garmin_activity_file",
       parserVersion: String(prev.parser_version ?? "2"),
@@ -237,4 +394,12 @@ export async function tryEnrichExecutedWorkoutFromGarminBinaryBlob(input: {
   } catch {
     /* tabella assente / RLS */
   }
+
+  return {
+    ...baseMeta(),
+    resolved_external_id: located.resolvedExternalId,
+    executed_workout_id: located.id,
+    match: located.match,
+    outcome: "merged",
+  };
 }

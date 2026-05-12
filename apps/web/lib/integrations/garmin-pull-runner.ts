@@ -10,7 +10,10 @@ import {
 import { ensureFreshGarminAccessTokenForAthlete } from "./garmin-access-token";
 import { tryParseGarminApiErrorMessage } from "./garmin-api-error-body";
 import { queueGarminActivityEnrichmentAfterActivitiesPull } from "./garmin-activity-follow-up-pull-queue";
-import { tryEnrichExecutedWorkoutFromGarminBinaryBlob } from "./garmin-binary-route-enrich";
+import {
+  type GarminBinaryEnrichRunSummary,
+  tryEnrichExecutedWorkoutFromGarminBinaryBlob,
+} from "./garmin-binary-route-enrich";
 import { materializeGarminActivitiesFromPullResponse } from "./garmin-activity-materialize";
 import { buildGarminSignedGetHeaders } from "./garmin-oauth1-client";
 import {
@@ -26,6 +29,7 @@ type PullJobRow = {
   endpoint_kind: string;
   stream_key: string | null;
   receipt_id: string | null;
+  query_snapshot: unknown;
 };
 
 function nowIso() {
@@ -74,7 +78,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
   const supabase = createServerSupabaseClient();
   const { data: jobs, error } = await supabase
     .from("garmin_pull_jobs")
-    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key, receipt_id")
+    .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key, receipt_id, query_snapshot")
     .eq("status", "pending")
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -150,6 +154,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
       const responseText = () => (responseTextCache ??= buf.toString("utf8"));
 
       let body: unknown;
+      let enrichRun: GarminBinaryEnrichRunSummary | null = null;
       const binaryPersist = shouldTreatGarminPullResponseAsBinary(ok, hdrCtRaw, buf);
       if (binaryPersist && ok) {
         const persisted = await persistGarminPullBinaryToStorage({
@@ -168,16 +173,28 @@ export async function runGarminPullJobs(limit: number): Promise<{
         activityBlobsStored += 1;
         if (job.athlete_id) {
           try {
-            await tryEnrichExecutedWorkoutFromGarminBinaryBlob({
+            const qs =
+              job.query_snapshot && typeof job.query_snapshot === "object" && !Array.isArray(job.query_snapshot)
+                ? (job.query_snapshot as Record<string, unknown>)
+                : null;
+            enrichRun = await tryEnrichExecutedWorkoutFromGarminBinaryBlob({
               supabase,
               athleteId: job.athlete_id,
               callbackUrl: job.callback_url,
               buffer: buf,
               extension: persisted.extension,
               contentType: persisted.upload_content_type,
+              querySnapshot: qs,
             });
-          } catch {
-            /* route enrich best-effort */
+          } catch (enrichErr) {
+            enrichRun = {
+              callback_activity_id: null,
+              candidate_ids: [],
+              resolved_external_id: null,
+              executed_workout_id: null,
+              outcome: "parse_error",
+              message: enrichErr instanceof Error ? enrichErr.message : String(enrichErr),
+            };
           }
         }
         body = {
@@ -191,6 +208,7 @@ export async function runGarminPullJobs(limit: number): Promise<{
           extension: persisted.extension,
           fit_extract_summary: persisted.fit_extract,
           blob_row_id: persisted.row_id ?? null,
+          ...(enrichRun ? { garmin_binary_enrich_run: enrichRun } : {}),
         };
       } else {
         body = await safeJsonBody(responseText());
