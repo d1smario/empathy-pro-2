@@ -2,6 +2,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BIOENERGETIC_EVIDENCE_CURVE_CONTRACT_VERSION } from "@empathy/contracts";
 import {
   SIM_BANK_VERSION,
+  GLUCOSE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  GLUCOSE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  LACTATE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  LACTATE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  PRED_GLUCOSE_STIMULI_LITERATURE_MANIFEST_V1,
+  PRED_LACTATE_STIMULI_LITERATURE_MANIFEST_V1,
+  INSULIN_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  PRED_INSULIN_STIMULI_LITERATURE_MANIFEST_V1,
   buildMetabolicEndocrineInteractionReportV1,
   buildSimulatedGluLacDiurnalSubHourly,
   computeInternalContextRichness01,
@@ -10,7 +19,7 @@ import {
   simBlendDeterministicWeightFromRichness01,
   synthesizeEvidenceConditionedLayerV1,
 } from "@empathy/domain-bioenergetics";
-import type { BioenergeticsDayViewModel, BioenergeticsWindowViewModel } from "@/api/bioenergetics/contracts";
+import type { BioenergeticsDayViewModel, BioenergeticsWindowViewModel, BioenergeticStimulusPredictorSubhourlyMetaV1 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { loadBioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { buildBioenergeticDaySeries, extractMeasuredGluLacFromSlice } from "@/lib/bioenergetics/day-curves-assembler";
@@ -30,6 +39,7 @@ import { enumerateInclusiveIsoDates } from "@/lib/bioenergetics/bioenergetic-win
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 import { buildBioenergeticDayTimeline } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { applyBioenergeticOpenAiGenerativeOverlay } from "@/lib/bioenergetics/bioenergetic-openai-generative-day";
+import { buildBioenergeticMonitoringStripAuditV1 } from "@/lib/bioenergetics/monitoring-strip-audit-v1";
 
 function diaryMealsWithMacroCount(rows: BioenergeticDayMemorySlice["diaryRows"]): number {
   let n = 0;
@@ -96,12 +106,36 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
           activityResponseScale01,
         }, 5)
       : null;
+
+  const stimulusPredictorSubhourlyV1: BioenergeticStimulusPredictorSubhourlyMetaV1 | undefined =
+    simGluLac != null
+      ? {
+          contractVersion: 1,
+          stepMinutes: 5,
+          glucose: {
+            predictorContractVersion: GLUCOSE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+            sourcePrefix: GLUCOSE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+            literatureManifestEntryIds: PRED_GLUCOSE_STIMULI_LITERATURE_MANIFEST_V1.map((e) => e.id),
+          },
+          lactate: {
+            predictorContractVersion: LACTATE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+            sourcePrefix: LACTATE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+            literatureManifestEntryIds: PRED_LACTATE_STIMULI_LITERATURE_MANIFEST_V1.map((e) => e.id),
+          },
+          insulin: {
+            predictorContractVersion: INSULIN_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+            sourcePrefix: INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+            literatureManifestEntryIds: PRED_INSULIN_STIMULI_LITERATURE_MANIFEST_V1.map((e) => e.id),
+          },
+        }
+      : undefined;
   const glucoseEstimated = glucoseMeasured.length > 0 ? null : simGluLac?.glucose ?? null;
   const lactateEstimated = lactateMeasured.length > 0 ? null : simGluLac?.lactate ?? null;
 
   const channels = {
     glucose: glucoseMeasured.length ? glucoseMeasured : glucoseEstimated,
     lactate: lactateMeasured.length ? lactateMeasured : lactateEstimated,
+    insulinProxyDense: simGluLac?.insulinProxy ?? null,
   };
   const provenance = {
     glucose: glucoseMeasured.length ? "measured" : glucoseEstimated ? "estimated" : "absent",
@@ -201,6 +235,7 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
     provenance,
     kernel,
     simBankVersion: SIM_BANK_VERSION,
+    ...(stimulusPredictorSubhourlyV1 != null ? { stimulusPredictorSubhourlyV1 } : {}),
     interpretationHints: buildBioenergeticInterpretationHints(kernel, {
       diaryEntryCount: slice.diaryRows.length,
       choIntakeG,
@@ -226,7 +261,7 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
       "Le serie aggiuntive (FC, CHO cumulativi, potenza da trace) dipendono da trace/diario disponibili per la data.",
       "La curva «Potenza (target da piano kJ/kcal)» è un vincolo energetico deterministico da `planned_workouts`, non una prescrizione FTP.",
       "Striscia monitoraggio continuo: policy fusione v1 — fase iniziale con peso maggiore al canale AI supervisionato sui sim; con contesto Empathy più ricco i pesi tendono al pareggio col motore. Merge numerico AI solo con endpoint e schema validati.",
-      "Sim diurna glucosio/lattato (passo 5 min): impulsi post-prandiali centrati su orario pasto (minuto) da CHO/kcal e IG diario; sedute su finestra start+durata con ramp; modulazione alba/sonno leggera sul glucosio. Piani senza orario usano slot fissi. Contesto fusione v1 — senza LLM sulla curva canonica. Passi/FC continui da trace: roadmap ingest (non duplicare serie parallele).",
+      "Sim sub-oraria 5 min: tre predittori deterministici da stimoli (`glucose_stimulus_predictor_v1_5m`, `lactate_stimulus_predictor_v1_5m`, `insulin_stimulus_predictor_v1_5m`) convogliati in `buildSimulatedGluLacDiurnalSubHourly` (glucosio/lattato + superficie CGM-like; insulin proxy 0–100 senza superficie CGM); metadati in `stimulusPredictorSubhourlyV1`. L’orario insulinico in striscia è la media oraria del predittore 5 min quando la serie densa è disponibile.",
     ],
     metricTiles,
     chart24h,
@@ -244,6 +279,9 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
  * Assembler unico per GET bioenergetics/day: memoria giorno → canali → kernel → serie → presentation.
  *
  * Default: striscia monitoring da OpenAI sugli input (`omitMonitoringStrip` + fill).
+ * Se OpenAI non restituisce canali (chiave assente, errore, JSON vuoto), si usa la striscia
+ * `model_continuous_v1` già calcolata dalla stessa slice (glucosio/lattato/proxy + ormoni se lab).
+ * Opzione `stripAudit: true` (query `stripAudit=1` sulla GET): aggiunge `monitoringStripAuditV1` nel body con input aggregati per verifica curve.
  * `POST merge-hourly-curve` richiede ancora la striscia deterministico-v1 con `curveResolution`: passare
  * `{ includeDeterministicMonitoringStripForMergeEndpoint: true }`.
  */
@@ -251,7 +289,7 @@ export async function assembleBioenergeticDay(
   db: SupabaseClient,
   athleteId: string,
   dateRaw: string,
-  options?: { includeDeterministicMonitoringStripForMergeEndpoint?: boolean },
+  options?: { includeDeterministicMonitoringStripForMergeEndpoint?: boolean; stripAudit?: boolean },
 ): Promise<AssembleBioenergeticDayResult> {
   const date = dateRaw.trim().slice(0, 10);
   const { slice, queryError } = await loadBioenergeticDayMemorySlice(db, athleteId, date);
@@ -271,10 +309,27 @@ export async function assembleBioenergeticDay(
       evidenceLinks,
       omitMonitoringStrip: false,
     });
+    if (options?.stripAudit === true) {
+      return {
+        ok: true,
+        body: {
+          ...body,
+          monitoringStripAuditV1: buildBioenergeticMonitoringStripAuditV1(body, slice),
+        },
+      };
+    }
     return { ok: true, body };
   }
 
-  const body = await applyBioenergeticOpenAiGenerativeOverlay(
+  const deterministicVm = buildBioenergeticDayViewModelFromSlice({
+    athleteId,
+    date,
+    slice,
+    evidenceLinks,
+    omitMonitoringStrip: false,
+  });
+
+  const overlaid = await applyBioenergeticOpenAiGenerativeOverlay(
     buildBioenergeticDayViewModelFromSlice({
       athleteId,
       date,
@@ -284,6 +339,34 @@ export async function assembleBioenergeticDay(
     }),
     slice,
   );
+
+  const aiStrip = overlaid.continuousMonitoring;
+  const aiChannels = aiStrip?.channels?.length ?? 0;
+  const detStrip = deterministicVm.continuousMonitoring;
+  const detChannels = detStrip?.channels?.length ?? 0;
+
+  let body = overlaid;
+  if (!aiChannels && detChannels) {
+    body = {
+      ...overlaid,
+      continuousMonitoring: detStrip,
+      disclaimers: [
+        ...overlaid.disclaimers,
+        "Striscia 24 h: curve deterministico v1 (diurna/sim/stream/lab) perché la striscia supervisionata (OpenAI) è assente o senza canali.",
+      ],
+    };
+  }
+
+  if (options?.stripAudit === true) {
+    return {
+      ok: true,
+      body: {
+        ...body,
+        monitoringStripAuditV1: buildBioenergeticMonitoringStripAuditV1(body, slice),
+      },
+    };
+  }
+
   return { ok: true, body };
 }
 

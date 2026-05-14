@@ -65,6 +65,12 @@ const STROKE_BY_CHANNEL_ID: Record<string, string> = {
   insulin_proxy: "#fb923c",
   cortisol: "#38bdf8",
   acth: "#f472b6",
+  tsh: "#2dd4bf",
+  ft4: "#fde047",
+  gh: "#4ade80",
+  ghrelin: "#f97316",
+  igf1: "#c084fc",
+  leptin: "#fbbf24",
 };
 
 /** Recharts con dominio [v,v] non disegna la linea: aggiunge padding simmetrico. */
@@ -88,6 +94,10 @@ function streamValuePlausible(channelId: string, v: number): boolean {
   if (!Number.isFinite(v)) return false;
   if (channelId === "glucose") return v >= 1.8 && v <= 16;
   if (channelId === "lactate") return v >= 0.12 && v <= 28;
+  if (channelId === "gh") return v >= 0.02 && v <= 12;
+  if (channelId === "ghrelin") return v >= 40 && v <= 1400;
+  if (channelId === "igf1") return v >= 35 && v <= 400;
+  if (channelId === "leptin") return v >= 0.2 && v <= 12;
   return true;
 }
 

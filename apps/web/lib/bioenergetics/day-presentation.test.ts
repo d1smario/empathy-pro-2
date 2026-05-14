@@ -82,13 +82,19 @@ test("buildBioenergeticDayPresentation: sim diurno 5m espone streamTrace su gluc
       keyDrivers: ["test"],
     },
     provenance: { glucose: "estimated", lactate: "estimated" },
-    channels: { glucose: sim.glucose, lactate: sim.lactate },
+    channels: { glucose: sim.glucose, lactate: sim.lactate, insulinProxyDense: sim.insulinProxy },
     timeline: [],
     biomarkerRows: [],
   });
   const glu = continuousMonitoring.channels.find((c) => c.id === "glucose");
   assert.ok(glu?.streamTrace && glu.streamTrace.length === 288);
   assert.equal(glu?.dataPlane, "model_continuous");
+  const lac = continuousMonitoring.channels.find((c) => c.id === "lactate");
+  assert.ok(lac?.streamTrace && lac.streamTrace.length === 288);
+  assert.equal(lac?.dataPlane, "model_continuous");
+  const ins = continuousMonitoring.channels.find((c) => c.id === "insulin_proxy");
+  assert.ok(ins?.streamTrace && ins.streamTrace.length === 288);
+  assert.equal(ins?.dataPlane, "model_continuous");
 });
 
 test("buildBioenergeticDayPresentation: stream glucosio denso espone streamTrace per grafico tempo reale", () => {
@@ -126,7 +132,7 @@ test("buildBioenergeticDayPresentation: stream glucosio denso espone streamTrace
   assert.equal(glu?.dataPlane, "measured_stream");
 });
 
-test("buildBioenergeticDayPresentation espone continuousMonitoring essenziale (glu lac insulin cort acth)", () => {
+test("buildBioenergeticDayPresentation espone continuousMonitoring essenziale (glu lac insulin + ormoni strip)", () => {
   const { continuousMonitoring } = buildBioenergeticDayPresentation({
     date: "2026-05-01",
     kernel: {
@@ -151,7 +157,10 @@ test("buildBioenergeticDayPresentation espone continuousMonitoring essenziale (g
   const ids = continuousMonitoring.channels.map((c) => c.id);
   assert.ok(ids.includes("glucose") && ids.includes("lactate") && ids.includes("insulin_proxy"));
   assert.ok(ids.includes("cortisol") && ids.includes("acth"));
-  assert.equal(continuousMonitoring.channels.length, 5);
+  assert.ok(ids.includes("tsh") && ids.includes("ft4"));
+  assert.ok(ids.includes("gh") && ids.includes("ghrelin"));
+  assert.ok(ids.includes("igf1") && ids.includes("leptin"));
+  assert.equal(continuousMonitoring.channels.length, 11);
 });
 
 test("buildBioenergeticDayPresentation: insulin proxy orario sale dopo pasto in timeline", () => {

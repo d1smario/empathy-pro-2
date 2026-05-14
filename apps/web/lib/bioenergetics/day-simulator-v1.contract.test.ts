@@ -6,6 +6,9 @@ import {
   buildInsulinProxyHourly24,
   buildMetabolicEndocrineInteractionReportV1,
   buildNominalCortisolActhHourly24,
+  buildNominalGhGhrelinHourly24,
+  buildNominalIgf1LeptinHourly24,
+  buildNominalThyroidTshFt4Hourly24,
   buildSimulatedGluLacDiurnal,
   mealGlycemicHourWeights24,
   simulatedLabNumeric,
@@ -91,9 +94,9 @@ test("buildInsulinProxyHourly24 ha 24 punti e reagisce a pasto con CHO/insulin_l
     oxidationDriveScore: 42,
     pathwayState: "mixed" as const,
   };
-  const empty = buildInsulinProxyHourly24(kernel, []);
+  const empty = buildInsulinProxyHourly24("2026-05-01", kernel, []);
   assert.equal(empty.length, 24);
-  const withMeal = buildInsulinProxyHourly24(kernel, [
+  const withMeal = buildInsulinProxyHourly24("2026-05-01", kernel, [
     { ts: "2026-05-01T08:15:00", type: "meal", payload: { carbsG: 70, insulinLoad: 22 } },
   ]);
   assert.ok(withMeal[8] > empty[8]);
@@ -117,4 +120,49 @@ test("buildNominalCortisolActhHourly24 produce 24 punti per cortisolo e ACTH", (
     Math.abs(imax(cortisolUgdL) - imax(acthPgMl)) >= 2,
     "picco cortisolo ritardato rispetto ad ACTH (forme non sovrapposte)",
   );
+});
+
+test("buildNominalThyroidTshFt4Hourly24 produce 24 punti TSH/FT4 in range plausibile", () => {
+  const k = {
+    insulinDemandScore: 35,
+    anabolicSuppressionScore: 22,
+    glucoseHandlingScore: 58,
+    oxidationDriveScore: 46,
+    pathwayState: "mixed" as const,
+  };
+  const { tshMiuL, ft4NgDl } = buildNominalThyroidTshFt4Hourly24(k);
+  assert.equal(tshMiuL.length, 24);
+  assert.equal(ft4NgDl.length, 24);
+  assert.ok(tshMiuL.every((v) => v >= 0.2 && v <= 10));
+  assert.ok(ft4NgDl.every((v) => v >= 0.35 && v <= 3.5));
+});
+
+test("buildNominalGhGhrelinHourly24 produce 24 punti GH/ghrelina in range plausibile", () => {
+  const k = {
+    insulinDemandScore: 35,
+    anabolicSuppressionScore: 22,
+    glucoseHandlingScore: 58,
+    oxidationDriveScore: 46,
+    pathwayState: "mixed" as const,
+  };
+  const { ghNgMl, ghrelinPgMl } = buildNominalGhGhrelinHourly24(k, []);
+  assert.equal(ghNgMl.length, 24);
+  assert.equal(ghrelinPgMl.length, 24);
+  assert.ok(ghNgMl.every((v) => v >= 0.06 && v <= 3.8));
+  assert.ok(ghrelinPgMl.every((v) => v >= 65 && v <= 980));
+});
+
+test("buildNominalIgf1LeptinHourly24 produce 24 punti IGF-1/leptina in range plausibile", () => {
+  const k = {
+    insulinDemandScore: 35,
+    anabolicSuppressionScore: 22,
+    glucoseHandlingScore: 58,
+    oxidationDriveScore: 46,
+    pathwayState: "mixed" as const,
+  };
+  const { igf1NgMl, leptinNgMl } = buildNominalIgf1LeptinHourly24(k, []);
+  assert.equal(igf1NgMl.length, 24);
+  assert.equal(leptinNgMl.length, 24);
+  assert.ok(igf1NgMl.every((v) => v >= 48 && v <= 340));
+  assert.ok(leptinNgMl.every((v) => v >= 0.35 && v <= 6.2));
 });

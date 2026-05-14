@@ -130,6 +130,78 @@ export type BioenergeticContinuousMonitoringDay = {
   channels: BioenergeticMonitoringChannel24[];
 };
 
+/**
+ * Metadati predittori sub-orari v1 (glucosio + lattato + insulin proxy da stimoli timeline), presenti quando la slice
+ * attiva `buildSimulatedGluLacDiurnalSubHourly` (passo 5 min) in domain-bioenergetics.
+ */
+export type BioenergeticStimulusPredictorSubhourlyMetaV1 = {
+  contractVersion: 1;
+  stepMinutes: 5;
+  glucose: {
+    predictorContractVersion: number;
+    sourcePrefix: string;
+    literatureManifestEntryIds: readonly string[];
+  };
+  lactate: {
+    predictorContractVersion: number;
+    sourcePrefix: string;
+    literatureManifestEntryIds: readonly string[];
+  };
+  insulin: {
+    predictorContractVersion: number;
+    sourcePrefix: string;
+    literatureManifestEntryIds: readonly string[];
+  };
+};
+
+/** Audit opzionale `GET …/bioenergetics/day?stripAudit=1` — input che alimentano le curve mostrate (verifica coerenza). */
+export type BioenergeticMonitoringStripChannelAuditV1 = {
+  id: string;
+  labelIt: string;
+  unit: string;
+  dataPlane: BioenergeticMonitoringDataPlane;
+  hourlyNonNullCount: number;
+  hourlyMin: number | null;
+  hourlyMax: number | null;
+  streamPointCount: number;
+  curveResolutionNote: string | null;
+};
+
+export type BioenergeticMonitoringStripAuditV1 = {
+  auditContractVersion: 1;
+  stripLayerRendered: BioenergeticContinuousMonitoringDay["layer"];
+  kernel: BioenergeticDayKernelOutput;
+  diaryAndTraining: {
+    choIntakeGramsDay: number;
+    executedWorkoutCount: number;
+    plannedWorkoutCount: number;
+    executedTssSum: number;
+    plannedTssSum: number;
+    diaryRowCount: number;
+    mealsWithMacroSignals: number;
+  };
+  channelsSource: {
+    glucosePointCount: number;
+    lactatePointCount: number;
+    glucoseProvenance: BioenergeticChannelProvenance;
+    lactateProvenance: BioenergeticChannelProvenance;
+    glucoseSamples055: number;
+    lactateSamples055: number;
+  };
+  timelineDigest: {
+    mealGlycemicMaxHour: number;
+    mealGlycemicMaxWeight: number;
+    activitySupportHours: number[];
+    events: Array<{ ts: string; type: string; title: string }>;
+  };
+  cortisolActhModulation: {
+    postprandialMealLoad01: number;
+    noteIt: string;
+  };
+  engineRefsIt: string[];
+  stripChannels: BioenergeticMonitoringStripChannelAuditV1[];
+};
+
 /** Serie temporale giornaliera per curve UI (timestamp ISO + valore numerico). */
 export type BioenergeticDaySeriesChannel = {
   id: string;
@@ -178,6 +250,8 @@ export type BioenergeticsDayViewModel = {
   channels: {
     glucose: BioenergeticSeriesPoint[] | null;
     lactate: BioenergeticSeriesPoint[] | null;
+    /** Predittore insulinico 5 min (stesso bundle `buildSimulatedGluLacDiurnalSubHourly`); assente senza sim sub-oraria. */
+    insulinProxyDense?: BioenergeticSeriesPoint[] | null;
   };
   provenance: {
     glucose: BioenergeticChannelProvenance;
@@ -186,6 +260,11 @@ export type BioenergeticsDayViewModel = {
   kernel: BioenergeticDayKernelOutput;
   /** Banca coefficienti simulatore diurno / tile lab (domain-bioenergetics), se valorizzato. */
   simBankVersion?: number;
+  /**
+   * Predittori glucosio/lattato/insulin proxy a passo 5 min (stimoli timeline + kernel);
+   * assente quando non viene costruita la sim sub-oraria condivisa (es. entrambi i canali già misurati).
+   */
+  stimulusPredictorSubhourlyV1?: BioenergeticStimulusPredictorSubhourlyMetaV1;
   interpretationHints: BioenergeticInterpretationHint[];
   disclaimers: string[];
   metricTiles: BioenergeticMetricTile[];
@@ -203,6 +282,8 @@ export type BioenergeticsDayViewModel = {
   biaLiteratureSummary?: BioenergeticBiaLiteratureSummaryV1 | null;
   /** Rete interazioni metabolico-endocrine: scheletro v1 + buchi dati (es. ghrelina senza diario). */
   interactionSkeleton?: BioenergeticInteractionSkeletonVmV1 | null;
+  /** Solo con `?stripAudit=1` sulla GET giornata: tabella tecnica input → curve. */
+  monitoringStripAuditV1?: BioenergeticMonitoringStripAuditV1;
 };
 
 /** `GET …/bioenergetics/window`: array di VM giornata (stesso contratto del singolo giorno per elemento). */

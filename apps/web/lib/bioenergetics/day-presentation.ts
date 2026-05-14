@@ -20,14 +20,22 @@ import {
   arbitrateNominalHormoneCurveFusionV1,
   buildInsulinProxyHourly24,
   buildNominalCortisolActhHourly24,
+  buildNominalGhGhrelinHourly24,
+  buildNominalIgf1LeptinHourly24,
+  buildNominalThyroidTshFt4Hourly24,
   computeInternalContextRichness01,
   countTimelineMealsWithMacroSignalsV1,
+  GLUCOSE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  LACTATE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
   hourlyFlat24,
   hourFromIsoTs,
   mealGlycemicHourWeights24,
   scaleSimulatedLabNumericForSkeletonPartialV1,
   simulatedLabNumeric,
+  SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX,
   type MetabolicNodeCoherenceV1,
+  type SimTimelineEventV1,
 } from "@empathy/domain-bioenergetics";
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -35,7 +43,7 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /** 0–1 da pasti con CHO/kcal elevati → modulazione diurna cortisolo/ACTH (`SIM_CORTISOL_MEAL_MOD_V1`, roadmap 2.2). */
-function postprandialMealLoad01ForCortisolMod(timeline: BioenergeticTimelineEvent[]): number {
+export function postprandialMealLoad01ForCortisolMod(timeline: BioenergeticTimelineEvent[]): number {
   let max = 0;
   for (const e of timeline) {
     if (e.type !== "meal") continue;
@@ -68,7 +76,8 @@ function monitoringPlaneForGluLac(
 
 /**
  * Traccia nativa per grafico continuo: stream CGM reale **oppure** modello diurno sub-orario deterministico
- * (`sim_diurnal_v1_*m`). Solo motore deterministico + presentazione; nessuna curva LLM come `source` di questi punti.
+ * (`glucose_stimulus_predictor_v1_*m` / `lactate_stimulus_predictor_v1_*m` / `insulin_stimulus_predictor_v1_*m`; legacy `sim_diurnal_v1_*m` se presente).
+ * Solo motore deterministico + presentazione; nessuna curva LLM come `source` di questi punti.
  */
 function monitoringStreamTraceFromPoints(
   provenance: BioenergeticChannelProvenance,
@@ -294,7 +303,15 @@ function hourlyMeansFromDensePoints(points: BioenergeticSeriesPoint[]): (number 
 
 function isDenseSimDiurnalSeries(points: BioenergeticSeriesPoint[] | null): boolean {
   if (!points?.length || points.length < 72) return false;
-  return points.some((p) => typeof p.source === "string" && p.source.startsWith("sim_diurnal_v1_"));
+  return points.some((p) => {
+    const s = typeof p.source === "string" ? p.source : "";
+    return (
+      s.startsWith(SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX) ||
+      s.startsWith(GLUCOSE_STIMULUS_PREDICTOR_SOURCE_PREFIX) ||
+      s.startsWith(LACTATE_STIMULUS_PREDICTOR_SOURCE_PREFIX) ||
+      s.startsWith(INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX)
+    );
+  });
 }
 
 /**
@@ -364,7 +381,11 @@ export function buildBioenergeticDayPresentation(input: {
   date: string;
   kernel: BioenergeticDayKernelOutput;
   provenance: { glucose: BioenergeticChannelProvenance; lactate: BioenergeticChannelProvenance };
-  channels: { glucose: BioenergeticSeriesPoint[] | null; lactate: BioenergeticSeriesPoint[] | null };
+  channels: {
+    glucose: BioenergeticSeriesPoint[] | null;
+    lactate: BioenergeticSeriesPoint[] | null;
+    insulinProxyDense?: BioenergeticSeriesPoint[] | null;
+  };
   timeline: BioenergeticTimelineEvent[];
   biomarkerRows: Array<Record<string, unknown>>;
   /** Da `buildMetabolicEndocrineInteractionReportV1`; se assente resta il comportamento storico (sim su tile). */
@@ -421,6 +442,8 @@ export function buildBioenergeticDayPresentation(input: {
         : lactatePoints?.length
           ? lactatePoints
           : null;
+  const chIns = input.channels.insulinProxyDense ?? null;
+  const simTl = input.timeline as readonly SimTimelineEventV1[];
   const glucoseDense = isHighFrequencyStream(input.provenance.glucose, chG);
   const lacDense = isHighFrequencyStream(input.provenance.lactate, lactatePoints);
   const lFromLab = pickNum(lab, ["lactate_mmol_l", "lactate_mmoll", "lactate"]);
@@ -459,6 +482,12 @@ export function buildBioenergeticDayPresentation(input: {
       lVal ?? (lTileProv === "estimated" ? 1.1 + k.oxidationDriveScore * 0.01 : null),
     );
   }
+
+  const insulinDenseMeans =
+    chIns && chIns.length >= 72 && isDenseSimDiurnalSeries(chIns) ? hourlyMeansFromDensePoints(chIns) : null;
+  const insulinHourlyFallback = buildInsulinProxyHourly24(input.date, k, simTl);
+  const insulinHourlyForStrip: (number | null)[] =
+    insulinDenseMeans != null ? insulinDenseMeans : insulinHourlyFallback;
 
   const skipMealGlucoseHourlyBecauseSubhourlySim =
     Boolean(glucosePointsForInterp?.length) &&
@@ -510,6 +539,9 @@ export function buildBioenergeticDayPresentation(input: {
   const nomH = buildNominalCortisolActhHourly24(k, {
     postprandialMealLoad01: postprandialMealLoad01ForCortisolMod(input.timeline),
   });
+  const nomThy = buildNominalThyroidTshFt4Hourly24(k);
+  const nomGhGre = buildNominalGhGhrelinHourly24(k, simTl);
+  const nomIgfLep = buildNominalIgf1LeptinHourly24(k, simTl);
 
   const insulinProxy = clamp(k.insulinDemandScore, 0, 100);
   const tiles: BioenergeticMetricTile[] = [];
@@ -874,6 +906,22 @@ export function buildBioenergeticDayPresentation(input: {
         : arbitrateNominalHormoneCurveFusionV1("cortisol", internalRichness);
     const acthCurveResolution =
       acthM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("acth") : arbitrateNominalHormoneCurveFusionV1("acth", internalRichness);
+    const tshCurveResolution =
+      tshM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("tsh") : arbitrateNominalHormoneCurveFusionV1("tsh", internalRichness);
+    const ft4CurveResolution =
+      ft4M.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("ft4") : arbitrateNominalHormoneCurveFusionV1("ft4", internalRichness);
+    const ghCurveResolution =
+      ghM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("gh") : arbitrateNominalHormoneCurveFusionV1("gh", internalRichness);
+    const ghrelinCurveResolution =
+      ghrelinM.provenance === "measured"
+        ? arbitrateLabHoldHormoneCurveFusionV1("ghrelin")
+        : arbitrateNominalHormoneCurveFusionV1("ghrelin", internalRichness);
+    const igf1CurveResolution =
+      igfM.provenance === "measured" ? arbitrateLabHoldHormoneCurveFusionV1("igf1") : arbitrateNominalHormoneCurveFusionV1("igf1", internalRichness);
+    const leptinCurveResolution =
+      leptinM.provenance === "measured"
+        ? arbitrateLabHoldHormoneCurveFusionV1("leptin")
+        : arbitrateNominalHormoneCurveFusionV1("leptin", internalRichness);
 
     const monitoringChannels: BioenergeticMonitoringChannel24[] = [
       {
@@ -903,7 +951,11 @@ export function buildBioenergeticDayPresentation(input: {
         labelIt: "Domanda insulinica (proxy)",
         unit: "score 0–100",
         category: "metabolic",
-        hourly: buildInsulinProxyHourly24(k, input.timeline),
+        hourly: insulinHourlyForStrip,
+        streamTrace:
+          chIns && isDenseSimDiurnalSeries(chIns)
+            ? monitoringStreamTraceFromPoints("estimated", chIns)
+            : undefined,
         dataPlane: "model_continuous",
         replacesWithDeviceStream: true,
         curveResolution: insulinCurveResolution,
@@ -932,6 +984,78 @@ export function buildBioenergeticDayPresentation(input: {
         dataPlane: acthM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
         replacesWithDeviceStream: true,
         curveResolution: acthCurveResolution,
+      });
+    }
+    if (tshM.numeric != null) {
+      monitoringChannels.push({
+        id: "tsh",
+        labelIt: "TSH",
+        unit: "mUI/L",
+        category: "hormonal",
+        hourly: tshM.provenance === "measured" ? hourlyFlat24(tshM.numeric) : [...nomThy.tshMiuL],
+        dataPlane: tshM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: tshCurveResolution,
+      });
+    }
+    if (ft4M.numeric != null) {
+      monitoringChannels.push({
+        id: "ft4",
+        labelIt: "T4 libera / T4",
+        unit: "ng/dL",
+        category: "hormonal",
+        hourly: ft4M.provenance === "measured" ? hourlyFlat24(ft4M.numeric) : [...nomThy.ft4NgDl],
+        dataPlane: ft4M.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: ft4CurveResolution,
+      });
+    }
+    if (ghM.numeric != null) {
+      monitoringChannels.push({
+        id: "gh",
+        labelIt: "GH",
+        unit: "ng/mL",
+        category: "hormonal",
+        hourly: ghM.provenance === "measured" ? hourlyFlat24(ghM.numeric) : [...nomGhGre.ghNgMl],
+        dataPlane: ghM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: ghCurveResolution,
+      });
+    }
+    if (ghrelinM.numeric != null) {
+      monitoringChannels.push({
+        id: "ghrelin",
+        labelIt: "Ghrelina",
+        unit: "pg/mL",
+        category: "gastro_intestinal",
+        hourly: ghrelinM.provenance === "measured" ? hourlyFlat24(ghrelinM.numeric) : [...nomGhGre.ghrelinPgMl],
+        dataPlane: ghrelinM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: ghrelinCurveResolution,
+      });
+    }
+    if (igfM.numeric != null) {
+      monitoringChannels.push({
+        id: "igf1",
+        labelIt: "IGF-1",
+        unit: "ng/mL",
+        category: "hormonal",
+        hourly: igfM.provenance === "measured" ? hourlyFlat24(igfM.numeric) : [...nomIgfLep.igf1NgMl],
+        dataPlane: igfM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: igf1CurveResolution,
+      });
+    }
+    if (leptinM.numeric != null) {
+      monitoringChannels.push({
+        id: "leptin",
+        labelIt: "Leptina",
+        unit: "ng/mL",
+        category: "gastro_intestinal",
+        hourly: leptinM.provenance === "measured" ? hourlyFlat24(leptinM.numeric) : [...nomIgfLep.leptinNgMl],
+        dataPlane: leptinM.provenance === "measured" ? "sparse_lab_hold" : "model_continuous",
+        replacesWithDeviceStream: true,
+        curveResolution: leptinCurveResolution,
       });
     }
 
