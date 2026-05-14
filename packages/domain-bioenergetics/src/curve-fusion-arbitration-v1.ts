@@ -219,27 +219,47 @@ export function arbitrateInsulinProxyCurveFusionV1(mealMacrosCount: number): Bio
   );
 }
 
-/** Diurna nominale (profili ACTH/cortisolo distinti in sim v1): come gli altri sim, AI inizialmente in vantaggio → pareggio con ricchezza contesto. */
+function nominalHormoneCurveRationaleIt(
+  channelId: "cortisol" | "acth" | "tsh" | "ft4" | "gh" | "ghrelin" | "igf1" | "leptin",
+): string[] {
+  if (channelId === "cortisol" || channelId === "acth") {
+    return [
+      "Diurna ormonale v1 (sim educativa, forme separate ACTH vs cortisolo): non è campionamento seriato; in fase prodotto prevale la quota AI, che si pareggia al crescere del contesto Empathy.",
+      "Con valore lab misurato (hold) la policy passa a misura Empathy.",
+    ];
+  }
+  if (channelId === "tsh" || channelId === "ft4") {
+    return [
+      "Asse tiroideo nominale TSH/FT4 (v1 educativa): modulazione diurna leggera, non profilo da campionamento seriato; stessa governance di fusione degli altri ormoni nominali.",
+      "Con valore lab misurato (hold) la policy passa a misura Empathy.",
+    ];
+  }
+  if (channelId === "gh" || channelId === "ghrelin") {
+    return [
+      "GH/ghrelina nominali v1: timeline pasti/sedute pesa ghrelina e burst GH educativi; non profilo pulsatile da campionamento seriato. Coerente con skeleton endocrino-metabolico quando presente.",
+      "Con valore lab misurato (hold) la policy passa a misura Empathy.",
+    ];
+  }
+  return [
+    "IGF-1 / leptina nominali v1: IGF-1 con oscillazione educativa molto attenuata; leptina modulata da carico prandiale in timeline (non leptina seriata). Governance fusione allineata agli altri canali ormonali nominali.",
+    "Con valore lab misurato (hold) la policy passa a misura Empathy.",
+  ];
+}
+
+/** Diurna nominale (ormoni vari): come gli altri sim, AI inizialmente in vantaggio → pareggio con ricchezza contesto. */
 export function arbitrateNominalHormoneCurveFusionV1(
-  channelId: "cortisol" | "acth",
+  channelId: "cortisol" | "acth" | "tsh" | "ft4" | "gh" | "ghrelin",
   internalContextRichness01: number,
 ): BioenergeticChannelCurveResolutionV1 {
   const r = round3(clamp(internalContextRichness01, 0, 1));
   const d = simBlendDeterministicWeightFromRichness01(r);
   const gov = governanceForSimBlendWeight(d);
-  return baseResolution(
-    channelId,
-    gov,
-    d,
-    r,
-    [
-      "Diurna ormonale v1 (sim educativa, forme separate ACTH vs cortisolo): non è campionamento seriato; in fase prodotto prevale la quota AI, che si pareggia al crescere del contesto Empathy.",
-      "Con valore lab misurato (hold) la policy passa a misura Empathy.",
-    ],
-  );
+  return baseResolution(channelId, gov, d, r, nominalHormoneCurveRationaleIt(channelId));
 }
 
-export function arbitrateLabHoldHormoneCurveFusionV1(channelId: "cortisol" | "acth"): BioenergeticChannelCurveResolutionV1 {
+export function arbitrateLabHoldHormoneCurveFusionV1(
+  channelId: "cortisol" | "acth" | "tsh" | "ft4" | "gh" | "ghrelin" | "igf1" | "leptin",
+): BioenergeticChannelCurveResolutionV1 {
   return baseResolution(
     channelId,
     "measurement_wins",

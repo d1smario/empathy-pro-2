@@ -31,21 +31,50 @@ export type {
   SimDayKernelV1Input,
   SimGluLacDiurnalModulationV1,
   SimSeriesPointV1,
+  GlucoseStimulusLiteratureManifestEntryV1,
+  GlucoseStimulusPriorTopicV1,
+  LactateStimulusLiteratureManifestEntryV1,
+  LactateStimulusPriorTopicV1,
 } from "./day-simulator-v1";
 export type { CgmSurfaceKernelV1Input, CgmSurfaceSeriesPointV1, CgmSurfaceRealismClamp } from "./cgm-surface-realism-v1";
 export { applyCgmLikeSurfaceToSubhourlyGluLac } from "./cgm-surface-realism-v1";
 export {
   SIM_DIURNAL_SUBHOURLY_SOURCE_PREFIX,
+  GLUCOSE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  GLUCOSE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  LACTATE_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  LACTATE_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  PRED_GLUCOSE_STIMULI_LITERATURE_MANIFEST_V1,
+  PRED_LACTATE_STIMULI_LITERATURE_MANIFEST_V1,
   SIM_LAB_TILE_PARTIAL_SCALE_V1,
+  buildGlucoseStimulusPredictorSubhourlyV1,
+  buildLactateStimulusPredictorSubhourlyV1,
   buildNominalCortisolActhHourly24,
+  buildNominalThyroidTshFt4Hourly24,
+  buildNominalGhGhrelinHourly24,
+  buildNominalIgf1LeptinHourly24,
   buildSimulatedGluLacDiurnal,
   buildSimulatedGluLacDiurnalSubHourly,
+  glucoseStimulusPredictorSourceV1,
+  lactateStimulusPredictorSourceV1,
   kernelDayStress01,
   scaleSimulatedLabNumericForSkeletonPartialV1,
   simulatedLabNumeric,
 } from "./day-simulator-v1";
 export { hourlyFlat24, hourlyRippleRelative, hourlyRippleSeries24 } from "./continuous-monitoring-shape-v1";
-export { buildInsulinProxyHourly24 } from "./insulin-proxy-hourly-v1";
+export {
+  INSULIN_STIMULUS_PREDICTOR_CONTRACT_VERSION,
+  INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX,
+  PRED_INSULIN_STIMULI_LITERATURE_MANIFEST_V1,
+  buildInsulinProxyHourly24,
+  buildInsulinStimulusPredictorSubhourlyV1,
+  insulinStimulusPredictorSourceV1,
+} from "./insulin-proxy-hourly-v1";
+export type {
+  InsulinProxySeriesPointV1,
+  InsulinStimulusLiteratureManifestEntryV1,
+  InsulinStimulusPriorTopicV1,
+} from "./insulin-proxy-hourly-v1";
 export { synthesizeEvidenceConditionedLayerV1 } from "./evidence-conditioned-synthesizer-v1";
 export type { EvidenceConditionedSynthesisInputV1, EvidenceConditionedSynthesisOutputV1 } from "./evidence-conditioned-synthesizer-v1";
 export { analyzeBioenergeticBiaLiteratureV1, resolveEcwTbwRatio } from "./bia-literature-model-v1";

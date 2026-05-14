@@ -8,7 +8,18 @@
 
 export const BIOENERGETIC_CURVE_FUSION_CONTRACT_VERSION = 1 as const;
 
-export type BioenergeticCurveChannelIdV1 = "glucose" | "lactate" | "insulin_proxy" | "cortisol" | "acth";
+export type BioenergeticCurveChannelIdV1 =
+  | "glucose"
+  | "lactate"
+  | "insulin_proxy"
+  | "cortisol"
+  | "acth"
+  | "tsh"
+  | "ft4"
+  | "gh"
+  | "ghrelin"
+  | "igf1"
+  | "leptin";
 
 /**
  * Chi governa la curva per policy prodotto (prima che esista il merge numerico effettivo).

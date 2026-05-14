@@ -53,11 +53,20 @@ test("computeInternalContextRichness01 sale con pasti e sedute", () => {
   assert.ok(rich > sparse);
 });
 
-test("Ormone nominale: contesto basso → AI in vantaggio; ricco → pareggio", () => {
+test("Ormone nominale: contesto basso → AI in vantaggio; ricco → pareggio (cortisolo e TSH)", () => {
   const low = arbitrateNominalHormoneCurveFusionV1("cortisol", 0.05);
   assert.equal(low.governance, "ai_proposal_wins_when_available");
   assert.ok(low.aiProposalWeight01 > 0.8);
   const hi = arbitrateNominalHormoneCurveFusionV1("cortisol", 0.95);
   assert.equal(hi.governance, "deterministic_engine_wins");
   assert.ok(hi.deterministicWeight01 >= 0.44);
+  const tshLow = arbitrateNominalHormoneCurveFusionV1("tsh", 0.05);
+  assert.equal(tshLow.channelId, "tsh");
+  assert.equal(tshLow.governance, low.governance);
+  const ghrelinLow = arbitrateNominalHormoneCurveFusionV1("ghrelin", 0.05);
+  assert.equal(ghrelinLow.channelId, "ghrelin");
+  assert.equal(ghrelinLow.governance, low.governance);
+  const leptinLow = arbitrateNominalHormoneCurveFusionV1("leptin", 0.05);
+  assert.equal(leptinLow.channelId, "leptin");
+  assert.equal(leptinLow.governance, low.governance);
 });
