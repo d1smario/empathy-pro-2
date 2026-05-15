@@ -16,15 +16,16 @@ test("buildSimulatedGluLacDiurnalSubHourly: stesso input → stessa curva (deter
   const b = buildSimulatedGluLacDiurnalSubHourly("2026-06-01", kernel, [], {}, 5);
   assert.deepEqual(a.glucose, b.glucose);
   assert.deepEqual(a.lactate, b.lactate);
+  assert.deepEqual(a.insulinProxy, b.insulinProxy);
 });
 
 test("applyCgmLikeSurfaceToSubhourlyGluLac: doppia applicazione idempotente su stessi punti", () => {
   const rawG = Array.from({ length: 12 }, (_, i) => ({
     ts: `2026-06-01T${String(8 + Math.floor(i / 6)).padStart(2, "0")}:${String((i % 6) * 10).padStart(2, "0")}:00`,
     value: 5.2 + (i % 3) * 0.01,
-    source: "sim_diurnal_v1_5m",
+    source: "glucose_stimulus_predictor_v1_5m",
   }));
-  const rawL = rawG.map((p, i) => ({ ...p, value: 1.2 + (i % 2) * 0.02 }));
+  const rawL = rawG.map((p, i) => ({ ...p, value: 1.2 + (i % 2) * 0.02, source: "lactate_stimulus_predictor_v1_5m" }));
   const a = applyCgmLikeSurfaceToSubhourlyGluLac({
     glucose: rawG,
     lactate: rawL,

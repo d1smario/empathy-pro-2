@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { AdminGrantsSection } from "@/components/admin/AdminGrantsSection";
+import { AdminPlatformReportSection } from "@/components/admin/AdminPlatformReportSection";
+import { AdminUserDirectorySection } from "@/components/admin/AdminUserDirectorySection";
 import type { AdminCoachRow } from "@/lib/admin/coach-list-types";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 
@@ -14,6 +16,9 @@ export default function AdminConsoleView() {
   const [coaches, setCoaches] = useState<AdminCoachRow[]>([]);
   const [loadErr, setLoadErr] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  const [grantEmailPrefill, setGrantEmailPrefill] = useState<string | null>(null);
+  const clearGrantPrefill = useCallback(() => setGrantEmailPrefill(null), []);
 
   const reloadCoaches = useCallback(async () => {
     const res = await fetch("/api/admin/coaches", { cache: "no-store" });
@@ -109,7 +114,7 @@ export default function AdminConsoleView() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-10 px-4 py-10">
+    <div className="mx-auto max-w-6xl space-y-10 px-4 py-10">
       <header className="space-y-2 border-b border-white/10 pb-8">
         <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-orange-300">{t("eyebrow")}</p>
         <h1 className="text-2xl font-bold text-white">{t("title")}</h1>
@@ -117,12 +122,26 @@ export default function AdminConsoleView() {
           {t("intro")}{" "}
           <span className="text-gray-300">{me.email ?? "—"}</span>
         </p>
+        <p className="text-xs text-gray-500">
+          {t("directoryHint")}{" "}
+          <a href="#admin-platform-report" className="text-cyan-400 underline-offset-2 hover:underline">
+            {t("reportAnchor")}
+          </a>
+          {" · "}
+          <a href="#admin-grants" className="text-cyan-400 underline-offset-2 hover:underline">
+            {t("directoryGrantAnchor")}
+          </a>
+        </p>
         <div className="flex flex-wrap gap-2 pt-2">
           <Pro2Link href="/dashboard" variant="secondary" className="justify-center border border-white/15">
             {t("dashboard")}
           </Pro2Link>
         </div>
       </header>
+
+      <AdminPlatformReportSection />
+
+      <AdminUserDirectorySection onPrefillGrantEmail={(email) => setGrantEmailPrefill(email)} />
 
       <section aria-labelledby="admin-coaches-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -224,7 +243,7 @@ export default function AdminConsoleView() {
         </div>
       </section>
 
-      <AdminGrantsSection />
+      <AdminGrantsSection grantEmailPrefill={grantEmailPrefill} onGrantEmailPrefillConsumed={clearGrantPrefill} />
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-6 text-sm text-gray-400">
         <h2 className="text-base font-semibold text-white">{t("comingHeading")}</h2>

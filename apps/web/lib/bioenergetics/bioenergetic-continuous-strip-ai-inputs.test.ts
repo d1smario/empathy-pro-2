@@ -27,6 +27,7 @@ test("buildOpenAiStripRealityCompact: pasti/sedute, niente kernel/tile", () => {
   const vm = {
     date: "2026-05-09",
     athleteId: "a1",
+    timeline: [],
     provenance: { glucose: "absent", lactate: "absent" },
     channels: { glucose: null, lactate: null },
     canonicalStreamCounts: { glucoseSampleCount: 0, lactateSampleCount: 0 },
@@ -53,6 +54,8 @@ test("buildOpenAiStripRealityCompact: pasti/sedute, niente kernel/tile", () => {
   assert.equal(c.contract, "bioenergetic_strip_ai_reality_inputs_v2");
   assert.ok(Array.isArray(c.meals));
   assert.equal((c.meals as unknown[]).length, 1);
+  assert.equal((c.meals as { resolved_timeline_iso: string }[])[0]!.resolved_timeline_iso, "2026-05-09T08:30:00");
+  assert.ok(Array.isArray(c.temporal_anchors));
   assert.equal(c.kernel, undefined);
   assert.equal(c.metricTiles, undefined);
   assert.equal(c.interpretationHints, undefined);

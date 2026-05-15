@@ -190,6 +190,114 @@ export async function loadUserAccessEntitlement(
   });
 }
 
+export type AccessEntitlementBatchEntry = {
+  entitlement: UserAccessEntitlement;
+  role: "private" | "coach" | null;
+  platformCoachStatus: "pending" | "approved" | "suspended" | null;
+  isPlatformAdmin: boolean;
+  athleteId: string | null;
+  stripeSubscriptions: Array<{
+    status: string;
+    currentPeriodEnd: string | null;
+    basePlanId: string | null;
+  }>;
+};
+
+/**
+ * Carica entitlement + profilo + righe Stripe per molti `user_id` (3 query batch, console admin).
+ */
+export async function loadAccessEntitlementsForUserIds(
+  db: SupabaseClient,
+  userIds: string[],
+): Promise<Map<string, AccessEntitlementBatchEntry>> {
+  const out = new Map<string, AccessEntitlementBatchEntry>();
+  if (userIds.length === 0) return out;
+
+  const nowIso = new Date().toISOString();
+
+  const [{ data: profiles }, { data: subs }, { data: grants }] = await Promise.all([
+    db
+      .from("app_user_profiles")
+      .select("user_id, is_platform_admin, role, platform_coach_status, athlete_id")
+      .in("user_id", userIds),
+    db.from("billing_subscriptions").select("user_id, status, current_period_end, base_plan_id").in("user_id", userIds),
+    db
+      .from("subscription_grants")
+      .select("user_id, kind, ends_at")
+      .in("user_id", userIds)
+      .is("revoked_at", null)
+      .lte("starts_at", nowIso)
+      .gt("ends_at", nowIso),
+  ]);
+
+  const profileByUser = new Map(
+    ((profiles ?? []) as Array<Record<string, unknown>>).map((r) => [String(r.user_id), r] as const),
+  );
+  const subsByUser = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of (subs ?? []) as Array<Record<string, unknown>>) {
+    const uid = String(row.user_id ?? "");
+    if (!uid) continue;
+    const arr = subsByUser.get(uid) ?? [];
+    arr.push(row);
+    subsByUser.set(uid, arr);
+  }
+  const grantsByUser = new Map<string, Array<Record<string, unknown>>>();
+  for (const row of (grants ?? []) as Array<Record<string, unknown>>) {
+    const uid = String(row.user_id ?? "");
+    if (!uid) continue;
+    const arr = grantsByUser.get(uid) ?? [];
+    arr.push(row);
+    grantsByUser.set(uid, arr);
+  }
+
+  for (const uid of userIds) {
+    const pr = profileByUser.get(uid) as
+      | {
+          is_platform_admin?: boolean | null;
+          role?: "private" | "coach" | null;
+          platform_coach_status?: "pending" | "approved" | "suspended" | null;
+          athlete_id?: string | null;
+        }
+      | undefined;
+
+    const athleteId = typeof pr?.athlete_id === "string" && pr.athlete_id.length > 0 ? pr.athlete_id : null;
+
+    const grantRows = (grantsByUser.get(uid) ?? []).slice();
+    grantRows.sort((a, b) => {
+      const ea = typeof a.ends_at === "string" ? a.ends_at : "";
+      const eb = typeof b.ends_at === "string" ? b.ends_at : "";
+      return eb.localeCompare(ea);
+    });
+
+    const stripeSubscriptions = (subsByUser.get(uid) ?? []).map((row) => ({
+      status: typeof row.status === "string" ? row.status : "",
+      currentPeriodEnd: typeof row.current_period_end === "string" ? row.current_period_end : null,
+      basePlanId: typeof row.base_plan_id === "string" ? row.base_plan_id : null,
+    }));
+
+    const ent = resolveUserAccessEntitlement({
+      isPlatformAdmin: pr?.is_platform_admin === true,
+      role: pr?.role ?? null,
+      platformCoachStatus: pr?.platform_coach_status ?? null,
+      paidSubscriptions: stripeSubscriptions,
+      activeGrants: grantRows.map((row) => ({
+        kind: row.kind as "testimonial" | "promo" | "comp" | "beta",
+        endsAt: typeof row.ends_at === "string" ? row.ends_at : "",
+      })),
+    });
+    out.set(uid, {
+      entitlement: ent,
+      role: pr?.role ?? null,
+      platformCoachStatus: pr?.platform_coach_status ?? null,
+      isPlatformAdmin: pr?.is_platform_admin === true,
+      athleteId,
+      stripeSubscriptions,
+    });
+  }
+
+  return out;
+}
+
 /** Helper: durata in mesi → ends_at ISO. */
 export function grantEndsAtFromMonths(months: number, startsAtIso?: string | null): string {
   const start = startsAtIso ? new Date(startsAtIso) : new Date();

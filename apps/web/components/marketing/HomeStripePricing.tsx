@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import type { HostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
@@ -25,6 +25,8 @@ type HomeStripePricingProps = {
   /** In dashboard: niente titolo duplicato (c’è già la shell EMPATHY + intro). */
   hideSectionTitle?: boolean;
   sectionId?: string;
+  /** Email sessione (es. pagina `/access/plan` post-registrazione). */
+  prefillEmail?: string | null;
 };
 
 function planPriceConfigured(id: EmpathyBasePlanId, a: HostedCheckoutAvailability): boolean {
@@ -51,6 +53,7 @@ export function HomeStripePricing({
   compactIntro,
   hideSectionTitle,
   sectionId = "piani",
+  prefillEmail,
 }: HomeStripePricingProps) {
   const t = useTranslations("Checkout");
   const [basePlanId, setBasePlanId] = useState<EmpathyBasePlanId>("silver");
@@ -58,6 +61,11 @@ export function HomeStripePricing({
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState<false | "subscribe" | "trial">(false);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    const e = prefillEmail?.trim();
+    if (e) setEmail(e);
+  }, [prefillEmail]);
 
   const trialEligible =
     trialPolicy.eligiblePlanIds.includes(basePlanId) &&

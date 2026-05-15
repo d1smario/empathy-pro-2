@@ -6,6 +6,7 @@ import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
+import { postSignInRedirectPath, postSignupRegistrationPath } from "@/lib/auth/post-registration-redirects";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
@@ -49,13 +50,6 @@ function formatAuthErrorMessage(t: AccessFormTranslator, message: string): strin
  * sono inclusi nella richiesta successiva: `router.replace` da solo può far vedere al middleware una sessione
  * ancora assente su Vercel.
  */
-function postAuthRedirectPath(redirectAfterLogin: string, appRole: PendingAppRole): string {
-  const path = redirectAfterLogin.startsWith("/") ? redirectAfterLogin : `/${redirectAfterLogin}`;
-  if (appRole === "coach" && (path === "/dashboard" || path === "/")) {
-    return "/athletes";
-  }
-  return path;
-}
 
 async function bootstrapProfileAfterSession(appRole: PendingAppRole): Promise<boolean> {
   const supabase = createEmpathyBrowserSupabase();
@@ -118,7 +112,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     await bootstrapProfileAfterSession(appRole);
     clearPendingAppRoleCookieClient();
     setBusy(false);
-    window.location.assign(postAuthRedirectPath(redirectAfterLogin, appRole));
+    window.location.assign(postSignInRedirectPath(redirectAfterLogin, appRole));
   }
 
   async function onSignUp(e: React.FormEvent) {
@@ -141,11 +135,12 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     setBusy(true);
     setPendingAppRoleCookieClient(appRole);
     const origin = accessAppOriginFromWindow();
+    const signupNext = postSignupRegistrationPath(appRole);
     const { data, error } = await supabase.auth.signUp({
       email: em,
       password,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectAfterLogin)}`,
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(signupNext)}`,
       },
     });
     setBusy(false);
@@ -156,7 +151,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     if (data.session) {
       await bootstrapProfileAfterSession(appRole);
       clearPendingAppRoleCookieClient();
-      window.location.assign(postAuthRedirectPath(redirectAfterLogin, appRole));
+      window.location.assign(postSignupRegistrationPath(appRole));
       return;
     }
     notify(t("msgConfirmEmailSent"), "success");

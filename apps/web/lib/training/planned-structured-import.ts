@@ -11,6 +11,11 @@ import {
 import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
 import { intensityToRelativeLoad, type Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
 import { extractSessionDurationHintSec, scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
+import type { StructuredIntervalRow } from "./planned-structured-interval-csv";
+import { formatStructuredIntervalLadderCsv } from "./planned-structured-interval-csv";
+
+export type { StructuredIntervalRow } from "./planned-structured-interval-csv";
+export { formatStructuredIntervalLadderCsv } from "./planned-structured-interval-csv";
 
 const DEFAULT_IMPORT_RENDER_PROFILE: Pro2RenderProfile = {
   intensityUnit: "watt",
@@ -51,50 +56,6 @@ function wattsToZone(w: number, ftpW: number): Pro2IntensityLabel {
 function splitDuration(totalSec: number): { minutes: number; seconds: number } {
   const s = Math.max(1, Math.round(totalSec));
   return { minutes: Math.floor(s / 60), seconds: s % 60 };
-}
-
-/** Scala intervalli esportabile (CSV / companion): come TrainingPeaks, durata + watt per segmento. */
-export type StructuredIntervalRow = {
-  index: number;
-  durationSec: number;
-  powerAvgW: number;
-  powerLowW: number;
-  powerHighW: number;
-  durationType: string;
-  kind: "steady" | "ramp";
-  label?: string;
-};
-
-function formatDurationMmss(totalSec: number): string {
-  const s = Math.max(0, Math.round(totalSec));
-  const h = Math.floor(s / 3600);
-  const m = Math.floor((s % 3600) / 60);
-  const ss = s % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return h > 0 ? `${h}:${pad(m)}:${pad(ss)}` : `${m}:${pad(ss)}`;
-}
-
-export function formatStructuredIntervalLadderCsv(rows: StructuredIntervalRow[]): string {
-  const header =
-    "index,duration_sec,duration_mmss,power_avg_w,power_low_w,power_high_w,duration_type,kind,label";
-  const lines = [header];
-  for (const r of rows) {
-    const lab = r.label != null && r.label.trim() ? `"${r.label.replace(/"/g, '""')}"` : "";
-    lines.push(
-      [
-        r.index,
-        r.durationSec,
-        formatDurationMmss(r.durationSec),
-        r.powerAvgW,
-        r.powerLowW,
-        r.powerHighW,
-        r.durationType,
-        r.kind,
-        lab,
-      ].join(","),
-    );
-  }
-  return lines.join("\n");
 }
 
 function planChartSegmentsToStructuredLadder(

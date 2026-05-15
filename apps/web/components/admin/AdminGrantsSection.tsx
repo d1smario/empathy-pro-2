@@ -6,7 +6,7 @@
  * Testi UI via next-intl (`AdminGrants.*`) — Tier A EN in messages/en.json.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { Pro2Button } from "@/components/ui/empathy";
 
@@ -89,7 +89,16 @@ function entitlementBadgeClass(source: string): string {
   }
 }
 
-export function AdminGrantsSection() {
+type AdminGrantsSectionProps = {
+  /** Imposta ricerca grant da directory admin (una tantum). */
+  grantEmailPrefill?: string | null;
+  onGrantEmailPrefillConsumed?: () => void;
+};
+
+export function AdminGrantsSection({
+  grantEmailPrefill,
+  onGrantEmailPrefillConsumed,
+}: AdminGrantsSectionProps = {}) {
   const t = useTranslations("AdminGrants");
   const locale = useLocale();
   const [query, setQuery] = useState("");
@@ -103,29 +112,42 @@ export function AdminGrantsSection() {
   const [info, setInfo] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
-  const search = useCallback(async () => {
-    const q = query.trim();
-    if (q.length < 2) {
-      setUsers([]);
-      return;
-    }
-    setSearching(true);
-    setErr(null);
-    try {
-      const res = await fetch(`/api/admin/users/lookup?q=${encodeURIComponent(q)}`, { cache: "no-store" });
-      const j = (await res.json()) as { ok: boolean; users?: LookupUser[]; error?: string };
-      if (!res.ok || !j.ok) {
-        setErr(j.error ?? t("errors.searchFailed"));
+  const runSearch = useCallback(
+    async (qRaw?: string) => {
+      const q = (qRaw ?? query).trim();
+      if (q.length < 2) {
         setUsers([]);
-      } else {
-        setUsers(j.users ?? []);
+        return;
       }
-    } catch {
-      setErr(t("errors.network"));
-    } finally {
-      setSearching(false);
-    }
-  }, [query, t]);
+      setSearching(true);
+      setErr(null);
+      try {
+        const res = await fetch(`/api/admin/users/lookup?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+        const j = (await res.json()) as { ok: boolean; users?: LookupUser[]; error?: string };
+        if (!res.ok || !j.ok) {
+          setErr(j.error ?? t("errors.searchFailed"));
+          setUsers([]);
+        } else {
+          setUsers(j.users ?? []);
+        }
+      } catch {
+        setErr(t("errors.network"));
+      } finally {
+        setSearching(false);
+      }
+    },
+    [query, t],
+  );
+
+  useEffect(() => {
+    if (!grantEmailPrefill?.trim()) return;
+    const q = grantEmailPrefill.trim();
+    setQuery(q);
+    void (async () => {
+      await runSearch(q);
+      onGrantEmailPrefillConsumed?.();
+    })();
+  }, [grantEmailPrefill, onGrantEmailPrefillConsumed, runSearch]);
 
   const loadGrants = useCallback(
     async (userId: string) => {
@@ -180,7 +202,7 @@ export function AdminGrantsSection() {
           setInfo(t("info.grantCreated"));
           setNote("");
           await loadGrants(selected.userId);
-          await search();
+          await runSearch();
         }
       } catch {
         setErr(t("errors.network"));
@@ -188,7 +210,7 @@ export function AdminGrantsSection() {
         setBusy(false);
       }
     },
-    [selected, note, loadGrants, search, t],
+    [selected, note, loadGrants, runSearch, t],
   );
 
   const revokeGrant = useCallback(
@@ -209,7 +231,7 @@ export function AdminGrantsSection() {
         } else {
           setInfo(t("info.revoked"));
           await loadGrants(selected.userId);
-          await search();
+          await runSearch();
         }
       } catch {
         setErr(t("errors.network"));
@@ -217,7 +239,7 @@ export function AdminGrantsSection() {
         setBusy(false);
       }
     },
-    [selected, loadGrants, search, t],
+    [selected, loadGrants, runSearch, t],
   );
 
   const presets = useMemo(
@@ -230,7 +252,7 @@ export function AdminGrantsSection() {
   );
 
   return (
-    <section aria-labelledby="admin-grants-heading" className="space-y-4">
+    <section id="admin-grants" aria-labelledby="admin-grants-heading" className="space-y-4">
       <div>
         <h2 id="admin-grants-heading" className="text-lg font-semibold text-white">
           {t("title")}
@@ -260,12 +282,12 @@ export function AdminGrantsSection() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") void search();
+              if (e.key === "Enter") void runSearch();
             }}
             className="mt-1 w-full rounded-lg border border-white/15 bg-black/40 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/60"
           />
         </label>
-        <Pro2Button type="button" disabled={searching || query.trim().length < 2} onClick={() => void search()}>
+        <Pro2Button type="button" disabled={searching || query.trim().length < 2} onClick={() => void runSearch()}>
           {searching ? t("searching") : t("search")}
         </Pro2Button>
       </div>

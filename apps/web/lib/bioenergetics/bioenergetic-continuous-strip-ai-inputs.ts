@@ -4,6 +4,7 @@ import type {
   BioenergeticsDayViewModel,
 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { resolveMealTimelineIsoTs } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 
 const N15 = 96;
@@ -112,7 +113,7 @@ export function buildOpenAiStripRealityCompact(
   slice: BioenergeticDayMemorySlice,
   skipGlucosePredictor: boolean,
 ): Record<string, unknown> {
-  const meals = slice.diaryRows.slice(0, 48).map((row) => ({
+  const meals = slice.diaryRows.slice(0, 48).map((row, mealIndex) => ({
     entry_time: typeof row.entry_time === "string" ? row.entry_time : null,
     meal_slot: typeof row.meal_slot === "string" ? row.meal_slot : null,
     food_label: String(row.food_label ?? "").slice(0, 160),
@@ -125,7 +126,19 @@ export function buildOpenAiStripRealityCompact(
     insulin_load: numField(row, "insulin_load"),
     glycemic_index_estimate: numField(row, "glycemic_index_estimate"),
     glycemic_load: numField(row, "glycemic_load"),
+    /** Allineato alla timeline server (stesso `resolveMealTimelineIsoTs` del builder). */
+    resolved_timeline_iso: resolveMealTimelineIsoTs(vm.date, row, mealIndex),
   }));
+
+  const temporalAnchors = vm.timeline
+    .filter((e) => e.type === "meal" || e.type === "executed_session" || e.type === "planned_session")
+    .slice(0, 64)
+    .map((e) => ({
+      ts: e.ts,
+      type: e.type,
+      title: e.title.slice(0, 120),
+      payload: e.payload ?? {},
+    }));
 
   const executed_workouts = slice.executed.slice(0, 32).map((w) => ({
     started_at: w.startedAt ?? null,
@@ -182,6 +195,7 @@ export function buildOpenAiStripRealityCompact(
       biomarker_panel_rows_on_date: slice.biomarkerRows.length,
     },
     meals,
+    temporal_anchors: temporalAnchors,
     executed_workouts,
     planned_workouts,
   };

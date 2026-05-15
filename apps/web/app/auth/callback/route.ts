@@ -82,7 +82,7 @@ export async function GET(request: NextRequest) {
   }
 
   let dest = next;
-  if (pending === "coach" && (next === "/dashboard" || next === "/")) {
+  if (pending === "coach") {
     dest = "/athletes";
   }
 

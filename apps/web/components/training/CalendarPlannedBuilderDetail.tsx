@@ -29,7 +29,7 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, Trash2, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 
@@ -83,6 +83,14 @@ export function CalendarPlannedBuilderDetail({
 
   const sessionHref = `/training/session/${workout.date}`;
   const builderHref = `/training/builder?date=${encodeURIComponent(workout.date)}&replace_planned_id=${encodeURIComponent(workout.id)}`;
+
+  const exportAid = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+  const exportHref = (fmt: string) =>
+    exportAid
+      ? `/api/training/planned/${encodeURIComponent(workout.id)}/export?athleteId=${encodeURIComponent(exportAid)}&format=${fmt}`
+      : null;
+  const canStructuredExport =
+    !!contract && contract.family === "aerobic" && contract.renderProfile?.intensityUnit === "watt";
 
   const family = contract?.family;
 
@@ -152,6 +160,49 @@ export function CalendarPlannedBuilderDetail({
           ) : null}
         </div>
       </div>
+
+      {exportAid && contract ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+          <span className="flex items-center gap-1 font-mono text-[0.6rem] font-bold uppercase tracking-wider text-zinc-500">
+            <Download className="h-3 w-3 shrink-0" aria-hidden />
+            Export device
+          </span>
+          {canStructuredExport ? (
+            <>
+              <Pro2Link
+                href={exportHref("zwo")!}
+                variant="ghost"
+                className="border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-100"
+              >
+                ZWO
+              </Pro2Link>
+              <Pro2Link
+                href={exportHref("fit_workout")!}
+                variant="ghost"
+                className="border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-100"
+              >
+                FIT
+              </Pro2Link>
+              <Pro2Link
+                href={exportHref("interval_csv")!}
+                variant="ghost"
+                className="border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-xs text-cyan-100"
+              >
+                CSV
+              </Pro2Link>
+            </>
+          ) : (
+            <span className="text-xs text-zinc-500">ZWO/FIT/CSV: richiede macro aerobico + watt.</span>
+          )}
+          <Pro2Link
+            href={exportHref("fueling_json")!}
+            variant="ghost"
+            className="border border-emerald-500/35 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-100"
+          >
+            Fueling JSON
+          </Pro2Link>
+        </div>
+      ) : null}
 
       {!contract ? (
         <p className="mt-3 text-sm text-gray-500">

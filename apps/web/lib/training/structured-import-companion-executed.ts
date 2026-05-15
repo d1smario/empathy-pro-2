@@ -7,7 +7,7 @@ import { intensityToRelativeLoad } from "@/lib/training/builder/pro2-intensity";
 import { estimateTssFromWattBlocks } from "@/lib/training/builder/tss-estimate";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
-import type { StructuredIntervalRow } from "@/lib/training/planned-structured-import";
+import type { StructuredIntervalRow } from "@/lib/training/planned-structured-interval-csv";
 
 function buildCompanionExternalId(input: { athleteId: string; date: string; fileChecksumSha1: string }): string {
   const digest = createHash("sha1")

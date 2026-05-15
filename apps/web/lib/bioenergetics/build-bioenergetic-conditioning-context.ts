@@ -11,6 +11,7 @@ import { analyzeBioenergeticBiaLiteratureV1 } from "@empathy/domain-bioenergetic
 import type { BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { deviceExportsHaveHrSignal, extractBestBioimpedanceSnapshot } from "@/lib/bioenergetics/bioenergetic-device-signals-for-context";
+import { resolveMealTimelineIsoTs } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 import { extractSleepRecoverySignal } from "@/lib/reality/sleep-recovery-signals";
 
@@ -19,22 +20,20 @@ const WATER_LABEL_RE = /\b(acqua|water|h2o|hydration|idratazione)\b/i;
 function fluidIntakeWindowsFromDiary(slice: BioenergeticDayMemorySlice): BioenergeticFluidIntakeWindowV1[] {
   const out: BioenergeticFluidIntakeWindowV1[] = [];
   const dateKey = slice.date.slice(0, 10);
-  for (const row of slice.diaryRows) {
+  slice.diaryRows.forEach((row, i) => {
     const label = typeof row.food_label === "string" ? row.food_label : "";
-    if (!WATER_LABEL_RE.test(label)) continue;
+    if (!WATER_LABEL_RE.test(label)) return;
     const qtyG = num(row.quantity_g);
-    if (qtyG == null || qtyG < 20) continue;
-    const entryTime =
-      typeof row.entry_time === "string" && row.entry_time.trim() ? row.entry_time.trim().slice(0, 8) : "12:00:00";
-    const hhmm = entryTime.length >= 5 ? entryTime.slice(0, 5) : "12:00";
+    if (qtyG == null || qtyG < 20) return;
+    const startTs = resolveMealTimelineIsoTs(dateKey, row as Record<string, unknown>, i);
     const sodiumMg = num(row.sodium_mg);
     out.push({
       windowId: `fluid-diary-${String(row.id ?? out.length)}`,
-      startTs: `${dateKey}T${hhmm}:00`,
+      startTs,
       volumeMl: Math.round(qtyG),
       sodiumMg: sodiumMg ?? undefined,
     });
-  }
+  });
   return out;
 }
 

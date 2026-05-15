@@ -28,6 +28,7 @@ import {
   NutritionMicronutrientGrid,
   diaryMicroRollupToGridProps,
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
+import { defaultFoodDiaryEntryTimeHmForMealSlot, normalizeFoodDiaryEntryTimeHms } from "@/lib/nutrition/food-diary-entry-time";
 
 type LookupHit = {
   source: "usda" | "brand-site";
@@ -194,6 +195,7 @@ export function FoodDiaryPanel({
 
   const [entryDate, setEntryDate] = useState(() => defaultDiaryEntryDate(planDateAnchor, planDateForSolverTargets));
   const [mealSlot, setMealSlot] = useState<FoodDiaryEntryViewModel["mealSlot"]>("lunch");
+  const [entryTime, setEntryTime] = useState(() => defaultFoodDiaryEntryTimeHmForMealSlot("lunch"));
   const [quantityG, setQuantityG] = useState("100");
   const [notes, setNotes] = useState("");
   const [supplements, setSupplements] = useState("");
@@ -413,6 +415,16 @@ export function FoodDiaryPanel({
       arr.push(e);
       map.set(e.mealSlot, arr);
     }
+    for (const k of order) {
+      const arr = map.get(k);
+      if (arr?.length) {
+        arr.sort((a, b) => {
+          const ta = (a.entryTime ?? "12:00:00").slice(0, 8);
+          const tb = (b.entryTime ?? "12:00:00").slice(0, 8);
+          return ta.localeCompare(tb);
+        });
+      }
+    }
     return map;
   }, [entries, entryDate]);
 
@@ -471,6 +483,7 @@ export function FoodDiaryPanel({
       athleteId,
       entryDate,
       mealSlot,
+      entryTime: normalizeFoodDiaryEntryTimeHms(entryTime) ?? undefined,
       mode: "scaled_reference",
       foodLabel: label.slice(0, 500),
       quantityG: qg,
@@ -591,6 +604,7 @@ export function FoodDiaryPanel({
         athleteId,
         entryDate,
         mealSlot,
+        entryTime: normalizeFoodDiaryEntryTimeHms(entryTime) ?? undefined,
         mode: "catalog_product",
         catalogId: selectedHit.catalogId.trim(),
         quantityG: qg,
@@ -602,6 +616,7 @@ export function FoodDiaryPanel({
         athleteId,
         entryDate,
         mealSlot,
+        entryTime: normalizeFoodDiaryEntryTimeHms(entryTime) ?? undefined,
         mode: "usda_fdc",
         fdcId: selectedHit.fdcId,
         quantityG: qg,
@@ -622,6 +637,7 @@ export function FoodDiaryPanel({
         athleteId,
         entryDate,
         mealSlot,
+        entryTime: normalizeFoodDiaryEntryTimeHms(entryTime) ?? undefined,
         mode: "scaled_reference",
         foodLabel: [selectedHit.brand, selectedHit.label].filter(Boolean).join(" · ") || selectedHit.label,
         quantityG: qg,
@@ -837,12 +853,39 @@ export function FoodDiaryPanel({
                     key={o.value}
                     type="button"
                     className={`nutrition-diary-meal-chip${active ? " nutrition-diary-meal-chip--active" : ""}`}
-                    onClick={() => setMealSlot(o.value)}
+                    onClick={() => {
+                      setMealSlot(o.value);
+                      setEntryTime(defaultFoodDiaryEntryTimeHmForMealSlot(o.value));
+                    }}
                   >
                     {o.label}
                   </button>
                 );
               })}
+            </div>
+            <div
+              style={{
+                marginTop: 14,
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                alignItems: "center",
+              }}
+            >
+              <label className="muted-copy" style={{ fontSize: "0.82rem", margin: 0 }} htmlFor="fd-entry-time">
+                Orario di consumo
+              </label>
+              <input
+                id="fd-entry-time"
+                type="time"
+                className="form-input"
+                value={entryTime}
+                onChange={(e) => setEntryTime(e.target.value)}
+                style={{ maxWidth: 148 }}
+              />
+              <span className="muted-copy" style={{ fontSize: "0.72rem", maxWidth: 340, lineHeight: 1.45 }}>
+                Serve a BioEnergetic e alla timeline (picchi post-prandiali). Cambiando pasto proponiamo un orario tipico; correggi se serve.
+              </span>
             </div>
           </div>
 
@@ -1260,6 +1303,11 @@ export function FoodDiaryPanel({
                                   <span className="empathy-meal-expo-food-name">{row.foodLabel}</span>
                                 </div>
                                 <div className="empathy-meal-expo-food-pills">
+                                  {row.entryTime ? (
+                                    <span className="empathy-meal-expo-pill empathy-meal-expo-pill--time" title="Orario di consumo">
+                                      {row.entryTime.slice(0, 5)}
+                                    </span>
+                                  ) : null}
                                   <span className="empathy-meal-expo-pill empathy-meal-expo-pill--wt">{row.quantityG} g</span>
                                   <span className="empathy-meal-expo-pill empathy-meal-expo-pill--kcal">
                                     <Flame className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />

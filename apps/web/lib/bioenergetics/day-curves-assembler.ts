@@ -7,6 +7,7 @@ import type {
   BioenergeticSeriesPoint,
 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { resolveMealTimelineIsoTs } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { glucosePointsFromPayload, lactatePointsFromPayload, num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -106,17 +107,17 @@ export function extractMeasuredGluLacFromSlice(slice: BioenergeticDayMemorySlice
 }
 
 function mealCarbCumulativeSeries(slice: BioenergeticDayMemorySlice): BioenergeticSeriesPoint[] {
-  const rows = [...slice.diaryRows].sort((a, b) => {
-    const ta = String(a.entry_time ?? "").localeCompare(String(b.entry_time ?? ""));
-    return ta;
-  });
+  const indexed = slice.diaryRows.map((row, i) => ({
+    row,
+    ts: resolveMealTimelineIsoTs(slice.date, row as Record<string, unknown>, i),
+  }));
+  indexed.sort((a, b) => a.ts.localeCompare(b.ts));
   let cum = 0;
   const out: BioenergeticSeriesPoint[] = [];
-  for (const row of rows) {
-    const t = typeof row.entry_time === "string" && row.entry_time.trim() ? row.entry_time.slice(0, 8) : "12:00:00";
+  for (const { row, ts } of indexed) {
     const c = num(row.carbs_g) ?? 0;
     cum += c;
-    out.push({ ts: `${slice.date}T${t}`, value: cum, source: "food_diary" });
+    out.push({ ts, value: cum, source: "food_diary" });
   }
   return out;
 }
@@ -258,7 +259,11 @@ function plannedStimulusPowerSeries(slice: BioenergeticDayMemorySlice): Bioenerg
 export type BioenergeticDayCurvesInput = {
   slice: BioenergeticDayMemorySlice;
   provenance: { glucose: BioenergeticChannelProvenance; lactate: BioenergeticChannelProvenance };
-  channels: { glucose: BioenergeticSeriesPoint[] | null; lactate: BioenergeticSeriesPoint[] | null };
+  channels: {
+    glucose: BioenergeticSeriesPoint[] | null;
+    lactate: BioenergeticSeriesPoint[] | null;
+    insulinProxyDense?: BioenergeticSeriesPoint[] | null;
+  };
 };
 
 /**
@@ -274,7 +279,8 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(g),
       provenance: input.provenance.glucose,
-      sourceHint: "athlete_time_series_samples|device_sync_exports|biomarker_panels|sim_diurnal_v1",
+      sourceHint:
+        "athlete_time_series_samples|device_sync_exports|biomarker_panels|glucose_stimulus_predictor_v1_5m|sim_diurnal_v1",
     });
   }
   const l = input.channels.lactate;
@@ -285,7 +291,20 @@ export function buildBioenergeticDaySeries(input: BioenergeticDayCurvesInput): B
       unit: "mmol/L",
       points: sortPoints(l),
       provenance: input.provenance.lactate,
-      sourceHint: "athlete_time_series_samples|device_sync_exports|biomarker_panels|sim_diurnal_v1",
+      sourceHint:
+        "athlete_time_series_samples|device_sync_exports|biomarker_panels|lactate_stimulus_predictor_v1_5m|sim_diurnal_v1",
+    });
+  }
+
+  const insD = input.channels.insulinProxyDense;
+  if (insD?.length) {
+    series.push({
+      id: "insulin_proxy_score_dense",
+      labelIt: "Domanda insulinica (proxy, 5 min)",
+      unit: "score 0–100",
+      points: sortPoints(insD),
+      provenance: "estimated",
+      sourceHint: "insulin_stimulus_predictor_v1_5m|buildInsulinStimulusPredictorSubhourlyV1",
     });
   }
 

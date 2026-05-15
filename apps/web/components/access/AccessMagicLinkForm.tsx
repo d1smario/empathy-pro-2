@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
+import { postOtpEmailRedirectNext } from "@/lib/auth/post-registration-redirects";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { Pro2Button } from "@/components/ui/empathy";
 
@@ -47,10 +48,11 @@ export function AccessMagicLinkForm({ redirectAfterLogin, appRole }: Props) {
     setBusy(true);
     setPendingAppRoleCookieClient(appRole);
     const origin = accessAppOriginFromWindow();
+    const otpNext = postOtpEmailRedirectNext(redirectAfterLogin, appRole);
     const { error } = await supabase.auth.signInWithOtp({
       email: trimmed,
       options: {
-        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(redirectAfterLogin)}`,
+        emailRedirectTo: `${origin}/auth/callback?next=${encodeURIComponent(otpNext)}`,
       },
     });
     setBusy(false);

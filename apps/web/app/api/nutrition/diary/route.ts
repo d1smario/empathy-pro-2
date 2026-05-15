@@ -9,6 +9,7 @@ import {
 } from "@/lib/nutrition/fdc-food-cache";
 import { scaleMacrosFromPer100g } from "@/lib/nutrition/usda-fdc-food-detail";
 import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
+import { resolveFoodDiaryEntryTimeForInsert } from "@/lib/nutrition/food-diary-entry-time";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 
 export const runtime = "nodejs";
@@ -153,6 +154,7 @@ export async function POST(req: NextRequest) {
     const { db } = await requireAthleteWriteContext(req, athleteId);
 
     const mode = (body.mode ?? "usda_fdc").trim();
+    const entryTimeResolved = resolveFoodDiaryEntryTimeForInsert(body.entryTime ?? null, mealSlot);
 
     let insert: Record<string, unknown>;
 
@@ -171,7 +173,7 @@ export async function POST(req: NextRequest) {
       insert = {
         athlete_id: athleteId,
         entry_date: entryDate,
-        entry_time: body.entryTime?.trim() || null,
+        entry_time: entryTimeResolved,
         meal_slot: mealSlot,
         provenance: "usda_fdc",
         fdc_id: Math.round(fdcId),
@@ -239,7 +241,7 @@ export async function POST(req: NextRequest) {
       insert = {
         athlete_id: athleteId,
         entry_date: entryDate,
-        entry_time: body.entryTime?.trim() || null,
+        entry_time: entryTimeResolved,
         meal_slot: mealSlot,
         provenance: "scaled_reference",
         fdc_id: null,
@@ -282,7 +284,7 @@ export async function POST(req: NextRequest) {
       insert = {
         athlete_id: athleteId,
         entry_date: entryDate,
-        entry_time: body.entryTime?.trim() || null,
+        entry_time: entryTimeResolved,
         meal_slot: mealSlot,
         provenance: "scaled_reference",
         fdc_id: null,

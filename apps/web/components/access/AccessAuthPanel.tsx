@@ -13,8 +13,9 @@ type Props = {
 };
 
 /**
- * Accesso: email+password (default) oppure magic link, stesso `redirectAfterLogin`.
- * Ruolo app (atleta vs coach) applicato a bootstrap profilo dopo autenticazione.
+ * Accesso: email+password (default) oppure magic link.
+ * `redirectAfterLogin` vale per login password (atleta) e per magic link quando `next` non è il default (es. `/access?next=/training/...`).
+ * Magic link atleta con default → gate `/access/plan` (vedi `postOtpEmailRedirectNext`).
  */
 export function AccessAuthPanel({ redirectAfterLogin }: Props) {
   const t = useTranslations("Access");

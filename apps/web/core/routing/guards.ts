@@ -10,7 +10,7 @@ const ANONYMOUS_PREFIXES = ["/preview"] as const;
 /** Paths that never require a session (marketing, static demo, access, auth callback). */
 export function isAnonymousAllowedPath(pathname: string): boolean {
   if (pathname === "/") return true;
-  if (pathname === "/access" || pathname === "/pricing") return true;
+  if (pathname === "/access" || pathname === "/access/plan" || pathname === "/pricing") return true;
   if (pathname === "/auth/callback" || pathname.startsWith("/auth/callback")) return true;
   if (pathname === "/auth/set-password" || pathname.startsWith("/auth/set-password/")) return true;
   if (pathname === "/invite" || pathname.startsWith("/invite/")) return true;

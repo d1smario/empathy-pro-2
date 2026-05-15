@@ -139,12 +139,16 @@ async function requestOpenAiGenerativeBioenergeticDay(
     "Ricevi `bioenergetic_strip_ai_reality_inputs_v2` + `tile_catalog`: pasti, sedute, totali, conteggi stream, metadati glucosio/lattato.",
     "Devi restituire SOLO JSON valido.",
     "Campo `tiles`: array di oggetti { id, value } — un elemento per OGNI voce in `tile_catalog` (stesso `id`), `value` numerico plausibile (coerente con pasti, CHO, TSS, sonno/stress implicito dai dati).",
+    "Vincoli temporali (obbligatori): usa `temporal_anchors` e `meals[].resolved_timeline_iso` come orari di riferimento, non inventare pasti/sedute a caso.",
+    "Per ogni pasto con CHO o kcal materiali: in `glucose_mmol_15m` (se richiesto) e `insulin_proxy_score_24` devi avere risposta entro ~20–120 min DOPO quel timestamp (picco o salita proporzionata a CHO/kcal; pasti multipli → picchi distinti se orari distinti).",
+    "Per sedute eseguite/pianificate: in glucosio/lattato modula nell’intervallo orario della seduta (usa `payload`/durata da anchor); lattato può salire durante sforzo; glucosio non restare piatto se TSS/kcal seduta sono significativi.",
+    "Cortisolo e ACTH (24 valori): rispetta circadianità grossolana (notte più bassa, giorno più alto); se c’è seduta intensa (TSS alto) modula nelle ore della seduta; non curve sinusoidali identiche fasulle se gli anchor pasto/seduta sono asimmetrici.",
     skipGlu
       ? "NON includere `glucose_mmol_15m` (CGM denso quel giorno)."
       : "Includi `glucose_mmol_15m`: 96 numeri (mmol/L) per la giornata.",
     "Includi `lactate_mmol_15m` (96), `cortisol_ug_dl_24`, `acth_pg_ml_24`, `insulin_proxy_score_24` (24 numeri ciascuno).",
     "`disclaimer_it` obbligatorio in italiano (breve). Opzionale `note_it`.",
-    "Non usare kernel, tile deterministiche o grafi pre-calcolati: inventa solo coerenza con gli input.",
+    "Non copiare numeri da kernel/tile deterministiche del server: però gli ORARI e l’ordine di grandezza delle risposte devono rispettare i vincoli sopra sugli input.",
   ].join(" ");
 
   const user = `Genera tile + striscia per:\n\n${JSON.stringify(compact)}`;
