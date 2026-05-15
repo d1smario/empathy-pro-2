@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadAdminAthleteActivityRollups } from "@/lib/admin/load-activity-rollups";
+import { loadAdminAthleteTimeSeriesCounts } from "@/lib/admin/load-athlete-time-series-counts";
 import {
   computeModuleAdoption,
   engagementScoreFromModules,
@@ -133,7 +134,10 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     }
   }
 
-  const { rollups, available: rollupsAvailable } = await loadRollupsBatched(admin, athleteIds);
+  const [{ rollups, available: rollupsAvailable }, timeSeriesCounts] = await Promise.all([
+    loadRollupsBatched(admin, athleteIds),
+    loadAdminAthleteTimeSeriesCounts(admin, athleteIds),
+  ]);
 
   const profileUserIds = profiles.map((p) => p.user_id);
   let stripePaidUsers = 0;
@@ -162,13 +166,14 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     } else if (p.role === "private") privateAccounts += 1;
   }
 
-  const moduleAdoption = computeModuleAdoption(athleteIds, rollups);
+  const moduleAdoption = computeModuleAdoption(athleteIds, rollups, timeSeriesCounts);
 
   let lowEngagementAthletes = 0;
   const athletes: PlatformAthleteReportRow[] = athleteIds.map((athleteId) => {
     const meta = athleteMeta.get(athleteId);
     const rollup = rollups.get(athleteId) ?? null;
-    const modulesUsed = modulesUsedFromRollup(rollup);
+    const tsCount = timeSeriesCounts.get(athleteId) ?? 0;
+    const modulesUsed = modulesUsedFromRollup(rollup, tsCount);
     const engagementScore = engagementScoreFromModules(modulesUsed);
     if (engagementScore === 0) lowEngagementAthletes += 1;
     const uid = userIdByAthlete.get(athleteId);
@@ -196,7 +201,8 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     const athleteRowsForCoach = athleteList.map((aid) => {
       const row = athletes.find((a) => a.athleteId === aid);
       const rollup = rollups.get(aid) ?? null;
-      const modulesUsed = modulesUsedFromRollup(rollup);
+      const tsCount = timeSeriesCounts.get(aid) ?? 0;
+      const modulesUsed = modulesUsedFromRollup(rollup, tsCount);
       const meta = athleteMeta.get(aid);
       return {
         athleteId: aid,

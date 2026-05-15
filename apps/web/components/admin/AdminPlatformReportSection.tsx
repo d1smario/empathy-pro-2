@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { PlatformModuleId, PlatformReport } from "@/lib/admin/platform-report-types";
+import { PLATFORM_REPORT_MODULE_COUNT } from "@/lib/admin/platform-report-types";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type ReportJson = { ok: boolean; report?: PlatformReport; error?: string };
@@ -208,7 +209,9 @@ export function AdminPlatformReportSection() {
                                 <span className="text-gray-600"> · </span>
                                 <span>{modulesCell(t, a.modulesUsed)}</span>
                                 <span className="text-gray-600"> · </span>
-                                <span>{a.engagementScore}/4</span>
+                                <span>
+                                  {a.engagementScore}/{PLATFORM_REPORT_MODULE_COUNT}
+                                </span>
                               </li>
                             ))}
                           </ul>
@@ -280,7 +283,7 @@ export function AdminPlatformReportSection() {
                                 : "rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-200"
                             }
                           >
-                            {a.engagementScore}/4
+                            {a.engagementScore}/{PLATFORM_REPORT_MODULE_COUNT}
                           </span>
                         </td>
                         <td className="px-4 py-2 text-gray-500">{formatShortDate(a.lastSignInAt, locale)}</td>

@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
+import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
+import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
+import { applyBuilderOperationalScaling } from "@/lib/training/builder/apply-builder-operational-scaling";
 import {
   coerceTechnicalModuleFocus,
   generateTrainingSession,
@@ -25,7 +29,8 @@ const NO_STORE = { "Cache-Control": "no-store" as const };
  * Vyria / piano annuale devono richiamare questo stesso percorso per ogni blocco da materializzare — nessun secondo motore sessione.
  *
  * Fase Pro 2: core `generateTrainingSession` + `resolveCanonicalPhysiologyState` + lettura `twin_states`.
- * Scaling operativo recovery/bioenergetica (V1) si aggiunge in incremento senza duplicare la selezione esercizi.
+ * Scaling operativo recovery/bioenergetica: solo se `applyOperationalScaling` (builder giornaliero).
+ * Materializzazione VIRYA annuale: lasciare `applyOperationalScaling` false per non alterare il piano guida.
  */
 function coerceAdaptationTarget(v: string): AdaptationTarget | null {
   const allowed: AdaptationTarget[] = [
@@ -180,7 +185,41 @@ export async function POST(req: NextRequest) {
     ...(technicalModuleFocus ? { technicalModuleFocus } : {}),
   };
 
-  const generated = generateTrainingSession(requestNormalized, athleteState);
+  let generated = generateTrainingSession(requestNormalized, athleteState);
+  let operationalScaling = null;
+  let operationalContext = null;
+  let adaptationLoop = null;
+  let bioenergeticModulation = null;
+  let adaptationGuidance = null;
+
+  if (body.applyOperationalScaling === true) {
+    const athleteMemory = await resolveAthleteMemory(athleteId);
+    const recoverySummary = await resolveLatestRecoverySummary(athleteId).catch(() => null);
+    const bundle = await resolveOperationalSignalsBundle({
+      athleteId,
+      athleteMemory,
+      recoverySummary,
+    });
+    adaptationGuidance = bundle.adaptationGuidance;
+    operationalContext = bundle.operationalContext;
+    adaptationLoop = bundle.adaptationLoop;
+    bioenergeticModulation = bundle.bioenergeticModulation;
+    if (operationalContext) {
+      const scaled = applyBuilderOperationalScaling({
+        session: generated,
+        sessionMinutesRequested: sessionMinutes,
+        tssTargetHintRequested: tssTargetHint ?? null,
+        adaptationGuidance: bundle.adaptationGuidance,
+        operationalContext,
+        bioenergeticModulation,
+        adaptationLoop: bundle.adaptationLoop,
+        recoveryStatus: recoverySummary?.status ?? null,
+      });
+      generated = scaled.session;
+      operationalScaling = scaled.operationalScaling;
+    }
+  }
+
   const blockExercises = generated.blocks.map((block) => ({
     order: block.order,
     label: block.label,
@@ -199,6 +238,11 @@ export async function POST(req: NextRequest) {
       source: "pro2_builder_engine_deterministic",
       physiologyPresent: Object.values(canonPhys.sources).some(Boolean),
       twinPresent: Boolean(twinRow),
+      adaptationGuidance,
+      operationalContext,
+      adaptationLoop,
+      bioenergeticModulation,
+      operationalScaling,
       /** Vyria / planner annuale: usare questo endpoint (o wrapper server) per materializzare ogni sessione. */
       materializationPolicy: "single_session_via_builder_engine_only",
     },

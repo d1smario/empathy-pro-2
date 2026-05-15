@@ -37,15 +37,23 @@ test("modulesUsedFromRollup: training da executed count", () => {
   assert.ok(mods.includes("training"));
 });
 
+test("modulesUsedFromRollup: bioenergetics da time-series count", () => {
+  const mods = modulesUsedFromRollup(emptyRollup, 3);
+  assert.ok(mods.includes("bioenergetics"));
+});
+
 test("computeModuleAdoption: percentuali su due atleti", () => {
   const rollups = new Map<string, AdminAthleteActivityRollup>([
     ["a1", { ...emptyRollup, athleteId: "a1", foodDiaryEntriesCount: 1 }],
     ["a2", { ...emptyRollup, athleteId: "a2", executedWorkoutsCount: 1 }],
   ]);
-  const adoption = computeModuleAdoption(["a1", "a2"], rollups);
+  const tsCounts = new Map<string, number>([["a2", 5]]);
+  const adoption = computeModuleAdoption(["a1", "a2"], rollups, tsCounts);
   const training = adoption.find((m) => m.moduleId === "training");
   const nutrition = adoption.find((m) => m.moduleId === "nutrition");
+  const bio = adoption.find((m) => m.moduleId === "bioenergetics");
   assert.equal(training?.athletesActive, 1);
   assert.equal(training?.pct, 50);
   assert.equal(nutrition?.athletesActive, 1);
+  assert.equal(bio?.athletesActive, 1);
 });

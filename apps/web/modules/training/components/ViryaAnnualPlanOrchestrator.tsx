@@ -1505,6 +1505,8 @@ export function ViryaAnnualPlanOrchestrator({
     }
     const engineRes = await generateBuilderSession({
       athleteId: selectedAthleteId,
+      /** Piano VIRYA = struttura guida; lo scaling giornaliero è solo nel builder operativo. */
+      applyOperationalScaling: false,
       request: {
         sport: input.discipline.toLowerCase(),
         domain: request.domain,

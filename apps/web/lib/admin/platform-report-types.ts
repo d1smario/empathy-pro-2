@@ -1,6 +1,9 @@
 import type { AdminAthleteActivityRollup } from "@/lib/admin/load-activity-rollups";
 
-export type PlatformModuleId = "training" | "nutrition" | "health" | "integrations";
+export type PlatformModuleId = "training" | "nutrition" | "health" | "integrations" | "bioenergetics";
+
+/** Numero massimo moduli tracciati nel report (per score UI). */
+export const PLATFORM_REPORT_MODULE_COUNT = 5;
 
 export type PlatformReportKpis = {
   totalAuthUsers: number;

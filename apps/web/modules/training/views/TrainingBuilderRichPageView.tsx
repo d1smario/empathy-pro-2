@@ -80,7 +80,14 @@ import {
 } from "@/lib/training/engine";
 import { sessionBlocksToChartSegments } from "@/lib/training/engine/block-chart-segments";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
-import { insertPlannedWorkoutFromEngineSession } from "@/modules/training/services/training-planned-api";
+import {
+  deletePlannedWorkout,
+  insertPlannedWorkoutFromEngineSession,
+} from "@/modules/training/services/training-planned-api";
+import {
+  fetchBuilderDayAdaptation,
+  type BuilderDayAdaptationResponse,
+} from "@/modules/training/services/training-builder-day-adaptation-api";
 import { pushBuilderSessionToWahoo } from "@/modules/training/services/wahoo-push-api";
 import { sessionSupportsWahooStructuredPlan } from "@/lib/integrations/wahoo-plan-from-generated-session";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
@@ -393,14 +400,51 @@ export default function TrainingBuilderRichPageView() {
   const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
   const [dismissViryaEntryBanner, setDismissViryaEntryBanner] = useState(false);
 
-  /** Calendario → builder: `?date=YYYY-MM-DD` (e in futuro `replace_planned_id` per punto B). */
+  /** Calendario → builder: `?date=YYYY-MM-DD` + opz. `replace_planned_id` per sostituire la riga pianificata. */
   const dateFromQuery = searchParams.get("date");
+  const replacePlannedIdFromQuery =
+    searchParams.get("replace_planned_id")?.trim() || searchParams.get("replacePlannedId")?.trim() || null;
   const viryaEntry = searchParams.get("src") === "virya";
+  const [dayAdaptation, setDayAdaptation] = useState<BuilderDayAdaptationResponse | null>(null);
+  const [dayAdaptationBusy, setDayAdaptationBusy] = useState(false);
+  const [dayAdaptationErr, setDayAdaptationErr] = useState<string | null>(null);
+  const [adaptedTssHint, setAdaptedTssHint] = useState<number | null>(null);
+
   useEffect(() => {
     if (!dateFromQuery || !/^\d{4}-\d{2}-\d{2}$/.test(dateFromQuery)) return;
     setPlannedDate(dateFromQuery);
     setManualPlannedDate(dateFromQuery);
   }, [dateFromQuery]);
+
+  useEffect(() => {
+    if (!athleteId || ctxLoading) return;
+    let cancelled = false;
+    (async () => {
+      setDayAdaptationBusy(true);
+      setDayAdaptationErr(null);
+      const res = await fetchBuilderDayAdaptation({
+        athleteId,
+        date: plannedDate,
+        replacePlannedId: replacePlannedIdFromQuery,
+      });
+      if (cancelled) return;
+      setDayAdaptationBusy(false);
+      if (!res.ok) {
+        setDayAdaptation(null);
+        setDayAdaptationErr(res.error);
+        return;
+      }
+      setDayAdaptation(res);
+      if (res.targetPlanned) {
+        setSessionMinutes(res.targetPlanned.adaptedDurationMinutes);
+        setManualSessionDurationMinutes(res.targetPlanned.adaptedDurationMinutes);
+        setAdaptedTssHint(res.targetPlanned.adaptedTssTarget > 0 ? res.targetPlanned.adaptedTssTarget : null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, ctxLoading, plannedDate, replacePlannedIdFromQuery, calendarRefresh]);
 
   useEffect(() => {
     if (ctxLoading) return;
@@ -706,13 +750,15 @@ export default function TrainingBuilderRichPageView() {
       const paletteDomain = trainingDomainForPaletteSport(sport);
       const out = await generateBuilderSession({
         athleteId,
-        applyOperationalScaling: false,
+        /** Adattamento giornaliero da twin/recovery; il piano VIRYA annuale resta invariato. */
+        applyOperationalScaling: true,
         request: {
           sport,
           ...(paletteDomain ? { domain: paletteDomain } : {}),
           goalLabel: adaptationUse,
           adaptationTarget: adaptationUse,
           sessionMinutes: sessionMinutesUse,
+          ...(adaptedTssHint != null && adaptedTssHint > 0 ? { tssTargetHint: adaptedTssHint } : {}),
           phase: phaseUse,
           ...(activeMacroId === "strength" && gymEngineProfile ? { gymProfile: gymEngineProfile } : {}),
           ...(activeMacroId === "technical"
@@ -761,7 +807,11 @@ export default function TrainingBuilderRichPageView() {
           return;
         }
         setGymManualRows(built);
-        setManualSessionDurationMinutes(sessionMinutesUse);
+        const scaledMinutes =
+          "operationalScaling" in out && out.operationalScaling?.sessionMinutesEffective != null
+            ? out.operationalScaling.sessionMinutesEffective
+            : sessionMinutesUse;
+        setManualSessionDurationMinutes(scaledMinutes);
         const goalLabel = String((out.session as { goalLabel?: string }).goalLabel ?? "").trim();
         if (goalLabel) setManualSessionName(goalLabel);
       }
@@ -783,6 +833,7 @@ export default function TrainingBuilderRichPageView() {
       techWorkPhase,
       techGameContext,
       techQualities,
+      adaptedTssHint,
     ],
   );
 
@@ -826,11 +877,25 @@ export default function TrainingBuilderRichPageView() {
       extraNotesLines = [serializePro2BuilderSessionContract(contract)];
     }
 
+    if (replacePlannedIdFromQuery) {
+      try {
+        await deletePlannedWorkout({ id: replacePlannedIdFromQuery, athleteId });
+      } catch (e) {
+        setSaveBusy(false);
+        setSaveErr(e instanceof Error ? e.message : "Impossibile sostituire la seduta pianificata.");
+        return;
+      }
+    }
+
     const res = await insertPlannedWorkoutFromEngineSession({
       athleteId,
       date: plannedDate,
       session,
       extraNotesLines,
+      plannedDurationMinutesOverride:
+        dayAdaptation?.ok && dayAdaptation.targetPlanned
+          ? dayAdaptation.targetPlanned.adaptedDurationMinutes
+          : null,
     });
     setSaveBusy(false);
     if (!res.ok) {
@@ -843,6 +908,8 @@ export default function TrainingBuilderRichPageView() {
     athleteId,
     genResult,
     plannedDate,
+    replacePlannedIdFromQuery,
+    dayAdaptation,
     activeMacroId,
     gymManualRows,
     sport,
@@ -1098,6 +1165,88 @@ export default function TrainingBuilderRichPageView() {
             athleteId={athleteId}
             plannedProvenanceSummary={plannedProvenanceSummary}
           />
+        ) : null}
+
+        {athleteId ? (
+          <section
+            aria-label="Adattamento giornaliero guidato"
+            className="mb-4 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-950/30 via-black/40 to-violet-950/20 p-4 sm:p-5"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-mono text-[0.65rem] font-bold uppercase tracking-[0.2em] text-amber-300">
+                  Adattamento giorno · {plannedDate}
+                </p>
+                {dayAdaptationBusy ? (
+                  <p className="mt-2 text-sm text-gray-400">Lettura score twin e seduta pianificata…</p>
+                ) : dayAdaptationErr ? (
+                  <p className="mt-2 text-sm text-amber-200/90" role="alert">
+                    {dayAdaptationErr}
+                  </p>
+                ) : dayAdaptation?.ok ? (
+                  <>
+                    <p className="mt-2 text-lg font-bold text-white">
+                      {dayAdaptation.loadAdaptation.headline} ·{" "}
+                      <span
+                        className={
+                          dayAdaptation.loadAdaptation.direction === "reduce"
+                            ? "text-amber-300"
+                            : dayAdaptation.loadAdaptation.direction === "increase"
+                              ? "text-emerald-300"
+                              : "text-gray-200"
+                        }
+                      >
+                        {dayAdaptation.loadAdaptation.adjustmentPct > 0
+                          ? `+${dayAdaptation.loadAdaptation.adjustmentPct}%`
+                          : `${dayAdaptation.loadAdaptation.adjustmentPct}%`}{" "}
+                        carico
+                      </span>
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-gray-400">
+                      Score {dayAdaptation.loadAdaptation.scorePct}% ({dayAdaptation.loadAdaptation.trafficLight}) · target seduta ~
+                      {dayAdaptation.loadAdaptation.loadScalePct}% del piano VIRYA.
+                      {dayAdaptation.loadAdaptation.unwantedSupercompensation
+                        ? " Supercompensazione non assorbita: riduzione consigliata."
+                        : null}
+                    </p>
+                    {dayAdaptation.targetPlanned ? (
+                      <p className="mt-2 font-mono text-xs text-amber-100/85">
+                        {dayAdaptation.targetPlanned.baselineDurationMinutes}′ / TSS {dayAdaptation.targetPlanned.baselineTssTarget} →{" "}
+                        {dayAdaptation.targetPlanned.adaptedDurationMinutes}′ / TSS {dayAdaptation.targetPlanned.adaptedTssTarget}
+                      </p>
+                    ) : (
+                      <p className="mt-2 text-xs text-gray-500">Nessuna seduta pianificata in questo giorno: genera da zero con lo score corrente.</p>
+                    )}
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">Apri con data calendario per guidare durata e TSS.</p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Pro2Button
+                  type="button"
+                  variant="primary"
+                  disabled={!athleteId || genBusy || dayAdaptationBusy}
+                  className="!bg-gradient-to-r !from-amber-600 !via-orange-600 !to-fuchsia-600"
+                  onClick={() => void runGenerate()}
+                >
+                  {genBusy ? "Generazione…" : "Genera con adattamento"}
+                </Pro2Button>
+                {replacePlannedIdFromQuery ? (
+                  <Pro2Link
+                    href={`/training/calendar?date=${encodeURIComponent(plannedDate)}`}
+                    variant="ghost"
+                    className="border border-white/15 text-xs"
+                  >
+                    Calendario
+                  </Pro2Link>
+                ) : null}
+              </div>
+            </div>
+            {dayAdaptation?.ok ? (
+              <p className="mt-3 text-xs leading-relaxed text-gray-500">{dayAdaptation.loadAdaptation.guidance}</p>
+            ) : null}
+          </section>
         ) : null}
 
         <section
@@ -1794,6 +1943,20 @@ export default function TrainingBuilderRichPageView() {
             <p className="mt-4 text-sm text-amber-300" role="alert">
               {genErr}
             </p>
+          ) : null}
+          {genResult && "ok" in genResult && genResult.ok && genResult.operationalScaling?.applied ? (
+            <div
+              className="mt-4 rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 text-sm text-amber-100/95"
+              role="status"
+            >
+              <p className="font-semibold text-amber-200">
+                Adattamento giornaliero · {genResult.operationalScaling.loadScalePct}% del target pianificato
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-amber-100/80">
+                {genResult.operationalScaling.guidance} Il piano VIRYA resta invariato; questa seduta è scalata da recovery, twin e
+                bioenergetica.
+              </p>
+            </div>
           ) : null}
           {genResult && "ok" in genResult && genResult.ok ? (
             <div className="mt-6 space-y-4 rounded-xl border border-white/10 bg-black/30 p-4 text-sm">

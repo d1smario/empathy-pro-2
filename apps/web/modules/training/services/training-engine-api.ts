@@ -1,4 +1,11 @@
 import type {
+  BuilderSessionOperationalScalingViewModel,
+  TrainingAdaptationLoopViewModel,
+  TrainingBioenergeticModulationViewModel,
+} from "@/api/training/contracts";
+import type { AdaptationGuidance } from "@/lib/empathy/schemas/adaptation";
+import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
+import type {
   AdaptationTarget,
   GeneratedSession,
   GymGenerationProfile,
@@ -36,6 +43,11 @@ export type BuilderSessionGenerationResponse =
       physiologyPresent: boolean;
       twinPresent: boolean;
       materializationPolicy: string;
+      adaptationGuidance?: AdaptationGuidance | null;
+      operationalContext?: TrainingDayOperationalContext | null;
+      adaptationLoop?: TrainingAdaptationLoopViewModel | null;
+      bioenergeticModulation?: TrainingBioenergeticModulationViewModel | null;
+      operationalScaling?: BuilderSessionOperationalScalingViewModel | null;
     }
   | { error: string };
 

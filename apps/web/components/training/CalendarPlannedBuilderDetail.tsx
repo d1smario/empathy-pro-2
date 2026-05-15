@@ -126,9 +126,9 @@ export function CalendarPlannedBuilderDetail({
             href={builderHref}
             variant="ghost"
             className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs"
-            title="Apre il builder sulla data di questa seduta (parametro date nell’URL). Sostituzione riga pianificata in arrivo con replace_planned_id."
+            title="Apre il builder con adattamento giornaliero e sostituisce questa riga al salvataggio."
           >
-            Modifica
+            Adatta
           </Pro2Link>
           {workout.athleteId?.trim() || athleteId?.trim() ? (
             <button

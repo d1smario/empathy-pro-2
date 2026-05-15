@@ -50,6 +50,35 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
  * `athleteId` obbligatorio (stesso valore usato in `planned-window`): il DELETE allinea il probe RLS alla lettura calendario.
  * In Network → risposta DELETE controlla header `x-empathy-delete-probe`.
  */
+export async function patchPlannedWorkout(input: {
+  id: string;
+  athleteId: string;
+  patch: {
+    duration_minutes?: number;
+    tss_target?: number;
+    kcal_target?: number | null;
+    notes?: string | null;
+    type?: string;
+  };
+}): Promise<void> {
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const res = await fetch("/api/training/planned", {
+    method: "PATCH",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify({
+      id: input.id,
+      athleteId: input.athleteId,
+      patch: input.patch,
+    }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) {
+    throw new Error(json.error ?? "Aggiornamento seduta pianificata non riuscito");
+  }
+}
+
 export async function deletePlannedWorkout(input: { id: string; athleteId: string }): Promise<void> {
   const hint = input.athleteId.trim();
   if (!hint) {

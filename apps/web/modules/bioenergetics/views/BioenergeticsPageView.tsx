@@ -21,6 +21,7 @@ import {
 } from "@/lib/nutrition/persisted-nutrition-plan-date";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { BioenergeticsContinuousMonitoringGrid } from "@/modules/bioenergetics/components/BioenergeticsContinuousMonitoringGrid";
+import { BioenergeticsStripAuditPanel } from "@/modules/bioenergetics/components/BioenergeticsStripAuditPanel";
 
 function toIsoDate(d: Date): string {
   const y = d.getFullYear();
@@ -114,7 +115,7 @@ export default function BioenergeticsPageView() {
       setLoading(true);
       setError(null);
       try {
-        const q = new URLSearchParams({ athleteId, date });
+        const q = new URLSearchParams({ athleteId, date, stripAudit: "1" });
         const res = await fetch(`/api/bioenergetics/day?${q}`, {
           cache: "no-store",
           credentials: "same-origin",
@@ -345,6 +346,10 @@ export default function BioenergeticsPageView() {
                 <p className="text-sm text-gray-500">Nessun dato striscia per questa giornata.</p>
               )}
             </Pro2SectionCard>
+
+            {vm.monitoringStripAuditV1 ? (
+              <BioenergeticsStripAuditPanel audit={vm.monitoringStripAuditV1} />
+            ) : null}
 
           </>
         ) : null}

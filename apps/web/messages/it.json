@@ -206,10 +206,10 @@
     "loading": "Carico report…",
     "rollupsMissing": "Rollup attività non disponibili: applica le migration 058 e 059 su Supabase.",
     "modulesHeading": "Adozione moduli (atleti con almeno un evento)",
-    "modulesFootnote": "Training = sedute/import; Nutrizione = diario; Health = panel/staging; Integrazioni = Garmin/device/sync.",
+    "modulesFootnote": "Training = sedute/import; Nutrizione = diario; Health = panel/staging; Integrazioni = Garmin/device/sync; Bioenergetics = campioni time-series (055) o staging interpretazione.",
     "coachesHeading": "Coach e roster atleti",
     "athletesHeading": "Atleti ({count})",
-    "filterLow": "Solo basso engagement (0/4)",
+    "filterLow": "Solo basso engagement (0/5)",
     "filterAll": "Tutti gli atleti",
     "modulesNone": "nessun modulo",
     "emptyCoaches": "Nessun account con ruolo coach.",
@@ -244,7 +244,8 @@
       "training": "Training",
       "nutrition": "Nutrizione",
       "health": "Health",
-      "integrations": "Integrazioni"
+      "integrations": "Integrazioni",
+      "bioenergetics": "Bioenergetics"
     },
     "coachStatus": {
       "approved": "Attivo",

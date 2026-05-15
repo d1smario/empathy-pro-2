@@ -417,11 +417,11 @@ export default function TrainingSessionPageView() {
             Calendar
           </Pro2Link>
           <Pro2Link
-            href="/training/builder"
+            href={dateValid ? `/training/builder?date=${encodeURIComponent(date)}` : "/training/builder"}
             variant="secondary"
             className="justify-center border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/15"
           >
-            Builder
+            Builder · adatta giorno
           </Pro2Link>
           <Pro2Link
             href="/training"
