@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
 import { buildBioenergeticDayViewModelFromSlice } from "@/lib/bioenergetics/bioenergetic-day-assembler";
 import { applyBioenergeticOpenAiGenerativeOverlay } from "@/lib/bioenergetics/bioenergetic-openai-generative-day";
 import type { LoadBioenergeticEvidenceLinksResult } from "@/lib/bioenergetics/load-bioenergetic-evidence-links";
@@ -21,10 +22,11 @@ function emptySlice(athleteId: string, date: string): BioenergeticDayMemorySlice
     biomarkerRows: [],
     deviceExportRows: [],
     timeSeriesSamplesRows: [],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
 }
 
-test("senza OPENAI_API_KEY la striscia AI è vuota ma quella deterministico v1 ha almeno tre canali", async () => {
+test("senza OPENAI_API_KEY la striscia deterministica plan-reality ha almeno tre canali", async () => {
   const prev = process.env.OPENAI_API_KEY;
   delete process.env.OPENAI_API_KEY;
   try {

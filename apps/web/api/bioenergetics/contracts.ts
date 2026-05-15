@@ -284,6 +284,18 @@ export type BioenergeticsDayViewModel = {
   interactionSkeleton?: BioenergeticInteractionSkeletonVmV1 | null;
   /** Solo con `?stripAudit=1` sulla GET giornata: tabella tecnica input → curve. */
   monitoringStripAuditV1?: BioenergeticMonitoringStripAuditV1;
+  /** Fusione striscia: predizione (meal plan + training pianificato) → adattamento (diario + eseguito). */
+  planRealityFusionV1?: PlanRealityFusionMetaV1;
+};
+
+export type PlanRealityFusionMetaV1 = {
+  contractVersion: 1;
+  adaptFromHour: number;
+  planSource: "nutrition_plans" | "calendar_training_solver" | "none";
+  plannedMealCount: number;
+  diaryMealCount: number;
+  executedSessionCount: number;
+  transitionHours: number;
 };
 
 /** `GET …/bioenergetics/window`: array di VM giornata (stesso contratto del singolo giorno per elemento). */

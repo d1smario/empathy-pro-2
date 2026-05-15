@@ -171,7 +171,7 @@ export default function BioenergeticsPageView() {
       eyebrow="BioEnergetic Intelligence · Focus"
       eyebrowClassName="text-lime-400"
       title="BioEnergetic Intelligence"
-      description="Generativo giornaliero: OpenAI legge diario, allenamenti e timeline; produce le tile (neuromodulatori, ormoni, metabolismo) e la striscia 24 h. Nessun pathway deterministico, grafi legacy né finestra multi-giorno in questa vista."
+      description="Striscia 24 h: mattino predittivo da meal plan + training pianificato; pomeriggio-sera adattata a diario e sedute eseguite. Tile metriche da OpenAI sugli stessi input. Non è CGM né referto."
       headerActions={
         <>
           <Pro2Link href="/nutrition" variant="secondary" className="justify-center border border-amber-500/35 bg-amber-500/10 hover:bg-amber-500/15">
@@ -301,7 +301,7 @@ export default function BioenergeticsPageView() {
             <Pro2SectionCard
               accent="fuchsia"
               title="Striscia 24 h (curve)"
-              subtitle="Glucosio, lattato, domanda insulinica, cortisolo e ACTH — stessa chiamata OpenAI; passo 5 min, illustrativo."
+              subtitle="Motore deterministico con fusione piano→realtà; passo 5 min. CGM misurato ha priorità assoluta."
               icon={LineChart}
             >
               {vm.continuousMonitoring &&
@@ -346,6 +346,18 @@ export default function BioenergeticsPageView() {
                 <p className="text-sm text-gray-500">Nessun dato striscia per questa giornata.</p>
               )}
             </Pro2SectionCard>
+
+            {vm.planRealityFusionV1 ? (
+              <p className="rounded-lg border border-lime-500/25 bg-lime-500/10 px-3 py-2 text-[0.7rem] leading-relaxed text-lime-100/95">
+                Adattamento da ore{" "}
+                <strong className="text-white">
+                  {vm.planRealityFusionV1.adaptFromHour >= 24 ? "— (solo piano)" : vm.planRealityFusionV1.adaptFromHour}
+                </strong>
+                {" · "}
+                piano: {vm.planRealityFusionV1.planSource} ({vm.planRealityFusionV1.plannedMealCount} pasti) · diario:{" "}
+                {vm.planRealityFusionV1.diaryMealCount} · eseguite: {vm.planRealityFusionV1.executedSessionCount}
+              </p>
+            ) : null}
 
             {vm.monitoringStripAuditV1 ? (
               <BioenergeticsStripAuditPanel audit={vm.monitoringStripAuditV1} />

@@ -5,6 +5,7 @@ import type { ExecutedWorkout, PlannedWorkout } from "@empathy/contracts";
 import { averagePowerWattsFromKjAndDuration } from "@empathy/domain-bioenergetics";
 import { ATHLETE_TIME_SERIES_CHANNEL_V1 } from "@empathy/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
 import { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import {
   buildBioenergeticDaySeries,
@@ -54,6 +55,7 @@ test("extractMeasuredGluLacFromSlice legge CGM e lab", () => {
         payload: { glucose_mmol: 5.3 },
       } as Record<string, unknown>,
     ],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
   const { glucoseMeasured } = extractMeasuredGluLacFromSlice(slice);
   assert.ok(glucoseMeasured.length >= 2);
@@ -84,6 +86,7 @@ test("extractMeasuredGluLacFromSlice unisce athlete_time_series_samples e vince 
         source: "cgm_adapter",
       } as Record<string, unknown>,
     ],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
   const { glucoseMeasured } = extractMeasuredGluLacFromSlice(slice);
   assert.equal(glucoseMeasured.length, 1);
@@ -103,6 +106,7 @@ test("buildBioenergeticDaySeries produce canali glucosio e CHO cumulativo", () =
     ],
     biomarkerRows: [],
     deviceExportRows: [],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
   const channels = {
     glucose: [{ ts: "2026-05-01T12:00:00", value: 5.2, source: "k" }],
@@ -139,6 +143,7 @@ test("buildBioenergeticDaySeries include potenza da trace_summary seduta eseguit
     diaryRows: [],
     biomarkerRows: [],
     deviceExportRows: [],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
   const series = buildBioenergeticDaySeries({
     slice,
@@ -186,6 +191,7 @@ test("buildBioenergeticDaySeries include planned_power_w da kj_target piano", ()
     diaryRows: [],
     biomarkerRows: [],
     deviceExportRows: [],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
   };
   const series = buildBioenergeticDaySeries({
     slice,

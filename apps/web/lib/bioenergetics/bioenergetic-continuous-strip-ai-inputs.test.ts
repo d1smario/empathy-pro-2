@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
 import {
   buildMonitoringChannelsFromStripAiParse,
   buildOpenAiStripRealityCompact,
@@ -48,6 +49,7 @@ test("buildOpenAiStripRealityCompact: pasti/sedute, niente kernel/tile", () => {
     ],
     biomarkerRows: [],
     deviceExportRows: [],
+    nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
     timeSeriesSamplesRows: [],
   };
   const c = buildOpenAiStripRealityCompact(vm, slice, false);

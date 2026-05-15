@@ -77,6 +77,22 @@ function executedSessionIsoTs(row: ExecutedWorkout, index: number): string {
 export function buildBioenergeticDayTimeline(date: string, slice: BioenergeticDayMemorySlice): BioenergeticTimelineEvent[] {
   const timeline: BioenergeticTimelineEvent[] = [];
 
+  for (const row of slice.nutritionPlan.plannedMeals) {
+    timeline.push({
+      id: `plan-meal-${row.slot}`,
+      ts: row.entry_time,
+      type: "meal",
+      title: row.food_label,
+      payload: {
+        mealSlot: row.slot,
+        carbsG: row.carbs_g,
+        kcal: row.kcal,
+        plannedMeal: true,
+        planSource: slice.nutritionPlan.planSource,
+      },
+    });
+  }
+
   slice.planned.forEach((row, i) => {
     timeline.push({
       id: `plan-${row.id}`,
@@ -104,6 +120,7 @@ export function buildBioenergeticDayTimeline(date: string, slice: BioenergeticDa
       title: String(row.food_label ?? "Meal"),
       payload: {
         mealSlot: row.meal_slot,
+        plannedMeal: false,
         carbsG: num(row.carbs_g),
         proteinG: num(row.protein_g),
         fatG: num(row.fat_g),

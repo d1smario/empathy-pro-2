@@ -4,6 +4,11 @@ import { executedWorkoutFromDbRow, plannedWorkoutFromDbRow, type ExecutedWorkout
 import { filterDeviceExportsByAthleteDataSourcePreference } from "@/lib/bioenergetics/bioenergetic-device-exports-preference-filter";
 import { loadDataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
 import { wellnessExportMatchesPanelDate } from "@/lib/physiology/wellness-day-key-from-device-export";
+import {
+  EMPTY_NUTRITION_PLAN_DAY,
+  loadNutritionPlanDayContext,
+  type NutritionPlanDayContext,
+} from "@/lib/bioenergetics/load-nutrition-plan-for-day";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export type BioenergeticDayMemorySlice = {
@@ -17,6 +22,8 @@ export type BioenergeticDayMemorySlice = {
   deviceExportRows: Array<Record<string, unknown>>;
   /** Campioni time-series canonici (055) per `date` locale (CGM / lattato). */
   timeSeriesSamplesRows?: Array<Record<string, unknown>>;
+  /** Macro pasti da `nutrition_plans` o solver training (Reality > Plan per fase predittiva). */
+  nutritionPlan: NutritionPlanDayContext;
 };
 
 function addDaysIsoDate(date: string, deltaDays: number): string {
@@ -96,6 +103,7 @@ export async function loadBioenergeticDayMemorySlice(
         biomarkerRows: [],
         deviceExportRows: [],
         timeSeriesSamplesRows: [],
+        nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
       },
       queryError: windowErr,
     };
@@ -111,6 +119,7 @@ export async function loadBioenergeticDayMemorySlice(
         biomarkerRows: [],
         deviceExportRows: [],
         timeSeriesSamplesRows: [],
+        nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
       },
       queryError: diaryRes.error.message,
     };
@@ -126,6 +135,7 @@ export async function loadBioenergeticDayMemorySlice(
         biomarkerRows: [],
         deviceExportRows: [],
         timeSeriesSamplesRows: [],
+        nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
       },
       queryError: exportsRes.error.message,
     };
@@ -141,6 +151,7 @@ export async function loadBioenergeticDayMemorySlice(
         biomarkerRows: [],
         deviceExportRows: [],
         timeSeriesSamplesRows: [],
+        nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
       },
       queryError: biomarkersRes.error.message,
     };
@@ -156,6 +167,7 @@ export async function loadBioenergeticDayMemorySlice(
         biomarkerRows: [],
         deviceExportRows: [],
         timeSeriesSamplesRows: [],
+        nutritionPlan: EMPTY_NUTRITION_PLAN_DAY,
       },
       queryError: timeSeriesRes.error.message,
     };
@@ -170,6 +182,7 @@ export async function loadBioenergeticDayMemorySlice(
 
   const deviceExportRows = filterDeviceExportsForPanelDate(exportCandidates, dateKey);
   const timeSeriesSamplesRows = (timeSeriesRes.data ?? []) as Array<Record<string, unknown>>;
+  const nutritionPlan = await loadNutritionPlanDayContext(db, athleteId, dateKey, planned);
 
   return {
     slice: {
@@ -181,6 +194,7 @@ export async function loadBioenergeticDayMemorySlice(
       biomarkerRows,
       deviceExportRows,
       timeSeriesSamplesRows: timeSeriesSamplesRows.length ? timeSeriesSamplesRows : undefined,
+      nutritionPlan,
     },
     queryError: null,
   };
