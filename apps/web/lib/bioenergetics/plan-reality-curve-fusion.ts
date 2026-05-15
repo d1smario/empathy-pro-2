@@ -171,14 +171,14 @@ export function fusePlanRealityGluLacSim(input: {
   nutritionPlan: NutritionPlanDayContext;
   mealResponseScale01: number;
   activityResponseScale01: number;
-  stepMinutes?: number;
+  stepMinutes?: 5 | 10;
 }): FusedGluLacSim | null {
   const { date, kernel, slice, nutritionPlan } = input;
   const scales = {
     mealResponseScale01: input.mealResponseScale01,
     activityResponseScale01: input.activityResponseScale01,
   };
-  const step = input.stepMinutes ?? 5;
+  const step: 5 | 10 = input.stepMinutes === 10 ? 10 : 5;
   const planTl = buildPlanPredictiveTimeline(date, slice, nutritionPlan);
   const realityTl = buildRealityAdaptiveTimeline(date, slice);
   const adaptFromHour = resolvePlanRealityAdaptFromHour(date, slice);
