@@ -161,10 +161,26 @@ function TrainingSessionSignalPanel({
   const durationCompletion = plannedMinutes > 0 ? (executedMinutes / plannedMinutes) * 100 : null;
   const tssDelta = executedTss - plannedTss;
   const adaptation = twinContextStrip?.adaptationScore ?? null;
+  const v1 = twinContextStrip?.adaptationScoreV1 ?? null;
+  const tier = twinContextStrip?.recoveryDataTier ?? null;
   const readiness = twinContextStrip?.readiness ?? null;
   const fatigue = twinContextStrip?.fatigueAcute ?? null;
   const glycogen = twinContextStrip?.glycogenStatus ?? null;
   const adaptationState = adaptationLabel(adaptation, readiness, fatigue);
+  const adaptationValue =
+    v1 != null
+      ? `${Math.round(v1.compositeScore)}`
+      : adaptation != null
+        ? scoreLine(adaptation)
+        : "—";
+  const adaptationDetailParts = [
+    adaptationState,
+    tier ? `dati recupero ${tier === "minimal" ? "minimi" : tier === "extended" ? "estesi" : "standard"}` : null,
+    v1 ? `conf ${(v1.confidence * 100).toFixed(0)}%` : null,
+    `readiness ${scoreLine(readiness, "")}`,
+    `fatigue ${scoreLine(fatigue, "")}`,
+  ].filter((s): s is string => Boolean(s));
+  const adaptationDetail = adaptationDetailParts.join(" · ");
   const planLabel = plannedContracts[0]?.adaptationTarget?.replaceAll("_", " ") ?? planned[0]?.adaptiveGoal ?? planned[0]?.type ?? "—";
   const realitySources = Array.from(new Set(executed.map((w) => w.source ?? "manual"))).join(" · ") || "nessuna realtà";
 
@@ -194,8 +210,8 @@ function TrainingSessionSignalPanel({
         />
         <TrainingSignalCell
           label="Adattamento"
-          value={scoreLine(adaptation)}
-          detail={`${adaptationState} · readiness ${scoreLine(readiness, "")} · fatigue ${scoreLine(fatigue, "")}`}
+          value={adaptationValue}
+          detail={adaptationDetail}
           tone={adaptationState === "Protezione" || adaptationState === "Readiness bassa" ? "amber" : "violet"}
           icon={Zap}
         />

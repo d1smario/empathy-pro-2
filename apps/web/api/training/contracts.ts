@@ -8,6 +8,8 @@ import type {
   ResearchPlan,
   SessionKnowledgePacket,
 } from "@/lib/empathy/schemas";
+import type { AdaptationScoreMethodVersion } from "@/lib/empathy/schemas/adaptation";
+import type { RecoveryDataTier } from "@/lib/empathy/schemas/internal-load";
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
 import type { AdaptationTarget, SessionGoalRequest, TrainingDomain } from "@/lib/training/engine";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
@@ -22,12 +24,29 @@ import type { ViryaRetuneProposalVm } from "@/lib/training/virya-retune-proposal
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
 
+/** Sottoinsieme AdaptationScoreV1 per strip API (senza 4 assi). */
+export type TrainingTwinAdaptationScoreV1StripViewModel = {
+  methodVersion: AdaptationScoreMethodVersion;
+  compositeScore: number;
+  confidence: number;
+};
+
 /** Strip twin per contesto operativo su calendario / giornata (senza payload twin completo). */
 export type TrainingTwinContextStripViewModel = {
   asOf: string | null;
   readiness: number | null;
   fatigueAcute: number | null;
   glycogenStatus: number | null;
+  adaptationScore: number | null;
+  recoveryDataTier: RecoveryDataTier | null;
+  adaptationScoreV1: TrainingTwinAdaptationScoreV1StripViewModel | null;
+};
+
+/** Riassunto compatto per `GET /api/training/analytics` (subset della strip twin). */
+export type TrainingAnalyticsAdaptationSummaryViewModel = {
+  asOf: string | null;
+  recoveryDataTier: RecoveryDataTier | null;
+  adaptationScoreV1: TrainingTwinAdaptationScoreV1StripViewModel | null;
   adaptationScore: number | null;
 };
 
@@ -362,6 +381,8 @@ export type TrainingAnalyticsViewModel = {
   executedVolumeRollup?: TrainingExecutedVolumeRollupViewModel | null;
   recoveryContinuousRollup?: TrainingRecoveryContinuousRollupViewModel | null;
   adaptationLoop: TrainingAdaptationLoopViewModel | null;
+  /** Subset twin (tier, v1, legacy adapt) allineato alla strip; assente/`null` se nessun twin in memoria o errore parziale. */
+  adaptationSummary?: TrainingAnalyticsAdaptationSummaryViewModel | null;
   twinState: CanonicalTwinState | null;
   athleteMemory: AthleteMemory | null;
   recoverySummary: RecoverySummary | null;

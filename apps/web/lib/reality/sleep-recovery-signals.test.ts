@@ -8,6 +8,18 @@ import {
   looksLikeGarminSleepRecord,
 } from "@/lib/reality/sleep-recovery-signals";
 
+test("Garmin / generic payload: respiratory rate rpm", () => {
+  const payload = {
+    garmin_sleep: {
+      averageRespirationValue: 14.2,
+      hrv_rmssd_ms: 42,
+      resting_heart_rate: 52,
+    },
+  };
+  const s = extractSleepRecoverySignal(payload);
+  assert.equal(s.respiratoryRateRpm, 14.2);
+});
+
 test("WHOOP recovery annidato in score → HRV, RHR, recovery %", () => {
   const payload = {
     whoop_recovery: {

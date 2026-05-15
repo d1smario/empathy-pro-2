@@ -23,6 +23,10 @@ function twinLine(t: TrainingTwinContextStripViewModel): string {
   if (t.fatigueAcute != null) bits.push(`fatigue ${Math.round(t.fatigueAcute)}`);
   if (t.glycogenStatus != null) bits.push(`glycogen ${Math.round(t.glycogenStatus)}`);
   if (t.adaptationScore != null) bits.push(`adapt ${Math.round(t.adaptationScore)}`);
+  if (t.recoveryDataTier != null) bits.push(`recovery tier ${t.recoveryDataTier}`);
+  if (t.adaptationScoreV1 != null) {
+    bits.push(`conf ${(t.adaptationScoreV1.confidence * 100).toFixed(0)}%`);
+  }
   return bits.length ? bits.join(" · ") : "Twin presente (metriche parziali).";
 }
 

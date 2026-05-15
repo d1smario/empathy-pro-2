@@ -271,6 +271,35 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
             ))}
           </div>
           {fetchErr ? <p className="mb-3 text-xs text-amber-300/90">{fetchErr}</p> : null}
+          {!loading && analyticsVm?.adaptationSummary ? (
+            <p className="mb-3 rounded-xl border border-violet-500/25 bg-violet-500/5 px-3 py-2 text-xs text-violet-100/90">
+              <span className="font-semibold text-violet-200/95">Twin · adattamento · </span>
+              {analyticsVm.adaptationSummary.recoveryDataTier ? (
+                <span>
+                  tier{" "}
+                  {analyticsVm.adaptationSummary.recoveryDataTier === "minimal"
+                    ? "minimo"
+                    : analyticsVm.adaptationSummary.recoveryDataTier === "extended"
+                      ? "esteso"
+                      : "standard"}
+                  {" · "}
+                </span>
+              ) : null}
+              {analyticsVm.adaptationSummary.adaptationScoreV1 ? (
+                <>
+                  v1 {Math.round(analyticsVm.adaptationSummary.adaptationScoreV1.compositeScore)} (conf{" "}
+                  {(analyticsVm.adaptationSummary.adaptationScoreV1.confidence * 100).toFixed(0)}%)
+                </>
+              ) : analyticsVm.adaptationSummary.adaptationScore != null ? (
+                <>legacy {Math.round(analyticsVm.adaptationSummary.adaptationScore)}/100</>
+              ) : (
+                "metriche parziali"
+              )}
+              {analyticsVm.adaptationSummary.asOf ? (
+                <span className="ml-1 font-mono text-[0.65rem] text-slate-500">· asOf {analyticsVm.adaptationSummary.asOf}</span>
+              ) : null}
+            </p>
+          ) : null}
           {loading ? (
             <div className="h-16 animate-pulse rounded-xl bg-cyan-500/10" />
           ) : (

@@ -609,7 +609,11 @@ export default function TrainingCalendarPageView() {
         </p>
       ) : null}
 
-      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+      <div
+        className={`mb-6 grid gap-3 ${
+          twinContextStrip ? "sm:grid-cols-2 lg:grid-cols-4" : "sm:grid-cols-3"
+        }`}
+      >
         <div className="rounded-2xl border border-cyan-500/25 bg-black/35 px-4 py-3">
           <p className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-cyan-400/90">Mese</p>
           <p className="mt-1 capitalize text-lg font-bold text-white">{monthLabel}</p>
@@ -624,6 +628,32 @@ export default function TrainingCalendarPageView() {
             {new Date(`${selectedDate}T12:00:00`).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit" })}
           </p>
         </div>
+        {twinContextStrip ? (
+          <div className="rounded-2xl border border-violet-500/25 bg-black/35 px-4 py-3">
+            <p className="font-mono text-[0.6rem] font-bold uppercase tracking-wider text-violet-400/90">Twin · adattamento</p>
+            <p className="mt-1 text-lg font-bold tabular-nums text-white">
+              {twinContextStrip.adaptationScoreV1 != null
+                ? Math.round(twinContextStrip.adaptationScoreV1.compositeScore)
+                : twinContextStrip.adaptationScore != null
+                  ? Math.round(twinContextStrip.adaptationScore)
+                  : "—"}
+            </p>
+            <p className="mt-0.5 text-xs leading-snug text-slate-400">
+              {twinContextStrip.recoveryDataTier
+                ? `Dati recupero ${
+                    twinContextStrip.recoveryDataTier === "minimal"
+                      ? "minimi"
+                      : twinContextStrip.recoveryDataTier === "extended"
+                        ? "estesi"
+                        : "standard"
+                  }`
+                : "Tier —"}
+              {twinContextStrip.adaptationScoreV1
+                ? ` · conf ${(twinContextStrip.adaptationScoreV1.confidence * 100).toFixed(0)}%`
+                : ""}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 px-4 py-3">

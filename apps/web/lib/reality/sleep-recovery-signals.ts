@@ -8,6 +8,8 @@ type SleepRecoverySignal = {
   hrvMs?: number | null;
   restingHrBpm?: number | null;
   sleepDurationHours?: number | null;
+  /** Respiri/min (notte o media vendor) — ingest, non clone score vendor. */
+  respiratoryRateRpm?: number | null;
   strainScore?: number | null;
   sourceDate?: string | null;
 };
@@ -211,6 +213,24 @@ export function extractSleepRecoverySignal(payload: Record<string, unknown> | nu
       "lowest_heart_rate",
     ]);
     merged.sleepDurationHours ??= normalizeSleepDurationHours(record);
+    merged.respiratoryRateRpm ??= pickNumber(record, [
+      "average_respiration_value",
+      "averageRespirationValue",
+      "avg_respiration_value",
+      "avgRespirationValue",
+      "resting_respiration_rate",
+      "restingRespirationRate",
+      "respiration_rate",
+      "respirationRate",
+      "breaths_per_minute",
+      "breathsPerMinute",
+      "breath_rate",
+      "breathRate",
+      "average_breath",
+      "averageBreath",
+      "waking_respiration_value",
+      "wakingRespirationValue",
+    ]);
     /**
      * Strain = carico giornaliero WHOOP-like (`day_strain`, `strain`, …).
      * **Non** mappare `averageStressLevel` / stress Garmin dailies qui: è stress 0–100,
@@ -256,6 +276,7 @@ export function buildSleepRecoveryCanonicalPreview(payload: Record<string, unkno
     hrv_ms: signal.hrvMs ?? null,
     resting_hr_bpm: signal.restingHrBpm ?? null,
     sleep_duration_hours: signal.sleepDurationHours ?? null,
+    respiratory_rate_rpm: signal.respiratoryRateRpm ?? null,
     strain_score: signal.strainScore ?? null,
     source_date: signal.sourceDate ?? null,
   };
@@ -273,6 +294,7 @@ export function buildSleepRecoveryCoverage(payload: Record<string, unknown>) {
     { key: "hrv", present: signal.hrvMs != null, recommendedInput: "night_hrv" },
     { key: "resting_hr", present: signal.restingHrBpm != null, recommendedInput: "resting_hr" },
     { key: "sleep_duration", present: signal.sleepDurationHours != null, recommendedInput: "sleep_duration" },
+    { key: "respiratory_rate", present: signal.respiratoryRateRpm != null, recommendedInput: "respiration_rpm" },
     { key: "strain", present: signal.strainScore != null, recommendedInput: "strain_score" },
   ]);
 
@@ -284,6 +306,7 @@ export function buildSleepRecoveryCoverage(payload: Record<string, unknown>) {
       hrv: signal.hrvMs != null ? 100 : 0,
       resting_hr: signal.restingHrBpm != null ? 100 : 0,
       sleep_duration: signal.sleepDurationHours != null ? 100 : 0,
+      respiratory_rate: signal.respiratoryRateRpm != null ? 100 : 0,
       strain: signal.strainScore != null ? 100 : 0,
     },
     missingChannels: summarized.missingSignals,
@@ -321,6 +344,7 @@ export function extractSignalFromDeviceExportRow(row: Record<string, unknown>): 
     restingHrBpm: sourceSignal.restingHrBpm ?? previewSignal.restingHrBpm ?? null,
     sleepDurationHours:
       sourceSignal.sleepDurationHours ?? (allowPreviewSleep ? previewSignal.sleepDurationHours : null) ?? null,
+    respiratoryRateRpm: sourceSignal.respiratoryRateRpm ?? previewSignal.respiratoryRateRpm ?? null,
     strainScore: sourceSignal.strainScore ?? previewSignal.strainScore ?? null,
     sourceDate: sourceSignal.sourceDate ?? previewSignal.sourceDate ?? null,
   };

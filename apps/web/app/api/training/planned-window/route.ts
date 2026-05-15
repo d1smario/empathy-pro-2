@@ -12,7 +12,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
-import type { TrainingTwinContextStripViewModel } from "@/api/training/contracts";
+import { twinContextStripFromMemory } from "@/lib/twin/twin-context-strip-from-memory";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -32,23 +32,6 @@ function executedDatesSampleForDiag(isoDayKeys: string[], max = 8): string[] {
   const headN = Math.ceil(max / 2);
   const tailN = max - headN;
   return Array.from(new Set([...uniq.slice(0, headN), ...uniq.slice(-tailN)])).sort();
-}
-
-function twinContextStripFromMemory(twin: {
-  asOf?: string;
-  readiness?: number;
-  fatigueAcute?: number;
-  glycogenStatus?: number;
-  adaptationScore?: number;
-} | null): TrainingTwinContextStripViewModel | null {
-  if (!twin) return null;
-  return {
-    asOf: typeof twin.asOf === "string" && twin.asOf.trim() !== "" ? twin.asOf : null,
-    readiness: typeof twin.readiness === "number" && Number.isFinite(twin.readiness) ? twin.readiness : null,
-    fatigueAcute: typeof twin.fatigueAcute === "number" && Number.isFinite(twin.fatigueAcute) ? twin.fatigueAcute : null,
-    glycogenStatus: typeof twin.glycogenStatus === "number" && Number.isFinite(twin.glycogenStatus) ? twin.glycogenStatus : null,
-    adaptationScore: typeof twin.adaptationScore === "number" && Number.isFinite(twin.adaptationScore) ? twin.adaptationScore : null,
-  };
 }
 
 /** Default: contesto atleta incluso. Valori che disattivano: `0`, `false`, `no`, `off`, `skip`. */

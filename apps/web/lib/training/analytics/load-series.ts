@@ -1,3 +1,11 @@
+import {
+  DEFAULT_ATL_TAU_DAYS,
+  DEFAULT_CTL_TAU_DAYS,
+  empathyCardioImpulseDailyFromSession,
+  empathyExternalDailyImpulseFromSession,
+  ewmaDailyStep,
+} from "@empathy/domain-training";
+
 export type ExecutedWorkoutLoadRow = {
   date: string | null;
   tss: number | null;
@@ -50,7 +58,7 @@ export function internalLoadScore(row: ExecutedWorkoutLoadRow): number {
   const rpe = pickMetric(row.trace_summary, ["rpe", "session_rpe"]);
   const duration = Math.max(0, Number(row.duration_minutes ?? 0));
   const externalBase = Math.max(0, Number(row.tss ?? 0)) * 0.72;
-  const hrStress = hrAvg != null ? Math.max(0, hrAvg - 110) * (duration / 60) * 0.16 : 0;
+  const hrStress = empathyCardioImpulseDailyFromSession({ durationMinutes: duration, hrAvgBpm: hrAvg });
   const rpeStress = rpe != null ? rpe * (duration / 60) * 4.2 : 0;
   const lactateStress = row.lactate_mmoll != null ? Math.max(0, row.lactate_mmoll - 1.5) * 9 : 0;
   const glucosePenalty = row.glucose_mmol != null ? Math.abs(row.glucose_mmol - 5.2) * 4.4 : 0;
@@ -71,14 +79,18 @@ export function computeDailyLoadSeries(rows: ExecutedWorkoutLoadRow[]): DailyLoa
   const byDay = new Map<string, { external: number; internal: number }>();
   for (const row of sorted) {
     const prev = byDay.get(row.date) ?? { external: 0, internal: 0 };
+    const hrAvg = pickMetric(row.trace_summary, ["hr_avg_bpm", "avg_hr", "heart_rate_avg"]);
+    const externalInc = empathyExternalDailyImpulseFromSession({
+      tss: row.tss != null ? Number(row.tss) : null,
+      durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
+      hrAvgBpm: hrAvg,
+    });
     byDay.set(row.date, {
-      external: prev.external + Math.max(0, Number(row.tss ?? 0)),
+      external: prev.external + externalInc,
       internal: prev.internal + internalLoadScore(row),
     });
   }
 
-  const ATL_K = Math.exp(-1 / 7);
-  const CTL_K = Math.exp(-1 / 42);
   let atl = 0;
   let ctl = 0;
   let iAtl = 0;
@@ -89,10 +101,10 @@ export function computeDailyLoadSeries(rows: ExecutedWorkoutLoadRow[]): DailyLoa
     const day = new Date(start.getTime() + index * DAY_MS);
     const date = toDateOnly(day);
     const daily = byDay.get(date) ?? { external: 0, internal: 0 };
-    atl = atl * ATL_K + daily.external * (1 - ATL_K);
-    ctl = ctl * CTL_K + daily.external * (1 - CTL_K);
-    iAtl = iAtl * ATL_K + daily.internal * (1 - ATL_K);
-    iCtl = iCtl * CTL_K + daily.internal * (1 - CTL_K);
+    atl = ewmaDailyStep(atl, daily.external, DEFAULT_ATL_TAU_DAYS);
+    ctl = ewmaDailyStep(ctl, daily.external, DEFAULT_CTL_TAU_DAYS);
+    iAtl = ewmaDailyStep(iAtl, daily.internal, DEFAULT_ATL_TAU_DAYS);
+    iCtl = ewmaDailyStep(iCtl, daily.internal, DEFAULT_CTL_TAU_DAYS);
     out.push({
       date,
       external: daily.external,

@@ -4,6 +4,10 @@
  * Usato da GET /api/nutrition/module e GET /api/dashboard/athlete-hub — stessa verità di V1 GET /api/dashboard.
  */
 import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
+import {
+  twinExpectedAdaptationForGuidance,
+  twinObservedAdaptationForGuidance,
+} from "@/lib/twin/twin-adaptation-fallbacks";
 import type { AdaptationGuidance } from "@/lib/empathy/schemas/adaptation";
 import type { AthleteMemory } from "@/lib/empathy/schemas/memory";
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
@@ -120,8 +124,8 @@ export async function resolveOperationalSignalsBundle(input: {
       : await resolveLatestRecoverySummary(athleteId).catch(() => null);
 
   const adaptationGuidance = buildAdaptationGuidance({
-    expectedAdaptation: twinState?.expectedAdaptation ?? twinState?.adaptationScore ?? 0,
-    observedAdaptation: twinState?.realAdaptation ?? twinState?.adaptationScore ?? 0,
+    expectedAdaptation: twinExpectedAdaptationForGuidance(twinState),
+    observedAdaptation: twinObservedAdaptationForGuidance(twinState),
     likelyDrivers: twinState?.likelyDrivers ?? [],
   });
 

@@ -4,6 +4,7 @@ import type {
   InternalLoadSignal,
   InternalLoadState,
   PhysiologyState,
+  RecoveryDataTier,
 } from "@/lib/empathy/schemas";
 import type { ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 import { computeDailyLoadSeries } from "@/lib/training/analytics/load-series";
@@ -167,6 +168,65 @@ function pickPanelValue(row: Record<string, unknown> | null, keys: string[]): nu
   return null;
 }
 
+function recoveryCapacityWeights(tier: RecoveryDataTier): {
+  sleep: number;
+  autonomic: number;
+  hydration: number;
+  endocrine: number;
+  glycemic: number;
+  enteric: number;
+} {
+  switch (tier) {
+    case "extended":
+      return { sleep: 0.22, autonomic: 0.22, hydration: 0.18, endocrine: 0.16, glycemic: 0.12, enteric: 0.1 };
+    case "standard":
+      return { sleep: 0.28, autonomic: 0.24, hydration: 0.18, endocrine: 0.12, glycemic: 0.08, enteric: 0.1 };
+    case "minimal":
+    default:
+      return { sleep: 0.34, autonomic: 0.3, hydration: 0.2, endocrine: 0.06, glycemic: 0.05, enteric: 0.05 };
+  }
+}
+
+function inferRecoveryDataTier(input: {
+  recentSlice: ReturnType<typeof extractSignalFromDeviceExportRow>[];
+  bloodPanel: Record<string, unknown> | null;
+  microbiotaPanel: Record<string, unknown> | null;
+  physiologyState: PhysiologyState;
+}): RecoveryDataTier {
+  const { recentSlice, bloodPanel, microbiotaPanel, physiologyState } = input;
+  const hasHrv = recentSlice.some((s) => s.hrvMs != null);
+  const hasRhr = recentSlice.some((s) => s.restingHrBpm != null);
+  const hasSleepHours = recentSlice.some((s) => s.sleepDurationHours != null);
+  const hasVendorScore = recentSlice.some(
+    (s) => s.sleepScore != null || s.readinessScore != null || s.recoveryScore != null,
+  );
+  const hasRR = recentSlice.some((s) => s.respiratoryRateRpm != null);
+  const hasLabBlood =
+    bloodPanel != null &&
+    pickPanelValue(bloodPanel, ["cortisol", "hba1c", "glycated_hemoglobin", "fasting_glucose", "testosterone"]) !=
+      null;
+  const hasLabMicro =
+    microbiotaPanel != null &&
+    pickPanelValue(microbiotaPanel, ["dysbiosis_score", "dysbiosis", "gut_inflammation_score"]) != null;
+  const hasBia =
+    physiologyState.bioenergeticProfile.phaseAngleScore != null ||
+    physiologyState.bioenergeticProfile.hydrationStatus != null;
+
+  if ((hasLabBlood || hasLabMicro) && (hasHrv || hasVendorScore)) {
+    return "extended";
+  }
+  if (hasBia && hasLabBlood && (hasHrv || hasRhr)) {
+    return "extended";
+  }
+  if (hasVendorScore && hasHrv && hasRhr) {
+    return "standard";
+  }
+  if ((hasHrv && hasRhr && hasSleepHours) || (hasVendorScore && (hasSleepHours || hasRR))) {
+    return "standard";
+  }
+  return "minimal";
+}
+
 export async function resolveInternalLoadState(
   input: ResolveInternalLoadStateInput,
 ): Promise<InternalLoadState> {
@@ -238,9 +298,23 @@ export async function resolveInternalLoadState(
   );
   const baselineStrain = median(sleepSignals.map((row) => row.strainScore).filter((value): value is number => value != null));
   const recentStrain = average(sleepSignals.slice(-7).map((row) => row.strainScore).filter((value): value is number => value != null));
+  const baselineRespiratoryRpm = median(
+    sleepSignals.map((row) => row.respiratoryRateRpm).filter((value): value is number => value != null),
+  );
+  const recentRespiratoryRpm = average(
+    sleepSignals.slice(-7).map((row) => row.respiratoryRateRpm).filter((value): value is number => value != null),
+  );
 
   const bloodPanel = panelRows.find((row) => String(row.type ?? "").toLowerCase() === "blood") ?? null;
   const microbiotaPanel = panelRows.find((row) => String(row.type ?? "").toLowerCase() === "microbiota") ?? null;
+
+  const recoveryDataTier = inferRecoveryDataTier({
+    recentSlice: sleepSignals.slice(-7),
+    bloodPanel,
+    microbiotaPanel,
+    physiologyState,
+  });
+  const recoveryWeights = recoveryCapacityWeights(recoveryDataTier);
 
   const autonomicChannel = summarizeChannel(
     "autonomic",
@@ -278,8 +352,19 @@ export async function resolveInternalLoadState(
         maxPenaltyPct: 35,
         source: "reality.sleep_recovery",
       }),
+      buildSignal({
+        key: "respiratory_rate_rpm",
+        label: "Respiratory rate",
+        value: recentRespiratoryRpm,
+        baseline: baselineRespiratoryRpm,
+        unit: "rpm",
+        preferredDirection: "lower",
+        tolerancePct: 6,
+        maxPenaltyPct: 25,
+        source: "reality.sleep_recovery",
+      }),
     ],
-    ["Autonomic channel combines HRV, resting HR and recovery strain across the rolling window."],
+    ["Autonomic channel combines HRV, resting HR, recovery strain and optional respiratory rate (ingest)."],
   );
 
   const sleepChannel = summarizeChannel(
@@ -483,12 +568,12 @@ export async function resolveInternalLoadState(
   const totalConfidence = channels.reduce((sum, channel) => sum + channel.confidence, 0);
   const internalLoadIndex = totalConfidence > 0 ? round(weightedScore / totalConfidence, 1) : 50;
   const recoveryCapacity = round(
-    (sleepChannel.score * 0.28 +
-      autonomicChannel.score * 0.24 +
-      hydrationCellularChannel.score * 0.18 +
-      endocrineChannel.score * 0.12 +
-      glycemicChannel.score * 0.08 +
-      entericChannel.score * 0.1),
+    sleepChannel.score * recoveryWeights.sleep +
+      autonomicChannel.score * recoveryWeights.autonomic +
+      hydrationCellularChannel.score * recoveryWeights.hydration +
+      endocrineChannel.score * recoveryWeights.endocrine +
+      glycemicChannel.score * recoveryWeights.glycemic +
+      entericChannel.score * recoveryWeights.enteric,
     1,
   );
   const adaptationReadiness = round(
@@ -542,6 +627,7 @@ export async function resolveInternalLoadState(
     calibrationWindowDays: 42,
     acuteWindowDays: 7,
     mesoWindowDays: 14,
+    recoveryDataTier,
     internalLoadIndex,
     recoveryCapacity,
     adaptationReadiness,

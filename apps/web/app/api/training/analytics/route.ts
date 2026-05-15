@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildAdaptationGuidance } from "@/lib/adaptation/adaptation-guidance";
+import {
+  twinExpectedAdaptationForGuidance,
+  twinObservedAdaptationForGuidance,
+} from "@/lib/twin/twin-adaptation-fallbacks";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
@@ -19,6 +23,7 @@ import { resolveAdaptationRegenerationLoop } from "@/lib/training/adaptation-reg
 import { buildBioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
 import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performance-integration-scaler";
+import { twinAdaptationSummaryFromTwin } from "@/lib/twin/twin-context-strip-from-memory";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 import {
   loadDataSourcePreferenceMap,
@@ -421,6 +426,7 @@ export async function GET(req: NextRequest) {
     const compareSeries = buildCompareSeries(from, to, plannedRows, series);
     const latest = series.at(-1) ?? null;
     const twinState = athleteMemory.twin;
+    const adaptationSummary = twinAdaptationSummaryFromTwin(twinState);
     const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);
     const last7 = summarizeWindow(series, 7);
     const last28 = summarizeWindow(series, 28);
@@ -437,8 +443,8 @@ export async function GET(req: NextRequest) {
       recoverySummary = null;
     }
     const adaptationGuidance = buildAdaptationGuidance({
-      expectedAdaptation: twinState?.expectedAdaptation ?? twinState?.adaptationScore ?? 0,
-      observedAdaptation: twinState?.realAdaptation ?? twinState?.adaptationScore ?? 0,
+      expectedAdaptation: twinExpectedAdaptationForGuidance(twinState),
+      observedAdaptation: twinObservedAdaptationForGuidance(twinState),
       likelyDrivers: twinState?.likelyDrivers ?? [],
     });
     const operationalContext = buildTrainingDayOperationalContext({
@@ -505,6 +511,7 @@ export async function GET(req: NextRequest) {
         executedVolumeRollup,
         recoveryContinuousRollup,
         adaptationLoop,
+        adaptationSummary,
         twinState,
         athleteMemory,
         recoverySummary,

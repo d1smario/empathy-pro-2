@@ -15,6 +15,7 @@ Documento di **riferimento rapido** (non sostituisce `CONSTITUTION.md` né `docs
 - **Builder** = unico generatore canonico di **singola sessione**; **calendar** operativo; orchestrazione annuale (Virya-equivalent) verso builder, senza secondo motore sessione.
 - **Nutrition** consuma twin + training + profile + health & bio; output da motori/solver deterministici.
 - **Dashboard / adattamento** richiude il loop su carico e supporti quando l’adattamento non segue il piano.
+- **Hub di contesto trasversale** (come la piattaforma si arricchisce con più dati reali, senza store paralleli): `docs/PRO2_CROSS_LAYER_CONTEXT_HUB_AND_ENRICHMENT.md`.
 
 ## Commercio e superficie pubblica
 

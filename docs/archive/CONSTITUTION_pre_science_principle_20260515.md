@@ -58,14 +58,11 @@ La **bioimpedenza** è prevista come ingresso strutturato per **stato cellulare 
 - **Device, laboratorio, sensori continui, file** entrano solo tramite **adapter** e **eventi normalizzati** verso la stessa memoria per `athlete_id` — vedi `docs/INGEST_DEVICE_AND_LAB_MATRIX.md`.
 - **Stripe** e **home pubblica** (piani, registrazione) sono layer **Application** e **billing**: non sostituiscono la chiave `athlete_id` né i motori.
 
-## J. Basi pubblicate dei motori, divieto di clonaggio, nessun doppione
-
-- **Letteratura e modelli pubblicati** definiscono *cosa* è plausibile modellare (es. carico giornaliero, filtri esponenzici sulle serie, relazioni impulso–risposta discusse in fisiologia dell’allenamento, limiti noti di segnali wearable). **Empathy** formula implementazioni **proprietarie, versionate e documentate** (equazioni, parametri, assunzioni) in `packages/domain-*` e in documentazione di dominio — non si persegue la **parità numerica** né il reverse engineering di algoritmi **chiusi** di prodotti terzi (app fitness, wearable, piattaforme coaching).
-- **Nessun clone** delle metriche “score” dei vendor come specifica tecnica interna; i segni provenienti dai device sono **ingressi ingest** soggetti a qualità tier e disclaimers prodotti (vedi ad es. `docs/ADAPTATION_LOAD_SCIENCE_AND_SCORE_V1.md`).
-- **Un solo grafo ingest → compute → memoria canonica**: vietato duplicare la stessa responsabilità in pipeline parallele tra moduli o route (“linea canonica convoglia” già §I e `.cursor/rules/empathy_pro2_no_parallel_lines.mdc`).
-- **AI e copiloti** interpretano, orchestrano e recuperano evidenza strutturata; non sostituiscono né ridefiniscono in silenzio i numeri dei motori (coerente con §C e §F).
-- **Revisioni testuali** di questo principio: in caso di conflitto con norme preesistenti, il testo sostituito si archivia in `docs/archive/` con riferimento esplicito; vedi snapshot `docs/archive/CONSTITUTION_pre_science_principle_20260515.md` per la versione immediatamente precedente l’aggiunta della presente §J.
-
 ---
 
-*Versione 1.3 — §J basi pubblicate motori / anti-clonaggio / anti-doppione; charter in `docs/PRODUCT_VISION.md`. Testo constitution pre-§J archiviato in `docs/archive/CONSTITUTION_pre_science_principle_20260515.md`.*
+*Versione 1.2 — memoria atleta + ingest; charter in `docs/PRODUCT_VISION.md`.*
+
+<!--
+  Archivio: copia faithful di CONSTITUTION.md al momento dello snapshot pre-§J.
+  Data snapshot: 2026-05-15. Canonical: vedere CONSTITUTION.md nel branch corrente.
+-->

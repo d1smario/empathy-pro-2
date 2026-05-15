@@ -1,6 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { resolveCanonicalPhysiologyState, type CanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import type { TwinState } from "@/lib/empathy/schemas";
+import type { AdaptationScoreV1 } from "@/lib/empathy/schemas/adaptation";
+import type { RecoveryDataTier } from "@/lib/empathy/schemas/internal-load";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
 import { extractSignalFromDeviceExportRow } from "@/lib/reality/sleep-recovery-signals";
 import { resolveInternalLoadState } from "@/lib/internal-load/internal-load-resolver";
@@ -51,6 +53,40 @@ function addDays(dateIso: string, days: number): string {
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+function buildAdaptationScoreV1(input: {
+  readiness: number;
+  latestAtl: number;
+  recoveryCapacity: number;
+  divergenceScore: number;
+  compositeScore: number;
+  drivers: string[];
+  sources: CanonicalTwinState["sources"];
+  recoveryDataTier: RecoveryDataTier;
+}): AdaptationScoreV1 {
+  const readinessBalance01 = clamp(input.readiness / 100, 0, 1);
+  const externalAcuteNorm = clamp(input.latestAtl / 150, 0, 1);
+  const internalRecoveryNorm = clamp(input.recoveryCapacity / 100, 0, 1);
+  const divergence01 = clamp(input.divergenceScore / 100, 0, 1);
+  let confidence = 0.35;
+  if (input.sources.executedLoad) confidence += 0.22;
+  if (input.sources.plannedLoad) confidence += 0.08;
+  if (input.sources.realityRecovery) confidence += 0.2;
+  if (input.sources.physiology) confidence += 0.15;
+  if (input.recoveryDataTier === "extended") confidence += 0.04;
+  if (input.recoveryDataTier === "minimal") confidence -= 0.06;
+  confidence = clamp(confidence, 0.25, 0.98);
+  return {
+    methodVersion: "adaptation_score_v1",
+    confidence: Number(confidence.toFixed(2)),
+    compositeScore: input.compositeScore,
+    readinessBalance01: Number(readinessBalance01.toFixed(3)),
+    externalAcuteNorm: Number(externalAcuteNorm.toFixed(3)),
+    internalRecoveryNorm: Number(internalRecoveryNorm.toFixed(3)),
+    divergence01: Number(divergence01.toFixed(3)),
+    drivers: [...input.drivers],
+  };
 }
 
 function average(values: Array<number | null | undefined>) {
@@ -250,6 +286,36 @@ export async function resolveCanonicalTwinState(
     100,
   );
 
+  const sourcesForScore: CanonicalTwinState["sources"] = {
+    physiology:
+      physiologyState.sources.physiologicalProfile ||
+      physiologyState.sources.lactateRun ||
+      physiologyState.sources.performanceRun,
+    bioenergetics:
+      physiologyState.sources.biomarkerPanel ||
+      physiologyState.sources.lactateRun ||
+      physiologyState.sources.performanceRun,
+    executedLoad: executedRows.length > 0,
+    plannedLoad: plannedRows.length > 0,
+    realityRecovery: recoveryRows.length > 0,
+    internalLoad: true,
+  };
+
+  const compositeAdaptationScore = Number(
+    ((adaptationScore * 0.55) + (internalLoadState.observed.observedAdaptationScore * 0.45)).toFixed(1),
+  );
+
+  const adaptationScoreV1 = buildAdaptationScoreV1({
+    readiness,
+    latestAtl: latest ? latest.atl : 0,
+    recoveryCapacity: internalLoadState.recoveryCapacity,
+    divergenceScore: internalLoadState.divergence.divergenceScore,
+    compositeScore: compositeAdaptationScore,
+    drivers: internalLoadState.divergence.likelyDrivers,
+    sources: sourcesForScore,
+    recoveryDataTier: internalLoadState.recoveryDataTier,
+  });
+
   return {
     athleteId,
     asOf: new Date().toISOString(),
@@ -276,26 +342,15 @@ export async function resolveCanonicalTwinState(
     adaptationReadiness: Number(internalLoadState.adaptationReadiness.toFixed(1)),
     giTolerance: Number(giTolerance.toFixed(1)),
     inflammationRisk: Number(inflammationRisk.toFixed(1)),
-    adaptationScore: Number(((adaptationScore * 0.55) + (internalLoadState.observed.observedAdaptationScore * 0.45)).toFixed(1)),
+    adaptationScore: compositeAdaptationScore,
+    adaptationScoreV1,
     expectedAdaptation: Number(internalLoadState.expected.expectedAdaptationScore.toFixed(1)),
     realAdaptation: Number(internalLoadState.observed.observedAdaptationScore.toFixed(1)),
     divergenceScore: Number(internalLoadState.divergence.divergenceScore.toFixed(1)),
     likelyDrivers: internalLoadState.divergence.likelyDrivers,
     interventionScore: Number(clamp((100 - readiness) * 0.55 + inflammationRisk * 0.2, 0, 100).toFixed(1)),
-    sources: {
-      physiology:
-        physiologyState.sources.physiologicalProfile ||
-        physiologyState.sources.lactateRun ||
-        physiologyState.sources.performanceRun,
-      bioenergetics:
-        physiologyState.sources.biomarkerPanel ||
-        physiologyState.sources.lactateRun ||
-        physiologyState.sources.performanceRun,
-      executedLoad: executedRows.length > 0,
-      plannedLoad: plannedRows.length > 0,
-      realityRecovery: recoveryRows.length > 0,
-      internalLoad: true,
-    },
+    recoveryDataTier: internalLoadState.recoveryDataTier,
+    sources: sourcesForScore,
     loadSnapshot: {
       recentExecutedSessions: executedRows.length,
       plannedSessionsNext7d,

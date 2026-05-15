@@ -115,3 +115,14 @@ export function formatPlannedWorkoutTitle(workout: PlannedWorkout): string {
 export function formatExecutedWorkoutSummary(workout: ExecutedWorkout): string {
   return [`${workout.durationMinutes} min`, `TSS ${workout.tss}`, workout.source ?? "manual"].join(" · ");
 }
+
+/** Serie giornaliero carico: EWMA documentata (`docs/ADAPTATION_LOAD_SCIENCE_AND_SCORE_V1.md`). */
+export {
+  DEFAULT_ATL_TAU_DAYS,
+  DEFAULT_CTL_TAU_DAYS,
+  ewmaDailyStep,
+  ewmaRetentionFromTauDays,
+} from "./daily-load-ewma";
+
+export { empathyCardioImpulseDailyFromSession } from "./empathy-cardio-impulse-daily";
+export { empathyExternalDailyImpulseFromSession } from "./empathy-external-daily-impulse";

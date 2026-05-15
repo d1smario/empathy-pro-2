@@ -54,12 +54,16 @@ export type AdaptationDivergenceState = {
   likelyDrivers: string[];
 };
 
+/** Copertura segnali recupero → pesi canali in `resolveInternalLoadState` (Empathy, non vendor). */
+export type RecoveryDataTier = "minimal" | "standard" | "extended";
+
 export type InternalLoadState = {
   athleteId: string;
   asOf: IsoDateTime;
   calibrationWindowDays: number;
   acuteWindowDays: number;
   mesoWindowDays: number;
+  recoveryDataTier: RecoveryDataTier;
   internalLoadIndex: number;
   recoveryCapacity: number;
   adaptationReadiness: number;

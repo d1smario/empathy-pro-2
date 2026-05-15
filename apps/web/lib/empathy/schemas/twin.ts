@@ -3,7 +3,9 @@
  * Updated by events (workout, sleep, HRV, CGM, meals, biomarkers).
  */
 
+import type { AdaptationScoreV1 } from "./adaptation";
 import type { IsoDate, IsoDateTime } from "./common";
+import type { RecoveryDataTier } from "./internal-load";
 
 export type TwinState = {
   athleteId: string;
@@ -41,6 +43,8 @@ export type TwinState = {
   inflammationRisk?: number;
   /** Adaptation score (quanto ci si adatta allo stimolo) */
   adaptationScore?: number;
+  /** Dettaglio versionato (metodo + confidence + assi normalizzati); preferire per nuove integrazioni. */
+  adaptationScoreV1?: AdaptationScoreV1;
   /** Adattamento atteso vs reale → divergence */
   expectedAdaptation?: number;
   realAdaptation?: number;
@@ -48,6 +52,8 @@ export type TwinState = {
   likelyDrivers?: string[];
   /** Quanto il sistema ha intervenuto (es. riduzione TSS) */
   interventionScore?: number;
+  /** Copertura segnali recupero (internal load); allineato a `resolveInternalLoadState`. */
+  recoveryDataTier?: RecoveryDataTier;
   /** Snapshot per date (opzionale, per storico) */
   history?: TwinStateSnapshot[];
 };

@@ -1,6 +1,7 @@
 # EMPATHY Pro 2.0 — Blueprint tecnico (greenfield)
 
 **Prodotto e charter:** `docs/PRODUCT_VISION.md`, `CONSTITUTION.md`, `docs/COMMERCIAL_AND_ROLES.md`.  
+**Contesto cross-modulo e arricchimento:** `docs/PRO2_CROSS_LAYER_CONTEXT_HUB_AND_ENRICHMENT.md`.  
 Questo file è lo **scheletro tecnico** e l’assorbimento da V1.
 
 **Fonti V1 da non perdere:** `ARCHITECTURE_RULES.md`, `docs/ARCHITECTURE.md`, `docs/PLATFORM_STRUCTURAL_SCHEMA.md`, `docs/KNOWLEDGE_LIBRARY_ARCHITECTURE.md`, `.cursor/rules/empathy_*.mdc` (nel repo `nextjs-empathy-pro`).
