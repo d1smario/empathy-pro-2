@@ -248,7 +248,7 @@ function nominalHormoneCurveRationaleIt(
 
 /** Diurna nominale (ormoni vari): come gli altri sim, AI inizialmente in vantaggio → pareggio con ricchezza contesto. */
 export function arbitrateNominalHormoneCurveFusionV1(
-  channelId: "cortisol" | "acth" | "tsh" | "ft4" | "gh" | "ghrelin",
+  channelId: "cortisol" | "acth" | "tsh" | "ft4" | "gh" | "ghrelin" | "igf1" | "leptin",
   internalContextRichness01: number,
 ): BioenergeticChannelCurveResolutionV1 {
   const r = round3(clamp(internalContextRichness01, 0, 1));
