@@ -19,6 +19,9 @@ import {
   simBlendDeterministicWeightFromRichness01,
   synthesizeEvidenceConditionedLayerV1,
 } from "@empathy/domain-bioenergetics";
+import type {
+  InsulinStimulusLiteratureManifestEntryV1,
+} from "@empathy/domain-bioenergetics";
 import type { BioenergeticsDayViewModel, BioenergeticsWindowViewModel, BioenergeticStimulusPredictorSubhourlyMetaV1 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
 import { loadBioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
@@ -125,7 +128,9 @@ export function buildBioenergeticDayViewModelFromSlice(input: {
           insulin: {
             predictorContractVersion: INSULIN_STIMULUS_PREDICTOR_CONTRACT_VERSION,
             sourcePrefix: INSULIN_STIMULUS_PREDICTOR_SOURCE_PREFIX,
-            literatureManifestEntryIds: PRED_INSULIN_STIMULI_LITERATURE_MANIFEST_V1.map((e) => e.id),
+            literatureManifestEntryIds: PRED_INSULIN_STIMULI_LITERATURE_MANIFEST_V1.map(
+              (e: InsulinStimulusLiteratureManifestEntryV1) => e.id,
+            ),
           },
         }
       : undefined;
