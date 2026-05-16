@@ -8,6 +8,7 @@ import {
 } from "@/components/profile/ProfilePro2KpiCard";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
+import { ManualIntegrationPullButton } from "@/components/integrations/ManualIntegrationPullButton";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { moduleEyebrowClass } from "@/core/navigation/module-ui-accent";
 import type { AthleteMemory, PhysiologyState, TwinState } from "@/lib/empathy/schemas";
@@ -1826,8 +1827,8 @@ export default function ProfilePage() {
                 ) : null}
                 {stravaReturn === "ok" ? (
                   <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
-                    Strava collegato. Token salvati lato server; il pull attività da Strava va configurato separatamente
-                    quando sarà disponibile.
+                    Strava collegato. Token salvati lato server; usa «Aggiorna attività Strava» qui sotto o in Impostazioni →
+                    Mio account · device.
                   </p>
                 ) : null}
                 {stravaReturn === "error" ? (
@@ -2264,6 +2265,12 @@ export default function ProfilePage() {
                         >
                           {stravaLink.linked ? "Ricollega Strava" : "Collega Strava"}
                         </a>
+                        <ManualIntegrationPullButton
+                          athleteId={activeAthleteId}
+                          linked={Boolean(stravaLink.linked)}
+                          endpoint="/api/integrations/strava/pull/run"
+                          label="Aggiorna attività Strava"
+                        />
                       </div>
                     </div>
                   </div>

@@ -93,7 +93,12 @@ export type AdaptationRegenerationLoop = {
   nextAction: "keep_course" | "retune_next_sessions" | "regenerate_microcycle";
   triggers: string[];
   guidance: string;
+  /** Carico eseguito 7g troppo basso per narrativa adattamento affidabile. */
+  lowExecutionEvidence: boolean;
 };
+
+/** Soglia minima somma TSS eseguito (7g) per considerare il loop adattamento “ancorato” alla reality. */
+const MIN_REAL_LOAD_7D_FOR_LOOP = 1;
 
 export async function resolveAdaptationRegenerationLoop(input: {
   athleteId: string;
@@ -130,8 +135,10 @@ export async function resolveAdaptationRegenerationLoop(input: {
   const series = computeDailyLoadSeries((executedData ?? []) as ExecutedWorkoutLoadRow[]);
   const compareSeries = buildCompareSeries(from, to, (plannedData ?? []) as PlannedWorkoutLoopRow[], series);
   const planLast7 = summarizePlanWindow(compareSeries);
+  const lowExecutionEvidence =
+    planLast7.planned > 0 && planLast7.executed < MIN_REAL_LOAD_7D_FOR_LOOP;
 
-  const divergenceScore = round(
+  let divergenceScore = round(
     clamp(
       input.twinState?.divergenceScore ?? Math.abs(planLast7.delta) * 0.5,
       0,
@@ -141,12 +148,18 @@ export async function resolveAdaptationRegenerationLoop(input: {
   );
   const readinessScore = round(clamp(input.twinState?.readiness ?? 0, 0, 100), 1);
   const adaptationScore = round(clamp(input.twinState?.adaptationScore ?? 0, 0, 100), 1);
-  const interventionScore = round(clamp(input.twinState?.interventionScore ?? 0, 0, 100), 1);
+  let interventionScore = round(clamp(input.twinState?.interventionScore ?? 0, 0, 100), 1);
+
+  if (lowExecutionEvidence) {
+    divergenceScore = round(divergenceScore * 0.35, 1);
+    interventionScore = round(interventionScore * 0.35, 1);
+  }
 
   const triggers = [
+    lowExecutionEvidence ? "insufficient_execution_data" : null,
     planLast7.compliancePct < 85 ? "execution_gap" : null,
     Math.abs(planLast7.delta) >= 20 ? "planned_real_mismatch" : null,
-    divergenceScore >= 18 ? "adaptation_divergence" : null,
+    !lowExecutionEvidence && divergenceScore >= 18 ? "adaptation_divergence" : null,
     input.recoverySummary?.status === "poor" ? "recovery_poor" : null,
     input.operationalContext?.mode === "protective" ? "protective_mode" : null,
     ...(input.twinState?.likelyDrivers ?? []),
@@ -157,22 +170,31 @@ export async function resolveAdaptationRegenerationLoop(input: {
   if (
     input.operationalContext?.mode === "protective" ||
     input.recoverySummary?.status === "poor" ||
-    divergenceScore >= 25 ||
-    planLast7.compliancePct < 70
+    (!lowExecutionEvidence && divergenceScore >= 25) ||
+    (!lowExecutionEvidence && planLast7.compliancePct < 70)
   ) {
     status = "regenerate";
     nextAction = "regenerate_microcycle";
-  } else if (divergenceScore >= 12 || planLast7.compliancePct < 90 || readinessScore < 60) {
+  } else if (
+    (!lowExecutionEvidence && divergenceScore >= 12) ||
+    (!lowExecutionEvidence && planLast7.compliancePct < 90) ||
+    readinessScore < 60
+  ) {
     status = "watch";
     nextAction = "retune_next_sessions";
   }
 
-  const guidance =
+  let guidance =
     status === "regenerate"
       ? "Planned vs real e stato adattivo non sono coerenti: rigenera il microciclo prossimo usando twin, recovery e bioenergetica come vincoli primari."
       : status === "watch"
         ? "Loop adattivo in osservazione: ritocca le prossime sedute e riallinea densita', intensita' e recupero sul delta recente."
         : "Loop coerente: planned, real e adattamento restano abbastanza allineati per proseguire senza rigenerazione.";
+
+  if (lowExecutionEvidence) {
+    guidance =
+      "Manca carico eseguito registrato negli ultimi 7 giorni: CTL/coupling e divergenza non sono interpretabili finché non arrivano sessioni eseguite (device, import o manuale). Twin e recovery restano validi come contesto.";
+  }
 
   return {
     windowDays: 7,
@@ -189,5 +211,6 @@ export async function resolveAdaptationRegenerationLoop(input: {
     nextAction,
     triggers,
     guidance,
+    lowExecutionEvidence,
   };
 }

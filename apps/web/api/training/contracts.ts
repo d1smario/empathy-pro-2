@@ -93,6 +93,8 @@ export type TrainingAdaptationLoopViewModel = {
   nextAction: "keep_course" | "retune_next_sessions" | "regenerate_microcycle";
   triggers: string[];
   guidance: string;
+  /** True quando il carico eseguito 7g è insufficiente per interpretare divergenza/intervento (Reality > Plan). */
+  lowExecutionEvidence?: boolean;
 };
 
 export type TrainingBioenergeticModulationViewModel = {
@@ -367,6 +369,25 @@ export type TrainingRecoveryContinuousRollupViewModel = {
   sampleCount: number;
 };
 
+export type TrainingRealityDiagnosticsHint =
+  | "none"
+  | "no_executed_in_window"
+  | "preference_mismatch"
+  | "executed_no_load_signal";
+
+export type TrainingRealityDiagnosticsViewModel = {
+  windowDays: number;
+  preferredTrainingProvider: string | null;
+  executedCountRaw: number;
+  executedCountVisible: number;
+  hiddenByTrainingPreference: number;
+  sourceCounts: Array<{ source: string; count: number }>;
+  sessionsWithStructuredTss: number;
+  sessionsWithExternalImpulse: number;
+  sessionsWithNoLoadSignal: number;
+  hint: TrainingRealityDiagnosticsHint;
+};
+
 export type TrainingAnalyticsViewModel = {
   athleteId?: string;
   from?: string;
@@ -394,6 +415,8 @@ export type TrainingAnalyticsViewModel = {
   readSpineCoverage?: ReadSpineCoverageSummary | null;
   /** Fase 4 device→UI: incroci intra-sessione (power/HR vs CGM glucosio) per Analyzer. */
   crossChannelSessions?: CrossChannelSessionVm[];
+  /** Perché CTL/TSS possono essere 0 nonostante piano o recovery popolati (7g). */
+  trainingRealityDiagnostics?: TrainingRealityDiagnosticsViewModel | null;
   error?: string | null;
 };
 

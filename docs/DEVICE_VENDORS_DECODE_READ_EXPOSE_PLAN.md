@@ -71,7 +71,7 @@ Prossimi incrementi consigliati: normalizzazione batch verso time-series; refres
 - **DB**: migration `040_vendor_oauth_strava.sql` estende `vendor_oauth_links.vendor` con valore `strava`.
 - **Route**: `GET /api/integrations/strava/authorize?athleteId=…`, `GET /api/integrations/strava/callback` (alias opzionale `GET /api/auth/callback/strava` se il redirect URI punta lì), `GET /api/integrations/strava/link-status?athleteId=…`.
 - **Persistenza**: token in `vendor_oauth_links` come WHOOP/Wahoo (`lib/integrations/strava-oauth2-api.ts`).
-- **UI Profilo** → Devices: «Collega Strava» / «Ricollega Strava». Pull attività da API Strava non ancora cablato (solo link OAuth).
+- **UI Profilo** → Devices: «Collega Strava» / «Ricollega Strava». Pull attività: `POST /api/integrations/strava/pull/run` (`strava-pull-runner` → `executed_workouts`); estendere UI «Aggiorna Strava» come WHOOP/Wahoo se assente.
 
 ## Ingest clips (implementato)
 

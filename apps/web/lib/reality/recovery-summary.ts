@@ -170,7 +170,9 @@ export async function resolveLatestRecoverySummary(athleteId: string, lookbackDa
       signal.readinessScore != null ||
       signal.recoveryScore != null ||
       signal.hrvMs != null ||
-      signal.sleepDurationHours != null
+      signal.restingHrBpm != null ||
+      signal.sleepDurationHours != null ||
+      signal.respiratoryRateRpm != null
     );
   });
 

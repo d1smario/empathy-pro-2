@@ -53,7 +53,7 @@ const DOMAIN_META: Array<{
   {
     id: "training_activity",
     title: "Training (attività)",
-    hint: "Workout eseguiti (corse, bici, gym, …). Filtra cosa entra nel calendario eseguito e negli analytics (`executed_workouts.source` → api_sync:provider:…).",
+    hint: "Workout eseguiti (corse, bici, gym, …). Filtra calendario, analytics e Core CTL/TSS per prefisso `api_sync:<provider>:`. Se il device reale è Garmin ma qui scegli Strava, le attività restano in DB ma non contano nel carico — usa Auto o il provider corretto.",
     options: [
       { value: "", label: "Auto (mix tutti i provider)" },
       { value: "garmin", label: "Garmin" },

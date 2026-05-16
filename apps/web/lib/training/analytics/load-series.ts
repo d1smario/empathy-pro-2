@@ -79,7 +79,13 @@ export function computeDailyLoadSeries(rows: ExecutedWorkoutLoadRow[]): DailyLoa
   const byDay = new Map<string, { external: number; internal: number }>();
   for (const row of sorted) {
     const prev = byDay.get(row.date) ?? { external: 0, internal: 0 };
-    const hrAvg = pickMetric(row.trace_summary, ["hr_avg_bpm", "avg_hr", "heart_rate_avg"]);
+    const hrAvg = pickMetric(row.trace_summary, [
+      "hr_avg_bpm",
+      "avg_hr",
+      "heart_rate_avg",
+      "avg_heart_rate",
+      "averageHeartRateInBeatsPerMinute",
+    ]);
     const externalInc = empathyExternalDailyImpulseFromSession({
       tss: row.tss != null ? Number(row.tss) : null,
       durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),

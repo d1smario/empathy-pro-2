@@ -1,6 +1,10 @@
 "use client";
 
-import type { TrainingAdaptationLoopViewModel, TrainingBioenergeticModulationViewModel } from "@/api/training/contracts";
+import type {
+  TrainingAdaptationLoopViewModel,
+  TrainingBioenergeticModulationViewModel,
+  TrainingRealityDiagnosticsViewModel,
+} from "@/api/training/contracts";
 import { Activity, LineChart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Pro2Link } from "@/components/ui/empathy";
@@ -14,6 +18,7 @@ import type { RecoverySummary } from "@/lib/reality/recovery-summary";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { fetchTrainingAnalyticsRows } from "@/modules/training/services/training-analytics-api";
+import { trainingRealityDiagnosticsBannerIt } from "@/lib/training/training-reality-diagnostics";
 
 function toDateOnly(d: Date): string {
   return d.toISOString().slice(0, 10);
@@ -193,6 +198,8 @@ export function DashboardLoadAnalysisSummary() {
   const [operationalContext, setOperationalContext] = useState<TrainingDayOperationalContext | null>(null);
   const [bioenergeticModulation, setBioenergeticModulation] = useState<TrainingBioenergeticModulationViewModel | null>(null);
   const [healthPanels, setHealthPanels] = useState<HealthPanelTimelineRow[]>([]);
+  const [trainingRealityDiagnostics, setTrainingRealityDiagnostics] =
+    useState<TrainingRealityDiagnosticsViewModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -211,6 +218,7 @@ export function DashboardLoadAnalysisSummary() {
         setOperationalContext(null);
         setBioenergeticModulation(null);
         setHealthPanels([]);
+        setTrainingRealityDiagnostics(null);
         setLoading(false);
         return;
       }
@@ -240,6 +248,7 @@ export function DashboardLoadAnalysisSummary() {
         setRecoverySummary(null);
         setOperationalContext(null);
         setBioenergeticModulation(null);
+        setTrainingRealityDiagnostics(null);
       } else {
         setRows(payload.rows ?? []);
         setSeries(payload.series ?? []);
@@ -283,6 +292,7 @@ export function DashboardLoadAnalysisSummary() {
         setRecoverySummary(payload.recoverySummary ?? null);
         setOperationalContext(payload.operationalContext ?? null);
         setBioenergeticModulation(payload.bioenergeticModulation ?? null);
+        setTrainingRealityDiagnostics(payload.trainingRealityDiagnostics ?? null);
       }
 
       setHealthPanels(healthRes.panels ?? []);
@@ -367,6 +377,21 @@ export function DashboardLoadAnalysisSummary() {
     ? `${(twinState.glycogenStatus ?? 0).toFixed(0)} / ${(twinState.adaptationScore ?? 0).toFixed(0)}`
     : "—";
   const adaptabilityScore = Math.max(0, Math.min(100, Math.round(100 - divergenceScore * 1.7)));
+  const realityDiagBanner = trainingRealityDiagnostics
+    ? trainingRealityDiagnosticsBannerIt(trainingRealityDiagnostics)
+    : null;
+  const showPreferenceMismatchBanner =
+    trainingRealityDiagnostics?.hint === "preference_mismatch" && Boolean(realityDiagBanner);
+  const showNoExecutedBanner =
+    !showPreferenceMismatchBanner &&
+    (plan7?.planned ?? 0) > 0 &&
+    (plan7?.executed ?? 0) < 1;
+  const showNoTssBanner =
+    !showNoExecutedBanner &&
+    !showPreferenceMismatchBanner &&
+    (plan7?.executed ?? 0) >= 1 &&
+    ext7 < 1 &&
+    ref7.tss < 1;
   const metricsRecent = [ext7, int7, plan7?.planned ?? 0, compliance7, latest?.ctl ?? 0, latest?.iCtl ?? 0];
   const metricsBaseline = [
     windows?.last28.external ?? 0,
@@ -422,6 +447,35 @@ export function DashboardLoadAnalysisSummary() {
           </p>
         ) : (
           <div className="mt-6 space-y-8">
+            {showPreferenceMismatchBanner && realityDiagBanner ? (
+              <p
+                className="rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100"
+                role="status"
+              >
+                <strong className="font-semibold text-cyan-50">Fonte training filtrata.</strong> {realityDiagBanner}
+              </p>
+            ) : null}
+            {showNoExecutedBanner ? (
+              <p
+                className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
+                role="status"
+              >
+                <strong className="font-semibold text-amber-50">Manca la reality esecuzione (7g).</strong> Il piano è
+                presente ma non risultano sessioni eseguite con carico: CTL, TSS, coupling e compliance non sono
+                significativi finché non sincronizzi device (Garmin/Wahoo/Strava), importi file o registri il
+                completato.
+              </p>
+            ) : null}
+            {showNoTssBanner ? (
+              <p
+                className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100"
+                role="status"
+              >
+                <strong className="font-semibold text-violet-50">Esecuzioni senza TSS strutturato.</strong> Ci sono
+                attività registrate ma senza impulso di carico (TSS o proxy da FC): verifica trace/power sulle sessioni
+                eseguite o collega un provider training.
+              </p>
+            ) : null}
             <div className="grid gap-6 lg:grid-cols-2">
               <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-orange-200/90">Stimolo &amp; fitness</h3>
@@ -490,6 +544,12 @@ export function DashboardLoadAnalysisSummary() {
                 </p>
                 {adaptationLoop.triggers.length ? (
                   <p className="mt-2 text-xs text-amber-200/80">Trigger: {adaptationLoop.triggers.join(" · ")}</p>
+                ) : null}
+                {adaptationLoop.lowExecutionEvidence ? (
+                  <p className="mt-2 text-xs text-amber-200/85">
+                    Evidenza esecutiva bassa: divergenza e intervento sono attenuati finché non c&apos;è carico
+                    eseguito registrato (7g).
+                  </p>
                 ) : null}
               </details>
             ) : null}

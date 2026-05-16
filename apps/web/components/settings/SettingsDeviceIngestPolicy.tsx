@@ -121,8 +121,8 @@ export function SettingsDeviceIngestPolicy() {
         </p>
         <p className="mt-2 text-sm text-gray-400">
           Scegli quali stream ogni integrazione può scrivere in <code className="text-gray-500">device_sync_exports</code> durante il
-          pull. WHOOP invia anche workout: lascia disattivato se il training canonico arriva da Garmin (o altro) per evitare
-          doppioni logici a valle.
+          pull. WHOOP/Wahoo <strong className="font-normal text-gray-300">workout</strong>: lascia Off se il training canonico
+          arriva da Garmin o Strava; abbina la preferenza «Training» sopra allo stesso provider per evitare doppioni in Core.
         </p>
         <p className="mt-1 text-[0.65rem] text-gray-600">
           API:{" "}

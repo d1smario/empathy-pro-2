@@ -96,6 +96,7 @@ export async function fetchTrainingAnalyticsRows(input: {
     crossModuleDynamicsLines: payload.crossModuleDynamicsLines ?? [],
     readSpineCoverage: payload.readSpineCoverage ?? null,
     crossChannelSessions: payload.crossChannelSessions ?? [],
+    trainingRealityDiagnostics: payload.trainingRealityDiagnostics ?? null,
     error: payload.error,
     athleteId: payload.athleteId,
     from: payload.from,

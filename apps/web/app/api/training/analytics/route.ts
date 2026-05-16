@@ -26,9 +26,11 @@ import { buildNutritionPerformanceIntegration } from "@/lib/nutrition/performanc
 import { twinAdaptationSummaryFromTwin } from "@/lib/twin/twin-context-strip-from-memory";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
 import {
+  executedWorkoutSourceMatchesPreference,
   loadDataSourcePreferenceMap,
   pickPreferredProvider,
 } from "@/lib/integrations/data-source-preference";
+import { summarizeTrainingRealityDiagnostics } from "@/lib/training/training-reality-diagnostics";
 import {
   extractSignalFromDeviceExportRow,
   isSleepBearingDevicePayload,
@@ -312,21 +314,34 @@ export async function GET(req: NextRequest) {
     // recovery degli analytics. Se non c'è preferenza, comportamento storico.
     const dataSourcePref = await loadDataSourcePreferenceMap(db, athleteId);
     const preferRecovery = pickPreferredProvider(dataSourcePref, "wellness_recovery");
-    const preferTrainingActivity = pickPreferredProvider(dataSourcePref, "training_activity");
-
     const filteredDeviceExports = preferRecovery
       ? ((deviceExportsData ?? []) as Array<Record<string, unknown>>).filter(
           (row) => typeof row.provider === "string" && row.provider === preferRecovery,
         )
       : (deviceExportsData ?? []);
 
-    const rows = ((executedData ?? []) as Array<Record<string, unknown>>).filter((row) => {
-      if (!preferTrainingActivity) return true;
+    const rawExecutedRows = (executedData ?? []) as Array<Record<string, unknown>>;
+    const rows = rawExecutedRows.filter((row) => {
       const source = (row as { source?: unknown }).source;
-      if (typeof source !== "string") return true; // legacy: non scartare row senza source
-      if (source === preferTrainingActivity) return true;
-      return source.startsWith(`api_sync:${preferTrainingActivity}:`);
+      return executedWorkoutSourceMatchesPreference(
+        dataSourcePref,
+        typeof source === "string" ? source : null,
+      );
     });
+    const trainingRealityDiagnostics = summarizeTrainingRealityDiagnostics(
+      rawExecutedRows.map((row) => ({
+        date: typeof row.date === "string" ? row.date : null,
+        source: typeof row.source === "string" ? row.source : null,
+        tss: typeof row.tss === "number" ? row.tss : null,
+        duration_minutes:
+          typeof row.duration_minutes === "number" && Number.isFinite(row.duration_minutes)
+            ? row.duration_minutes
+            : null,
+        trace_summary: asRecord(row.trace_summary),
+      })),
+      dataSourcePref,
+      { endDate: to, windowDays: 7 },
+    );
     const rowsByDate = new Map<string, Record<string, unknown>>();
     for (const row of rows) {
       const date = typeof row.date === "string" ? row.date : "";
@@ -522,6 +537,7 @@ export async function GET(req: NextRequest) {
         crossModuleDynamicsLines,
         readSpineCoverage,
         crossChannelSessions,
+        trainingRealityDiagnostics,
         source: "analytics_v3_planned_real_internal_external",
       },
       { headers: NO_STORE },
