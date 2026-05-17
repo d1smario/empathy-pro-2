@@ -31,6 +31,8 @@ import {
   pickPreferredProvider,
 } from "@/lib/integrations/data-source-preference";
 import { summarizeTrainingRealityDiagnostics } from "@/lib/training/training-reality-diagnostics";
+import { executedWorkoutsFromAnalyticsRows } from "@/lib/training/analytics/analytics-row-mappers";
+import { wellnessSignalsByDateFromLoadRows } from "@/lib/training/analytics/wellness-signals-from-load-rows";
 import {
   extractSignalFromDeviceExportRow,
   isSleepBearingDevicePayload,
@@ -437,7 +439,9 @@ export async function GET(req: NextRequest) {
     });
 
     const plannedRows = (plannedData ?? []) as PlannedWorkoutAnalyticsRow[];
-    const series = computeDailyLoadSeries(enrichedRows as ExecutedWorkoutLoadRow[]);
+    const executedSessions = executedWorkoutsFromAnalyticsRows(rows, athleteId);
+    const wellnessByDate = wellnessSignalsByDateFromLoadRows(enrichedRows as ExecutedWorkoutLoadRow[]);
+    const series = computeDailyLoadSeries(rows as ExecutedWorkoutLoadRow[], { wellnessByDate });
     const compareSeries = buildCompareSeries(from, to, plannedRows, series);
     const latest = series.at(-1) ?? null;
     const twinState = athleteMemory.twin;
@@ -508,6 +512,7 @@ export async function GET(req: NextRequest) {
         from,
         to,
         rows: enrichedRows,
+        executedSessions,
         plannedRows,
         series,
         compareSeries,

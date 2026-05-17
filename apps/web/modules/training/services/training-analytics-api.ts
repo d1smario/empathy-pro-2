@@ -25,6 +25,7 @@ export async function fetchTrainingAnalyticsRows(input: {
   } catch (error) {
     return {
       rows: [],
+      executedSessions: [],
       plannedRows: [],
       series: [],
       compareSeries: [],
@@ -51,6 +52,7 @@ export async function fetchTrainingAnalyticsRows(input: {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     return {
       rows: [],
+      executedSessions: [],
       plannedRows: [],
       series: [],
       compareSeries: [],
@@ -76,6 +78,7 @@ export async function fetchTrainingAnalyticsRows(input: {
   const payload = (await response.json()) as TrainingAnalyticsViewModel;
   return {
     rows: payload.rows ?? [],
+    executedSessions: payload.executedSessions ?? [],
     plannedRows: payload.plannedRows ?? [],
     series: payload.series ?? [],
     compareSeries: payload.compareSeries ?? [],

@@ -27,7 +27,12 @@ import {
 } from "@/lib/training/analytics/executed-metric-aggregates";
 import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
 import { TrainingAnalyzerCrossChannelSection } from "@/components/training/TrainingAnalyzerCrossChannelSection";
+import { CalendarDaySessionDetail } from "@/components/training/CalendarDaySessionDetail";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
+import { workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
+import { trainingRealityDiagnosticsBannerIt } from "@/lib/training/training-reality-diagnostics";
+import type { ExecutedWorkout } from "@empathy/domain-training";
+import type { TrainingRealityDiagnosticsViewModel } from "@/api/training/contracts";
 import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
 import {
   executedWorkoutsFromAnalyticsRows,
@@ -201,6 +206,9 @@ export default function TrainingAnalyticsPageView() {
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [crossModuleDynamicsLines, setCrossModuleDynamicsLines] = useState<string[]>([]);
   const [crossChannelSessions, setCrossChannelSessions] = useState<CrossChannelSessionVm[]>([]);
+  const [executedSessions, setExecutedSessions] = useState<ExecutedWorkout[]>([]);
+  const [trainingRealityDiagnostics, setTrainingRealityDiagnostics] =
+    useState<TrainingRealityDiagnosticsViewModel | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   /** Ultimo giorno della finestra analizzata (incluso). */
@@ -240,6 +248,8 @@ export default function TrainingAnalyticsPageView() {
         setReadSpineCoverage(null);
         setCrossModuleDynamicsLines([]);
         setCrossChannelSessions([]);
+        setExecutedSessions([]);
+        setTrainingRealityDiagnostics(null);
         setLoading(false);
         return;
       }
@@ -269,8 +279,12 @@ export default function TrainingAnalyticsPageView() {
         setReadSpineCoverage(null);
         setCrossModuleDynamicsLines([]);
         setCrossChannelSessions([]);
+        setExecutedSessions([]);
+        setTrainingRealityDiagnostics(null);
       } else {
         setRows(payload.rows ?? []);
+        setExecutedSessions(payload.executedSessions ?? []);
+        setTrainingRealityDiagnostics(payload.trainingRealityDiagnostics ?? null);
         setPlannedRows(payload.plannedRows ?? []);
         setSeries(payload.series ?? []);
         setCompareSeries(payload.compareSeries ?? []);
@@ -324,10 +338,10 @@ export default function TrainingAnalyticsPageView() {
   }, [operationalContext, adaptationLoop?.expectedLoad7d]);
 
   const dmMap = useMemo(() => dailyMetricMap(rows as ExecutedAnalyticsRow[]), [rows]);
-  const executedWorkouts = useMemo(
-    () => (athleteId ? executedWorkoutsFromAnalyticsRows(rows, athleteId) : []),
-    [rows, athleteId],
-  );
+  const executedWorkouts = useMemo(() => {
+    if (executedSessions.length > 0) return executedSessions;
+    return athleteId ? executedWorkoutsFromAnalyticsRows(rows, athleteId) : [];
+  }, [executedSessions, rows, athleteId]);
   const plannedWorkouts = useMemo(
     () => (athleteId ? plannedWorkoutsFromAnalyticsRows(plannedRows, athleteId) : []),
     [plannedRows, athleteId],
@@ -344,14 +358,20 @@ export default function TrainingAnalyticsPageView() {
     () => monthWorkoutsForDate(executedWorkouts, focusDay),
     [executedWorkouts, focusDay],
   );
-  const activeDays = useMemo(
-    () =>
-      compareSeries
-        .filter((c) => c.executed > 0 || c.planned > 0)
-        .map((c) => c.date)
-        .slice(-14),
-    [compareSeries],
-  );
+  const activeDays = useMemo(() => {
+    const days = new Set<string>();
+    for (const w of executedWorkouts) {
+      const key = workoutDayKey(w);
+      if (key && Number(w.durationMinutes) > 0) days.add(key);
+    }
+    for (const c of compareSeries) {
+      if (c.executed > 0 || c.planned > 0) days.add(c.date);
+    }
+    return Array.from(days).sort().slice(-14);
+  }, [executedWorkouts, compareSeries]);
+  const realityDiagBanner = trainingRealityDiagnostics
+    ? trainingRealityDiagnosticsBannerIt(trainingRealityDiagnostics)
+    : null;
   const weeklyExternalLoad = useMemo(() => {
     const last42 = compareSeries.slice(-42);
     const weeks: number[] = [];
@@ -612,16 +632,30 @@ export default function TrainingAnalyticsPageView() {
             <p className="mb-4 text-xs text-slate-400">
               GPS, telemetria, min/max, profili esagonali potenza · FC · VAM (5s–60′). Stesso pannello del Calendario.
             </p>
+            {realityDiagBanner ? (
+              <p className="mb-4 rounded-lg border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-xs text-amber-100">
+                {realityDiagBanner}
+              </p>
+            ) : null}
             {focusDayExecuted.length === 0 && focusDayPlanned.length === 0 ? (
               <p className="text-sm text-slate-500">Nessuna seduta in questo giorno nel range caricato.</p>
             ) : (
-              <TrainingCalendarAnalyzer
-                selectedDate={focusDay}
-                dayPlanned={focusDayPlanned}
-                dayExecuted={focusDayExecuted}
-                monthExecuted={focusMonthExecuted}
-                athleteId={athleteId}
-              />
+              <div className="space-y-8">
+                {focusDayExecuted.length > 0 ? (
+                  <CalendarDaySessionDetail
+                    selectedDate={focusDay}
+                    dayExecuted={focusDayExecuted}
+                    athleteId={athleteId}
+                  />
+                ) : null}
+                <TrainingCalendarAnalyzer
+                  selectedDate={focusDay}
+                  dayPlanned={focusDayPlanned}
+                  dayExecuted={focusDayExecuted}
+                  monthExecuted={focusMonthExecuted}
+                  athleteId={athleteId}
+                />
+              </div>
             )}
           </section>
 

@@ -3,6 +3,7 @@ import {
   type ExecutedWorkout,
   type PlannedWorkout,
 } from "@empathy/domain-training";
+import { workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 
 function isRealExecutedId(id: unknown): id is string {
   return typeof id === "string" && id.length > 0 && !id.startsWith("device-") && !id.startsWith("biomarker-");
@@ -75,7 +76,7 @@ export function plannedWorkoutsFromAnalyticsRows(
 
 export function filterWorkoutsByDate(workouts: ExecutedWorkout[], dateKey: string): ExecutedWorkout[] {
   const d = dateKey.slice(0, 10);
-  return workouts.filter((w) => w.date.slice(0, 10) === d);
+  return workouts.filter((w) => workoutDayKey(w) === d);
 }
 
 export function filterPlannedByDate(planned: PlannedWorkout[], dateKey: string): PlannedWorkout[] {
@@ -84,7 +85,6 @@ export function filterPlannedByDate(planned: PlannedWorkout[], dateKey: string):
 }
 
 export function monthWorkoutsForDate(workouts: ExecutedWorkout[], dateKey: string): ExecutedWorkout[] {
-  const d = dateKey.slice(0, 10);
-  const ym = d.slice(0, 7);
-  return workouts.filter((w) => w.date.slice(0, 7) === ym);
+  const ym = dateKey.slice(0, 7);
+  return workouts.filter((w) => workoutDayKey(w).slice(0, 7) === ym);
 }

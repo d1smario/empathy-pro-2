@@ -393,6 +393,8 @@ export type TrainingAnalyticsViewModel = {
   from?: string;
   to?: string;
   rows: Array<Record<string, unknown>>;
+  /** Tutte le sedute eseguite nel range (non una sola riga/giorno come `rows`). */
+  executedSessions?: ExecutedWorkout[];
   plannedRows: Array<Record<string, unknown>>;
   series: DailyLoadPoint[];
   compareSeries: TrainingAnalyticsComparePointViewModel[];
