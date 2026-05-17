@@ -19,7 +19,6 @@ import {
   pickText,
   POWER_PROFILE_WINDOWS,
   powerProfileFromSeries,
-  vamProfileFromAltitudeSeries,
   prepareAltitudeSeries,
   prepareDisplaySeries,
   resampleToLength,
@@ -35,6 +34,11 @@ import {
   resolveExecutedAvgPowerW,
   resolveExecutedKcal,
 } from "@/lib/training/resolve-executed-session-energy";
+import {
+  monthPeakVamProfile,
+  sessionPeakVam,
+  vamProfileFromTrace,
+} from "@/lib/training/vam-from-trace";
 import { deleteExecutedWorkout } from "@/modules/training/services/training-executed-api";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 import {
@@ -395,20 +399,15 @@ export function TrainingCalendarAnalyzer({
     let sessionProfile: { key: string; label: string; watts: number | null }[];
     let peaks: Map<string, number>;
     if (radarMetricId === "vam") {
-      const alt = pickSeries(tr, ["altitude_series_m", "route_altitude_series_m", "altitude_series"]);
-      if (alt.length < 2) return null;
-      sessionProfile = vamProfileFromAltitudeSeries(alt, dur);
-      peaks = new Map();
-      for (const w of monthExecuted) {
-        const wTr = traceRecord(w);
-        const wAlt = pickSeries(wTr, ["altitude_series_m", "route_altitude_series_m", "altitude_series"]);
-        if (wAlt.length < 2) continue;
-        const prof = vamProfileFromAltitudeSeries(wAlt, n(w.durationMinutes));
-        for (const p of prof) {
-          if (p.watts == null) continue;
-          peaks.set(p.key, Math.max(peaks.get(p.key) ?? 0, p.watts));
-        }
-      }
+      const vamProf = vamProfileFromTrace(tr, dur);
+      if (!vamProf.some((p) => p.vamMh != null)) return null;
+      sessionProfile = vamProf.map((p) => ({ key: p.key, label: p.label, watts: p.vamMh }));
+      peaks = monthPeakVamProfile(
+        monthExecuted.map((w) => ({
+          durationMinutes: n(w.durationMinutes) ?? 0,
+          traceSummary: traceRecord(w),
+        })),
+      );
     } else {
       const raw = pickSeries(tr, cfg.keys);
       if (raw.length < 2) return null;
@@ -477,8 +476,12 @@ export function TrainingCalendarAnalyzer({
       if (p != null) powerWeighted += p * wt;
     }
     const wattAvg = totalMin > 0 && powerWeighted > 0 ? powerWeighted / totalMin : null;
-    return { tss, kcal, wattAvg, totalMin };
-  }, [dayExecuted]);
+    const vamPeak =
+      primaryExecuted != null
+        ? sessionPeakVam(traceRecord(primaryExecuted), n(primaryExecuted.durationMinutes))
+        : null;
+    return { tss, kcal, wattAvg, totalMin, vamPeak };
+  }, [dayExecuted, primaryExecuted]);
 
   function formatDayDurationMin(min: number): string {
     if (!Number.isFinite(min) || min <= 0) return "—";
@@ -710,12 +713,12 @@ export function TrainingCalendarAnalyzer({
           File trace mode
         </button>
         <span className="text-xs text-slate-500">
-          Con traccia file: potenza (area), FC linea rossa, quota (area); radar multi-metrica vs picchi del mese nel calendario.
+          Con traccia Garmin/Wahoo: potenza, FC, quota; radar vs picco mese — VAM da quota o vertical_speed (m/h).
         </span>
       </div>
 
       {!plannedOnly && dayExecuted.length > 0 ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="rounded-2xl border border-rose-500/45 bg-rose-500/[0.12] px-4 py-3">
             <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">Carico · giornata</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-rose-50">{dayRefKpis.tss.toFixed(0)}</div>
@@ -734,6 +737,14 @@ export function TrainingCalendarAnalyzer({
             <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-200/80">Tempo tot</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-emerald-50">
               {formatDayDurationMin(dayRefKpis.totalMin)}
+            </div>
+          </div>
+          <div className="rounded-2xl border border-teal-500/45 bg-teal-500/[0.12] px-4 py-3">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-teal-200/80">
+              VAM max{dayRefKpis.vamPeak ? ` · ${dayRefKpis.vamPeak.label}` : ""}
+            </div>
+            <div className="mt-1 text-xl font-bold tabular-nums text-teal-50">
+              {dayRefKpis.vamPeak != null ? `${dayRefKpis.vamPeak.vamMh} m/h` : "—"}
             </div>
           </div>
         </div>

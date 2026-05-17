@@ -510,37 +510,6 @@ export function bestRollingAverage(series: number[], windowSamples: number): num
   return best / windowSamples;
 }
 
-/** Serie salita istantanea (m/s, solo tratti in salita). */
-export function climbRateSeriesFromAltitude(altitudeM: number[]): number[] {
-  if (altitudeM.length < 2) return [];
-  const out: number[] = [0];
-  for (let i = 1; i < altitudeM.length; i += 1) {
-    out.push(Math.max(0, altitudeM[i]! - altitudeM[i - 1]!));
-  }
-  return out;
-}
-
-/** Profilo VAM (m/h) per finestre temporali da serie quota. */
-export function vamProfileFromAltitudeSeries(
-  altitudeM: number[],
-  durationMinutes: number | null,
-  windows: PowerProfileWindow[] = POWER_PROFILE_WINDOWS,
-): { key: string; label: string; watts: number | null }[] {
-  const climb = climbRateSeriesFromAltitude(altitudeM);
-  const durMin = durationMinutes != null && durationMinutes > 0 ? durationMinutes : null;
-  const durationSec = durMin != null ? durMin * 60 : null;
-  if (climb.length < 2 || durationSec == null || durationSec <= 0) {
-    return windows.map((w) => ({ key: w.key, label: w.label, watts: null }));
-  }
-  const dt = durationSec / Math.max(1, climb.length - 1);
-  return windows.map((w) => {
-    const span = Math.max(1, Math.round(w.sec / dt));
-    const climbMs = bestRollingAverage(climb, Math.min(span, climb.length));
-    const vamMh = climbMs != null && climbMs > 0 ? climbMs * 3600 : null;
-    return { key: w.key, label: w.label, watts: vamMh != null && vamMh > 0 ? Math.round(vamMh) : null };
-  });
-}
-
 export function powerProfileFromSeries(
   series: number[],
   durationMinutes: number | null,
