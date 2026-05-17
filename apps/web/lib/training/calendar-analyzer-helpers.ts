@@ -148,6 +148,20 @@ export function workoutDayKey(row: ExecutedWorkout): string {
   return normalizeDateKey(fromTrace ?? "");
 }
 
+/** Seduta con più GPS/serie (stesso criterio Analyzer / Calendario). */
+export function traceRichnessScore(w: ExecutedWorkout): number {
+  const tr = traceRecord(w);
+  const route = parseRoute(tr).length;
+  const alt = pickSeries(tr, ["route_altitude_series_m", "altitude_series_m"]).length;
+  const power = pickSeries(tr, ["power_series_w"]).length;
+  return route + alt + power;
+}
+
+export function pickPrimaryExecutedWorkout(dayExecuted: ExecutedWorkout[]): ExecutedWorkout | null {
+  if (!dayExecuted.length) return null;
+  return [...dayExecuted].sort((a, b) => traceRichnessScore(b) - traceRichnessScore(a))[0] ?? null;
+}
+
 export type FitQuality = {
   status: "OK" | "SPARSE" | "LIKELY_TRUNCATED";
   sourceFile: string | null;

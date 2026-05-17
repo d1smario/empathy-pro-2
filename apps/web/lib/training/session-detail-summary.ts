@@ -188,6 +188,24 @@ function buildKpiTiles(
     });
   }
 
+  const elevGain = pickMetric(trace, [
+    "elevation_gain_m",
+    "total_elevation_gain_m",
+    "altitude_gain_m",
+    "elev_gain_m",
+    "ascent_m",
+    "total_ascent",
+    "elevationGain",
+  ]);
+  if (elevGain != null && elevGain > 0) {
+    tiles.push({
+      label: "Dislivello",
+      value: fmtInt(elevGain),
+      unit: "m",
+      accent: "emerald",
+    });
+  }
+
   const trainingLoad = resolveExecutedTrainingLoad({
     storedTss: w.tss,
     durationMinutes: Math.max(0, Number(w.durationMinutes ?? 0)),

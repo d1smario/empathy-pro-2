@@ -10,15 +10,13 @@ import {
   deriveSpeedKmh,
   formatElapsedLabel,
   mergeTraceChannelAvailability,
-  monthPeakMetricProfile,
+  pickPrimaryExecutedWorkout,
   n,
   parseRoute,
   pickMetric,
   pickRouteElevationSeries,
   pickSeries,
   pickText,
-  POWER_PROFILE_WINDOWS,
-  powerProfileFromSeries,
   prepareAltitudeSeries,
   prepareDisplaySeries,
   resampleToLength,
@@ -35,10 +33,10 @@ import {
   resolveExecutedKcal,
 } from "@/lib/training/resolve-executed-session-energy";
 import {
-  monthPeakVamProfile,
+  sessionAverageVamMh,
   sessionPeakVam,
-  vamProfileFromTrace,
 } from "@/lib/training/vam-from-trace";
+import { buildAllSessionPeakAnalysisProfiles } from "@/lib/training/analytics/session-peak-analysis";
 import { deleteExecutedWorkout } from "@/modules/training/services/training-executed-api";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 import {
@@ -46,20 +44,6 @@ import {
   effectiveTssDisplayFromPro2Contract,
   parsePro2BuilderSessionFromNotes,
 } from "@/lib/training/builder/pro2-session-notes";
-
-/** Radar MMP-style: stessi assi temporali, serie diverse vs picco mensile nel calendario. */
-const RADAR_METRIC_OPTIONS: Array<{ id: string; label: string; unit: string; keys: string[] }> = [
-  { id: "power", label: "Potenza", unit: "W", keys: ["power_series_w", "power_stream_w", "power_series"] },
-  {
-    id: "hr",
-    label: "FC",
-    unit: "bpm",
-    keys: ["hr_series_bpm", "heart_rate_series_bpm", "heart_rate_series", "hr_stream_bpm", "hr_series"],
-  },
-  { id: "cadence", label: "Cadenza", unit: "rpm", keys: ["cadence_series_rpm", "cadence_series"] },
-  { id: "speed", label: "Velocità", unit: "km/h", keys: ["speed_series_kmh", "speed_stream_kmh", "speed_series"] },
-  { id: "vam", label: "VAM", unit: "m/h", keys: [] },
-];
 
 const StravaStyleMap = dynamic(
   () => import("@/components/training/StravaStyleMap").then((m) => m.StravaStyleMap),
@@ -113,25 +97,11 @@ export function TrainingCalendarAnalyzer({
 }: Props) {
   const [fileTraceMode, setFileTraceMode] = useState(true);
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  const [radarMetricId, setRadarMetricId] = useState<string>("power");
   const [overlayOn, setOverlayOn] = useState<Record<string, boolean>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingPlannedId, setDeletingPlannedId] = useState<string | null>(null);
 
-  const primaryExecuted = useMemo(() => {
-    if (!dayExecuted.length) return null;
-    return [...dayExecuted].sort((a, b) => {
-      const trA = traceRecord(a);
-      const trB = traceRecord(b);
-      const aRoute = parseRoute(trA).length;
-      const bRoute = parseRoute(trB).length;
-      const aAlt = pickSeries(trA, ["route_altitude_series_m", "altitude_series_m"]).length;
-      const bAlt = pickSeries(trB, ["route_altitude_series_m", "altitude_series_m"]).length;
-      const aPower = pickSeries(trA, ["power_series_w"]).length;
-      const bPower = pickSeries(trB, ["power_series_w"]).length;
-      return bRoute + bAlt + bPower - (aRoute + aAlt + aPower);
-    })[0];
-  }, [dayExecuted]);
+  const primaryExecuted = useMemo(() => pickPrimaryExecutedWorkout(dayExecuted), [dayExecuted]);
 
   const dayMetrics = useMemo<SessionMetric[]>(() => {
     return dayExecuted.map((w) => {
@@ -391,49 +361,10 @@ export function TrainingCalendarAnalyzer({
     }));
   }, [detailedSeries, analyzerLabels]);
 
-  const metricRadarRows = useMemo(() => {
-    if (!primaryExecuted) return null;
-    const cfg = RADAR_METRIC_OPTIONS.find((o) => o.id === radarMetricId) ?? RADAR_METRIC_OPTIONS[0];
-    const tr = traceRecord(primaryExecuted);
-    const dur = n(primaryExecuted.durationMinutes);
-    let sessionProfile: { key: string; label: string; watts: number | null }[];
-    let peaks: Map<string, number>;
-    if (radarMetricId === "vam") {
-      const vamProf = vamProfileFromTrace(tr, dur);
-      if (!vamProf.some((p) => p.vamMh != null)) return null;
-      sessionProfile = vamProf.map((p) => ({ key: p.key, label: p.label, watts: p.vamMh }));
-      peaks = monthPeakVamProfile(
-        monthExecuted.map((w) => ({
-          durationMinutes: n(w.durationMinutes) ?? 0,
-          traceSummary: traceRecord(w),
-        })),
-      );
-    } else {
-      const raw = pickSeries(tr, cfg.keys);
-      if (raw.length < 2) return null;
-      sessionProfile = powerProfileFromSeries(raw, dur);
-      peaks = monthPeakMetricProfile(monthExecuted, cfg.keys);
-    }
-    return POWER_PROFILE_WINDOWS.map((w) => {
-      const sp = sessionProfile.find((p) => p.key === w.key);
-      const s = sp?.watts ?? null;
-      const peakStored = peaks.get(w.key) ?? 0;
-      const mp = Math.max(peakStored, s ?? 0);
-      const pct = mp > 0 && s != null ? (s / mp) * 100 : 0;
-      return {
-        subject: w.label,
-        pct,
-        sessionW: s,
-        monthPeakW: mp > 0 ? mp : null,
-        unit: cfg.unit,
-      };
-    });
-  }, [primaryExecuted, monthExecuted, radarMetricId]);
-
-  const radarValueUnit = useMemo(
-    () => RADAR_METRIC_OPTIONS.find((o) => o.id === radarMetricId)?.unit ?? "W",
-    [radarMetricId],
-  );
+  const peakRadarProfiles = useMemo(() => {
+    if (!primaryExecuted) return [];
+    return buildAllSessionPeakAnalysisProfiles(primaryExecuted, monthExecuted);
+  }, [primaryExecuted, monthExecuted]);
 
   const selectedMetricDefs = useMemo(
     () => availableAnalyzerMetricDefs.filter((m) => overlayOn[m.id] !== false),
@@ -441,46 +372,55 @@ export function TrainingCalendarAnalyzer({
   );
 
   const dayRefKpis = useMemo(() => {
-    let tss = 0;
-    let kcal = 0;
-    let totalMin = 0;
-    let powerWeighted = 0;
-    for (const w of dayExecuted) {
-      const tr = traceRecord(w);
-      const m = Math.max(0, n(w.durationMinutes) ?? 0);
-      const p = resolveExecutedAvgPowerW({
-        storedKj: w.kj,
-        durationMinutes: m,
-        traceSummary: tr,
-      });
-      tss += resolveExecutedTrainingLoad({
-        storedTss: w.tss,
-        durationMinutes: m,
-        traceSummary: tr,
-        vendorLoad: pickMetric(tr, [
-          "training_load",
-          "trainingLoad",
-          "training_load_score",
-          "activity_training_load",
-        ]),
-      });
-      kcal += resolveExecutedKcal({
-        storedKcal: w.kcal,
-        storedKj: w.kj,
-        durationMinutes: m,
-        traceSummary: tr,
-        avgPowerW: p,
-      });
-      totalMin += m;
-      const wt = m > 0 ? m : 1;
-      if (p != null) powerWeighted += p * wt;
+    const w = primaryExecuted;
+    if (!w) {
+      return {
+        tss: 0,
+        kcal: 0,
+        wattAvg: null as number | null,
+        totalMin: 0,
+        vamAvg: null as number | null,
+        vamPeak: null as { label: string; vamMh: number } | null,
+        multiSessionDay: false,
+        dayTotalMin: 0,
+      };
     }
-    const wattAvg = totalMin > 0 && powerWeighted > 0 ? powerWeighted / totalMin : null;
-    const vamPeak =
-      primaryExecuted != null
-        ? sessionPeakVam(traceRecord(primaryExecuted), n(primaryExecuted.durationMinutes))
-        : null;
-    return { tss, kcal, wattAvg, totalMin, vamPeak };
+    const tr = traceRecord(w);
+    const m = Math.max(0, n(w.durationMinutes) ?? 0);
+    const p = resolveExecutedAvgPowerW({
+      storedKj: w.kj,
+      durationMinutes: m,
+      traceSummary: tr,
+    });
+    const tss = resolveExecutedTrainingLoad({
+      storedTss: w.tss,
+      durationMinutes: m,
+      traceSummary: tr,
+      vendorLoad: pickMetric(tr, [
+        "training_load",
+        "trainingLoad",
+        "training_load_score",
+        "activity_training_load",
+      ]),
+    });
+    const kcal = resolveExecutedKcal({
+      storedKcal: w.kcal,
+      storedKj: w.kj,
+      durationMinutes: m,
+      traceSummary: tr,
+      avgPowerW: p,
+    });
+    const dayTotalMin = dayExecuted.reduce((s, row) => s + Math.max(0, n(row.durationMinutes) ?? 0), 0);
+    return {
+      tss,
+      kcal,
+      wattAvg: p,
+      totalMin: m,
+      vamAvg: sessionAverageVamMh(tr, m),
+      vamPeak: sessionPeakVam(tr, m),
+      multiSessionDay: dayExecuted.length > 1 && dayTotalMin > m + 1,
+      dayTotalMin,
+    };
   }, [dayExecuted, primaryExecuted]);
 
   function formatDayDurationMin(min: number): string {
@@ -559,17 +499,19 @@ export function TrainingCalendarAnalyzer({
   }, [primaryExecuted, dayMetrics]);
 
   const gpsStats = useMemo(() => {
-    const importedDistanceKm = dayMetrics.reduce((s, m) => s + (m.km ?? 0), 0);
+    const primaryIdx = primaryExecuted ? dayExecuted.findIndex((w) => w.id === primaryExecuted.id) : 0;
+    const pm = dayMetrics[primaryIdx >= 0 ? primaryIdx : 0];
+    const importedDistanceKm = pm?.km ?? 0;
     const routeKm = routeDistanceKm(gpsRoute);
     const distanceKm =
       routeKm > 0 && (importedDistanceKm <= 0 || importedDistanceKm > routeKm * 3)
         ? routeKm
         : importedDistanceKm;
-    const elevGain = dayMetrics.reduce((s, m) => s + (m.altitude ?? 0), 0);
-    const durationMin = dayMetrics.reduce((s, m) => s + (m.duration ?? 0), 0);
-    const paceMinKm = distanceKm > 0 ? durationMin / distanceKm : 0;
+    const elevGain = pm?.altitude ?? 0;
+    const durationMin = pm?.duration ?? 0;
+    const paceMinKm = distanceKm > 0 && durationMin > 0 ? durationMin / distanceKm : 0;
     return { distanceKm, elevGain, durationMin, paceMinKm };
-  }, [dayMetrics, gpsRoute]);
+  }, [dayMetrics, dayExecuted, gpsRoute, primaryExecuted]);
 
   const fitQuality = useMemo(() => {
     const withFitTrace =
@@ -718,13 +660,20 @@ export function TrainingCalendarAnalyzer({
       </div>
 
       {!plannedOnly && dayExecuted.length > 0 ? (
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <>
+          {dayRefKpis.multiSessionDay ? (
+            <p className="mt-3 text-xs text-amber-200/90">
+              KPI sulla seduta principale (mappa/GPS). Totale giornata: {formatDayDurationMin(dayRefKpis.dayTotalMin)} su{" "}
+              {dayExecuted.length} sessioni.
+            </p>
+          ) : null}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <div className="rounded-2xl border border-rose-500/45 bg-rose-500/[0.12] px-4 py-3">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">Carico · giornata</div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">Carico · seduta</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-rose-50">{dayRefKpis.tss.toFixed(0)}</div>
           </div>
           <div className="rounded-2xl border border-amber-500/45 bg-amber-500/[0.12] px-4 py-3">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-200/80">Kcal · giornata</div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-amber-200/80">Kcal · seduta</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-amber-50">{dayRefKpis.kcal.toFixed(0)}</div>
           </div>
           <div className="rounded-2xl border border-sky-500/45 bg-sky-500/[0.12] px-4 py-3">
@@ -734,59 +683,60 @@ export function TrainingCalendarAnalyzer({
             </div>
           </div>
           <div className="rounded-2xl border border-emerald-500/45 bg-emerald-500/[0.12] px-4 py-3">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-200/80">Tempo tot</div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-emerald-200/80">Durata · seduta</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-emerald-50">
               {formatDayDurationMin(dayRefKpis.totalMin)}
             </div>
           </div>
           <div className="rounded-2xl border border-teal-500/45 bg-teal-500/[0.12] px-4 py-3">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-teal-200/80">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-teal-200/80">VAM media salita</div>
+            <div className="mt-1 text-xl font-bold tabular-nums text-teal-50">
+              {dayRefKpis.vamAvg != null ? `${dayRefKpis.vamAvg} m/h` : "—"}
+            </div>
+            <p className="mt-0.5 text-[0.6rem] text-teal-200/60">dislivello ÷ ore</p>
+          </div>
+          <div className="rounded-2xl border border-cyan-500/45 bg-cyan-500/[0.12] px-4 py-3">
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-cyan-200/80">
               VAM max{dayRefKpis.vamPeak ? ` · ${dayRefKpis.vamPeak.label}` : ""}
             </div>
-            <div className="mt-1 text-xl font-bold tabular-nums text-teal-50">
+            <div className="mt-1 text-xl font-bold tabular-nums text-cyan-50">
               {dayRefKpis.vamPeak != null ? `${dayRefKpis.vamPeak.vamMh} m/h` : "—"}
             </div>
+            <p className="mt-0.5 text-[0.6rem] text-cyan-200/60">picco finestra</p>
           </div>
+        </div>
+        </>
+      ) : null}
+
+      {telemetryRows.length >= 2 ? (
+        <div className="mt-4 rounded-2xl border border-orange-500/25 bg-gradient-to-b from-slate-950/95 via-slate-900/40 to-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+          <h4 className="text-sm font-bold text-orange-100/95">Telemetria (stile sessione)</h4>
+          <p className="mb-3 text-xs text-slate-500">Potenza con riempimento gradiente; FC in rosso; quota separata sotto.</p>
+          <TrainingCalendarTelemetryChart data={telemetryRows} />
         </div>
       ) : null}
 
-      {telemetryRows.length >= 2 || metricRadarRows ? (
-        <div
-          className={`mt-4 grid gap-6 ${telemetryRows.length >= 2 && metricRadarRows ? "lg:grid-cols-2" : ""}`}
-        >
-          {telemetryRows.length >= 2 ? (
-            <div className="rounded-2xl border border-orange-500/25 bg-gradient-to-b from-slate-950/95 via-slate-900/40 to-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <h4 className="text-sm font-bold text-orange-100/95">Telemetria (stile sessione)</h4>
-              <p className="mb-3 text-xs text-slate-500">Potenza con riempimento gradiente; FC in rosso; quota separata sotto.</p>
-              <TrainingCalendarTelemetryChart data={telemetryRows} />
-            </div>
-          ) : null}
-          {metricRadarRows ? (
-            <div className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-slate-950/95 via-slate-900/40 to-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <h4 className="text-sm font-bold text-pink-100/95">Profilo · radar (multi-metrica)</h4>
-                <label className="text-xs text-slate-400">
-                  Metrica
-                  <select
-                    className="ml-2 rounded-lg border border-white/15 bg-black/50 px-2 py-1 text-sm text-white"
-                    value={radarMetricId}
-                    onChange={(e) => setRadarMetricId(e.target.value)}
-                  >
-                    {RADAR_METRIC_OPTIONS.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label} ({o.unit})
-                      </option>
-                    ))}
-                  </select>
-                </label>
+      {peakRadarProfiles.length > 0 ? (
+        <div className="mt-6 space-y-4">
+          <div>
+            <h4 className="text-sm font-bold text-pink-100/95">Profili · radar vs picco mese</h4>
+            <p className="mt-1 text-xs text-slate-500">
+              Finestre 5s → 60m: valore sessione vs massimo del mese nel range Analyzer.
+            </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {peakRadarProfiles.map((profile) => (
+              <div
+                key={profile.metricId}
+                className="rounded-2xl border border-pink-500/25 bg-gradient-to-b from-slate-950/95 via-slate-900/40 to-black/35 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+              >
+                <h5 className="mb-2 text-xs font-bold uppercase tracking-wide text-pink-200/90">
+                  {profile.label} ({profile.unit})
+                </h5>
+                <TrainingPowerProfileRadar rows={profile.rows} valueUnit={profile.unit} />
               </div>
-              <p className="mb-1 text-xs text-slate-500">
-                Finestre 5s → 60m: media massima nella sessione vs picco nel mese visibile sul calendario (stessa logica per
-                potenza, FC, cadenza, velocità).
-              </p>
-              <TrainingPowerProfileRadar rows={metricRadarRows} valueUnit={radarValueUnit} />
-            </div>
-          ) : null}
+            ))}
+          </div>
         </div>
       ) : null}
 

@@ -8,7 +8,7 @@ import { SessionRouteMap } from "@/components/training/SessionRouteMap";
 import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
 import { TrainingSingleTraceChart } from "@/components/training/TrainingSingleTraceChart";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
-import { formatElapsedLabel } from "@/lib/training/calendar-analyzer-helpers";
+import { formatElapsedLabel, pickPrimaryExecutedWorkout } from "@/lib/training/calendar-analyzer-helpers";
 import {
   buildSessionDetailVM,
   type SessionDetailViewModel,
@@ -362,7 +362,12 @@ export type CalendarDaySessionDetailProps = {
 };
 
 export function CalendarDaySessionDetail({ selectedDate, dayExecuted, athleteId }: CalendarDaySessionDetailProps) {
-  const vms = useMemo(() => dayExecuted.map((w) => buildSessionDetailVM(w)), [dayExecuted]);
+  const sortedExecuted = useMemo(() => {
+    const primary = pickPrimaryExecutedWorkout(dayExecuted);
+    if (!primary) return dayExecuted;
+    return [primary, ...dayExecuted.filter((w) => w.id !== primary.id)];
+  }, [dayExecuted]);
+  const vms = useMemo(() => sortedExecuted.map((w) => buildSessionDetailVM(w)), [sortedExecuted]);
   const subtitle = `${dayExecuted.length} eseguito${dayExecuted.length === 1 ? "" : "i"} · ${selectedDate}`;
 
   if (dayExecuted.length === 0) {
@@ -386,7 +391,7 @@ export function CalendarDaySessionDetail({ selectedDate, dayExecuted, athleteId 
   return (
     <div id="day-session-detail" className="scroll-mt-24 space-y-6">
       {vms.map((vm, idx) => {
-        const w = dayExecuted[idx];
+        const w = sortedExecuted[idx]!;
         const duration = Number.isFinite(w.durationMinutes) ? w.durationMinutes : null;
         return (
           <Pro2SectionCard

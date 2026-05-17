@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   bestVamMhInAltitudeWindow,
   pickAltitudeSeriesFromTrace,
+  sessionAverageVamMh,
   sessionPeakVam,
   vamProfileFromAltitudeSeries,
   vamProfileFromTrace,
@@ -35,4 +36,10 @@ test("vamProfileFromTrace uses garmin vertical_speed when present", () => {
 test("sessionPeakVam from elevation_gain scalar fallback", () => {
   const peak = sessionPeakVam({ elevation_gain_m: 1200 }, 120);
   assert.ok(peak != null && peak.vamMh > 0);
+});
+
+test("sessionAverageVamMh: 551m in 116min ≈ 285 m/h", () => {
+  const vam = sessionAverageVamMh({ elevation_gain_m: 551 }, 116);
+  assert.ok(vam != null);
+  assert.ok(vam >= 275 && vam <= 295, `expected ~285 m/h, got ${vam}`);
 });
