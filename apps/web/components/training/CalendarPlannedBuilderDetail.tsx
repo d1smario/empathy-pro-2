@@ -107,7 +107,7 @@ export function CalendarPlannedBuilderDetail({
             <span className="font-mono text-xs text-gray-500">{workout.type}</span>
           </div>
           <h4 className="mt-1.5 text-base font-bold text-white">
-            {contract?.sessionName?.trim() || workout.type} · {titleDurationMin}′ · TSS {titleTss}
+            {contract?.sessionName?.trim() || workout.type} · {titleDurationMin}′ · Carico {titleTss}
           </h4>
           {contract?.discipline ? (
             <p className="mt-0.5 text-xs text-gray-500">

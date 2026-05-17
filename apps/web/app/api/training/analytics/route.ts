@@ -437,7 +437,7 @@ export async function GET(req: NextRequest) {
     });
 
     const plannedRows = (plannedData ?? []) as PlannedWorkoutAnalyticsRow[];
-    const series = computeDailyLoadSeries(rows as ExecutedWorkoutLoadRow[]);
+    const series = computeDailyLoadSeries(enrichedRows as ExecutedWorkoutLoadRow[]);
     const compareSeries = buildCompareSeries(from, to, plannedRows, series);
     const latest = series.at(-1) ?? null;
     const twinState = athleteMemory.twin;

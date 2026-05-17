@@ -189,14 +189,14 @@ function TrainingSessionSignalPanel({
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <TrainingSignalCell
           label="Stimolo piano"
-          value={plannedTss > 0 ? `${Math.round(plannedTss)} TSS` : "—"}
+          value={plannedTss > 0 ? `${Math.round(plannedTss)} carico` : "—"}
           detail={`${planned.length} sedute · ${formatDuration(plannedMinutes)} · ${planLabel}`}
           tone="orange"
           icon={Target}
         />
         <TrainingSignalCell
           label="Reality load"
-          value={executedTss > 0 ? `${Math.round(executedTss)} TSS` : "—"}
+          value={executedTss > 0 ? `${Math.round(executedTss)} carico` : "—"}
           detail={`${executed.length} registrazioni · ${formatDuration(executedMinutes)} · ${realitySources}`}
           tone="emerald"
           icon={Activity}
@@ -204,7 +204,7 @@ function TrainingSessionSignalPanel({
         <TrainingSignalCell
           label="Aderenza"
           value={tssCompletion != null ? `${Math.round(tssCompletion)}%` : "—"}
-          detail={`Δ TSS ${tssDelta >= 0 ? "+" : ""}${Math.round(tssDelta)} · durata ${durationCompletion != null ? `${Math.round(durationCompletion)}%` : "—"}`}
+          detail={`Δ carico ${tssDelta >= 0 ? "+" : ""}${Math.round(tssDelta)} · durata ${durationCompletion != null ? `${Math.round(durationCompletion)}%` : "—"}`}
           tone={tssCompletion == null ? "slate" : tssCompletion < 70 || tssCompletion > 130 ? "amber" : "cyan"}
           icon={Gauge}
         />

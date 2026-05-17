@@ -27,6 +27,7 @@ import {
 } from "@/lib/training/analytics/executed-metric-aggregates";
 import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
 import { TrainingAnalyzerCrossChannelSection } from "@/components/training/TrainingAnalyzerCrossChannelSection";
+import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
 
 /** Data locale YYYY-MM-DD (evita shift UTC su `toISOString`). */
 function toLocalDateKey(d: Date): string {
@@ -509,12 +510,12 @@ export default function TrainingAnalyticsPageView() {
               couplingToneClass,
             )}
             {kpiCard(
-              "CTL / ATL / TSB (ext)",
+              `${EMPATHY_LOAD_LABELS_IT.fitness4} · ${EMPATHY_LOAD_LABELS_IT.strain} · ${EMPATHY_LOAD_LABELS_IT.form}`,
               latest ? `${latest.ctl.toFixed(1)} / ${latest.atl.toFixed(1)} / ${latest.tsb.toFixed(1)}` : "—",
             )}
             {kpiCard(
-              "CTL / ATL / TSB (int)",
-              latest ? `${latest.iCtl.toFixed(1)} / ${latest.iAtl.toFixed(1)} / ${latest.iTsb.toFixed(1)}` : "—",
+              `${EMPATHY_LOAD_LABELS_IT.conditioningInt4} · ${EMPATHY_LOAD_LABELS_IT.fatigueInt}`,
+              latest ? `${latest.iCtl.toFixed(1)} / ${latest.iAtl.toFixed(1)}` : "—",
             )}
             {kpiCard(
               "Readiness / fatigue",
@@ -829,10 +830,10 @@ export default function TrainingAnalyticsPageView() {
                 <span className="h-2 w-2 rounded-full bg-[#d946ef]" /> Internal
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#ff9e4a]" /> CTL ext
+                <span className="h-2 w-2 rounded-full bg-[#ff9e4a]" /> {EMPATHY_LOAD_LABELS_IT.fitness4}
               </span>
               <span className="inline-flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-[#f59e0b]" /> CTL int
+                <span className="h-2 w-2 rounded-full bg-[#f59e0b]" /> {EMPATHY_LOAD_LABELS_IT.conditioningInt4}
               </span>
             </div>
           </div>

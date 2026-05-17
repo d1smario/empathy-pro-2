@@ -323,7 +323,7 @@ export function TrainingCalendarAnalyzer({
 
   const analyzerMetricDefs = useMemo(
     () => [
-      { id: "tss", label: "TSS", color: "#c084fc", values: lineSeries.tss },
+      { id: "tss", label: "Carico", color: "#c084fc", values: lineSeries.tss },
       { id: "power", label: "Power", color: "#f97316", values: lineSeries.power },
       { id: "hr", label: "HR", color: "#ef4444", values: lineSeries.hr },
       { id: "cadence", label: "Cadence", color: "#a78bfa", values: lineSeries.cadence },
@@ -578,7 +578,7 @@ export function TrainingCalendarAnalyzer({
 
       {plannedOnly ? (
         <p className="mt-2 rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-sm text-violet-100/90">
-          Solo pianificazione: il grafico mostra TSS e durata target (blocchi PLAN). Importa un eseguito per mappa e traccia
+          Solo pianificazione: il grafico mostra carico e durata target (blocchi PLAN). Importa un eseguito per mappa e traccia
           file.
         </p>
       ) : null}
@@ -672,7 +672,7 @@ export function TrainingCalendarAnalyzer({
       {!plannedOnly && dayExecuted.length > 0 ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-rose-500/45 bg-rose-500/[0.12] px-4 py-3">
-            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">TSS · giornata</div>
+            <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">Carico · giornata</div>
             <div className="mt-1 text-xl font-bold tabular-nums text-rose-50">{dayRefKpis.tss.toFixed(0)}</div>
           </div>
           <div className="rounded-2xl border border-amber-500/45 bg-amber-500/[0.12] px-4 py-3">
@@ -765,7 +765,7 @@ export function TrainingCalendarAnalyzer({
                    setOverlayOn(next);
                  }}
                >
-                 Solo TSS · Power · HR
+                 Solo carico · Power · HR
                </button>
              </div>
              <div className="mb-3 flex flex-wrap gap-x-4 gap-y-2">
@@ -902,7 +902,7 @@ export function TrainingCalendarAnalyzer({
                   PLAN
                 </span>
                 <span>
-                  {dm}m · TSS {ts}
+                  {dm}m · carico {ts}
                 </span>
               </div>
               {athleteId ? (
@@ -947,7 +947,7 @@ export function TrainingCalendarAnalyzer({
                   EXEC
                 </span>
                 <span className="ml-2">
-                  {w.durationMinutes}m · TSS {w.tss}
+                  {w.durationMinutes}m · carico {w.tss}
                   {fn ? (
                     <>
                       {" "}

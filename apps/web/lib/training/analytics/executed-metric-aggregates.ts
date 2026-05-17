@@ -1,3 +1,5 @@
+import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
+
 /** Per-workout e per-giorno: estrae metriche da `executed_workouts` + `trace_summary` (best-effort). */
 
 export type ExecutedAnalyticsRow = {
@@ -218,11 +220,11 @@ export type MetricSeriesKey =
   | "kSweat";
 
 export const OVERLAY_METRIC_DEFS: Array<{ key: MetricSeriesKey; label: string; color: string }> = [
-  { key: "planned", label: "Planned TSS", color: "#60a5fa" },
-  { key: "executed", label: "TSS eseguito", color: "#ff7a1a" },
-  { key: "internal", label: "Carico interno", color: "#d946ef" },
-  { key: "ctl", label: "CTL ext", color: "#ff9e4a" },
-  { key: "iCtl", label: "CTL int", color: "#f59e0b" },
+  { key: "planned", label: "Piano · carico", color: "#60a5fa" },
+  { key: "executed", label: `${EMPATHY_LOAD_LABELS_IT.trainingLoad} eseguito`, color: "#ff7a1a" },
+  { key: "internal", label: EMPATHY_LOAD_LABELS_IT.stressCore, color: "#d946ef" },
+  { key: "ctl", label: EMPATHY_LOAD_LABELS_IT.fitness4, color: "#ff9e4a" },
+  { key: "iCtl", label: EMPATHY_LOAD_LABELS_IT.conditioningInt4, color: "#f59e0b" },
   { key: "hr", label: "FC media", color: "#f43f5e" },
   { key: "glucose", label: "Glucosio", color: "#22d3ee" },
   { key: "coreTemp", label: "Core temp", color: "#fb923c" },

@@ -163,7 +163,7 @@ export function trainingRealityDiagnosticsBannerIt(diag: {
     return `Nessuna sessione in \`executed_workouts\` negli ultimi ${diag.windowDays} giorni: sincronizza Garmin/Wahoo/Strava, importa file o segna completato da Calendario.`;
   }
   if (diag.hint === "executed_no_load_signal") {
-    return `${diag.executedCountVisible} sessioni visibili senza TSS né FC media in trace: CTL/TSS restano piatti finché il provider non invia carico o FC (o power per stima).`;
+    return `${diag.executedCountVisible} sessioni visibili senza carico strutturato né FC in trace: Fitness/Strain restano piatti finché il provider non invia load o FC (o power per stima).`;
   }
   return null;
 }

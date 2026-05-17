@@ -2,7 +2,9 @@ import {
   computeEmpathyLoadMetricsV2,
   inferEmpathyTrainingLoadForSession,
   type EmpathyLoadMetricsDayInput,
+  type EmpathyLoadWellnessInput,
 } from "@empathy/domain-training";
+import { wellnessSignalsByDateFromLoadRows } from "@/lib/training/analytics/wellness-signals-from-load-rows";
 
 export type ExecutedWorkoutLoadRow = {
   date: string | null;
@@ -81,17 +83,35 @@ function sessionTrainingLoad(row: ExecutedWorkoutLoadRow): number {
   });
 }
 
-function rowsToV2Input(rows: ExecutedWorkoutLoadRow[]): EmpathyLoadMetricsDayInput[] {
+function rowsToV2Input(
+  rows: ExecutedWorkoutLoadRow[],
+  wellnessByDate?: Map<string, EmpathyLoadWellnessInput>,
+): EmpathyLoadMetricsDayInput[] {
+  const wellness = wellnessByDate ?? wellnessSignalsByDateFromLoadRows(rows);
   const byDate = new Map<string, EmpathyLoadMetricsDayInput>();
   for (const row of rows) {
     if (typeof row.date !== "string" || row.date.length < 10) continue;
-    const prev = byDate.get(row.date) ?? { date: row.date, sessions: [] };
-    prev.sessions.push({
-      trainingLoad: sessionTrainingLoad(row),
-      durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
-      hrAvgBpm: pickMetric(row.trace_summary, HR_KEYS),
-    });
+    const prev = byDate.get(row.date) ?? {
+      date: row.date,
+      sessions: [],
+      wellness: wellness.get(row.date),
+    };
+    if (row.duration_minutes != null && Number(row.duration_minutes) > 0) {
+      prev.sessions.push({
+        trainingLoad: sessionTrainingLoad(row),
+        durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
+        hrAvgBpm: pickMetric(row.trace_summary, HR_KEYS),
+      });
+    }
     byDate.set(row.date, prev);
+  }
+  for (const [date, w] of wellness) {
+    if (!byDate.has(date)) {
+      byDate.set(date, { date, sessions: [], wellness: w });
+    } else {
+      const day = byDate.get(date)!;
+      day.wellness = w;
+    }
   }
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
@@ -101,8 +121,11 @@ export function internalLoadScore(row: ExecutedWorkoutLoadRow): number {
   return sessionTrainingLoad(row) * 0.72;
 }
 
-export function computeDailyLoadSeries(rows: ExecutedWorkoutLoadRow[]): DailyLoadPoint[] {
-  const v2 = computeEmpathyLoadMetricsV2(rowsToV2Input(rows));
+export function computeDailyLoadSeries(
+  rows: ExecutedWorkoutLoadRow[],
+  options?: { wellnessByDate?: Map<string, EmpathyLoadWellnessInput> },
+): DailyLoadPoint[] {
+  const v2 = computeEmpathyLoadMetricsV2(rowsToV2Input(rows, options?.wellnessByDate));
   return v2.map((p) => ({
     date: p.date,
     external: p.trainingLoadDaily,

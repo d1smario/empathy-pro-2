@@ -425,7 +425,7 @@ export function DashboardLoadAnalysisSummary() {
           </summary>
           <p className="mt-2 text-sm leading-relaxed text-gray-400">
             Vista sintetica del <strong className="text-gray-200">modello di controllo</strong>: a sinistra stimolo e stato
-            di fitness (TSS, CTL/ATL/TSB, piano vs reale); a destra modulatori della risposta (sonno/HRV, contesto
+            di fitness (carico, fitness/strain/form, piano vs reale); a destra modulatori della risposta (sonno/HRV, contesto
             operativo, bioenergetica, twin, lab quando presenti).
           </p>
         </details>
@@ -462,7 +462,7 @@ export function DashboardLoadAnalysisSummary() {
                 role="status"
               >
                 <strong className="font-semibold text-amber-50">Manca la reality esecuzione (7g).</strong> Il piano è
-                presente ma non risultano sessioni eseguite con carico: CTL, TSS, coupling e compliance non sono
+                presente ma non risultano sessioni eseguite con carico: Fitness, Carico e coupling non sono
                 significativi finché non sincronizzi device (Garmin/Wahoo/Strava), importi file o registri il
                 completato.
               </p>
@@ -472,8 +472,8 @@ export function DashboardLoadAnalysisSummary() {
                 className="rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100"
                 role="status"
               >
-                <strong className="font-semibold text-violet-50">Esecuzioni senza TSS strutturato.</strong> Ci sono
-                attività registrate ma senza impulso di carico (TSS o proxy da FC): verifica trace/power sulle sessioni
+                <strong className="font-semibold text-violet-50">Esecuzioni senza carico strutturato.</strong> Ci sono
+                attività registrate ma senza impulso di carico (load o proxy da FC): verifica trace/power sulle sessioni
                 eseguite o collega un provider training.
               </p>
             ) : null}
@@ -503,7 +503,7 @@ export function DashboardLoadAnalysisSummary() {
                     "fuchsia",
                   )}
                   {kpiTile("Coupling int/ext · 7g", coupling7.toFixed(2), couplingSub)}
-                  {kpiTile("Carico esterno 7g", ext7.toFixed(0), "Proxy TSS eseguito")}
+                  {kpiTile("Carico esterno 7g", ext7.toFixed(0), "Somma training load")}
                   {kpiTile("Carico interno 7g", int7.toFixed(0), "Indice stress interno", "fuchsia")}
                   {kpiTile("Divergenza · intervento", divInt, "Loop adattamento vs piano", divergenceScore > 35 ? "rose" : undefined)}
                 </div>
@@ -604,7 +604,7 @@ export function DashboardLoadAnalysisSummary() {
               <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
                 <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-white">
                   <LineChart className="h-4 w-4 text-cyan-400" aria-hidden />
-                  Pannello unico 42g · load + CTL + confronto
+                  Pannello unico 42g · carico + fitness + confronto
                 </h3>
                 <svg viewBox="0 0 1100 260" width="100%" height="260" className="max-h-[40vh]">
                   <polyline fill="none" stroke="#60a5fa" strokeWidth="1.8" points={plannedLine} />
@@ -617,8 +617,8 @@ export function DashboardLoadAnalysisSummary() {
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#60a5fa]" /> Planned</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#ff7a1a]" /> Real</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-[#d946ef]" /> Internal</span>
-                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-400/90" /> CTL ext</span>
-                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-400/90" /> CTL int</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-sky-400/90" /> {EMPATHY_LOAD_LABELS_IT.fitness4}</span>
+                  <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-violet-400/90" /> {EMPATHY_LOAD_LABELS_IT.conditioningInt4}</span>
                 </div>
               </div>
             ) : null}
@@ -655,7 +655,7 @@ export function DashboardLoadAnalysisSummary() {
                     Confronto stella · recente vs baseline ({adaptabilityScore}/100)
                   </summary>
                   <p className="mt-2">
-                    Assi: external 7g, internal 7g, planned 7g, compliance 7g, CTL ext, CTL int. Verde = finestra
+                    Assi: carico est. 7g, stress core 7g, piano 7g, compliance 7g, fitness, conditioning int. Verde = finestra
                     recente; viola tratteggiato = baseline.
                   </p>
                 </details>

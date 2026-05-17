@@ -308,7 +308,7 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
                 {[
                   { k: "Sedute", v: f.sessions },
                   { k: "Ore", v: f.hours },
-                  { k: "TSS", v: f.tss },
+                  { k: "Carico", v: f.tss },
                   { k: "Distanza km", v: f.km },
                   { k: "Dislivello m", v: f.elev },
                   { k: "kcal", v: f.kcal },

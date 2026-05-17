@@ -184,7 +184,7 @@ function buildKpiTiles(
   }
 
   tiles.push({
-    label: "TSS",
+    label: "Carico",
     value: fmtInt(w.tss),
     accent: "violet",
   });
