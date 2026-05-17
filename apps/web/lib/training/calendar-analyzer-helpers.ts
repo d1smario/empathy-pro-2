@@ -489,10 +489,12 @@ export type PowerProfileWindow = { key: string; label: string; sec: number };
 export const POWER_PROFILE_WINDOWS: PowerProfileWindow[] = [
   { key: "w5s", label: "5s", sec: 5 },
   { key: "w20s", label: "20s", sec: 20 },
-  { key: "w60s", label: "60s", sec: 60 },
-  { key: "w3m", label: "3m", sec: 180 },
-  { key: "w12m", label: "12m", sec: 720 },
-  { key: "w60m", label: "60m", sec: 3600 },
+  { key: "w1m", label: "1'", sec: 60 },
+  { key: "w3m", label: "3'", sec: 180 },
+  { key: "w5m", label: "5'", sec: 300 },
+  { key: "w12m", label: "12'", sec: 720 },
+  { key: "w20m", label: "20'", sec: 1200 },
+  { key: "w60m", label: "60'", sec: 3600 },
 ];
 
 /** Media mobile massima su `windowSamples` campioni consecutivi. */

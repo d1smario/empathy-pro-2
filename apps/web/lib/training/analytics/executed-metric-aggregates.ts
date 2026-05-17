@@ -1,4 +1,5 @@
 import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
+import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 
 /** Per-workout e per-giorno: estrae metriche da `executed_workouts` + `trace_summary` (best-effort). */
 
@@ -69,10 +70,20 @@ const EMPTY_DAY: DailyMetricAgg = {
 };
 
 function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricAgg {
-  const tss = Math.max(0, Number(row.tss ?? 0));
+  const tr = row.trace_summary;
+  const tss = resolveExecutedTrainingLoad({
+    storedTss: row.tss,
+    durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
+    traceSummary: tr,
+    vendorLoad: pickMetric(tr, [
+      "training_load",
+      "trainingLoad",
+      "training_load_score",
+      "activity_training_load",
+    ]),
+  });
   const kcal = Math.max(0, Number(row.kcal ?? 0));
   const minutes = Math.max(0, Number(row.duration_minutes ?? 0));
-  const tr = row.trace_summary;
   const power =
     pickMetric(tr, ["power_avg_w", "avg_power_w", "avg_power", "normalized_power_w", "np_w"]) ?? null;
   const hr = pickMetric(tr, ["hr_avg_bpm", "avg_hr", "heart_rate_avg", "avg_heart_rate"]) ?? null;
@@ -286,7 +297,17 @@ export function refKpisLastNDays(
   for (const row of rows) {
     const ds = row.date?.slice(0, 10);
     if (!ds || ds < startS || ds > endS) continue;
-    tss += Math.max(0, Number(row.tss ?? 0));
+    tss += resolveExecutedTrainingLoad({
+      storedTss: row.tss,
+      durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
+      traceSummary: row.trace_summary,
+      vendorLoad: pickMetric(row.trace_summary, [
+        "training_load",
+        "trainingLoad",
+        "training_load_score",
+        "activity_training_load",
+      ]),
+    });
     kcal += Math.max(0, Number(row.kcal ?? 0));
     const m = Math.max(0, Number(row.duration_minutes ?? 0));
     totalMinutes += m;

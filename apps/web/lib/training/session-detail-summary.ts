@@ -15,6 +15,7 @@ import {
   pickText,
   traceRecord,
 } from "@/lib/training/calendar-analyzer-helpers";
+import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 import type { SportGlyphId } from "@/lib/training/builder/sport-glyph-id";
 
 export type SessionKpiTile = {
@@ -183,9 +184,20 @@ function buildKpiTiles(
     });
   }
 
+  const trainingLoad = resolveExecutedTrainingLoad({
+    storedTss: w.tss,
+    durationMinutes: Math.max(0, Number(w.durationMinutes ?? 0)),
+    traceSummary: trace,
+    vendorLoad: pickMetric(trace, [
+      "training_load",
+      "trainingLoad",
+      "training_load_score",
+      "activity_training_load",
+    ]),
+  });
   tiles.push({
     label: "Carico",
-    value: fmtInt(w.tss),
+    value: trainingLoad > 0 ? fmtInt(trainingLoad) : "—",
     accent: "violet",
   });
 

@@ -468,7 +468,7 @@ export default function TrainingAnalyticsPageView() {
         <>
           <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-2xl border border-rose-500/45 bg-rose-500/[0.12] px-4 py-3 shadow-[inset_0_0_0_1px_rgba(244,63,94,0.2)]">
-              <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">TSS · 7g</div>
+              <div className="text-[0.65rem] font-bold uppercase tracking-wider text-rose-200/80">{EMPATHY_LOAD_LABELS_IT.trainingLoad} · 7g</div>
               <div className="mt-1 text-xl font-bold tabular-nums text-rose-50">{refKpis7d.tss.toFixed(0)}</div>
             </div>
             <div className="rounded-2xl border border-amber-500/45 bg-amber-500/[0.12] px-4 py-3 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.2)]">

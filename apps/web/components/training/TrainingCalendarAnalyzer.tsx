@@ -29,6 +29,7 @@ import {
 } from "@/lib/training/calendar-analyzer-helpers";
 import { TrainingCalendarTelemetryChart } from "@/components/training/TrainingCalendarTelemetryChart";
 import { TrainingPowerProfileRadar } from "@/components/training/TrainingPowerProfileRadar";
+import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 import { deleteExecutedWorkout } from "@/modules/training/services/training-executed-api";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 import {
@@ -421,9 +422,17 @@ export function TrainingCalendarAnalyzer({
     let powerWeighted = 0;
     for (const w of dayExecuted) {
       const tr = traceRecord(w);
-      const tssCol = n(w.tss);
-      const tssTrace = pickMetric(tr, ["tss"]);
-      tss += (tssCol != null && tssCol > 0 ? tssCol : tssTrace) ?? 0;
+      tss += resolveExecutedTrainingLoad({
+        storedTss: w.tss,
+        durationMinutes: Math.max(0, n(w.durationMinutes) ?? 0),
+        traceSummary: tr,
+        vendorLoad: pickMetric(tr, [
+          "training_load",
+          "trainingLoad",
+          "training_load_score",
+          "activity_training_load",
+        ]),
+      });
       kcal += n(w.kcal) ?? 0;
       const m = n(w.durationMinutes) ?? 0;
       totalMin += m;
