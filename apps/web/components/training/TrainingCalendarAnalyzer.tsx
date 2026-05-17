@@ -721,10 +721,11 @@ export function TrainingCalendarAnalyzer({
           <div>
             <h4 className="text-sm font-bold text-pink-100/95">Profili · radar vs picco mese</h4>
             <p className="mt-1 text-xs text-slate-500">
-              Finestre 5s → 60m: valore sessione vs massimo del mese nel range Analyzer.
+              Un esagono per ogni canale presente nella registrazione (potenza, FC, cadenza, velocità, VAM, lattato,
+              glucosio, SmO₂, temperatura, VO₂, …) — finestre 5s → 60′ vs picco del mese.
             </p>
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
             {peakRadarProfiles.map((profile) => (
               <div
                 key={profile.metricId}
