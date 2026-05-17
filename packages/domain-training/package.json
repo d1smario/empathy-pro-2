@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/daily-load-ewma.test.ts src/empathy-cardio-impulse-daily.test.ts src/empathy-external-daily-impulse.test.ts"
+    "test": "tsx --test src/daily-load-ewma.test.ts src/empathy-cardio-impulse-daily.test.ts src/empathy-external-daily-impulse.test.ts src/empathy-infer-training-load.test.ts src/empathy-load-metrics-v2.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0"

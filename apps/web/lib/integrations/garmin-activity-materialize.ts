@@ -8,6 +8,7 @@ import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-impor
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
 import { pickGarminActivityStableId } from "@/lib/integrations/garmin-activity-stable-id";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
+import { inferEmpathyTrainingLoadForSession } from "@empathy/domain-training";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
@@ -375,13 +376,24 @@ function extractGarminActivitySeries(samples: unknown): Record<string, unknown> 
   return out;
 }
 
-function inferTss(r: Record<string, unknown>): number {
+function inferGarminTrainingLoad(r: Record<string, unknown>, durationMinutes: number): number {
+  const summary = buildGarminCanonicalSummary(r);
   const direct = r.trainingLoadScore ?? r.trainingStressScore ?? r.tss;
-  if (typeof direct === "number" && Number.isFinite(direct) && direct >= 0) return direct;
-  const te = asRecord(r.trainingEffect);
-  const v = te?.lte ?? te?.aerobicTrainingEffect;
-  if (typeof v === "number" && Number.isFinite(v) && v >= 0) return Math.min(999, v * 20);
-  return 0;
+  let vendorLoad: number | null = null;
+  if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
+    vendorLoad = direct;
+  } else {
+    const te = asRecord(r.trainingEffect);
+    const v = te?.lte ?? te?.aerobicTrainingEffect;
+    if (typeof v === "number" && Number.isFinite(v) && v >= 0) vendorLoad = Math.min(999, v * 20);
+  }
+  return inferEmpathyTrainingLoadForSession({
+    vendorLoad,
+    avgPowerW: summary.power_avg_w,
+    ftpW: null,
+    hrAvgBpm: summary.hr_avg_bpm,
+    durationMinutes,
+  });
 }
 
 function buildGarminObservationForRow(
@@ -447,7 +459,7 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
     if (!date || durSec == null) continue;
 
     const durationMinutes = Math.max(1, Math.round(durSec / 60));
-    const tss = inferTss(r);
+    const tss = inferGarminTrainingLoad(r, durationMinutes);
     const kcalRaw = r.activeKilocalories ?? r.calories;
     const kcal = typeof kcalRaw === "number" && Number.isFinite(kcalRaw) ? kcalRaw : null;
     const kj = kcal != null ? Math.round(kcal * 4.184 * 1000) / 1000 : null;

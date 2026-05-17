@@ -18,6 +18,7 @@ import type { RecoverySummary } from "@/lib/reality/recovery-summary";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { fetchTrainingAnalyticsRows } from "@/modules/training/services/training-analytics-api";
+import { EMPATHY_LOAD_LABELS_IT } from "@/lib/training/load-metrics-labels";
 import { trainingRealityDiagnosticsBannerIt } from "@/lib/training/training-reality-diagnostics";
 
 function toDateOnly(d: Date): string {
@@ -480,7 +481,7 @@ export function DashboardLoadAnalysisSummary() {
               <div className="rounded-2xl border border-orange-500/20 bg-orange-500/10 p-4">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-orange-200/90">Stimolo &amp; fitness</h3>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {kpiTile("TSS · 7g", ref7.tss.toFixed(0), tssSub28, "rose")}
+                  {kpiTile(`${EMPATHY_LOAD_LABELS_IT.trainingLoad} · 7g`, ref7.tss.toFixed(0), tssSub28, "rose")}
                   {kpiTile("Kcal · 7g", ref7.kcal.toFixed(0), kcalSub28)}
                   {kpiTile("Watt medi · 7g", wattVal, "Durata-weighted da trace")}
                   {kpiTile("Piano · reale · 7g", planReal7, planReal28Sub)}
@@ -490,8 +491,17 @@ export function DashboardLoadAnalysisSummary() {
                     compliance28s,
                     compliance7 < 70 || compliance7 > 130 ? "rose" : undefined,
                   )}
-                  {kpiTile("CTL · ATL · TSB (ext)", ctlExt, "Fitness da carico esterno")}
-                  {kpiTile("CTL · ATL · TSB (int)", ctlInt, "Stima da carico interno", "fuchsia")}
+                  {kpiTile(
+                    `${EMPATHY_LOAD_LABELS_IT.fitness4} · ${EMPATHY_LOAD_LABELS_IT.strain} · ${EMPATHY_LOAD_LABELS_IT.form}`,
+                    ctlExt,
+                    "Carico esterno (V2)",
+                  )}
+                  {kpiTile(
+                    `${EMPATHY_LOAD_LABELS_IT.conditioningInt4} · ${EMPATHY_LOAD_LABELS_IT.fatigueInt} · diff.`,
+                    ctlInt,
+                    "Stress core (V2)",
+                    "fuchsia",
+                  )}
                   {kpiTile("Coupling int/ext · 7g", coupling7.toFixed(2), couplingSub)}
                   {kpiTile("Carico esterno 7g", ext7.toFixed(0), "Proxy TSS eseguito")}
                   {kpiTile("Carico interno 7g", int7.toFixed(0), "Indice stress interno", "fuchsia")}

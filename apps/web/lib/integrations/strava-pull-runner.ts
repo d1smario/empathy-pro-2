@@ -7,6 +7,7 @@ import { exchangeStravaRefreshToken } from "@/lib/integrations/strava-oauth2-api
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
+import { trainingLoadForExecutedPersist } from "@/lib/training/infer-executed-training-load";
 
 function stravaActivitiesUrl(): string {
   return process.env.STRAVA_API_ACTIVITIES_URL?.trim() || "https://www.strava.com/api/v3/athlete/activities";
@@ -92,7 +93,14 @@ async function upsertExecutedFromStrava(input: {
   if (durationMinutes <= 0) return;
   const distanceM = num(input.rec.distance);
   const avgPower = num(input.rec.average_watts);
-  const estimateTss = avgPower != null && durationSec != null ? Math.max(0, (avgPower * (durationSec / 3600)) / 10) : 0;
+  const estimateTss = trainingLoadForExecutedPersist({
+    vendorLoad: null,
+    durationMinutes,
+    traceSummary: {
+      power_avg_w: avgPower,
+      hr_avg_bpm: num(input.rec.average_heartrate),
+    },
+  });
   const channelCoverage = stravaChannelCoverage(input.rec);
   const quality = buildExecutedTrainingImportQuality({ channelCoverage });
   const source = "api_sync:strava:activities";

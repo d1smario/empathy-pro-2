@@ -126,3 +126,33 @@ export {
 
 export { empathyCardioImpulseDailyFromSession } from "./empathy-cardio-impulse-daily";
 export { empathyExternalDailyImpulseFromSession } from "./empathy-external-daily-impulse";
+
+export {
+  EMPATHY_LOAD_METHOD_VERSION,
+  inferEmpathyTrainingLoadForSession,
+  trainingLoadFromPowerSession,
+} from "./empathy-infer-training-load";
+
+export {
+  STRESS_CORE_WEIGHTS,
+  DEFAULT_TARGET_SLEEP_HOURS,
+  FORM_INT_EPSILON,
+  computeStressCoreDaily,
+  dailyCardioImpulseFromSessions,
+  stressCoreBaselinesFromHistory,
+  stressCoreComponents,
+  meanFinite,
+  type StressCoreBaselines,
+  type StressCoreDaySignals,
+} from "./empathy-stress-core-daily";
+
+export {
+  FITNESS4_WINDOW_DAYS,
+  FITNESS8_WINDOW_DAYS,
+  STRAIN_TAU_DAYS,
+  computeEmpathyLoadMetricsV2,
+  type EmpathyDailyLoadPointV2,
+  type EmpathyLoadMetricsDayInput,
+  type EmpathyLoadSessionInput,
+  type EmpathyLoadWellnessInput,
+} from "./empathy-load-metrics-v2";

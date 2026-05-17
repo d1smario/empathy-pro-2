@@ -22,6 +22,8 @@ import {
   parsePro2BuilderSessionFromNotes,
 } from "@/lib/training/builder/pro2-session-notes";
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
+import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
+import { LOAD_CHIP_LABEL } from "@/lib/training/load-metrics-labels";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
@@ -833,7 +835,7 @@ export default function TrainingCalendarPageView() {
                                 PLAN
                               </div>
                               <div>
-                                {chip.minutes}m · TSS {chip.tss}
+                                {chip.minutes}m · {LOAD_CHIP_LABEL} {chip.tss}
                               </div>
                               <div>
                                 {plannedTitleLine(w)} · km — · Pavg — · kcal{" "}
@@ -854,7 +856,12 @@ export default function TrainingCalendarPageView() {
                             <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-exec">
                               <div className="font-bold">✅ EXEC</div>
                               <div>
-                                {w.durationMinutes}m · TSS {Number(w.tss).toFixed(0)}
+                                {w.durationMinutes}m · {LOAD_CHIP_LABEL}{" "}
+                                {resolveExecutedTrainingLoad({
+                                  storedTss: w.tss,
+                                  durationMinutes: w.durationMinutes,
+                                  traceSummary: tr,
+                                }).toFixed(0)}
                               </div>
                               <div>
                                 km {km != null ? km.toFixed(1) : "—"} · Pavg {pwr != null ? Math.round(pwr) : "—"} · kcal{" "}

@@ -51,4 +51,6 @@ Per **HRV, sonno, FC a riposo**: evidenza su validazione dispositivi, variabilit
 
 ---
 
+**V2 prodotto:** metriche esterne/interne e nomenclatura in [`docs/EMPATHY_LOAD_METRICS_V2_SPEC.md`](EMPATHY_LOAD_METRICS_V2_SPEC.md) (`@empathy/domain-training`).
+
 *v1 — allineato a Costituzione §J; aggiornare quando cambiano parametri o contratti.*
