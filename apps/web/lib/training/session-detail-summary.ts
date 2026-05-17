@@ -16,6 +16,10 @@ import {
   traceRecord,
 } from "@/lib/training/calendar-analyzer-helpers";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
+import {
+  resolveExecutedAvgPowerW,
+  resolveExecutedKcal,
+} from "@/lib/training/resolve-executed-session-energy";
 import type { SportGlyphId } from "@/lib/training/builder/sport-glyph-id";
 
 export type SessionKpiTile = {
@@ -210,19 +214,33 @@ function buildKpiTiles(
     });
   }
 
-  if (w.kcal != null) {
+  const kcalResolved = resolveExecutedKcal({
+    storedKcal: w.kcal,
+    storedKj: w.kj,
+    durationMinutes: Math.max(0, Number(w.durationMinutes ?? 0)),
+    traceSummary: trace,
+    avgPowerW: powerStats.avg,
+  });
+  if (kcalResolved > 0) {
     tiles.push({
       label: "Energia",
-      value: fmtInt(w.kcal),
+      value: fmtInt(kcalResolved),
       unit: "kcal",
       accent: "orange",
     });
   }
 
-  if (powerStats.avg != null) {
+  const powerAvg =
+    powerStats.avg ??
+    resolveExecutedAvgPowerW({
+      storedKj: w.kj,
+      durationMinutes: Math.max(0, Number(w.durationMinutes ?? 0)),
+      traceSummary: trace,
+    });
+  if (powerAvg != null) {
     tiles.push({
       label: "Potenza media",
-      value: fmtInt(powerStats.avg),
+      value: fmtInt(powerAvg),
       unit: "W",
       accent: "fuchsia",
     });

@@ -272,7 +272,7 @@ export async function GET(req: NextRequest) {
       db
         .from("executed_workouts")
         .select(
-          "id, date, started_at, ended_at, tss, duration_minutes, kcal, trace_summary, lactate_mmoll, glucose_mmol, smo2, source",
+          "id, date, started_at, ended_at, tss, duration_minutes, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, source",
         )
         .eq("athlete_id", athleteId)
         .gte("date", from)

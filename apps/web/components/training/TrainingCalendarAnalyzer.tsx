@@ -19,6 +19,7 @@ import {
   pickText,
   POWER_PROFILE_WINDOWS,
   powerProfileFromSeries,
+  vamProfileFromAltitudeSeries,
   prepareAltitudeSeries,
   prepareDisplaySeries,
   resampleToLength,
@@ -30,6 +31,10 @@ import {
 import { TrainingCalendarTelemetryChart } from "@/components/training/TrainingCalendarTelemetryChart";
 import { TrainingPowerProfileRadar } from "@/components/training/TrainingPowerProfileRadar";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
+import {
+  resolveExecutedAvgPowerW,
+  resolveExecutedKcal,
+} from "@/lib/training/resolve-executed-session-energy";
 import { deleteExecutedWorkout } from "@/modules/training/services/training-executed-api";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 import {
@@ -49,6 +54,7 @@ const RADAR_METRIC_OPTIONS: Array<{ id: string; label: string; unit: string; key
   },
   { id: "cadence", label: "Cadenza", unit: "rpm", keys: ["cadence_series_rpm", "cadence_series"] },
   { id: "speed", label: "Velocità", unit: "km/h", keys: ["speed_series_kmh", "speed_stream_kmh", "speed_series"] },
+  { id: "vam", label: "VAM", unit: "m/h", keys: [] },
 ];
 
 const StravaStyleMap = dynamic(
@@ -385,10 +391,30 @@ export function TrainingCalendarAnalyzer({
     if (!primaryExecuted) return null;
     const cfg = RADAR_METRIC_OPTIONS.find((o) => o.id === radarMetricId) ?? RADAR_METRIC_OPTIONS[0];
     const tr = traceRecord(primaryExecuted);
-    const raw = pickSeries(tr, cfg.keys);
-    if (raw.length < 2) return null;
-    const sessionProfile = powerProfileFromSeries(raw, n(primaryExecuted.durationMinutes));
-    const peaks = monthPeakMetricProfile(monthExecuted, cfg.keys);
+    const dur = n(primaryExecuted.durationMinutes);
+    let sessionProfile: { key: string; label: string; watts: number | null }[];
+    let peaks: Map<string, number>;
+    if (radarMetricId === "vam") {
+      const alt = pickSeries(tr, ["altitude_series_m", "route_altitude_series_m", "altitude_series"]);
+      if (alt.length < 2) return null;
+      sessionProfile = vamProfileFromAltitudeSeries(alt, dur);
+      peaks = new Map();
+      for (const w of monthExecuted) {
+        const wTr = traceRecord(w);
+        const wAlt = pickSeries(wTr, ["altitude_series_m", "route_altitude_series_m", "altitude_series"]);
+        if (wAlt.length < 2) continue;
+        const prof = vamProfileFromAltitudeSeries(wAlt, n(w.durationMinutes));
+        for (const p of prof) {
+          if (p.watts == null) continue;
+          peaks.set(p.key, Math.max(peaks.get(p.key) ?? 0, p.watts));
+        }
+      }
+    } else {
+      const raw = pickSeries(tr, cfg.keys);
+      if (raw.length < 2) return null;
+      sessionProfile = powerProfileFromSeries(raw, dur);
+      peaks = monthPeakMetricProfile(monthExecuted, cfg.keys);
+    }
     return POWER_PROFILE_WINDOWS.map((w) => {
       const sp = sessionProfile.find((p) => p.key === w.key);
       const s = sp?.watts ?? null;
@@ -422,9 +448,15 @@ export function TrainingCalendarAnalyzer({
     let powerWeighted = 0;
     for (const w of dayExecuted) {
       const tr = traceRecord(w);
+      const m = Math.max(0, n(w.durationMinutes) ?? 0);
+      const p = resolveExecutedAvgPowerW({
+        storedKj: w.kj,
+        durationMinutes: m,
+        traceSummary: tr,
+      });
       tss += resolveExecutedTrainingLoad({
         storedTss: w.tss,
-        durationMinutes: Math.max(0, n(w.durationMinutes) ?? 0),
+        durationMinutes: m,
         traceSummary: tr,
         vendorLoad: pickMetric(tr, [
           "training_load",
@@ -433,10 +465,14 @@ export function TrainingCalendarAnalyzer({
           "activity_training_load",
         ]),
       });
-      kcal += n(w.kcal) ?? 0;
-      const m = n(w.durationMinutes) ?? 0;
+      kcal += resolveExecutedKcal({
+        storedKcal: w.kcal,
+        storedKj: w.kj,
+        durationMinutes: m,
+        traceSummary: tr,
+        avgPowerW: p,
+      });
       totalMin += m;
-      const p = pickMetric(tr, ["power_avg_w", "power_avg", "avg_power", "powerAvg", "normalized_power_w"]);
       const wt = m > 0 ? m : 1;
       if (p != null) powerWeighted += p * wt;
     }

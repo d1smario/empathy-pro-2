@@ -1,5 +1,9 @@
 import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
+import {
+  resolveExecutedAvgPowerW,
+  resolveExecutedKcal,
+} from "@/lib/training/resolve-executed-session-energy";
 
 /** Per-workout e per-giorno: estrae metriche da `executed_workouts` + `trace_summary` (best-effort). */
 
@@ -8,6 +12,7 @@ export type ExecutedAnalyticsRow = {
   tss: number | null;
   duration_minutes: number | null;
   kcal: number | null;
+  kj?: number | null;
   trace_summary: Record<string, unknown> | null;
   lactate_mmoll: number | null;
   glucose_mmol: number | null;
@@ -82,10 +87,19 @@ function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricA
       "activity_training_load",
     ]),
   });
-  const kcal = Math.max(0, Number(row.kcal ?? 0));
   const minutes = Math.max(0, Number(row.duration_minutes ?? 0));
-  const power =
-    pickMetric(tr, ["power_avg_w", "avg_power_w", "avg_power", "normalized_power_w", "np_w"]) ?? null;
+  const power = resolveExecutedAvgPowerW({
+    storedKj: row.kj,
+    durationMinutes: minutes,
+    traceSummary: tr,
+  });
+  const kcal = resolveExecutedKcal({
+    storedKcal: row.kcal,
+    storedKj: row.kj,
+    durationMinutes: minutes,
+    traceSummary: tr,
+    avgPowerW: power,
+  });
   const hr = pickMetric(tr, ["hr_avg_bpm", "avg_hr", "heart_rate_avg", "avg_heart_rate"]) ?? null;
   const glucose = row.glucose_mmol ?? pickMetric(tr, ["glucose_mmol", "glucose_mg_dl"]);
   const smo2 = row.smo2 ?? pickMetric(tr, ["smo2", "smO2", "moxy_smo2"]);
@@ -297,23 +311,32 @@ export function refKpisLastNDays(
   for (const row of rows) {
     const ds = row.date?.slice(0, 10);
     if (!ds || ds < startS || ds > endS) continue;
+    const m = Math.max(0, Number(row.duration_minutes ?? 0));
+    const tr = row.trace_summary;
+    const power = resolveExecutedAvgPowerW({
+      storedKj: row.kj,
+      durationMinutes: m,
+      traceSummary: tr,
+    });
     tss += resolveExecutedTrainingLoad({
       storedTss: row.tss,
-      durationMinutes: Math.max(0, Number(row.duration_minutes ?? 0)),
-      traceSummary: row.trace_summary,
-      vendorLoad: pickMetric(row.trace_summary, [
+      durationMinutes: m,
+      traceSummary: tr,
+      vendorLoad: pickMetric(tr, [
         "training_load",
         "trainingLoad",
         "training_load_score",
         "activity_training_load",
       ]),
     });
-    kcal += Math.max(0, Number(row.kcal ?? 0));
-    const m = Math.max(0, Number(row.duration_minutes ?? 0));
+    kcal += resolveExecutedKcal({
+      storedKcal: row.kcal,
+      storedKj: row.kj,
+      durationMinutes: m,
+      traceSummary: tr,
+      avgPowerW: power,
+    });
     totalMinutes += m;
-    const power =
-      pickMetric(row.trace_summary, ["power_avg_w", "avg_power_w", "avg_power", "normalized_power_w", "np_w"]) ??
-      null;
     const w = m > 0 ? m : 1;
     if (power != null) powerWeighted += power * w;
   }

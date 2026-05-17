@@ -27,7 +27,15 @@ import {
 } from "@/lib/training/analytics/executed-metric-aggregates";
 import type { CrossChannelSessionVm } from "@/lib/training/analytics/cross-channel-session";
 import { TrainingAnalyzerCrossChannelSection } from "@/components/training/TrainingAnalyzerCrossChannelSection";
+import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
 import { EMPATHY_LOAD_LABELS_IT } from "@empathy/contracts";
+import {
+  executedWorkoutsFromAnalyticsRows,
+  filterPlannedByDate,
+  filterWorkoutsByDate,
+  monthWorkoutsForDate,
+  plannedWorkoutsFromAnalyticsRows,
+} from "@/lib/training/analytics/analytics-row-mappers";
 
 /** Data locale YYYY-MM-DD (evita shift UTC su `toISOString`). */
 function toLocalDateKey(d: Date): string {
@@ -207,6 +215,12 @@ export default function TrainingAnalyticsPageView() {
     return init;
   });
   const [hexMetric, setHexMetric] = useState<MetricSeriesKey>("executed");
+  /** Giorno per drill-down grafico (MMP, GPS, telemetria). */
+  const [focusDay, setFocusDay] = useState<string>(() => toLocalDateKey(new Date()));
+
+  useEffect(() => {
+    setFocusDay(anchorDate);
+  }, [anchorDate]);
 
   useEffect(() => {
     async function loadExecuted() {
@@ -310,6 +324,43 @@ export default function TrainingAnalyticsPageView() {
   }, [operationalContext, adaptationLoop?.expectedLoad7d]);
 
   const dmMap = useMemo(() => dailyMetricMap(rows as ExecutedAnalyticsRow[]), [rows]);
+  const executedWorkouts = useMemo(
+    () => (athleteId ? executedWorkoutsFromAnalyticsRows(rows, athleteId) : []),
+    [rows, athleteId],
+  );
+  const plannedWorkouts = useMemo(
+    () => (athleteId ? plannedWorkoutsFromAnalyticsRows(plannedRows, athleteId) : []),
+    [plannedRows, athleteId],
+  );
+  const focusDayExecuted = useMemo(
+    () => filterWorkoutsByDate(executedWorkouts, focusDay),
+    [executedWorkouts, focusDay],
+  );
+  const focusDayPlanned = useMemo(
+    () => filterPlannedByDate(plannedWorkouts, focusDay),
+    [plannedWorkouts, focusDay],
+  );
+  const focusMonthExecuted = useMemo(
+    () => monthWorkoutsForDate(executedWorkouts, focusDay),
+    [executedWorkouts, focusDay],
+  );
+  const activeDays = useMemo(
+    () =>
+      compareSeries
+        .filter((c) => c.executed > 0 || c.planned > 0)
+        .map((c) => c.date)
+        .slice(-14),
+    [compareSeries],
+  );
+  const weeklyExternalLoad = useMemo(() => {
+    const last42 = compareSeries.slice(-42);
+    const weeks: number[] = [];
+    for (let w = 0; w < 6; w += 1) {
+      const slice = last42.slice(w * 7, (w + 1) * 7);
+      weeks.push(slice.reduce((s, d) => s + d.executed, 0));
+    }
+    return weeks;
+  }, [compareSeries]);
   const analyticsEndDate = compareSeries.at(-1)?.date ?? bounds.to;
   const refKpis7d = useMemo(
     () => refKpisLastNDays(rows as ExecutedAnalyticsRow[], 7, analyticsEndDate),
@@ -431,6 +482,38 @@ export default function TrainingAnalyticsPageView() {
             Richiesta API: <span className="text-slate-400">{bounds.from}</span> → <span className="text-slate-400">{bounds.to}</span>
             {windowDays === 1 ? " · un solo giorno (dettaglio giornaliero)" : null}
           </p>
+          <label className="mt-4 flex min-w-[12rem] flex-col gap-1 text-xs text-slate-400">
+            <span className="font-semibold text-violet-200/90">Giorno analisi dettagliata</span>
+            <input
+              type="date"
+              value={focusDay}
+              min={bounds.from}
+              max={bounds.to}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (/^\d{4}-\d{2}-\d{2}$/.test(v)) setFocusDay(v);
+              }}
+              className="rounded-xl border border-violet-500/30 bg-black/50 px-3 py-2 font-mono text-sm text-white outline-none focus:border-violet-400/50"
+            />
+          </label>
+          {activeDays.length ? (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {activeDays.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setFocusDay(d)}
+                  className={`rounded-lg border px-2 py-1 font-mono text-[0.65rem] ${
+                    focusDay === d
+                      ? "border-violet-400/50 bg-violet-500/20 text-violet-100"
+                      : "border-white/15 bg-black/40 text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {d.slice(8, 10)}/{d.slice(5, 7)}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -488,6 +571,59 @@ export default function TrainingAnalyticsPageView() {
               </div>
             </div>
           </div>
+
+          <div className="mb-6 rounded-2xl border border-cyan-500/20 bg-black/30 p-4">
+            <h2 className="mb-3 text-sm font-bold text-white">Progressione settimanale · carico esterno (6×7g)</h2>
+            <svg viewBox="0 0 400 120" width="100%" height="120" className="max-h-[28vh]">
+              <defs>
+                <linearGradient id="wkGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f472b6" />
+                  <stop offset="100%" stopColor="#fb923c" />
+                </linearGradient>
+              </defs>
+              {weeklyExternalLoad.map((v, i) => {
+                const max = Math.max(1, ...weeklyExternalLoad);
+                const barH = (v / max) * 80;
+                const x = 24 + i * 58;
+                return (
+                  <g key={i}>
+                    <rect x={x} y={100 - barH} width={40} height={barH} rx={4} fill="url(#wkGrad)" opacity={0.92} />
+                    <text x={x + 20} y={112} textAnchor="middle" fill="#94a3b8" fontSize={9}>
+                      S{i + 1}
+                    </text>
+                    <text x={x + 20} y={Math.max(12, 94 - barH)} textAnchor="middle" fill="#f8fafc" fontSize={9}>
+                      {Math.round(v)}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+
+          <section className="mb-8 rounded-2xl border border-violet-500/25 bg-gradient-to-b from-violet-950/20 to-black/40 p-4 shadow-inner shadow-violet-950/20">
+            <h2 className="mb-1 text-base font-bold text-white">
+              Analisi giorno ·{" "}
+              {new Date(`${focusDay}T12:00:00`).toLocaleDateString("it-IT", {
+                weekday: "long",
+                day: "numeric",
+                month: "long",
+              })}
+            </h2>
+            <p className="mb-4 text-xs text-slate-400">
+              GPS, telemetria, min/max, profili esagonali potenza · FC · VAM (5s–60′). Stesso pannello del Calendario.
+            </p>
+            {focusDayExecuted.length === 0 && focusDayPlanned.length === 0 ? (
+              <p className="text-sm text-slate-500">Nessuna seduta in questo giorno nel range caricato.</p>
+            ) : (
+              <TrainingCalendarAnalyzer
+                selectedDate={focusDay}
+                dayPlanned={focusDayPlanned}
+                dayExecuted={focusDayExecuted}
+                monthExecuted={focusMonthExecuted}
+                athleteId={athleteId}
+              />
+            )}
+          </section>
 
           <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {kpiCard("External load 7d", external7.toFixed(0))}
