@@ -175,6 +175,8 @@
     "directoryHint": "Ruoli, coach, report, directory e grant. Vai a:",
     "rolePanelAnchor": "Ruoli e coach",
     "coachesAnchor": "Elenco coach",
+    "directorySectionTitle": "Directory utenti",
+    "sectionCollapsedHint": "clic per espandere",
     "reportAnchor": "Report piattaforma",
     "directoryGrantAnchor": "Accessi gratuiti",
     "dashboard": "Dashboard",

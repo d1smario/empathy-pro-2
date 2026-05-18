@@ -175,6 +175,8 @@
     "directoryHint": "Roles, coaches, report, directory, and grants. Jump to:",
     "rolePanelAnchor": "Roles & coaches",
     "coachesAnchor": "Coach list",
+    "directorySectionTitle": "User directory",
+    "sectionCollapsedHint": "click to expand",
     "reportAnchor": "Platform report",
     "directoryGrantAnchor": "Complimentary access",
     "dashboard": "Dashboard",

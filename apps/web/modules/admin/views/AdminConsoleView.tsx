@@ -250,9 +250,28 @@ export default function AdminConsoleView() {
         </div>
       </section>
 
-      <AdminPlatformReportSection />
+      <details
+        id="admin-platform-report"
+        className="group rounded-2xl border border-white/10 bg-white/[0.03] open:border-white/15"
+      >
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-300 [&::-webkit-details-marker]:hidden">
+          <span className="text-white">{t("reportAnchor")}</span>
+          <span className="ml-2 text-xs font-normal text-gray-500">({t("sectionCollapsedHint")})</span>
+        </summary>
+        <div className="border-t border-white/10 px-1 pb-4 pt-2">
+          <AdminPlatformReportSection />
+        </div>
+      </details>
 
-      <AdminUserDirectorySection onPrefillGrantEmail={(email) => setGrantEmailPrefill(email)} />
+      <details className="group rounded-2xl border border-white/10 bg-white/[0.03] open:border-white/15">
+        <summary className="cursor-pointer list-none px-5 py-4 text-sm font-semibold text-gray-300 [&::-webkit-details-marker]:hidden">
+          <span className="text-white">{t("directorySectionTitle")}</span>
+          <span className="ml-2 text-xs font-normal text-gray-500">({t("sectionCollapsedHint")})</span>
+        </summary>
+        <div className="border-t border-white/10 px-1 pb-4 pt-2">
+          <AdminUserDirectorySection onPrefillGrantEmail={(email) => setGrantEmailPrefill(email)} />
+        </div>
+      </details>
 
       <AdminGrantsSection grantEmailPrefill={grantEmailPrefill} onGrantEmailPrefillConsumed={clearGrantPrefill} />
 
