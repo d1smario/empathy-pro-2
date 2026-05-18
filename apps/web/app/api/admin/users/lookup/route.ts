@@ -51,6 +51,14 @@ export async function GET(req: Request) {
   }
 
   // Per ogni match, carica entitlement (parallel).
+  if (q.includes("@")) {
+    matches.sort((a, b) => {
+      const ae = a.email.toLowerCase() === q ? 0 : 1;
+      const be = b.email.toLowerCase() === q ? 0 : 1;
+      return ae - be;
+    });
+  }
+
   const enriched = await Promise.all(
     matches.map(async (m) => {
       const entitlement = await loadUserAccessEntitlement(admin, m.userId);

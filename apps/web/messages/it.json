@@ -172,7 +172,9 @@
     "eyebrow": "Piattaforma",
     "title": "Console amministrazione",
     "intro": "Abilitazione coach, directory utenti e accessi gratuiti. Accesso:",
-    "directoryHint": "Report piattaforma, directory utenti e grant. Vai a:",
+    "directoryHint": "Ruoli, coach, report, directory e grant. Vai a:",
+    "rolePanelAnchor": "Ruoli e coach",
+    "coachesAnchor": "Elenco coach",
     "reportAnchor": "Report piattaforma",
     "directoryGrantAnchor": "Accessi gratuiti",
     "dashboard": "Dashboard",
@@ -196,6 +198,38 @@
     "errors": {
       "coachList": "Lettura coach non riuscita.",
       "updateFailed": "Aggiornamento non riuscito.",
+      "network": "Errore di rete."
+    }
+  },
+  "AdminRolePanel": {
+    "eyebrow": "Operazioni",
+    "title": "Ruolo utente e convalida coach",
+    "subtitle": "Cerca per email, verifica lo stato e attiva account atleta o coach (in attesa / approvato / sospeso).",
+    "emailLabel": "Email",
+    "emailPlaceholder": "es. contact@d1s.ch",
+    "search": "Cerca",
+    "searching": "Cerco…",
+    "pickUser": "Più risultati — seleziona l’utente:",
+    "currentState": "Stato attuale",
+    "setAthlete": "Imposta atleta",
+    "setCoachPending": "Coach in attesa",
+    "setCoachApproved": "Approva coach",
+    "suspendCoach": "Sospendi coach",
+    "statusAthlete": "Atleta (privato)",
+    "statusCoachPending": "Coach · in attesa",
+    "statusCoachApproved": "Coach · attivo",
+    "statusCoachSuspended": "Coach · sospeso",
+    "pendingQueue": "In coda ({count} coach in attesa)",
+    "openInPanel": "Apri qui",
+    "pendingMore": "…e altri {count} nell’elenco completo sotto.",
+    "fullCoachList": "Vai all’elenco coach completo",
+    "info": {
+      "updated": "Profilo aggiornato.",
+      "approved": "Coach approvato."
+    },
+    "errors": {
+      "search": "Ricerca non riuscita.",
+      "update": "Aggiornamento non riuscito.",
       "network": "Errore di rete."
     }
   },
@@ -317,6 +351,7 @@
     "grantFromDetail": "Apri flusso grant per questa email",
     "grant": "Grant…",
     "makeCoach": "Coach (pending)",
+    "approveCoach": "Approva coach",
     "makePrivate": "Atleta privato",
     "confirmPrivate": "Riportare questo utente ad account atleta privato? I link coach–atleta nel DB non vengono rimossi automaticamente.",
     "errors": {

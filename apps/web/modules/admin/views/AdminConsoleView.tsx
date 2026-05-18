@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { AdminGrantsSection } from "@/components/admin/AdminGrantsSection";
 import { AdminPlatformReportSection } from "@/components/admin/AdminPlatformReportSection";
 import { AdminUserDirectorySection } from "@/components/admin/AdminUserDirectorySection";
+import { AdminUserRolePanel } from "@/components/admin/AdminUserRolePanel";
 import type { AdminCoachRow } from "@/lib/admin/coach-list-types";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 
@@ -124,6 +125,14 @@ export default function AdminConsoleView() {
         </p>
         <p className="text-xs text-gray-500">
           {t("directoryHint")}{" "}
+          <a href="#admin-user-role" className="text-fuchsia-300 underline-offset-2 hover:underline">
+            {t("rolePanelAnchor")}
+          </a>
+          {" · "}
+          <a href="#admin-coaches-heading" className="text-cyan-400 underline-offset-2 hover:underline">
+            {t("coachesAnchor")}
+          </a>
+          {" · "}
           <a href="#admin-platform-report" className="text-cyan-400 underline-offset-2 hover:underline">
             {t("reportAnchor")}
           </a>
@@ -139,9 +148,7 @@ export default function AdminConsoleView() {
         </div>
       </header>
 
-      <AdminPlatformReportSection />
-
-      <AdminUserDirectorySection onPrefillGrantEmail={(email) => setGrantEmailPrefill(email)} />
+      <AdminUserRolePanel onRolesChanged={() => void reloadCoaches()} />
 
       <section aria-labelledby="admin-coaches-heading" className="space-y-4">
         <div className="flex flex-wrap items-end justify-between gap-4">
@@ -242,6 +249,10 @@ export default function AdminConsoleView() {
           </table>
         </div>
       </section>
+
+      <AdminPlatformReportSection />
+
+      <AdminUserDirectorySection onPrefillGrantEmail={(email) => setGrantEmailPrefill(email)} />
 
       <AdminGrantsSection grantEmailPrefill={grantEmailPrefill} onGrantEmailPrefillConsumed={clearGrantPrefill} />
 

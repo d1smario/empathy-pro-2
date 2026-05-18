@@ -172,7 +172,9 @@
     "eyebrow": "Platform",
     "title": "Administration console",
     "intro": "Coach onboarding, user directory, and complimentary access. Signed in as:",
-    "directoryHint": "Platform report, user directory, and grants. Jump to:",
+    "directoryHint": "Roles, coaches, report, directory, and grants. Jump to:",
+    "rolePanelAnchor": "Roles & coaches",
+    "coachesAnchor": "Coach list",
     "reportAnchor": "Platform report",
     "directoryGrantAnchor": "Complimentary access",
     "dashboard": "Dashboard",
@@ -196,6 +198,38 @@
     "errors": {
       "coachList": "Could not load coaches.",
       "updateFailed": "Update failed.",
+      "network": "Network error."
+    }
+  },
+  "AdminRolePanel": {
+    "eyebrow": "Operations",
+    "title": "User role & coach approval",
+    "subtitle": "Search by email, review status, and set athlete or coach (pending / approved / suspended).",
+    "emailLabel": "Email",
+    "emailPlaceholder": "e.g. contact@d1s.ch",
+    "search": "Search",
+    "searching": "Searching…",
+    "pickUser": "Multiple matches — select a user:",
+    "currentState": "Current state",
+    "setAthlete": "Set athlete",
+    "setCoachPending": "Coach (pending)",
+    "setCoachApproved": "Approve coach",
+    "suspendCoach": "Suspend coach",
+    "statusAthlete": "Athlete (private)",
+    "statusCoachPending": "Coach · pending",
+    "statusCoachApproved": "Coach · active",
+    "statusCoachSuspended": "Coach · suspended",
+    "pendingQueue": "Queue ({count} coaches pending)",
+    "openInPanel": "Open here",
+    "pendingMore": "…and {count} more in the full list below.",
+    "fullCoachList": "Go to full coach list",
+    "info": {
+      "updated": "Profile updated.",
+      "approved": "Coach approved."
+    },
+    "errors": {
+      "search": "Search failed.",
+      "update": "Update failed.",
       "network": "Network error."
     }
   },
@@ -317,6 +351,7 @@
     "grantFromDetail": "Open grants flow for this email",
     "grant": "Grants…",
     "makeCoach": "Coach (pending)",
+    "approveCoach": "Approve coach",
     "makePrivate": "Private athlete",
     "confirmPrivate": "Revert this user to a private athlete account? Coach–athlete links in the database are not removed automatically.",
     "errors": {

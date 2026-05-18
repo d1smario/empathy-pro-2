@@ -436,6 +436,16 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
                           {t("grant")}
                         </Pro2Button>
                       ) : null}
+                      {r.role === "coach" && (r.platformCoachStatus ?? "pending") !== "approved" ? (
+                        <Pro2Button
+                          type="button"
+                          className="px-2 py-1 text-[0.65rem]"
+                          disabled={busy}
+                          onClick={() => void setRole(r.userId, "coach", "approved")}
+                        >
+                          {t("approveCoach")}
+                        </Pro2Button>
+                      ) : null}
                       {r.role !== "coach" ? (
                         <Pro2Button type="button" className="px-2 py-1 text-[0.65rem]" disabled={busy} onClick={() => void setRole(r.userId, "coach", "pending")}>
                           {t("makeCoach")}
