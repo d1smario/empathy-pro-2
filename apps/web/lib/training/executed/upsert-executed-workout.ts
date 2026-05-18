@@ -3,6 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type ExecutedWorkoutUpsertPayload = {
   athlete_id: string;
   date: string;
+  /** Ora reale inizio seduta (import vendor / FIT); guida timeline bioenergetica e curve training. */
+  started_at?: string | null;
+  ended_at?: string | null;
   duration_minutes: number;
   tss: number;
   kcal: number | null;

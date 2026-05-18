@@ -54,7 +54,7 @@ export const SESSION_PEAK_METRIC_DEFS: SessionPeakMetricDef[] = [
     label: "FC",
     unit: "bpm",
     keys: ["hr_series_bpm", "heart_rate_series_bpm", "heart_rate_series", "hr_stream_bpm", "hr_series"],
-    scalarKeys: ["hr_max_bpm", "max_hr", "max_heart_rate", "hr_avg_bpm", "avg_hr"],
+    scalarKeys: ["hr_max_bpm", "max_hr", "max_heart_rate", "hr_avg_bpm", "avg_hr", "average_heart_rate", "max_heart_rate"],
   },
   {
     id: "cadence",

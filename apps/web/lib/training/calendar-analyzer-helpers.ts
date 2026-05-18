@@ -96,7 +96,8 @@ export function mergeTraceChannelAvailability(trace: Record<string, unknown> | n
     baseOn("hr") ||
     pickSeries(trace, ["hr_series_bpm", "heart_rate_series_bpm", "heart_rate_series", "hr_stream_bpm", "hr_series"])
       .length >= 1 ||
-    pickMetric(trace, ["hr_avg_bpm", "heart_rate_avg", "avg_hr", "hrAvg"]) != null ||
+    pickMetric(trace, ["hr_avg_bpm", "heart_rate_avg", "avg_hr", "hrAvg", "average_heart_rate", "max_heart_rate"]) !=
+      null ||
     rawCountPositive(trace, "hr");
 
   const power =

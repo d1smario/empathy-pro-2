@@ -8,6 +8,7 @@ import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-impor
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
 import { pickGarminActivityStableId } from "@/lib/integrations/garmin-activity-stable-id";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
+import { resolveGarminActivitySessionTimes } from "@/lib/training/executed/executed-workout-session-times";
 import { inferEmpathyTrainingLoadForSession } from "@empathy/domain-training";
 
 function asRecord(v: unknown): Record<string, unknown> | null {
@@ -538,9 +539,11 @@ export async function materializeGarminActivitiesFromPullResponse(input: {
       observation,
     };
 
+    const sessionTimes = resolveGarminActivitySessionTimes(r);
     const payload = {
       athlete_id: input.athleteId,
       date,
+      ...(sessionTimes ? { started_at: sessionTimes.started_at, ended_at: sessionTimes.ended_at } : {}),
       duration_minutes: durationMinutes,
       tss,
       kj,

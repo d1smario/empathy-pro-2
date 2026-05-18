@@ -7,6 +7,7 @@ import { exchangeStravaRefreshToken } from "@/lib/integrations/strava-oauth2-api
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
+import { resolveStravaActivitySessionTimes } from "@/lib/training/executed/executed-workout-session-times";
 import { trainingLoadForExecutedPersist } from "@/lib/training/infer-executed-training-load";
 
 function stravaActivitiesUrl(): string {
@@ -132,9 +133,11 @@ async function upsertExecutedFromStrava(input: {
   };
   const kcal = num(input.rec.calories);
   const kj = kcal != null ? Math.round(kcal * 4.184 * 100) / 100 : null;
+  const sessionTimes = resolveStravaActivitySessionTimes(input.rec, durationMinutes);
   const payload = {
     athlete_id: input.athleteId,
     date,
+    ...(sessionTimes ? { started_at: sessionTimes.started_at, ended_at: sessionTimes.ended_at } : {}),
     duration_minutes: durationMinutes,
     tss: estimateTss,
     kcal,

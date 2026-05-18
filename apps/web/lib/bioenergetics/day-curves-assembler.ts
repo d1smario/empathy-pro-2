@@ -153,24 +153,34 @@ function pickNumericSeriesFromTrace(tr: Record<string, unknown>, keys: string[])
 
 /** Finestra temporale per campioni trace: `started_at`/`ended_at` da DB se validi, altrimenti slot sintetico (stesso schema precedente). */
 export function timeWindowMsForExecutedSession(
-  ex: Pick<ExecutedWorkout, "startedAt" | "endedAt" | "durationMinutes" | "date">,
+  ex: Pick<ExecutedWorkout, "startedAt" | "endedAt" | "durationMinutes" | "date" | "traceSummary">,
   day: string,
   sessionIndexOffset: number,
   sessionIdx: number,
 ): { startMs: number; spanMs: number } {
   const dm = Math.max(5, Number(ex.durationMinutes) || 60);
-  const sAt = ex.startedAt ? Date.parse(ex.startedAt) : NaN;
-  const eAt = ex.endedAt ? Date.parse(ex.endedAt) : NaN;
+  const tr = ex.traceSummary && typeof ex.traceSummary === "object" ? (ex.traceSummary as Record<string, unknown>) : null;
+  const traceStart =
+    typeof tr?.workout_start_iso === "string" && tr.workout_start_iso.includes("T") ? tr.workout_start_iso : null;
+  const traceEnd =
+    typeof tr?.workout_end_iso === "string" && tr.workout_end_iso.includes("T") ? tr.workout_end_iso : null;
+  const startIso = ex.startedAt ?? traceStart ?? null;
+  const endIso = ex.endedAt ?? traceEnd ?? null;
+  const sAt = startIso ? Date.parse(startIso) : NaN;
+  const eAt = endIso ? Date.parse(endIso) : NaN;
   if (Number.isFinite(sAt) && Number.isFinite(eAt) && eAt > sAt) {
     return { startMs: sAt, spanMs: eAt - sAt };
+  }
+  if (Number.isFinite(sAt)) {
+    return { startMs: sAt, spanMs: dm * 60 * 1000 };
   }
   const dayKey = day.slice(0, 10);
   const startMin = 7 * 60 + 15 + (sessionIndexOffset + sessionIdx) * 75;
   const capped = Math.min(Math.max(startMin, 6 * 60), 21 * 60);
   const h = Math.floor(capped / 60);
   const m = capped % 60;
-  const startIso = `${dayKey}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
-  const startMs = Date.parse(startIso);
+  const staggerStartIso = `${dayKey}T${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  const startMs = Date.parse(staggerStartIso);
   if (Number.isNaN(startMs)) {
     const noon = Date.parse(`${dayKey}T12:00:00`);
     return { startMs: Number.isFinite(noon) ? noon : Date.now(), spanMs: dm * 60 * 1000 };

@@ -16,6 +16,10 @@ import { defaultObservationIngestTags } from "@/lib/reality/observation-ingest-d
 import { mergeObservationIngestTags } from "@/lib/reality/observation-merge";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { upsertExecutedWorkoutByExternalId } from "@/lib/training/executed/upsert-executed-workout";
+import {
+  buildScalarRepresentativeHrSeriesBpm,
+  resolveWhoopWorkoutSessionTimes,
+} from "@/lib/training/executed/executed-workout-session-times";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 import { getMergedIngestStreams } from "@/lib/integrations/ingest-stream-policy";
@@ -210,19 +214,41 @@ async function upsertExecutedWorkoutFromWhoopWorkout(input: {
   const quality = buildExecutedTrainingImportQuality({ channelCoverage });
   const source = "api_sync:whoop:workout";
   const supabase = createServerSupabaseClient();
-  const traceSummary = {
+  const hrAvg = num(merged.average_heart_rate);
+  const hrMax = num(merged.max_heart_rate);
+  const sessionTimes = resolveWhoopWorkoutSessionTimes(input.rec, durationMinutes);
+  const hrSeries =
+    hrAvg != null
+      ? buildScalarRepresentativeHrSeriesBpm({
+          durationMinutes,
+          avgBpm: hrAvg,
+          maxBpm: hrMax,
+        })
+      : [];
+  const traceSummary: Record<string, unknown> = {
     parser_engine: "whoop_v2_rest_workout",
     parser_version: "2",
     source,
     whoop_workout_id: input.workoutId,
     sport_name: merged.sport_name ?? input.rec.sport_name ?? null,
     strain,
-    average_heart_rate: num(merged.average_heart_rate),
-    max_heart_rate: num(merged.max_heart_rate),
+    average_heart_rate: hrAvg,
+    max_heart_rate: hrMax,
+    hr_avg_bpm: hrAvg,
+    hr_max_bpm: hrMax,
     distance_m: num(merged.distance_meter),
     elevation_gain_m: num(merged.elevation_gain_meter),
     kcal,
     kj,
+    ...(sessionTimes
+      ? { workout_start_iso: sessionTimes.started_at, workout_end_iso: sessionTimes.ended_at }
+      : {}),
+    ...(hrSeries.length >= 2
+      ? {
+          hr_series_bpm: hrSeries,
+          hr_series_bpm_source: "whoop_scalar_representation",
+        }
+      : {}),
     channels_available: Object.fromEntries(Object.entries(channelCoverage).map(([k, v]) => [k, v > 0])) as Record<
       string,
       boolean
@@ -236,10 +262,14 @@ async function upsertExecutedWorkoutFromWhoopWorkout(input: {
       channel_coverage_pct: channelCoverage,
     },
   };
+  if (hrSeries.length >= 2) {
+    (traceSummary.channels_available as Record<string, boolean>).hr = true;
+  }
   const externalId = `whoop:${input.workoutId}`;
   const payload = {
     athlete_id: input.athleteId,
     date,
+    ...(sessionTimes ? { started_at: sessionTimes.started_at, ended_at: sessionTimes.ended_at } : {}),
     duration_minutes: durationMinutes,
     tss,
     kcal,
@@ -274,19 +304,27 @@ async function persistWhoopRecords(input: {
     }
 
     try {
-      await persistRealityDeviceExport({
-        athleteId: input.athleteId,
-        provider: "whoop",
-        domain: input.domain,
-        sourceKind: "api_sync",
-        externalRef: id,
-        payload: { [input.payloadKey]: rec },
-        canonicalPreview: preview,
-        status: "created",
-        parserEngine: "whoop_v2_rest",
-        parserVersion: "2",
-        observation,
-      });
+      let exportOk = false;
+      try {
+        await persistRealityDeviceExport({
+          athleteId: input.athleteId,
+          provider: "whoop",
+          domain: input.domain,
+          sourceKind: "api_sync",
+          externalRef: id,
+          payload: { [input.payloadKey]: rec },
+          canonicalPreview: preview,
+          status: "created",
+          parserEngine: "whoop_v2_rest",
+          parserVersion: "2",
+          observation,
+        });
+        exportOk = true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!isDuplicateExportError(msg)) throw e;
+        skipped += 1;
+      }
       if (input.domain === "training" && input.payloadKey === "whoop_workout") {
         await upsertExecutedWorkoutFromWhoopWorkout({
           athleteId: input.athleteId,
@@ -295,13 +333,9 @@ async function persistWhoopRecords(input: {
           rec,
         });
       }
-      inserted += 1;
+      if (exportOk) inserted += 1;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (isDuplicateExportError(msg)) {
-        skipped += 1;
-        continue;
-      }
       errors.push(`[${input.domain}] ${msg}`);
     }
   }

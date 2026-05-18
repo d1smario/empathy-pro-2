@@ -64,9 +64,18 @@ function plannedSessionIsoTs(row: PlannedWorkout, index: number): string {
   return `${d}T${t}`;
 }
 
+function workoutStartIsoFromTrace(row: ExecutedWorkout): string | null {
+  const tr = row.traceSummary;
+  if (!tr || typeof tr !== "object") return null;
+  const w = (tr as Record<string, unknown>).workout_start_iso;
+  return typeof w === "string" && w.includes("T") ? w.trim() : null;
+}
+
 function executedSessionIsoTs(row: ExecutedWorkout, index: number): string {
   const started = row.startedAt?.trim();
   if (started && started.length >= 13 && started.includes("T")) return started;
+  const fromTrace = workoutStartIsoFromTrace(row);
+  if (fromTrace) return fromTrace;
   const d = toDateKey(row.date);
   return staggerSessionTs(d, index, 2);
 }

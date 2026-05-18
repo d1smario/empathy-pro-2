@@ -100,7 +100,7 @@ function mergeDay(prev: DailyMetricAgg, row: ExecutedAnalyticsRow): DailyMetricA
     traceSummary: tr,
     avgPowerW: power,
   });
-  const hr = pickMetric(tr, ["hr_avg_bpm", "avg_hr", "heart_rate_avg", "avg_heart_rate"]) ?? null;
+  const hr = pickMetric(tr, ["hr_avg_bpm", "avg_hr", "heart_rate_avg", "avg_heart_rate", "average_heart_rate"]) ?? null;
   const glucose = row.glucose_mmol ?? pickMetric(tr, ["glucose_mmol", "glucose_mg_dl"]);
   const smo2 = row.smo2 ?? pickMetric(tr, ["smo2", "smO2", "moxy_smo2"]);
   const core = pickMetric(tr, ["core_temp_c", "core_temperature_c", "skin_temp_c"]);
