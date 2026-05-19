@@ -6,10 +6,7 @@
 import type { BuilderSessionOperationalScalingViewModel } from "@/api/training/contracts";
 import type { Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { serializePro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
-import {
-  buildPro2GymRowsFromCatalog,
-  extractPreferredExerciseNamesFromBlockExercises,
-} from "@/lib/training/builder/pro2-gym-catalog-plan";
+import { buildPro2GymManualRowsFromEngine } from "@/lib/training/builder/build-pro2-gym-rows-from-engine";
 import { buildPro2GymSchedaSessionContract } from "@/lib/training/builder/pro2-gym-manual-plan";
 import { PRO2_GYM_EXECUTION_STYLES } from "@/lib/training/builder/gym-execution-styles";
 import { disciplineToBlock1SportTag } from "@/lib/training/domain-blocks/block1-strength-functional";
@@ -137,13 +134,12 @@ export async function materializeViryaGymBuilderSession(
     return { ok: false, reason: catErr ?? "catalog_empty", fallbackBlocks };
   }
 
-  const preferred = extractPreferredExerciseNamesFromBlockExercises(engineRes.blockExercises);
-  const gymRows = buildPro2GymRowsFromCatalog({
-    sourceRows: catalogRows,
-    activeSportTag: sportTag,
+  const gymRows = buildPro2GymManualRowsFromEngine({
+    blockExercises: engineRes.blockExercises,
+    catalogRows,
+    sportTag,
     adaptation: input.adaptationTarget,
     executionStyle,
-    preferredExerciseNames: preferred.length ? preferred : undefined,
     targetDistrictLabels: districts,
   });
 

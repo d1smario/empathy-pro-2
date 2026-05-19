@@ -76,6 +76,7 @@ import {
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { effectivePlannedWorkoutNutritionMetrics } from "@/lib/training/builder/pro2-session-notes";
+import { Pro2GymSchedaBlockList } from "@/components/training/Pro2GymSchedaBlockList";
 import { analyzePlannedSessionsForFueling } from "@/lib/nutrition/fueling-planned-session-analysis";
 import {
   buildFuelingProtocolSlots,
@@ -3499,6 +3500,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                         <div style={{ fontSize: 12 }}>
                           <strong>Blocks:</strong> {session.blockLabels.join(" · ")}
                         </div>
+                      ) : null}
+                      {session.family === "strength" && session.builderContract ? (
+                        <details className="mt-2" open>
+                          <summary style={{ fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                            Scheda palestra (Builder) · intra workout
+                          </summary>
+                          <div style={{ marginTop: 8 }}>
+                            <Pro2GymSchedaBlockList contract={session.builderContract} compact />
+                          </div>
+                        </details>
                       ) : null}
                       {session.physiologicalIntent.length ? (
                         <div style={{ fontSize: 12 }}>

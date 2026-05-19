@@ -41,6 +41,7 @@ import type { AdaptationTarget, SessionGoalRequest, TrainingDomain } from "@/lib
 import type { BuilderSessionOperationalScalingViewModel } from "@/api/training/contracts";
 import { materializePro2BlocksFromEngine } from "@/lib/training/virya/materialize-pro2-blocks-from-engine";
 import { materializeViryaGymBuilderSession } from "@/lib/training/virya/materialize-virya-gym-builder-session";
+import { isGenericViryaPlanName, suggestedViryaPlanName, viryaPlanTag } from "@/lib/training/virya/virya-plan-name";
 import { resolveAerobicViryaPrescription } from "@/lib/training/engine/aerobic-virya-prescription";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
 import {
@@ -962,6 +963,10 @@ export function ViryaAnnualPlanOrchestrator({
   }, [sportTargets, discipline]);
 
   useEffect(() => {
+    setPlanName((prev) => (isGenericViryaPlanName(prev) ? suggestedViryaPlanName(sportFamily, discipline) : prev));
+  }, [sportFamily, discipline]);
+
+  useEffect(() => {
     setGymDayModules((prev) => ensureGymWeekModules(prev));
   }, []);
 
@@ -1773,7 +1778,8 @@ export function ViryaAnnualPlanOrchestrator({
       return;
     }
     setSaving(true);
-    const tag = `[VIRYA:${planName.trim() || "Annual"}]`;
+    const tag = viryaPlanTag(planName);
+    let gymSchedaSessions = 0;
     const contextHint = (viryaContext?.strategyHints ?? []).slice(0, 4).join(",");
     const syncGymPhasesToWindow =
       sportFamily === "strength" && !phasesCoverGymWindow(phases, gymPlanStart, gymPlanEnd);
@@ -1834,7 +1840,7 @@ export function ViryaAnnualPlanOrchestrator({
             const serializedContract = await materializeViryaSessionContract({
               family: "strength",
               discipline: "Gym",
-              sessionName: `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · Gym`,
+              sessionName: `${planName.trim() || "VIRYA"} · ${phaseLabels[phase.phase]} · Gym`,
               phase: phase.phase,
               durationMinutes: baseDuration,
               tss: tssPerSession,
@@ -1843,6 +1849,8 @@ export function ViryaAnnualPlanOrchestrator({
               methodology: module.methodology,
               gymModule: module,
             });
+            if (serializedContract.includes("catalogExerciseId")) gymSchedaSessions += 1;
+            const viryaMeta = `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretti=${formatGymDistrictsLabel(module)} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`;
             rows.push({
               athlete_id: selectedAthleteId,
               date: addDays(weekStart, dayOffset),
@@ -1850,10 +1858,7 @@ export function ViryaAnnualPlanOrchestrator({
               duration_minutes: baseDuration,
               tss_target: tssPerSession,
               kcal_target: Math.round(tssPerSession * 9.5),
-              notes: [
-                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretti=${formatGymDistrictsLabel(module)} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
-                serializedContract,
-              ].join("\n"),
+              notes: [serializedContract, viryaMeta].join("\n"),
             });
           }
         } else if (sportFamily === "technical") {
@@ -1893,8 +1898,8 @@ export function ViryaAnnualPlanOrchestrator({
               tss_target: tssPerSession,
               kcal_target: Math.round(tssPerSession * 9.0),
               notes: [
-                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo C Tecnico-Tattico · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} obiettivi=${sequence} esercizio=${module.exerciseType} intensita=${module.intensity} metodo=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 serializedContract,
+                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo C Tecnico-Tattico · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} obiettivi=${sequence} esercizio=${module.exerciseType} intensita=${module.intensity} metodo=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
               ].join("\n"),
             });
           }
@@ -1934,8 +1939,8 @@ export function ViryaAnnualPlanOrchestrator({
               tss_target: tssPerSession,
               kcal_target: Math.round(tssPerSession * 7.8),
               notes: [
-                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo D Lifestyle · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} objective=${module.objective} pratica=${module.practiceType} RPE=${module.intensityRpe} breathing=${module.breathingCadence} holdFlow=${module.holdOrFlow} method=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 serializedContract,
+                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo D Lifestyle · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} objective=${module.objective} pratica=${module.practiceType} RPE=${module.intensityRpe} breathing=${module.breathingCadence} holdFlow=${module.holdOrFlow} method=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
               ].join("\n"),
             });
           }
@@ -2006,8 +2011,8 @@ export function ViryaAnnualPlanOrchestrator({
                 tss_target: tssAdj,
                 kcal_target: kcalAdj,
                 notes: [
-                  `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                   serializedContract,
+                  `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
                 ].join("\n"),
               });
             }
@@ -2051,7 +2056,13 @@ export function ViryaAnnualPlanOrchestrator({
         minD && maxD
           ? ` Intervallo ${minD} → ${maxD}: in Calendar usa le frecce o apri una data nel range (la vista iniziale mostra solo poche settimane).`
           : "";
-      setSuccess(`Piano VIRYA creato: ${rows.length} sessioni inviate in Calendar.${rangeHint}`);
+      const gymHint =
+        sportFamily === "strength" && gymSchedaSessions < rows.length
+          ? ` Attenzione: ${rows.length - gymSchedaSessions} sedute senza scheda catalogo (fallback leggero) — verifica distretti o ripubblica dopo deploy.`
+          : sportFamily === "strength"
+            ? ` Schede palestra Builder: ${gymSchedaSessions}/${rows.length}.`
+            : "";
+      setSuccess(`Piano «${planName.trim() || "Annual"}» (${tag}): ${rows.length} sessioni su Calendar.${gymHint}${rangeHint}`);
       void refreshViryaCalendarPlans();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Errore inatteso durante la generazione.";
@@ -2217,6 +2228,21 @@ export function ViryaAnnualPlanOrchestrator({
           Percorso in cinque passi — stesso motore sessione del builder. Gli obiettivi focali settimanali (stimoli) sono
           al passo 5, colonna «Obiettivi (multipli)». Deploy batch su Calendar da lì quando sei pronto.
         </p>
+        <div className="mt-4 max-w-xl">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-fuchsia-300/90">
+            Nome piano annuale
+          </label>
+          <input
+            className="mt-1.5 w-full rounded-xl border border-fuchsia-500/35 bg-black/50 px-3 py-2.5 text-sm text-white outline-none ring-fuchsia-500/20 focus:ring-2"
+            value={planName}
+            onChange={(e) => setPlanName(e.target.value)}
+            placeholder="Es. Gym 2026 · Forza · Running primavera"
+          />
+          <p className="mt-1.5 font-mono text-[0.68rem] text-slate-500">
+            Tag Calendar: <span className="text-cyan-300/90">{viryaPlanTag(planName)}</span> — usalo per distinguere Gym,
+            Running, ecc. nell’elenco piani sotto.
+          </p>
+        </div>
         {viryaHeroStats.length ? (
           <div className="mt-3 flex flex-wrap gap-2">
             {viryaHeroStats.map((s) => (
@@ -3015,8 +3041,9 @@ export function ViryaAnnualPlanOrchestrator({
             icon={CalendarRange}
           >
             <p className="mb-3 text-sm text-slate-300">
-              Qui si materializza il piano: finché non premi il pulsante, le sedute restano solo in questa pagina. In basso
-              trovi la stessa azione con anteprima carico annuale; usa quella che preferisci.
+              Piano <strong className="text-white">«{planName.trim() || "Senza nome"}»</strong> · tag{" "}
+              <code className="rounded bg-black/40 px-1 text-cyan-200">{viryaPlanTag(planName)}</code>. Finché non premi il
+              pulsante, le sedute restano solo qui; in basso trovi la stessa azione con anteprima carico annuale.
             </p>
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-200">
               <input

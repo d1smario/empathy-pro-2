@@ -32,8 +32,13 @@ describe("catalogRowMatchesViryaDistricts", () => {
 
   it("matches any of multiple VIRYA districts", () => {
     const petto = row({ primaryDistrict: "Petto" });
-    const gambe = row({ primaryDistrict: "Gambe" });
+    const gambe = row({ primaryDistrict: "Quadricipiti", muscleGroup: "legs" });
     expect(catalogRowMatchesViryaDistricts(petto, ["Petto", "Gambe"])).toBe(true);
     expect(catalogRowMatchesViryaDistricts(gambe, ["Petto", "Gambe"])).toBe(true);
+  });
+
+  it("matches Gambe label to quadricipiti catalog row", () => {
+    const r = row({ primaryDistrict: "Quadricipiti" });
+    expect(catalogRowMatchesViryaDistricts(r, ["Gambe"])).toBe(true);
   });
 });

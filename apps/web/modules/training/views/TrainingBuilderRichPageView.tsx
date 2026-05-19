@@ -56,10 +56,7 @@ import {
   technicalManualRowsToGeneratedSession,
   type Pro2TechnicalManualRow,
 } from "@/lib/training/builder/pro2-technical-manual-plan";
-import {
-  buildPro2GymRowsFromCatalog,
-  extractPreferredExerciseNamesFromBlockExercises,
-} from "@/lib/training/builder/pro2-gym-catalog-plan";
+import { buildPro2GymManualRowsFromEngine } from "@/lib/training/builder/build-pro2-gym-rows-from-engine";
 import { PRO2_GYM_EXECUTION_STYLES } from "@/lib/training/builder/gym-execution-styles";
 import { pro2PaletteSportToBlock1SportTag } from "@/lib/training/domain-blocks/block1-strength-functional";
 import { fetchUnifiedBuilderExercises } from "@/modules/training/services/training-builder-catalog-api";
@@ -790,13 +787,12 @@ export default function TrainingBuilderRichPageView() {
           setGenResult(null);
           return;
         }
-        const preferred = extractPreferredExerciseNamesFromBlockExercises(out.blockExercises);
-        const built = buildPro2GymRowsFromCatalog({
-          sourceRows: catalogRows,
-          activeSportTag: sportTag,
+        const built = buildPro2GymManualRowsFromEngine({
+          blockExercises: out.blockExercises,
+          catalogRows,
+          sportTag,
           adaptation: adaptationUse,
           executionStyle: gymAutoExecutionStyle,
-          preferredExerciseNames: preferred.length ? preferred : undefined,
         });
         if (built.length === 0) {
           setGenBusy(false);

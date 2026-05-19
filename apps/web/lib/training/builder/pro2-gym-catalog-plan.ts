@@ -63,6 +63,30 @@ function normalizeDistrictLabel(value: string): string {
     .trim();
 }
 
+/** Token di match catalogo per etichette tabella VIRYA (IT). */
+const VIRYA_DISTRICT_MATCH_TOKENS: Record<string, string[]> = {
+  petto: ["petto", "chest", "pec"],
+  spalle: ["spalle", "shoulder", "delt"],
+  dorsali: ["dorsal", "lats", "latissimus", "gran dorsale"],
+  schiena: ["schiena", "back", "trapez", "upper back"],
+  addominali: ["addomin", "core", "abs", "oblique"],
+  gambe: ["gambe", "leg", "quadricip", "femor", "glute", "polpacc", "lower"],
+  polpacci: ["polpacc", "calf", "calves"],
+  glutei: ["glute"],
+  femorali: ["femor", "hamstring"],
+  quadricipiti: ["quadricip", "quad"],
+  braccia: ["bicip", "tricip", "bracc", "arm"],
+  avambracci: ["avambr", "forearm", "grip"],
+  "full body": ["full body", "total body"],
+  "total body": ["full body", "total body"],
+};
+
+function viryaDistrictSearchTokens(label: string): string[] {
+  const n = normalizeDistrictLabel(label);
+  const fromMap = VIRYA_DISTRICT_MATCH_TOKENS[n] ?? [];
+  return Array.from(new Set([n, ...fromMap]));
+}
+
 /** Etichette distretto tabella VIRYA → match su `primaryDistrict` / `muscleGroup` catalogo. */
 export function catalogRowMatchesViryaDistricts(
   row: BuilderCatalogExerciseRow,
@@ -77,14 +101,13 @@ export function catalogRowMatchesViryaDistricts(
       return n.includes("full body") || n.includes("total body");
     });
   if (fullBodyOnly) return true;
-  const rowTokens = [row.primaryDistrict, row.muscleGroup]
-    .map((v) => normalizeDistrictLabel(String(v ?? "")))
-    .filter(Boolean);
-  if (!rowTokens.length) return false;
+  const rowHaystack = normalizeDistrictLabel(
+    [row.primaryDistrict, row.muscleGroup, row.name].filter(Boolean).join(" "),
+  );
+  if (!rowHaystack) return false;
   return targets.some((label) => {
-    const nt = normalizeDistrictLabel(label);
-    if (nt.includes("full body") || nt.includes("total body")) return true;
-    return rowTokens.some((rt) => rt === nt || rt.includes(nt) || nt.includes(rt));
+    const tokens = viryaDistrictSearchTokens(label);
+    return tokens.some((tok) => tok.length >= 3 && rowHaystack.includes(tok));
   });
 }
 
