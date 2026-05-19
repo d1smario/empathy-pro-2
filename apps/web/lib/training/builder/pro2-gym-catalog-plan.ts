@@ -54,6 +54,40 @@ function normalizeExerciseName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
+function normalizeDistrictLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/** Etichette distretto tabella VIRYA → match su `primaryDistrict` / `muscleGroup` catalogo. */
+export function catalogRowMatchesViryaDistricts(
+  row: BuilderCatalogExerciseRow,
+  targetDistrictLabels: string[],
+): boolean {
+  const targets = targetDistrictLabels.map((t) => t.trim()).filter(Boolean);
+  if (!targets.length) return true;
+  const fullBodyOnly =
+    targets.length > 0 &&
+    targets.every((t) => {
+      const n = normalizeDistrictLabel(t);
+      return n.includes("full body") || n.includes("total body");
+    });
+  if (fullBodyOnly) return true;
+  const rowTokens = [row.primaryDistrict, row.muscleGroup]
+    .map((v) => normalizeDistrictLabel(String(v ?? "")))
+    .filter(Boolean);
+  if (!rowTokens.length) return false;
+  return targets.some((label) => {
+    const nt = normalizeDistrictLabel(label);
+    if (nt.includes("full body") || nt.includes("total body")) return true;
+    return rowTokens.some((rt) => rt === nt || rt.includes(nt) || nt.includes(rt));
+  });
+}
+
 function scoreCatalogRow(
   row: BuilderCatalogExerciseRow,
   profile: ReturnType<typeof strengthGenerationProfile>,
@@ -158,8 +192,19 @@ export function buildPro2GymRowsFromCatalog(input: {
   adaptation: AdaptationTarget;
   executionStyle: string;
   preferredExerciseNames?: string[];
+  /** Distretti coach (VIRYA / builder): filtra catalogo; Full body = nessun filtro stretto. */
+  targetDistrictLabels?: string[];
 }): Pro2GymManualRow[] {
   const profile = strengthGenerationProfile(input.adaptation);
+  const districtTargets = (input.targetDistrictLabels ?? []).map((t) => t.trim()).filter(Boolean);
+  const nonFullBodyDistricts = districtTargets.filter((t) => {
+    const n = normalizeDistrictLabel(t);
+    return !n.includes("full body") && !n.includes("total body");
+  });
+  const exerciseCap = Math.min(
+    10,
+    profile.exerciseCount + Math.max(0, nonFullBodyDistricts.length > 1 ? nonFullBodyDistricts.length : 0),
+  );
   const preferred = (input.preferredExerciseNames ?? []).map(normalizeExerciseName).filter(Boolean);
   const ranked = input.sourceRows
     .map((row) => {
@@ -187,8 +232,9 @@ export function buildPro2GymRowsFromCatalog(input: {
   const style = input.executionStyle.trim() || "Standard";
 
   for (const { row } of ranked) {
-    if (selected.length >= profile.exerciseCount) break;
+    if (selected.length >= exerciseCap) break;
     if (usedIds.has(row.id)) continue;
+    if (districtTargets.length && !catalogRowMatchesViryaDistricts(row, districtTargets)) continue;
     const districtKey = (row.primaryDistrict ?? row.muscleGroup ?? "general").trim() || "general";
     const currentDistrictCount = usedDistricts.get(districtKey) ?? 0;
     if (currentDistrictCount >= 2) continue;

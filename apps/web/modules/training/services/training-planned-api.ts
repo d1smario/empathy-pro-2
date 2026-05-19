@@ -108,6 +108,41 @@ export async function deletePlannedWorkout(input: { id: string; athleteId: strin
   }
 }
 
+export type ViryaCalendarPlanSummary = {
+  tag: string;
+  planName: string;
+  sessionCount: number;
+  dateMin: string;
+  dateMax: string;
+};
+
+export async function fetchViryaCalendarPlans(athleteId: string): Promise<ViryaCalendarPlanSummary[]> {
+  const headers = await buildSupabaseAuthHeaders();
+  const q = new URLSearchParams({ athleteId: athleteId.trim() });
+  const res = await fetch(`/api/training/virya/plans?${q}`, {
+    headers,
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as { plans?: ViryaCalendarPlanSummary[]; error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Caricamento piani VIRYA non riuscito");
+  return json.plans ?? [];
+}
+
+export async function deleteViryaCalendarPlan(input: { athleteId: string; tag: string }): Promise<number> {
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const res = await fetch("/api/training/virya/plans", {
+    method: "DELETE",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify({ athleteId: input.athleteId.trim(), tag: input.tag.trim() }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as { deletedCount?: number; error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Eliminazione piano VIRYA non riuscita");
+  return json.deletedCount ?? 0;
+}
+
 export async function replaceTrainingPlannerCalendar(
   input: TrainingPlannerCalendarReplaceInput,
 ): Promise<TrainingPlannerCalendarReplaceResult> {
