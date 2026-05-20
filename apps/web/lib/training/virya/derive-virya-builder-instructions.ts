@@ -141,9 +141,9 @@ export function deriveViryaBuilderInstructions(input: {
   const dayTag = `weekday=${weekdayLabel(brief.weekdayOffset)}`;
 
   if (brief.family === "strength" && input.gymModule) {
-    const module = input.gymModule;
+    const gymDay = input.gymModule;
     const adaptationTarget = deriveStrengthAdaptationForRole(
-      module,
+      gymDay,
       brief.sessionRole,
       brief.gymPrimaryGoal,
     );
@@ -157,8 +157,8 @@ export function deriveViryaBuilderInstructions(input: {
     return {
       adaptationTarget,
       domain: "gym",
-      intensityHint: `${roleHint} · ${module.methodology} · ${module.districtObjective}`,
-      objectiveDetail: `${formatGymDistrictsLabel(module)} / ${module.exerciseType} · ${roleTag} · ${dayTag}`,
+      intensityHint: `${roleHint} · ${gymDay.methodology} · ${gymDay.districtObjective}`,
+      objectiveDetail: `${formatGymDistrictsLabel(gymDay)} / ${gymDay.exerciseType} · ${roleTag} · ${dayTag}`,
       sessionMinutes,
       tss,
       kcal,
@@ -166,14 +166,14 @@ export function deriveViryaBuilderInstructions(input: {
   }
 
   if (brief.family === "technical" && input.technicalModule) {
-    const module = input.technicalModule;
+    const technicalDay = input.technicalModule;
     const sessionMinutes =
       brief.sessionRole === "quality" ? 90 : brief.sessionRole === "recovery" ? 50 : 70;
     return {
-      adaptationTarget: deriveTechnicalAdaptation(module, brief.sessionRole),
+      adaptationTarget: deriveTechnicalAdaptation(technicalDay, brief.sessionRole),
       domain: viryaDomainForSession("technical", brief.discipline),
-      intensityHint: `${module.intensity} · ${module.methodology} · ${roleTag}`,
-      objectiveDetail: `${module.objectives.join(" > ")} · ${dayTag}`,
+      intensityHint: `${technicalDay.intensity} · ${technicalDay.methodology} · ${roleTag}`,
+      objectiveDetail: `${technicalDay.objectives.join(" > ")} · ${dayTag}`,
       sessionMinutes,
       tss,
       kcal,
@@ -181,12 +181,12 @@ export function deriveViryaBuilderInstructions(input: {
   }
 
   if (brief.family === "lifestyle" && input.lifestyleModule) {
-    const module = input.lifestyleModule;
+    const lifestyleDay = input.lifestyleModule;
     return {
-      adaptationTarget: deriveLifestyleAdaptation(module),
+      adaptationTarget: deriveLifestyleAdaptation(lifestyleDay),
       domain: "mind_body",
-      intensityHint: `RPE ${module.intensityRpe} · ${module.breathingCadence}`,
-      objectiveDetail: `${module.practiceType} · ${module.objective} · ${dayTag}`,
+      intensityHint: `RPE ${lifestyleDay.intensityRpe} · ${lifestyleDay.breathingCadence}`,
+      objectiveDetail: `${lifestyleDay.practiceType} · ${lifestyleDay.objective} · ${dayTag}`,
       sessionMinutes: 50,
       tss: Math.max(8, Math.round(tss * 0.85)),
       kcal: kcalFromLoadTarget(Math.max(8, Math.round(tss * 0.85))),
