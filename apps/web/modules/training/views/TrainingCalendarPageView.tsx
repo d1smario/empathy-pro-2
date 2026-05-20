@@ -18,16 +18,11 @@ import { TrainingSubnav } from "@/components/training/TrainingSubnav";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
-import {
-  effectiveDurationMinutesFromPro2Contract,
-  effectiveTssDisplayFromPro2Contract,
-  parsePro2BuilderSessionFromNotes,
-} from "@/lib/training/builder/pro2-session-notes";
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 import { LOAD_CHIP_LABEL } from "@/lib/training/load-metrics-labels";
 import {
-  resolvePlannedWorkoutSportGlyph,
+  plannedCalendarChipViewModel,
   uniquePlannedSportGlyphs,
 } from "@/lib/training/planned-workout-display";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
@@ -73,14 +68,6 @@ function calendarPlannedFetchBounds(monthStart: Date, monthEnd: Date): {
   const fetchFrom = addDaysToIsoDateKey(monthFrom, -45);
   const fetchTo = addDaysToIsoDateKey(monthTo, 45);
   return { monthFrom, monthTo, fetchFrom, fetchTo };
-}
-
-function plannedChipMetrics(w: PlannedWorkout): { minutes: number; tss: number } {
-  const c = parsePro2BuilderSessionFromNotes(w.notes ?? null);
-  return {
-    minutes: effectiveDurationMinutesFromPro2Contract(c, w.durationMinutes),
-    tss: effectiveTssDisplayFromPro2Contract(c, w.tssTarget),
-  };
 }
 
 function normalizeIsoDateParam(raw: string | null): string | null {
@@ -564,13 +551,6 @@ export default function TrainingCalendarPageView() {
     }
   }
 
-  const plannedTitleLine = useCallback((w: PlannedWorkout) => {
-    const c = parsePro2BuilderSessionFromNotes(w.notes ?? null);
-    const name = c?.sessionName?.trim();
-    if (name) return name.length > 42 ? `${name.slice(0, 40)}…` : name;
-    return w.type;
-  }, []);
-
   return (
     <Pro2ModulePageShell
       eyebrow="Training · Calendar"
@@ -848,27 +828,34 @@ export default function TrainingCalendarPageView() {
                           </div>
                         ) : null}
                         {pList.slice(0, 2).map((w) => {
-                          const chip = plannedChipMetrics(w);
-                          const glyph = resolvePlannedWorkoutSportGlyph(w);
+                          const chip = plannedCalendarChipViewModel(w);
                           return (
-                            <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-plan">
-                              <div className="flex items-center gap-1 font-bold">
-                                <span className="tc2-sport-glyph inline-flex shrink-0">
-                                  {glyph ? (
-                                    <SportDisciplineGlyph glyph={glyph} className="h-3.5 w-3.5" />
+                            <div key={w.id} className={`tc2-calendar-chip ${chip.chipClass}`}>
+                              <div className="flex items-center gap-1.5 font-bold">
+                                <span className={`tc2-calendar-chip-icon tc2-calendar-chip-icon--${chip.family}`}>
+                                  {chip.glyph ? (
+                                    <SportDisciplineGlyph glyph={chip.glyph} className="h-4 w-4" />
                                   ) : (
                                     <SportGlyph type={w.type} />
                                   )}
                                 </span>
-                                PLAN
+                                <span>PLAN</span>
+                                <span
+                                  className={`tc2-calendar-chip-sport-badge ${
+                                    chip.family === "strength"
+                                      ? "bg-fuchsia-500/30 text-fuchsia-100"
+                                      : chip.family === "aerobic"
+                                        ? "bg-cyan-500/25 text-cyan-100"
+                                        : "bg-white/10 text-gray-200"
+                                  }`}
+                                >
+                                  {chip.sportLabel}
+                                </span>
                               </div>
                               <div>
-                                {chip.minutes}m · {LOAD_CHIP_LABEL} {chip.tss}
+                                {chip.minutes}m · {LOAD_CHIP_LABEL} {chip.load}
                               </div>
-                              <div>
-                                {plannedTitleLine(w)} · km — · Pavg — · kcal{" "}
-                                {w.kcalTarget != null ? Number(w.kcalTarget).toFixed(0) : "—"}
-                              </div>
+                              <div className="opacity-90">{chip.detailLine}</div>
                             </div>
                           );
                         })}
