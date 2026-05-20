@@ -1788,10 +1788,15 @@ export function ViryaAnnualPlanOrchestrator({
     const tag = viryaPlanTag(planName);
     let gymSchedaSessions = 0;
     const contextHint = (viryaContext?.strategyHints ?? []).slice(0, 4).join(",");
+    const strengthWindowStart =
+      sportFamily === "strength" ? (planWindowStart.trim() || gymPlanStart.trim()) : gymPlanStart;
+    const strengthWindowEnd =
+      sportFamily === "strength" ? (planWindowEnd.trim() || gymPlanEnd.trim()) : gymPlanEnd;
     const syncGymPhasesToWindow =
-      sportFamily === "strength" && !phasesCoverGymWindow(phases, gymPlanStart, gymPlanEnd);
+      sportFamily === "strength" &&
+      !phasesCoverGymWindow(phases, strengthWindowStart, strengthWindowEnd);
     const effectivePhases = syncGymPhasesToWindow
-      ? buildGymMacroPhases(gymPlanStart, gymPlanEnd, gymMacroPhaseCount).map((p) => ({
+      ? buildGymMacroPhases(strengthWindowStart, strengthWindowEnd, gymMacroPhaseCount).map((p) => ({
           ...p,
           sessionsPerWeek: Math.max(1, Math.min(7, gymTrainingDaysPerWeek)),
         }))
@@ -2097,6 +2102,14 @@ export function ViryaAnnualPlanOrchestrator({
       }
     }
 
+    if (rows.length === 0) {
+      setError(
+        "Nessuna seduta generata: controlla date mag–giu (passo 3 → Applica periodo alle fasi), macro-fasi al passo 4/5 e giorni/settimana gym, poi riprova.",
+      );
+      setSaving(false);
+      return;
+    }
+
     try {
       const coachTraceIds =
         viryaContext?.athleteMemory?.evidenceMemory?.items
@@ -2155,6 +2168,38 @@ export function ViryaAnnualPlanOrchestrator({
       return;
     }
     setError(null);
+    if (sportFamily === "strength") {
+      setGymPlanStart(s);
+      setGymPlanEnd(e);
+      const next = buildGymMacroPhases(s, e, gymMacroPhaseCount).map((p) => ({
+        ...p,
+        sessionsPerWeek: Math.max(1, Math.min(7, gymTrainingDaysPerWeek)),
+      }));
+      setPhases(next);
+      return;
+    }
+    if (sportFamily === "technical") {
+      setTechnicalPlanStart(s);
+      setTechnicalPlanEnd(e);
+      setPhases(
+        buildGymMacroPhases(s, e, technicalMacroPhaseCount).map((p) => ({
+          ...p,
+          sessionsPerWeek: Math.max(1, Math.min(7, technicalTrainingDaysPerWeek)),
+        })),
+      );
+      return;
+    }
+    if (sportFamily === "lifestyle") {
+      setLifestylePlanStart(s);
+      setLifestylePlanEnd(e);
+      setPhases(
+        buildGymMacroPhases(s, e, lifestyleMacroPhaseCount).map((p) => ({
+          ...p,
+          sessionsPerWeek: Math.max(1, Math.min(7, lifestyleTrainingDaysPerWeek)),
+        })),
+      );
+      return;
+    }
     const next = defaultPhases(s);
     if (next.length === 0) return;
     next[next.length - 1] = { ...next[next.length - 1], end: e };
@@ -3296,8 +3341,11 @@ export function ViryaAnnualPlanOrchestrator({
           >
             <p className="mb-3 text-sm text-slate-300">
               Piano <strong className="text-white">«{planName.trim() || "Senza nome"}»</strong> · tag{" "}
-              <code className="rounded bg-black/40 px-1 text-cyan-200">{viryaPlanTag(planName)}</code>. Finché non premi il
-              pulsante, le sedute restano solo qui; in basso trovi la stessa azione con anteprima carico annuale.
+              <code className="rounded bg-black/40 px-1 text-cyan-200">{viryaPlanTag(planName)}</code>.{" "}
+              <strong className="text-amber-200">
+                Configurare mag–giu in VIRYA non scrive sul Calendar: serve questo pulsante.
+              </strong>{" "}
+              Dopo il successo, apri Calendar sulle date indicate (es. maggio–giugno).
             </p>
             <label className="mb-3 flex cursor-pointer items-center gap-2 text-sm text-slate-200">
               <input
