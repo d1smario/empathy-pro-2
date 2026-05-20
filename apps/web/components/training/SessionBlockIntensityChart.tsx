@@ -1,6 +1,7 @@
 "use client";
 
 import { colorForIntensity } from "@/lib/training/builder/pro2-intensity";
+import { LOAD_CHIP_LABEL } from "@/lib/training/load-metrics-labels";
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
 
 function formatSec(sec: number): string {
@@ -47,7 +48,7 @@ export function SessionBlockIntensityChart({
           </span>
           {typeof estimatedTss === "number" ? (
             <span className="rounded-full border border-orange-400/35 bg-gradient-to-r from-violet-600/35 to-fuchsia-600/35 px-2 py-0.5 font-bold text-orange-50 shadow-sm shadow-fuchsia-500/20">
-              TSS ~{estimatedTss}
+              {LOAD_CHIP_LABEL} ~{estimatedTss}
             </span>
           ) : null}
         </div>

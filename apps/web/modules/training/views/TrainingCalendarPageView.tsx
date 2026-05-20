@@ -9,6 +9,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { CalendarDaySessionDetail } from "@/components/training/CalendarDaySessionDetail";
 import { CalendarDayWellnessDetail } from "@/components/training/CalendarDayWellnessDetail";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
+import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
+import { TrainingViryaActivePlanStrip } from "@/components/training/TrainingViryaActivePlanStrip";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
 import { TrainingPeriodVolumeSummary } from "@/components/training/TrainingPeriodVolumeSummary";
 import { TrainingPlannedWindowContextStrip } from "@/components/training/TrainingPlannedWindowContextStrip";
@@ -24,6 +26,10 @@ import {
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 import { LOAD_CHIP_LABEL } from "@/lib/training/load-metrics-labels";
+import {
+  resolvePlannedWorkoutSportGlyph,
+  uniquePlannedSportGlyphs,
+} from "@/lib/training/planned-workout-display";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
@@ -767,6 +773,7 @@ export default function TrainingCalendarPageView() {
 
       {!ctxLoading && !loading && !err ? (
         <Fragment>
+          <TrainingViryaActivePlanStrip athleteId={athleteId} selectedDate={selectedDate} />
           <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
             <div className="tc2-calendar-scroll">
               <div className="tc2-calendar-frame">
@@ -808,6 +815,16 @@ export default function TrainingCalendarPageView() {
                         className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
                       >
                         <div className="tc2-calendar-day-num">{day}</div>
+                        {pList.length > 0 ? (
+                          <div
+                            className="tc2-calendar-day-glyphs flex flex-wrap items-center justify-center gap-0.5 py-0.5"
+                            aria-label="Sport pianificati"
+                          >
+                            {uniquePlannedSportGlyphs(pList, 5).map((glyph) => (
+                              <SportDisciplineGlyph key={glyph} glyph={glyph} className="h-4 w-4 text-violet-200/95" />
+                            ))}
+                          </div>
+                        ) : null}
                         {wellness ? (
                           <div className="tc2-calendar-wellness">
                             {wellness.sleepHours != null ? (
@@ -826,11 +843,16 @@ export default function TrainingCalendarPageView() {
                         ) : null}
                         {pList.slice(0, 2).map((w) => {
                           const chip = plannedChipMetrics(w);
+                          const glyph = resolvePlannedWorkoutSportGlyph(w);
                           return (
                             <div key={w.id} className="tc2-calendar-chip tc2-calendar-chip-plan">
-                              <div className="flex items-center font-bold">
-                                <span className="tc2-sport-glyph">
-                                  <SportGlyph type={w.type} />
+                              <div className="flex items-center gap-1 font-bold">
+                                <span className="tc2-sport-glyph inline-flex shrink-0">
+                                  {glyph ? (
+                                    <SportDisciplineGlyph glyph={glyph} className="h-3.5 w-3.5" />
+                                  ) : (
+                                    <SportGlyph type={w.type} />
+                                  )}
                                 </span>
                                 PLAN
                               </div>

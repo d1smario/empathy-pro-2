@@ -82,12 +82,18 @@ const SPORT_GLYPH_BY_KEYWORD: Array<{ match: RegExp; glyph: SportGlyphId }> = [
   { match: /crossfit/i, glyph: "crossfit" },
 ];
 
-function resolveSportGlyph(sport: string | null): SportGlyphId | null {
-  if (!sport) return null;
+/** Disciplina / type testuale → glifo calendario e dettaglio seduta. */
+export function resolveSportGlyphFromSportString(sport: string | null | undefined): SportGlyphId | null {
+  const s = (sport ?? "").trim();
+  if (!s) return null;
   for (const entry of SPORT_GLYPH_BY_KEYWORD) {
-    if (entry.match.test(sport)) return entry.glyph;
+    if (entry.match.test(s)) return entry.glyph;
   }
   return null;
+}
+
+function resolveSportGlyph(sport: string | null): SportGlyphId | null {
+  return resolveSportGlyphFromSportString(sport);
 }
 
 function fmtNumber(value: number | null | undefined, digits: number): string {

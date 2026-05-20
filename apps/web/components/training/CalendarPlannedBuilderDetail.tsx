@@ -2,9 +2,9 @@
 
 import type { PlannedWorkout } from "@empathy/domain-training";
 import { BuilderPlannedSessionViz } from "@/components/training/BuilderPlannedSessionViz";
+import { Pro2GymSchedaBlockList } from "@/components/training/Pro2GymSchedaBlockList";
 import { SessionMultilevelAnalysisStrip } from "@/components/training/SessionMultilevelAnalysisStrip";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
-import { GymExerciseMediaThumb } from "@/components/training/GymExerciseMediaThumb";
 import { LifestylePracticeMediaThumb } from "@/components/training/LifestylePracticeMediaThumb";
 import { Pro2Link } from "@/components/ui/empathy";
 import {
@@ -29,6 +29,7 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
+import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
 import { ExternalLink, Trash2, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
@@ -93,6 +94,7 @@ export function CalendarPlannedBuilderDetail({
     !!contract && contract.family === "aerobic" && contract.renderProfile?.intensityUnit === "watt";
 
   const family = contract?.family;
+  const gymScheda = contract && family === "strength" ? contractHasGymScheda(contract) : false;
 
   return (
     <article className="rounded-2xl border border-white/10 bg-black/35 p-4 shadow-inner">
@@ -211,112 +213,126 @@ export function CalendarPlannedBuilderDetail({
           <span className="text-gray-400">Modifica</span> qui sopra.
         </p>
       ) : (
-        <details
-          className="mt-4 rounded-xl border border-white/10 bg-black/25"
-          open={structureOpen}
-          onToggle={(e) => setStructureOpen(e.currentTarget.open)}
-        >
-          <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-gray-200 marker:hidden [&::-webkit-details-marker]:hidden">
-            Struttura · apri / chiudi
-          </summary>
-          <div className="space-y-4 border-t border-white/10 px-3 pb-4 pt-3">
-            {family === "aerobic" && segments.length > 0 ? (
-              <SessionBlockIntensityChart
-                segments={segments}
-                title="Grafico a blocchi (pianificato)"
-                estimatedTss={tssEst > 0 ? tssEst : undefined}
+        <>
+          {family === "strength" ? (
+            <div className="mt-4 rounded-xl border border-fuchsia-500/25 bg-fuchsia-950/15 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-fuchsia-200/90">Scheda palestra (Builder)</p>
+              <div className="mt-3">
+                <Pro2GymSchedaBlockList contract={contract} />
+              </div>
+              {!gymScheda ? (
+                <p className="mt-3 text-xs text-amber-200/90">
+                  Questa seduta non ha ancora esercizi catalogo (<code className="text-amber-100/80">gymRx</code>). In VIRYA
+                  imposta un nome piano, rigenera e ripubblica su Calendar, oppure apri <span className="text-white">Adatta</span> nel
+                  Builder.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          <details
+            className="mt-4 rounded-xl border border-white/10 bg-black/25"
+            open={structureOpen}
+            onToggle={(e) => setStructureOpen(e.currentTarget.open)}
+          >
+            <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-gray-200 marker:hidden [&::-webkit-details-marker]:hidden">
+              {family === "strength" ? "Dettaglio tecnico · apri / chiudi" : "Struttura · apri / chiudi"}
+            </summary>
+            <div className="space-y-4 border-t border-white/10 px-3 pb-4 pt-3">
+              {family === "aerobic" && segments.length > 0 ? (
+                <SessionBlockIntensityChart
+                  segments={segments}
+                  title="Grafico a blocchi (pianificato)"
+                  estimatedTss={tssEst > 0 ? tssEst : undefined}
+                />
+              ) : null}
+
+              {(family === "technical" || family === "lifestyle") && segments.length > 0 ? (
+                <SessionBlockIntensityChart
+                  segments={segments}
+                  title="Proxy tempo / carico (stima)"
+                  estimatedTss={tssEst > 0 ? tssEst : undefined}
+                />
+              ) : null}
+
+              {family === "strength" && !gymScheda && segments.length > 0 ? (
+                <SessionBlockIntensityChart
+                  segments={segments}
+                  title="Proxy tempo / carico (stima — senza scheda)"
+                  estimatedTss={tssEst > 0 ? tssEst : undefined}
+                />
+              ) : null}
+
+              {family !== "strength" ? (
+                <BuilderPlannedSessionViz contract={contract} title="Profilo zone (builder V1)" compact />
+              ) : null}
+
+              <SessionMultilevelAnalysisStrip
+                contract={contract}
+                fallbackTss={titleTss}
+                fallbackDurationMin={titleDurationMin}
+                compact
               />
-            ) : null}
 
-            {(family === "strength" || family === "technical" || family === "lifestyle") && segments.length > 0 ? (
-              <SessionBlockIntensityChart
-                segments={segments}
-                title="Proxy tempo / carico (stima)"
-                estimatedTss={tssEst > 0 ? tssEst : undefined}
-              />
-            ) : null}
-
-            <BuilderPlannedSessionViz contract={contract} title="Profilo zone (builder V1)" compact />
-
-            <SessionMultilevelAnalysisStrip
-              contract={contract}
-              fallbackTss={titleTss}
-              fallbackDurationMin={titleDurationMin}
-              compact
-            />
-
-            <ul className="flex flex-col gap-3">
-              {(contract.blocks ?? []).map((block, idx) => (
-                <li
-                  key={block.id}
-                  className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-gray-200"
-                >
-                  <div className="flex flex-wrap gap-3">
-                    {family === "strength" && block.gymRx?.catalogExerciseId ? (
-                      <GymExerciseMediaThumb
-                        catalogExerciseId={block.gymRx.catalogExerciseId}
-                        alt={block.label}
-                        fallbackLabel={block.label}
-                        className="h-20 w-20 shrink-0 rounded-lg border border-fuchsia-500/25 object-cover"
-                      />
-                    ) : null}
-                    {family === "lifestyle" && block.lifestyleRx ? (
-                      <LifestylePracticeMediaThumb
-                        src={block.lifestyleRx.mediaUrl ?? null}
-                        practiceCategory={asLifestyleCategory(block.lifestyleRx.practiceCategory)}
-                        alt={block.label}
-                        playbookItemId={block.lifestyleRx.playbookItemId ?? null}
-                        fallbackLabel={block.label}
-                        className="h-20 w-20 shrink-0 rounded-lg border border-emerald-500/25"
-                      />
-                    ) : null}
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-white">
-                        {idx + 1}. {block.label}
-                      </p>
-                      <p className="mt-1 text-xs text-gray-500">
-                        {block.kind}
-                        {" · "}
-                        {block.durationMinutes}′
-                        {block.intensityCue ? (
-                          <>
-                            {" "}
-                            · <span className="text-gray-400">{block.intensityCue}</span>
-                          </>
+              {family !== "strength" ? (
+                <ul className="flex flex-col gap-3">
+                  {(contract.blocks ?? []).map((block, idx) => (
+                    <li
+                      key={block.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-gray-200"
+                    >
+                      <div className="flex flex-wrap gap-3">
+                        {family === "lifestyle" && block.lifestyleRx ? (
+                          <LifestylePracticeMediaThumb
+                            src={block.lifestyleRx.mediaUrl ?? null}
+                            practiceCategory={asLifestyleCategory(block.lifestyleRx.practiceCategory)}
+                            alt={block.label}
+                            playbookItemId={block.lifestyleRx.playbookItemId ?? null}
+                            fallbackLabel={block.label}
+                            className="h-20 w-20 shrink-0 rounded-lg border border-emerald-500/25"
+                          />
                         ) : null}
-                      </p>
-                      {block.gymRx ? (
-                        <p className="mt-2 font-mono text-xs text-orange-200/90">
-                          {block.gymRx.sets != null ? `${block.gymRx.sets}×` : ""}
-                          {block.gymRx.reps ? `${block.gymRx.reps}` : "—"}
-                          {block.gymRx.weightKg != null && block.gymRx.weightKg > 0 ? ` · ${block.gymRx.weightKg} kg` : ""}
-                          {block.gymRx.executionStyle ? ` · ${block.gymRx.executionStyle}` : ""}
-                        </p>
-                      ) : null}
-                      {block.technicalRx ? (
-                        <p className="mt-2 text-xs text-violet-200/85">
-                          {block.technicalRx.entryType === "scheme" ? "Schema" : "Drill"}
-                          {block.technicalRx.periodsLabel ? ` · ${block.technicalRx.periodsLabel}` : ""}
-                          {block.technicalRx.spaceLabel ? ` · ${block.technicalRx.spaceLabel}` : ""}
-                          {block.technicalRx.coachingCue ? ` · ${block.technicalRx.coachingCue}` : ""}
-                        </p>
-                      ) : null}
-                      {block.lifestyleRx ? (
-                        <p className="mt-2 text-xs text-emerald-200/85">
-                          {block.lifestyleRx.rounds != null ? `${block.lifestyleRx.rounds} round` : ""}
-                          {block.lifestyleRx.holdOrReps ? ` · ${block.lifestyleRx.holdOrReps}` : ""}
-                          {block.lifestyleRx.restSec != null ? ` · rec ${block.lifestyleRx.restSec}s` : ""}
-                          {block.lifestyleRx.breathPattern ? ` · ${block.lifestyleRx.breathPattern}` : ""}
-                        </p>
-                      ) : null}
-                      {block.notes ? <p className="mt-2 text-xs text-gray-500">{block.notes}</p> : null}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </details>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-white">
+                            {idx + 1}. {block.label}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {block.kind}
+                            {" · "}
+                            {block.durationMinutes}′
+                            {block.intensityCue ? (
+                              <>
+                                {" "}
+                                · <span className="text-gray-400">{block.intensityCue}</span>
+                              </>
+                            ) : null}
+                          </p>
+                          {block.technicalRx ? (
+                            <p className="mt-2 text-xs text-violet-200/85">
+                              {block.technicalRx.entryType === "scheme" ? "Schema" : "Drill"}
+                              {block.technicalRx.periodsLabel ? ` · ${block.technicalRx.periodsLabel}` : ""}
+                              {block.technicalRx.spaceLabel ? ` · ${block.technicalRx.spaceLabel}` : ""}
+                              {block.technicalRx.coachingCue ? ` · ${block.technicalRx.coachingCue}` : ""}
+                            </p>
+                          ) : null}
+                          {block.lifestyleRx ? (
+                            <p className="mt-2 text-xs text-emerald-200/85">
+                              {block.lifestyleRx.rounds != null ? `${block.lifestyleRx.rounds} round` : ""}
+                              {block.lifestyleRx.holdOrReps ? ` · ${block.lifestyleRx.holdOrReps}` : ""}
+                              {block.lifestyleRx.restSec != null ? ` · rec ${block.lifestyleRx.restSec}s` : ""}
+                              {block.lifestyleRx.breathPattern ? ` · ${block.lifestyleRx.breathPattern}` : ""}
+                            </p>
+                          ) : null}
+                          {block.notes ? <p className="mt-2 text-xs text-gray-500">{block.notes}</p> : null}
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </details>
+        </>
       )}
     </article>
   );
