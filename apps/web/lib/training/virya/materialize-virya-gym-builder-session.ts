@@ -6,7 +6,10 @@
 import type { BuilderSessionOperationalScalingViewModel } from "@/api/training/contracts";
 import type { Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { serializePro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
-import { buildPro2GymManualRowsFromEngine } from "@/lib/training/builder/build-pro2-gym-rows-from-engine";
+import {
+  buildPro2GymManualRowsFromEngine,
+  buildPro2GymRowsCatalogOnly,
+} from "@/lib/training/builder/build-pro2-gym-rows-from-engine";
 import { buildPro2GymSchedaSessionContract } from "@/lib/training/builder/pro2-gym-manual-plan";
 import { PRO2_GYM_EXECUTION_STYLES } from "@/lib/training/builder/gym-execution-styles";
 import { disciplineToBlock1SportTag } from "@/lib/training/domain-blocks/block1-strength-functional";
@@ -143,7 +146,16 @@ export async function materializeViryaGymBuilderSession(
     targetDistrictLabels: districts,
   });
 
-  if (!gymRows.length) {
+  let rows = gymRows;
+  if (!rows.length) {
+    rows = buildPro2GymRowsCatalogOnly({
+      catalogRows,
+      sportTag,
+      adaptation: input.adaptationTarget,
+      executionStyle,
+    });
+  }
+  if (!rows.length) {
     return { ok: false, reason: "no_catalog_match_for_districts", fallbackBlocks };
   }
 
@@ -158,7 +170,7 @@ export async function materializeViryaGymBuilderSession(
       : input.kcal;
 
   const scheda = buildPro2GymSchedaSessionContract({
-    rows: gymRows,
+    rows,
     renderProfile: DEFAULT_RENDER,
     discipline: input.discipline.trim() || "Gym",
     sessionName: input.sessionName,
@@ -183,6 +195,6 @@ export async function materializeViryaGymBuilderSession(
   return {
     ok: true,
     notesLine: serializePro2BuilderSessionContract(withVirya),
-    exerciseCount: gymRows.length,
+    exerciseCount: rows.length,
   };
 }

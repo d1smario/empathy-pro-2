@@ -65,7 +65,7 @@ export function CalendarPlannedBuilderDetail({
   athleteId?: string | null;
   onDeleted?: (removedPlannedId: string) => void;
 }) {
-  const [structureOpen, setStructureOpen] = useState(true);
+  const [structureOpen, setStructureOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const contract = useMemo(() => parsePro2BuilderSessionFromNotes(workout.notes ?? null), [workout.notes]);
 
@@ -215,9 +215,12 @@ export function CalendarPlannedBuilderDetail({
       ) : (
         <>
           {family === "strength" ? (
-            <div className="mt-4 rounded-xl border border-fuchsia-500/25 bg-fuchsia-950/15 p-4">
-              <p className="text-xs font-bold uppercase tracking-wider text-fuchsia-200/90">Scheda palestra (Builder)</p>
-              <div className="mt-3">
+            <div
+              id="calendar-gym-scheda"
+              className="mt-4 scroll-mt-28 rounded-2xl border border-fuchsia-500/35 bg-gradient-to-br from-fuchsia-950/30 via-violet-950/20 to-black/50 p-4 shadow-[0_0_32px_-12px_rgba(217,70,239,0.35)]"
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-fuchsia-200">Scheda palestra · come Builder</p>
+              <div className="mt-4">
                 <Pro2GymSchedaBlockList contract={contract} />
               </div>
               {!gymScheda ? (

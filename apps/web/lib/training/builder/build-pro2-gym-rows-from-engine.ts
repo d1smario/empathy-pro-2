@@ -36,5 +36,28 @@ export function buildPro2GymManualRowsFromEngine(input: {
       preferredExerciseNames: preferred.length ? preferred : undefined,
     });
   }
+  if (!rows.length) {
+    rows = buildPro2GymRowsFromCatalog({
+      sourceRows: input.catalogRows,
+      activeSportTag: input.sportTag,
+      adaptation: input.adaptation,
+      executionStyle: input.executionStyle,
+    });
+  }
   return rows;
+}
+
+/** Ultimo tentativo: catalogo senza filtro distretti né nomi motore. */
+export function buildPro2GymRowsCatalogOnly(input: {
+  catalogRows: BuilderCatalogExerciseRow[];
+  sportTag: string;
+  adaptation: AdaptationTarget;
+  executionStyle: string;
+}): Pro2GymManualRow[] {
+  return buildPro2GymRowsFromCatalog({
+    sourceRows: input.catalogRows,
+    activeSportTag: input.sportTag,
+    adaptation: input.adaptation,
+    executionStyle: input.executionStyle,
+  });
 }

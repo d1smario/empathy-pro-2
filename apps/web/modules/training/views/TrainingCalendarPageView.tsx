@@ -802,7 +802,13 @@ export default function TrainingCalendarPageView() {
                         type="button"
                         onClick={() => {
                           setSelectedDate(date);
-                          const target = hasExecuted ? "day-session-detail" : wellness ? "day-wellness-detail" : null;
+                          const target = pList.length
+                            ? "calendar-day-planned-detail"
+                            : hasExecuted
+                              ? "day-session-detail"
+                              : wellness
+                                ? "day-wellness-detail"
+                                : null;
                           if (target) {
                             window.setTimeout(() => {
                               document.getElementById(target)?.scrollIntoView({
@@ -908,6 +914,32 @@ export default function TrainingCalendarPageView() {
               </div>
             </div>
           </section>
+
+          {dayPlanned.length > 0 ? (
+            <div id="calendar-day-planned-detail" className="mb-8 scroll-mt-24 w-full min-w-0">
+              <Pro2SectionCard
+                accent="fuchsia"
+                title="Sedute pianificate"
+                subtitle={`${selectedDate} · ${dayPlanned.length} in giornata — scheda gym / struttura builder`}
+                icon={CalendarDays}
+              >
+                <ul className="space-y-5">
+                  {dayPlanned.map((w) => (
+                    <li key={w.id}>
+                      <CalendarPlannedBuilderDetail
+                        workout={w}
+                        athleteId={athleteId}
+                        onDeleted={(removedId) => {
+                          if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
+                          void loadMonth();
+                        }}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </Pro2SectionCard>
+            </div>
+          ) : null}
 
           <div className="mb-8 w-full min-w-0">
             <TrainingPeriodVolumeSummary athleteId={athleteId} />
@@ -1129,22 +1161,28 @@ export default function TrainingCalendarPageView() {
                   </Pro2Link>
                 </div>
 
-                <div className="mt-4 space-y-3">
-                  <p className="text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">Pianificato · builder</p>
+                <div className="mt-4 space-y-2">
+                  <p className="text-[0.65rem] font-bold uppercase tracking-wider text-gray-500">Pianificato</p>
                   {dayPlanned.length === 0 ? (
                     <p className="text-sm text-gray-500">Nessuna seduta pianificata.</p>
                   ) : (
-                    dayPlanned.map((w) => (
-                      <CalendarPlannedBuilderDetail
-                        key={w.id}
-                        workout={w}
-                        athleteId={athleteId}
-                        onDeleted={(removedId) => {
-                          if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
-                          void loadMonth();
-                        }}
-                      />
-                    ))
+                    <>
+                      <p className="text-sm text-fuchsia-200/85">
+                        {dayPlanned.length} seduta{dayPlanned.length === 1 ? "" : "e"} — scheda e dettaglio sopra la griglia.
+                      </p>
+                      <button
+                        type="button"
+                        className="text-xs font-semibold text-cyan-300/90 underline-offset-2 hover:underline"
+                        onClick={() =>
+                          document.getElementById("calendar-day-planned-detail")?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start",
+                          })
+                        }
+                      >
+                        Vai alle sedute pianificate ↑
+                      </button>
+                    </>
                   )}
                 </div>
 
