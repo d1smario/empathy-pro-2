@@ -307,11 +307,12 @@ export async function DELETE(req: NextRequest) {
     const rowId = row0 ? idFromRow(row0) : "";
     const rowAthleteId = row0 ? athleteIdFromRow(row0) : "";
     if (!rowId || !rowAthleteId) {
+      /** Secondo DELETE sulla stessa id: riga già assente (es. eliminazione VIRYA bulk o primo click riuscito). */
       return NextResponse.json(
         {
-          error:
-            "Nessuna riga planned_workouts con questo id. Confronta l’id con la risposta GET /api/training/planned-window (stessa sessione); in produzione verifica NEXT_PUBLIC_SUPABASE_URL e che SUPABASE_SERVICE_ROLE_KEY sia impostata se usi letture training con service role.",
-          errorCode: "planned_probe_empty",
+          status: "ok" as const,
+          alreadyDeleted: true as const,
+          athleteMemory: athleteIdHint ? await memoryOrNull(athleteIdHint) : null,
           deleteHints: {
             scoped,
             global,
@@ -319,7 +320,7 @@ export async function DELETE(req: NextRequest) {
             scopedDbError: scopedDbError ?? null,
           },
         },
-        { status: 404, headers: deleteProbeHeaders(deleteProbe) },
+        { headers: deleteProbeHeaders(`${deleteProbe};delete=idempotent_miss`) },
       );
     }
 

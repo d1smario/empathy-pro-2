@@ -79,7 +79,10 @@ export async function patchPlannedWorkout(input: {
   }
 }
 
-export async function deletePlannedWorkout(input: { id: string; athleteId: string }): Promise<void> {
+export async function deletePlannedWorkout(input: {
+  id: string;
+  athleteId: string;
+}): Promise<{ alreadyDeleted?: boolean }> {
   const hint = input.athleteId.trim();
   if (!hint) {
     throw new Error("athleteId mancante: impossibile allineare DELETE a planned-window.");
@@ -95,6 +98,7 @@ export async function deletePlannedWorkout(input: { id: string; athleteId: strin
   const json = (await res.json().catch(() => ({}))) as {
     error?: string;
     errorCode?: string;
+    alreadyDeleted?: boolean;
     deleteHints?: Record<string, unknown>;
   };
   if (!res.ok) {
@@ -106,6 +110,7 @@ export async function deletePlannedWorkout(input: { id: string; athleteId: strin
     const extra = [json.errorCode, probe, hints].filter(Boolean).join(" · ");
     throw new Error([json.error ?? "Eliminazione seduta pianificata non riuscita", extra].filter(Boolean).join(" — "));
   }
+  return { alreadyDeleted: json.alreadyDeleted === true };
 }
 
 export type ViryaCalendarPlanSummary = {
