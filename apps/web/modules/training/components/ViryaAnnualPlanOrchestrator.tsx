@@ -60,6 +60,22 @@ import {
   toggleGymDistrict,
   type GymDayModule,
 } from "@/lib/training/virya/gym-day-modules";
+import { buildViryaBuilderSessionBrief } from "@/lib/training/virya/build-virya-session-brief";
+import {
+  deriveViryaBuilderInstructions,
+  formatViryaBriefMetaLine,
+  weekdayLabel,
+  type ViryaDerivedBuilderInstructions,
+} from "@/lib/training/virya/derive-virya-builder-instructions";
+import type { ViryaMacroPhase, ViryaWeekdayPatternId } from "@/lib/training/virya/virya-builder-session-brief";
+import {
+  buildWeekGenerationPlan,
+  defaultWeekdayPatternForSessions,
+} from "@/lib/training/virya/virya-microcycle-planner";
+import type {
+  LifestyleDayModule,
+  TechnicalDayModule,
+} from "@/lib/training/virya/virya-day-module-types";
 
 type PhaseType = "base" | "build" | "refine" | "peak" | "deload" | "second_peak";
 type RaceType = "warmup" | "test" | "goal" | "milestone";
@@ -198,24 +214,6 @@ type MultiSportTarget = {
 /** Etichetta prodotto per carico pianificato (campo DB resta `tss_target`). */
 const VIRYA_LOAD_LABEL = "Carico di lavoro";
 const VIRYA_LOAD_SHORT = "Carico";
-
-type TechnicalDayModule = {
-  dayIndex: number;
-  objectives: string[];
-  exerciseType: string;
-  intensity: string;
-  methodology: string;
-};
-
-type LifestyleDayModule = {
-  dayIndex: number;
-  objective: string;
-  practiceType: string;
-  intensityRpe: number;
-  breathingCadence: string;
-  holdOrFlow: string;
-  methodology: string;
-};
 
 const phaseLabels: Record<PhaseType, string> = {
   base: "Base",
@@ -646,6 +644,7 @@ export function ViryaAnnualPlanOrchestrator({
   const [gymPlanEnd, setGymPlanEnd] = useState(addDays(start, 364));
   const [gymMacroPhaseCount, setGymMacroPhaseCount] = useState(4);
   const [gymTrainingDaysPerWeek, setGymTrainingDaysPerWeek] = useState(5);
+  const [viryaWeekdayPattern, setViryaWeekdayPattern] = useState<"auto" | ViryaWeekdayPatternId>("auto");
   const [gymDayModules, setGymDayModules] = useState<GymDayModule[]>(() => buildGymDayModules());
   const [viryaCalendarPlans, setViryaCalendarPlans] = useState<ViryaCalendarPlanSummary[]>([]);
   const [viryaPlansLoading, setViryaPlansLoading] = useState(false);
@@ -1526,8 +1525,16 @@ export function ViryaAnnualPlanOrchestrator({
     weekObjectives?: WeekObjectiveKey[];
     sessionIndexInWeek?: number;
     sessionsInWeek?: number;
+    builderInstructions?: ViryaDerivedBuilderInstructions;
   }) {
-    const request = deriveViryaRequest(input);
+    const request = input.builderInstructions
+      ? {
+          adaptationTarget: input.builderInstructions.adaptationTarget,
+          domain: input.builderInstructions.domain,
+          intensityHint: input.builderInstructions.intensityHint,
+          objectiveDetail: input.builderInstructions.objectiveDetail,
+        }
+      : deriveViryaRequest(input);
     const fallbackBlocks = buildViryaBlocks(input);
     if (!selectedAthleteId) {
       return serializeViryaSessionContract({
@@ -1798,7 +1805,6 @@ export function ViryaAnnualPlanOrchestrator({
       kcal_target: number;
       notes: string;
     }[] = [];
-    const scheduleOffsets = [1, 2, 3, 4, 5, 6, 0];
     const activeSports = sportTargets
       .filter((t) => (t.sport ?? "").trim() !== "")
       .map((t) => ({
@@ -1822,42 +1828,61 @@ export function ViryaAnnualPlanOrchestrator({
             weekCfg?.modules?.length ? weekCfg.modules : gymDayModules.length ? gymDayModules : buildGymDayModules(),
           );
           const modules = activeGymModulesForWeek(templateModules, weekSessions);
-          const tssPerSession = Math.round((adjustedWeeklyTss / weekSessions) * clamp(objectiveDemand, 0.88, 1.25));
-          const baseDuration =
-            gymPrimaryGoal === "potenza" || gymPrimaryGoal === "rapidita"
-              ? 55
-              : gymPrimaryGoal === "forza"
-                ? 70
-                : gymPrimaryGoal === "massa"
-                  ? 75
-                  : gymPrimaryGoal === "definizione"
-                    ? 60
-                    : 65;
-          for (let s = 0; s < weekSessions; s += 1) {
-            const dayOffset = scheduleOffsets[s % scheduleOffsets.length];
-            const module = modules[s % modules.length];
+          const weekPlan = buildWeekGenerationPlan({
+            weeklyBudgetLoad: adjustedWeeklyTss,
+            sessionsPerWeek: weekSessions,
+            phase: phase.phase as ViryaMacroPhase,
+            family: "strength",
+            patternId: viryaPatternForSessions(),
+          });
+          for (const slot of weekPlan.slots) {
+            const module = modules[slot.slotIndex % modules.length]!;
             const phaseObj = phase.macroObjective ?? gymPrimaryGoal;
+            const sessionName = `${planName.trim() || "VIRYA"} · ${phaseLabels[phase.phase]} · Gym · ${weekdayLabel(slot.weekdayOffset)}`;
+            const brief = buildViryaBuilderSessionBrief({
+              weekStart,
+              slot,
+              sessionsInWeek: weekPlan.slots.length,
+              weeklyBudgetLoad: weekPlan.weeklyBudgetLoad,
+              weekdayPatternId: weekPlan.patternId,
+              phase: phase.phase as ViryaMacroPhase,
+              family: "strength",
+              discipline: "Gym",
+              planName: planName.trim() || "VIRYA",
+              phaseLabel: phaseLabels[phase.phase],
+              sessionName,
+              objective: String(phaseObj),
+              methodology: module.methodology,
+              weekObjectives: wm.objectives,
+              gymPrimaryGoal,
+              contextHint: contextHint || undefined,
+            });
+            const derived = deriveViryaBuilderInstructions({ brief, gymModule: module });
             const serializedContract = await materializeViryaSessionContract({
               family: "strength",
               discipline: "Gym",
-              sessionName: `${planName.trim() || "VIRYA"} · ${phaseLabels[phase.phase]} · Gym`,
+              sessionName,
               phase: phase.phase,
-              durationMinutes: baseDuration,
-              tss: tssPerSession,
-              kcal: Math.round(tssPerSession * 9.5),
+              durationMinutes: derived.sessionMinutes,
+              tss: derived.tss,
+              kcal: derived.kcal,
               objective: String(phaseObj),
               methodology: module.methodology,
               gymModule: module,
+              builderInstructions: derived,
+              sessionIndexInWeek: slot.slotIndex,
+              sessionsInWeek: weekPlan.slots.length,
             });
             if (serializedContract.includes("catalogExerciseId")) gymSchedaSessions += 1;
-            const viryaMeta = `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretti=${formatGymDistrictsLabel(module)} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`;
+            const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
+            const viryaMeta = `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretti=${formatGymDistrictsLabel(module)} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()} · ${briefMeta}`;
             rows.push({
               athlete_id: selectedAthleteId,
-              date: addDays(weekStart, dayOffset),
+              date: addDays(weekStart, slot.weekdayOffset),
               type: "gym",
-              duration_minutes: baseDuration,
-              tss_target: tssPerSession,
-              kcal_target: Math.round(tssPerSession * 9.5),
+              duration_minutes: derived.sessionMinutes,
+              tss_target: derived.tss,
+              kcal_target: derived.kcal,
               notes: [serializedContract, viryaMeta].join("\n"),
             });
           }
@@ -1871,35 +1896,62 @@ export function ViryaAnnualPlanOrchestrator({
             : technicalDayModules.length
               ? technicalDayModules
               : buildTechnicalDayModules(weekSessions);
-          const tssPerSession = Math.round((adjustedWeeklyTss / weekSessions) * clamp(objectiveDemand, 0.88, 1.25));
-          const baseDuration = 80;
-          for (let s = 0; s < weekSessions; s += 1) {
-            const dayOffset = scheduleOffsets[s % scheduleOffsets.length];
-            const module = modules[s % modules.length];
+          const weekPlan = buildWeekGenerationPlan({
+            weeklyBudgetLoad: adjustedWeeklyTss,
+            sessionsPerWeek: weekSessions,
+            phase: phase.phase as ViryaMacroPhase,
+            family: "technical",
+            patternId: viryaPatternForSessions(),
+          });
+          for (const slot of weekPlan.slots) {
+            const module = modules[slot.slotIndex % modules.length]!;
             const phaseObj = phase.macroObjective ?? "tecnico";
             const sequence = module.objectives.length ? module.objectives.join(" > ") : "N/A";
+            const sessionName = `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${discipline} · ${weekdayLabel(slot.weekdayOffset)}`;
+            const brief = buildViryaBuilderSessionBrief({
+              weekStart,
+              slot,
+              sessionsInWeek: weekPlan.slots.length,
+              weeklyBudgetLoad: weekPlan.weeklyBudgetLoad,
+              weekdayPatternId: weekPlan.patternId,
+              phase: phase.phase as ViryaMacroPhase,
+              family: "technical",
+              discipline,
+              planName: planName.trim() || "VIRYA",
+              phaseLabel: phaseLabels[phase.phase],
+              sessionName,
+              objective: sequence,
+              methodology: module.methodology,
+              weekObjectives: wm.objectives,
+              contextHint: contextHint || undefined,
+            });
+            const derived = deriveViryaBuilderInstructions({ brief, technicalModule: module });
             const serializedContract = await materializeViryaSessionContract({
               family: "technical",
               discipline,
-              sessionName: `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${discipline}`,
+              sessionName,
               phase: phase.phase,
-              durationMinutes: baseDuration,
-              tss: tssPerSession,
-              kcal: Math.round(tssPerSession * 9.0),
+              durationMinutes: derived.sessionMinutes,
+              tss: derived.tss,
+              kcal: derived.kcal,
               objective: sequence,
               methodology: module.methodology,
               technicalModule: module,
+              builderInstructions: derived,
+              sessionIndexInWeek: slot.slotIndex,
+              sessionsInWeek: weekPlan.slots.length,
             });
+            const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
             rows.push({
               athlete_id: selectedAthleteId,
-              date: addDays(weekStart, dayOffset),
+              date: addDays(weekStart, slot.weekdayOffset),
               type: discipline.toLowerCase(),
-              duration_minutes: baseDuration,
-              tss_target: tssPerSession,
-              kcal_target: Math.round(tssPerSession * 9.0),
+              duration_minutes: derived.sessionMinutes,
+              tss_target: derived.tss,
+              kcal_target: derived.kcal,
               notes: [
                 serializedContract,
-                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo C Tecnico-Tattico · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} obiettivi=${sequence} esercizio=${module.exerciseType} intensita=${module.intensity} metodo=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
+                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo C Tecnico-Tattico · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} obiettivi=${sequence} esercizio=${module.exerciseType} intensita=${module.intensity} metodo=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()} · ${briefMeta}`,
               ].join("\n"),
             });
           }
@@ -1913,34 +1965,61 @@ export function ViryaAnnualPlanOrchestrator({
             : lifestyleDayModules.length
               ? lifestyleDayModules
               : buildLifestyleDayModules(weekSessions);
-          const tssPerSession = Math.round((adjustedWeeklyTss / weekSessions) * clamp(objectiveDemand, 0.85, 1.15));
-          const baseDuration = 50;
-          for (let s = 0; s < weekSessions; s += 1) {
-            const dayOffset = scheduleOffsets[s % scheduleOffsets.length];
-            const module = modules[s % modules.length];
+          const weekPlan = buildWeekGenerationPlan({
+            weeklyBudgetLoad: adjustedWeeklyTss,
+            sessionsPerWeek: weekSessions,
+            phase: phase.phase as ViryaMacroPhase,
+            family: "lifestyle",
+            patternId: viryaPatternForSessions(),
+          });
+          for (const slot of weekPlan.slots) {
+            const module = modules[slot.slotIndex % modules.length]!;
             const phaseObj = phase.macroObjective ?? "lifestyle";
+            const sessionName = `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${discipline} · ${weekdayLabel(slot.weekdayOffset)}`;
+            const brief = buildViryaBuilderSessionBrief({
+              weekStart,
+              slot,
+              sessionsInWeek: weekPlan.slots.length,
+              weeklyBudgetLoad: weekPlan.weeklyBudgetLoad,
+              weekdayPatternId: weekPlan.patternId,
+              phase: phase.phase as ViryaMacroPhase,
+              family: "lifestyle",
+              discipline,
+              planName: planName.trim() || "VIRYA",
+              phaseLabel: phaseLabels[phase.phase],
+              sessionName,
+              objective: module.objective,
+              methodology: module.methodology,
+              weekObjectives: wm.objectives,
+              contextHint: contextHint || undefined,
+            });
+            const derived = deriveViryaBuilderInstructions({ brief, lifestyleModule: module });
             const serializedContract = await materializeViryaSessionContract({
               family: "lifestyle",
               discipline,
-              sessionName: `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${discipline}`,
+              sessionName,
               phase: phase.phase,
-              durationMinutes: baseDuration,
-              tss: tssPerSession,
-              kcal: Math.round(tssPerSession * 7.8),
+              durationMinutes: derived.sessionMinutes,
+              tss: derived.tss,
+              kcal: derived.kcal,
               objective: module.objective,
               methodology: module.methodology,
               lifestyleModule: module,
+              builderInstructions: derived,
+              sessionIndexInWeek: slot.slotIndex,
+              sessionsInWeek: weekPlan.slots.length,
             });
+            const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
             rows.push({
               athlete_id: selectedAthleteId,
-              date: addDays(weekStart, dayOffset),
+              date: addDays(weekStart, slot.weekdayOffset),
               type: discipline.toLowerCase(),
-              duration_minutes: baseDuration,
-              tss_target: tssPerSession,
-              kcal_target: Math.round(tssPerSession * 7.8),
+              duration_minutes: derived.sessionMinutes,
+              tss_target: derived.tss,
+              kcal_target: derived.kcal,
               notes: [
                 serializedContract,
-                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo D Lifestyle · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} objective=${module.objective} pratica=${module.practiceType} RPE=${module.intensityRpe} breathing=${module.breathingCadence} holdFlow=${module.holdOrFlow} method=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
+                `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Modulo D Lifestyle · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} objective=${module.objective} pratica=${module.practiceType} RPE=${module.intensityRpe} breathing=${module.breathingCadence} holdFlow=${module.holdOrFlow} method=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()} · ${briefMeta}`,
               ].join("\n"),
             });
           }
@@ -1950,73 +2029,69 @@ export function ViryaAnnualPlanOrchestrator({
               ? activeSports
               : [{ ...emptyTargetSport(discipline), sport: discipline, share: 100 }];
           const sharesSum = normalizedSports.reduce((s, sp) => s + Math.max(0, sp.share), 0);
-          let dayCursor = 0;
 
           for (const sportTarget of normalizedSports) {
             const normalizedShare =
               sharesSum > 0 ? Math.max(0, sportTarget.share) / sharesSum : 1 / normalizedSports.length;
             const sportWeeklyTss = Math.max(20, Math.round(wm.weeklyTss * normalizedShare));
             const sportSessions = Math.max(1, Math.round(wm.sessions * normalizedShare));
-            const tssPerSession = Math.round((sportWeeklyTss / sportSessions) * clamp(objectiveDemand, 0.85, 1.25));
-            const hoursForSport =
-              wm.hoursPerWeek != null ? wm.hoursPerWeek * normalizedShare : null;
-            const durationFromObjective = sportTarget.durationMin != null
-              ? Math.round(
-                  sportTarget.durationMin *
-                    (phase.phase === "base"
-                      ? 0.42
-                      : phase.phase === "build"
-                        ? 0.5
-                        : phase.phase === "refine"
-                          ? 0.56
-                          : 0.38),
-                )
-              : 0;
-            const duration =
-              hoursForSport != null && sportSessions > 0
-                ? Math.max(30, Math.round((hoursForSport * 60) / sportSessions))
-                : Math.max(30, durationFromObjective || Math.round((tssPerSession / 0.9) * 1.2));
-            for (let s = 0; s < sportSessions; s += 1) {
-              const dayOffset = scheduleOffsets[(dayCursor + s) % scheduleOffsets.length];
-              const aerobicPres = resolveAerobicViryaPrescription({
-                viryaPhase: phase.phase,
-                goalSummary,
+            const weekPlan = buildWeekGenerationPlan({
+              weeklyBudgetLoad: sportWeeklyTss,
+              sessionsPerWeek: sportSessions,
+              phase: phase.phase as ViryaMacroPhase,
+              family: "aerobic",
+              patternId: viryaPatternForSessions(),
+            });
+            for (const slot of weekPlan.slots) {
+              const brief = buildViryaBuilderSessionBrief({
+                weekStart,
+                slot,
+                sessionsInWeek: weekPlan.slots.length,
+                weeklyBudgetLoad: weekPlan.weeklyBudgetLoad,
+                weekdayPatternId: weekPlan.patternId,
+                phase: phase.phase as ViryaMacroPhase,
+                family: "aerobic",
+                discipline: sportTarget.sport,
+                planName: planName.trim() || "VIRYA",
+                phaseLabel: phaseLabels[phase.phase],
+                sessionName: `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${sportTarget.sport} · ${weekdayLabel(slot.weekdayOffset)}`,
+                objective: goalSummary,
+                methodology: "annual_periodized_distribution",
                 weekObjectives: wm.objectives,
-                sessionIndexInWeek: s,
-                sessionsInWeek: sportSessions,
+                contextHint: contextHint || undefined,
               });
-              const durationAdj = Math.max(28, Math.round(duration * aerobicPres.durationScale));
-              const tssAdj = Math.max(12, Math.round(tssPerSession * aerobicPres.tssScale));
-              const kcalAdj = Math.round(tssAdj * 10.5);
-              const sessionTitle = `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${sportTarget.sport} · ${aerobicPres.archetypeLabelIt}`;
+              const derived = deriveViryaBuilderInstructions({ brief });
+              const archetypeLabel = derived.aerobicPrescription?.archetypeLabelIt ?? "aerobic";
+              const sessionTitle = `${planName || "VIRYA"} · ${phaseLabels[phase.phase]} · ${sportTarget.sport} · ${archetypeLabel} · ${weekdayLabel(slot.weekdayOffset)}`;
               const serializedContract = await materializeViryaSessionContract({
                 family: "aerobic",
                 discipline: sportTarget.sport,
                 sessionName: sessionTitle,
                 phase: phase.phase,
-                durationMinutes: durationAdj,
-                tss: tssAdj,
-                kcal: kcalAdj,
+                durationMinutes: derived.sessionMinutes,
+                tss: derived.tss,
+                kcal: derived.kcal,
                 objective: goalSummary,
                 methodology: "annual_periodized_distribution",
                 weekObjectives: wm.objectives,
-                sessionIndexInWeek: s,
-                sessionsInWeek: sportSessions,
+                sessionIndexInWeek: slot.slotIndex,
+                sessionsInWeek: weekPlan.slots.length,
+                builderInstructions: derived,
               });
+              const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
               rows.push({
                 athlete_id: selectedAthleteId,
-                date: addDays(weekStart, dayOffset),
+                date: addDays(weekStart, slot.weekdayOffset),
                 type: sportTarget.sport.toLowerCase(),
-                duration_minutes: durationAdj,
-                tss_target: tssAdj,
-                kcal_target: kcalAdj,
+                duration_minutes: derived.sessionMinutes,
+                tss_target: derived.tss,
+                kcal_target: derived.kcal,
                 notes: [
                   serializedContract,
-                  `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()}`,
+                  `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · Sport ${sportTarget.sport} (${Math.round(normalizedShare * 100)}%) · Target: ${goalSummary} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()} · ${briefMeta}`,
                 ].join("\n"),
               });
             }
-            dayCursor += sportSessions;
           }
         }
       }
@@ -2218,6 +2293,109 @@ export function ViryaAnnualPlanOrchestrator({
       objectives: autoRetune?.objectives ?? ov?.objectives ?? [],
     };
   }
+
+  function viryaPatternForSessions(): ViryaWeekdayPatternId | undefined {
+    return viryaWeekdayPattern === "auto" ? undefined : viryaWeekdayPattern;
+  }
+
+  const microcyclePreviewRows = useMemo(() => {
+    const phase = phases[0];
+    if (!phase) return [];
+    const weekStart = phase.start;
+    const wm = resolveWeekMetrics(phase, 0, weekStart);
+    const weekPlan = buildWeekGenerationPlan({
+      weeklyBudgetLoad: wm.weeklyTss,
+      sessionsPerWeek: wm.sessions,
+      phase: phase.phase as ViryaMacroPhase,
+      family: sportFamily,
+      patternId: viryaPatternForSessions(),
+    });
+    const effectivePattern =
+      viryaWeekdayPattern === "auto"
+        ? defaultWeekdayPatternForSessions(wm.sessions)
+        : viryaWeekdayPattern;
+    const gymModules =
+      sportFamily === "strength"
+        ? activeGymModulesForWeek(
+            ensureGymWeekModules(gymDayModules.length ? gymDayModules : buildGymDayModules()),
+            wm.sessions,
+          )
+        : [];
+    const technicalMods =
+      sportFamily === "technical"
+        ? technicalDayModules.length
+          ? technicalDayModules
+          : buildTechnicalDayModules(wm.sessions)
+        : [];
+    const lifestyleMods =
+      sportFamily === "lifestyle"
+        ? lifestyleDayModules.length
+          ? lifestyleDayModules
+          : buildLifestyleDayModules(wm.sessions)
+        : [];
+    return weekPlan.slots.map((slot) => {
+      const gymModule =
+        sportFamily === "strength" ? gymModules[slot.slotIndex % Math.max(1, gymModules.length)] : undefined;
+      const technicalModule =
+        sportFamily === "technical"
+          ? technicalMods[slot.slotIndex % Math.max(1, technicalMods.length)]
+          : undefined;
+      const lifestyleModule =
+        sportFamily === "lifestyle"
+          ? lifestyleMods[slot.slotIndex % Math.max(1, lifestyleMods.length)]
+          : undefined;
+      const brief = buildViryaBuilderSessionBrief({
+        weekStart,
+        slot,
+        sessionsInWeek: weekPlan.slots.length,
+        weeklyBudgetLoad: weekPlan.weeklyBudgetLoad,
+        weekdayPatternId: weekPlan.patternId,
+        phase: phase.phase as ViryaMacroPhase,
+        family: sportFamily,
+        discipline: sportFamily === "strength" ? "Gym" : discipline,
+        planName: planName.trim() || "VIRYA",
+        phaseLabel: phaseLabels[phase.phase],
+        sessionName: `${planName.trim() || "VIRYA"} · ${phaseLabels[phase.phase]}`,
+        gymPrimaryGoal: sportFamily === "strength" ? gymPrimaryGoal : undefined,
+        weekObjectives: wm.objectives,
+        contextHint: (viryaContext?.strategyHints ?? []).slice(0, 4).join(","),
+      });
+      const derived = deriveViryaBuilderInstructions({
+        brief,
+        gymModule,
+        technicalModule,
+        lifestyleModule,
+      });
+      return {
+        day: weekdayLabel(slot.weekdayOffset),
+        role: slot.sessionRole,
+        load: slot.loadTarget,
+        adapt: derived.adaptationTarget,
+        patternId: effectivePattern,
+        loadSum: weekPlan.loadSum,
+      };
+    });
+  }, [
+    phases,
+    sportFamily,
+    viryaWeekdayPattern,
+    gymDayModules,
+    gymPrimaryGoal,
+    gymTrainingDaysPerWeek,
+    technicalDayModules,
+    technicalTrainingDaysPerWeek,
+    lifestyleDayModules,
+    lifestyleTrainingDaysPerWeek,
+    discipline,
+    planName,
+    weeklyProgramOverrides,
+    gymWeekCustomizations,
+    technicalWeekCustomizations,
+    lifestyleWeekCustomizations,
+    adaptationControlPct,
+    viryaRetuneProposal,
+    viryaContext?.strategyHints,
+  ]);
 
   return (
     <div id="virya-orchestrator" className="mt-6 scroll-mt-24 space-y-6">
@@ -3032,6 +3210,82 @@ export function ViryaAnnualPlanOrchestrator({
               Valori iniziali dalle fasi; modifiche qui hanno priorità sulla generazione. Le ore settimanali (macro aerobico)
               ripartiscono la durata media per seduta.
             </p>
+          </Pro2SectionCard>
+
+          <Pro2SectionCard
+            accent="violet"
+            title="Microciclo · anteprima Builder"
+            subtitle="Pattern giorni, polarizzazione Q/V e istruzioni che riceverà generateBuilderSession (prima settimana fase 1)"
+            icon={Layers}
+          >
+            <div className="mb-4 flex flex-wrap items-end gap-4">
+              <label className="flex flex-col gap-1 text-sm text-slate-300">
+                <span className="text-xs font-semibold uppercase tracking-wide text-violet-200/80">
+                  Pattern settimanale
+                </span>
+                <select
+                  className="rounded-lg border border-white/15 bg-black/50 px-3 py-2 text-sm text-white outline-none focus:border-violet-400/50"
+                  value={viryaWeekdayPattern}
+                  onChange={(e) =>
+                    setViryaWeekdayPattern(
+                      e.target.value === "auto" ? "auto" : (e.target.value as ViryaWeekdayPatternId),
+                    )
+                  }
+                >
+                  <option value="auto">Auto (da giorni/settimana)</option>
+                  <option value="3d">3d · Lun Mer Ven</option>
+                  <option value="4d">4d · Lun Mer Ven Dom</option>
+                  <option value="5d">5d · Lun Mar Gio Ven Dom</option>
+                  <option value="6d">6d · Lun–Sab</option>
+                </select>
+              </label>
+              {microcyclePreviewRows.length > 0 ? (
+                <p className="text-xs text-slate-400">
+                  Somma carico anteprima:{" "}
+                  <span className="font-mono text-violet-200">{microcyclePreviewRows[0]?.loadSum ?? "—"}</span> · pattern{" "}
+                  <span className="font-mono text-violet-200">{microcyclePreviewRows[0]?.patternId ?? "—"}</span>
+                </p>
+              ) : null}
+            </div>
+            {microcyclePreviewRows.length === 0 ? (
+              <p className="text-sm text-slate-500">Aggiungi almeno una fase per vedere l&apos;anteprima settimana.</p>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-white/10">
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs uppercase tracking-wide text-slate-400">
+                      <th className="p-2">Giorno</th>
+                      <th className="p-2">Ruolo</th>
+                      <th className="p-2">Carico</th>
+                      <th className="p-2">Adattamento Builder</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {microcyclePreviewRows.map((row, i) => (
+                      <tr key={`micro-preview-${i}`} className="border-b border-white/5 text-slate-200">
+                        <td className="p-2 font-medium text-white">{row.day}</td>
+                        <td className="p-2">
+                          <span
+                            className={cn(
+                              "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                              row.role === "quality"
+                                ? "border-fuchsia-400/40 bg-fuchsia-500/20 text-fuchsia-100"
+                                : row.role === "recovery"
+                                  ? "border-cyan-400/30 bg-cyan-500/15 text-cyan-100"
+                                  : "border-orange-400/30 bg-orange-500/15 text-orange-100",
+                            )}
+                          >
+                            {row.role}
+                          </span>
+                        </td>
+                        <td className="p-2 font-mono">{row.load}</td>
+                        <td className="p-2 font-mono text-xs text-violet-200/90">{row.adapt}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </Pro2SectionCard>
 
           <Pro2SectionCard
