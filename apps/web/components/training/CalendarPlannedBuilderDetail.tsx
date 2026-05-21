@@ -30,7 +30,7 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   return "mobility";
 }
 import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
-import { ExternalLink, Trash2, Download } from "lucide-react";
+import { ChevronDown, ExternalLink, Trash2, Download } from "lucide-react";
 import { useMemo, useState } from "react";
 import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
 
@@ -65,11 +65,13 @@ export function CalendarPlannedBuilderDetail({
   athleteId?: string | null;
   onDeleted?: (removedPlannedId: string) => void;
 }) {
-  const [structureOpen, setStructureOpen] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const contract = useMemo(() => parsePro2BuilderSessionFromNotes(workout.notes ?? null), [workout.notes]);
 
   const segments = useMemo(() => (contract ? pro2BuilderContractToChartSegments(contract) : []), [contract]);
+
+  const hasBlockChart = segments.length > 0 && contract?.family !== "strength";
+  const [structureOpen, setStructureOpen] = useState(() => hasBlockChart);
+  const [deleting, setDeleting] = useState(false);
 
   const tssEst = useMemo(() => (contract ? estimatedTssFromPro2Contract(contract) : 0), [contract]);
 
@@ -233,32 +235,45 @@ export function CalendarPlannedBuilderDetail({
             </div>
           ) : null}
 
+          {hasBlockChart ? (
+            <div className="mt-4">
+              <SessionBlockIntensityChart
+                segments={segments}
+                title={
+                  family === "aerobic"
+                    ? "Grafico a blocchi (pianificato)"
+                    : "Proxy tempo / carico (stima)"
+                }
+                estimatedTss={tssEst > 0 ? tssEst : undefined}
+              />
+            </div>
+          ) : contract && (contract.blocks ?? []).length === 0 ? (
+            <p className="mt-4 text-sm text-amber-200/90">
+              Contratto Builder senza blocchi: apri <span className="text-white">Adatta</span> nel Builder e salva di nuovo, oppure
+              rigenera da VIRYA su Calendar.
+            </p>
+          ) : null}
+
           <details
             className="mt-4 rounded-xl border border-white/10 bg-black/25"
             open={structureOpen}
             onToggle={(e) => setStructureOpen(e.currentTarget.open)}
           >
-            <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-semibold text-gray-200 marker:hidden [&::-webkit-details-marker]:hidden">
-              {family === "strength" ? "Dettaglio tecnico · apri / chiudi" : "Struttura · apri / chiudi"}
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5 text-sm font-semibold text-gray-200 marker:hidden [&::-webkit-details-marker]:hidden">
+              <span>
+                {family === "strength"
+                  ? "Dettaglio tecnico · lista blocchi"
+                  : hasBlockChart
+                    ? "Dettaglio blocchi · zone e note"
+                    : "Struttura · apri / chiudi"}
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 shrink-0 text-gray-500 transition-transform ${structureOpen ? "rotate-180" : ""}`}
+                aria-hidden
+              />
             </summary>
             <div className="space-y-4 border-t border-white/10 px-3 pb-4 pt-3">
-              {family === "aerobic" && segments.length > 0 ? (
-                <SessionBlockIntensityChart
-                  segments={segments}
-                  title="Grafico a blocchi (pianificato)"
-                  estimatedTss={tssEst > 0 ? tssEst : undefined}
-                />
-              ) : null}
-
-              {(family === "technical" || family === "lifestyle") && segments.length > 0 ? (
-                <SessionBlockIntensityChart
-                  segments={segments}
-                  title="Proxy tempo / carico (stima)"
-                  estimatedTss={tssEst > 0 ? tssEst : undefined}
-                />
-              ) : null}
-
-              {family === "strength" && !gymScheda && segments.length > 0 ? (
+              {family === "strength" && !gymScheda && segments.length > 0 && !hasBlockChart ? (
                 <SessionBlockIntensityChart
                   segments={segments}
                   title="Proxy tempo / carico (stima — senza scheda)"
