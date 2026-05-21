@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
+import { resolveBootstrapRole } from "@/lib/auth/resolve-bootstrap-role";
 import { coachOperationalApproved } from "@/lib/platform-coach-status";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
     lastName?: string | null;
   };
   const userId = (body.userId ?? "").trim();
-  const role = body.role ?? "private";
+  const requestedRole = body.role ?? "private";
   if (!userId || userId !== user.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
@@ -46,14 +47,20 @@ export async function POST(req: Request) {
 
   const { data: existing, error: existingErr } = await supabase
     .from("app_user_profiles")
-    .select("role, athlete_id")
+    .select("role, athlete_id, platform_coach_status")
     .eq("user_id", userId)
     .maybeSingle();
   if (existingErr) {
     return NextResponse.json({ error: existingErr.message }, { status: 500 });
   }
 
-  const current = existing as { role: "private" | "coach"; athlete_id: string | null } | null;
+  const current = existing as {
+    role: "private" | "coach";
+    athlete_id: string | null;
+    platform_coach_status?: string | null;
+  } | null;
+
+  const role = resolveBootstrapRole(requestedRole, current);
 
   const athleteIdForBootstrap =
     role === "coach" ? athleteIdBody : athleteIdBody ?? current?.athlete_id ?? null;
@@ -73,18 +80,25 @@ export async function POST(req: Request) {
 
   const { data: after } = await supabase
     .from("app_user_profiles")
-    .select("athlete_id, platform_coach_status")
+    .select("role, athlete_id, platform_coach_status")
     .eq("user_id", userId)
     .maybeSingle();
-  const rowAfter = after as { athlete_id?: string | null; platform_coach_status?: string | null } | null;
-  const resolvedAthleteId = role === "private" ? (rowAfter?.athlete_id ?? null) : null;
+  const rowAfter = after as {
+    role?: "private" | "coach";
+    athlete_id?: string | null;
+    platform_coach_status?: string | null;
+  } | null;
+  const effectiveRole = rowAfter?.role === "coach" ? "coach" : "private";
+  const resolvedAthleteId = effectiveRole === "private" ? (rowAfter?.athlete_id ?? null) : null;
   const platformCoachStatus = rowAfter?.platform_coach_status ?? null;
 
   return NextResponse.json({
     status: current ? "existing" : "created",
-    role,
+    role: effectiveRole,
+    requestedRole,
+    roleLockedFromDowngrade: requestedRole === "private" && effectiveRole === "coach",
     athleteId: resolvedAthleteId,
     platformCoachStatus,
-    coachOperationalApproved: coachOperationalApproved(role, platformCoachStatus),
+    coachOperationalApproved: coachOperationalApproved(effectiveRole, platformCoachStatus),
   });
 }

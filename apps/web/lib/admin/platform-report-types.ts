@@ -44,11 +44,32 @@ export type PlatformCoachReportRow = {
   athletes: PlatformCoachAthleteRow[];
 };
 
+/** Coach referenziato in `coach_athletes` (può non avere ruolo coach in app_user_profiles). */
+export type PlatformLinkedCoach = {
+  userId: string;
+  email: string | null;
+  role: "private" | "coach" | null;
+  platformCoachStatus: string | null;
+  /** true solo se role=coach e platform_coach_status=approved (console roster operativa). */
+  coachConsoleOperational: boolean;
+};
+
+/** Account con atleti in roster ma profilo non allineato (causa tipica: coach 0 ma rosterLinks > 0). */
+export type PlatformRosterOperatorRow = {
+  coachUserId: string;
+  email: string | null;
+  role: "private" | "coach" | null;
+  platformCoachStatus: string | null;
+  athleteCount: number;
+  issue: "missing_coach_role" | "coach_pending" | "coach_suspended";
+};
+
 export type PlatformAthleteReportRow = {
   athleteId: string;
   email: string | null;
   displayName: string | null;
   linkedCoachCount: number;
+  linkedCoaches: PlatformLinkedCoach[];
   modulesUsed: PlatformModuleId[];
   engagementScore: number;
   rollup: AdminAthleteActivityRollup | null;
@@ -62,5 +83,7 @@ export type PlatformReport = {
   kpis: PlatformReportKpis;
   moduleAdoption: PlatformModuleAdoption[];
   coaches: PlatformCoachReportRow[];
+  /** Roster presente ma ruolo/stato coach non consente la console — da correggere in «Ruolo utente». */
+  rosterOperatorsNeedingFix: PlatformRosterOperatorRow[];
   athletes: PlatformAthleteReportRow[];
 };

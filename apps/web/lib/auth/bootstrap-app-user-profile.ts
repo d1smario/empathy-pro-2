@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
+import { resolveBootstrapRole } from "@/lib/auth/resolve-bootstrap-role";
 
 export async function athleteIdByNormalizedEmail(
   supabase: SupabaseClient,
@@ -54,7 +55,6 @@ export async function bootstrapAppUserProfile(
   supabase: SupabaseClient,
   input: BootstrapAppUserProfileInput,
 ): Promise<{ error: string | null }> {
-  const role = input.role;
   const email = String(input.email ?? "").trim().toLowerCase() || null;
   const firstName = String(input.firstName ?? "").trim() || null;
   const lastName = String(input.lastName ?? "").trim() || null;
@@ -75,6 +75,8 @@ export async function bootstrapAppUserProfile(
     athlete_id: string | null;
     platform_coach_status?: string | null;
   } | null;
+
+  const role = resolveBootstrapRole(input.role, current);
 
   let resolvedAthleteId: string | null;
   if (role === "coach") {

@@ -66,7 +66,7 @@
     "roleAthlete": "Athlete",
     "roleCoach": "Coach",
     "hintCoach": "After registration you land on the Athletes area: Empathy must approve your coach account before invites and roster work. You will receive access to the operational console once approved.",
-    "hintAthlete": "Personal profile and athlete data linked to your account.",
+    "hintAthlete": "Personal athlete profile. If your account is already an approved coach on the platform, you always sign in as coach (DB role is not reset).",
     "modePassword": "Email and password",
     "modeMagicLink": "Email link"
   },
@@ -101,6 +101,7 @@
     "msgEnterEmailAndPassword": "Enter email and password.",
     "msgEmailPasswordMin8": "Email and password (min. 8 characters).",
     "msgPasswordsMismatch": "Passwords do not match.",
+    "msgProfileBootstrapFailed": "Profile could not be updated. Try again or contact support.",
     "msgEnterEmail": "Enter an email address.",
     "msgEnterEmailForReset": "Enter your email to receive the reset link.",
     "msgPasswordMin8": "Password must be at least 8 characters.",
@@ -225,6 +226,8 @@
     "openInPanel": "Open here",
     "pendingMore": "…and {count} more in the full list below.",
     "fullCoachList": "Go to full coach list",
+    "rosterLinked": "Roster as coach: {count} athletes linked in DB.",
+    "rosterNeedsActivation": "This account has roster athletes but cannot open the coach console: use «Approve coach» (sets coach role + active). Without that, login shows an empty roster.",
     "info": {
       "updated": "Profile updated.",
       "approved": "Coach approved."
@@ -249,6 +252,17 @@
     "filterAll": "All athletes",
     "modulesNone": "no modules",
     "emptyCoaches": "No coach-role accounts.",
+    "rosterMismatchHeading": "Roster without active coach",
+    "rosterMismatchHint": "Links exist in coach_athletes but the account has no approved coach role — explains «0 coaches» with roster links > 0. Fix in «User role» above.",
+    "thRosterIssue": "Issue",
+    "rosterIssue": {
+      "missingRole": "Still athlete (private) account",
+      "pending": "Coach pending approval",
+      "suspended": "Coach suspended"
+    },
+    "linkedCoachesNone": "0",
+    "linkedCoachAthleteAccount": "athlete account, not coach",
+    "linkedCoachNotActive": "coach not active",
     "emptyAthletes": "No athletes in this view.",
     "athletesTruncated": "Showing first {count} athletes; use the directory for paginated detail.",
     "thModule": "Module",

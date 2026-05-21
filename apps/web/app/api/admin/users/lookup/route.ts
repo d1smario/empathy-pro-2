@@ -59,30 +59,49 @@ export async function GET(req: Request) {
     });
   }
 
-  const enriched = await Promise.all(
+  let enriched;
+  try {
+    enriched = await Promise.all(
     matches.map(async (m) => {
-      const entitlement = await loadUserAccessEntitlement(admin, m.userId);
-      const { data: profile } = await admin
-        .from("app_user_profiles")
-        .select("role, platform_coach_status, is_platform_admin")
-        .eq("user_id", m.userId)
-        .maybeSingle();
+      const [entitlement, { data: profile }, { count: rosterAsCoachCount, error: rosterErr }] = await Promise.all([
+        loadUserAccessEntitlement(admin, m.userId),
+        admin
+          .from("app_user_profiles")
+          .select("role, platform_coach_status, is_platform_admin")
+          .eq("user_id", m.userId)
+          .maybeSingle(),
+        admin
+          .from("coach_athletes")
+          .select("athlete_id", { count: "exact", head: true })
+          .eq("coach_user_id", m.userId),
+      ]);
+      if (rosterErr) throw new Error(rosterErr.message);
       const profileRow =
         (profile as {
           role?: "private" | "coach" | null;
           platform_coach_status?: string | null;
           is_platform_admin?: boolean | null;
         } | null) ?? null;
+      const role = profileRow?.role ?? null;
+      const platformCoachStatus = profileRow?.platform_coach_status ?? null;
+      const rosterCount = rosterAsCoachCount ?? 0;
+      const coachConsoleOperational = role === "coach" && platformCoachStatus === "approved";
       return {
         userId: m.userId,
         email: m.email,
-        role: profileRow?.role ?? null,
-        platformCoachStatus: profileRow?.platform_coach_status ?? null,
+        role,
+        platformCoachStatus,
         isPlatformAdmin: profileRow?.is_platform_admin === true,
+        rosterAsCoachCount: rosterCount,
+        rosterNeedsCoachActivation: rosterCount > 0 && !coachConsoleOperational,
         entitlement,
       };
     }),
-  );
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "lookup_failed";
+    return NextResponse.json({ ok: false as const, error: msg }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true as const, users: enriched });
 }

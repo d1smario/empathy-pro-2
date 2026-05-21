@@ -11,6 +11,8 @@ type LookupUser = {
   role: "private" | "coach" | null;
   platformCoachStatus: string | null;
   isPlatformAdmin: boolean;
+  rosterAsCoachCount?: number;
+  rosterNeedsCoachActivation?: boolean;
 };
 
 type Props = {
@@ -234,8 +236,19 @@ export function AdminUserRolePanel({ onRolesChanged }: Props) {
                   <span className="ml-2 rounded bg-violet-500/20 px-1.5 py-0.5 text-xs text-violet-200">platform admin</span>
                 ) : null}
               </p>
+              {(selected.rosterAsCoachCount ?? 0) > 0 ? (
+                <p className="mt-2 text-sm text-amber-200/95">
+                  {t("rosterLinked", { count: selected.rosterAsCoachCount ?? 0 })}
+                </p>
+              ) : null}
             </div>
           </div>
+
+          {selected.rosterNeedsCoachActivation ? (
+            <p className="rounded-xl border border-amber-500/35 bg-amber-950/25 px-4 py-3 text-sm text-amber-100" role="status">
+              {t("rosterNeedsActivation")}
+            </p>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             <Pro2Button

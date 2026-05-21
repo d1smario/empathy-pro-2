@@ -9,7 +9,9 @@ import {
 import type {
   PlatformAthleteReportRow,
   PlatformCoachReportRow,
+  PlatformLinkedCoach,
   PlatformReport,
+  PlatformRosterOperatorRow,
 } from "@/lib/admin/platform-report-types";
 import { loadAccessEntitlementsForUserIds } from "@/lib/billing/access-entitlement";
 
@@ -90,7 +92,21 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
   if (linkErr) throw new Error(linkErr.message);
 
   const profiles = (profilesRaw ?? []) as ProfileRow[];
+  const profileByUserId = new Map(profiles.map((p) => [p.user_id, p]));
   const links = (linksRaw ?? []) as Array<{ coach_user_id: string; athlete_id: string }>;
+
+  const linkedCoachDetail = (coachUserId: string): PlatformLinkedCoach => {
+    const prof = profileByUserId.get(coachUserId);
+    const role = prof?.role ?? null;
+    const platformCoachStatus = prof?.platform_coach_status ?? null;
+    return {
+      userId: coachUserId,
+      email: authIndex.emailByUserId.get(coachUserId) ?? null,
+      role,
+      platformCoachStatus,
+      coachConsoleOperational: role === "coach" && platformCoachStatus === "approved",
+    };
+  };
 
   const athleteIdSet = new Set<string>();
   const userIdByAthlete = new Map<string, string>();
@@ -177,11 +193,13 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     const engagementScore = engagementScoreFromModules(modulesUsed);
     if (engagementScore === 0) lowEngagementAthletes += 1;
     const uid = userIdByAthlete.get(athleteId);
+    const coachIds = [...(coachIdsByAthlete.get(athleteId) ?? [])];
     return {
       athleteId,
       email: meta?.email ?? null,
       displayName: meta ? athleteDisplayName(meta) : null,
-      linkedCoachCount: coachIdsByAthlete.get(athleteId)?.size ?? 0,
+      linkedCoachCount: coachIds.length,
+      linkedCoaches: coachIds.map(linkedCoachDetail),
       modulesUsed,
       engagementScore,
       rollup,
@@ -229,6 +247,27 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     return b.athleteCount - a.athleteCount;
   });
 
+  const rosterOperatorsNeedingFix: PlatformRosterOperatorRow[] = [];
+  for (const [coachUserId, athleteList] of athletesByCoach) {
+    const prof = profileByUserId.get(coachUserId);
+    const role = prof?.role ?? null;
+    const st = prof?.platform_coach_status ?? null;
+    let issue: PlatformRosterOperatorRow["issue"] | null = null;
+    if (role !== "coach") issue = "missing_coach_role";
+    else if (st === "suspended") issue = "coach_suspended";
+    else if (st !== "approved") issue = "coach_pending";
+    if (!issue) continue;
+    rosterOperatorsNeedingFix.push({
+      coachUserId,
+      email: authIndex.emailByUserId.get(coachUserId) ?? null,
+      role,
+      platformCoachStatus: st,
+      athleteCount: athleteList.length,
+      issue,
+    });
+  }
+  rosterOperatorsNeedingFix.sort((a, b) => b.athleteCount - a.athleteCount);
+
   return {
     generatedAt: new Date().toISOString(),
     rollupsAvailable: rollupsAvailable,
@@ -249,6 +288,7 @@ export async function loadPlatformReport(admin: SupabaseClient): Promise<Platfor
     },
     moduleAdoption,
     coaches,
+    rosterOperatorsNeedingFix,
     athletes,
   };
 }

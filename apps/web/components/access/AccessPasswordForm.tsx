@@ -59,13 +59,21 @@ async function bootstrapProfileAfterSession(appRole: PendingAppRole): Promise<bo
   } = await supabase.auth.getSession();
   const u = session?.user;
   if (!u?.id) return false;
+  const { data: existingProfile } = await supabase
+    .from("app_user_profiles")
+    .select("role")
+    .eq("user_id", u.id)
+    .maybeSingle();
+  const storedRole = (existingProfile as { role?: PendingAppRole } | null)?.role;
+  const roleForBootstrap: PendingAppRole = storedRole === "coach" ? "coach" : appRole;
   const meta = u.user_metadata as Record<string, unknown>;
   const res = await fetch("/api/access/ensure-profile", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
     body: JSON.stringify({
       userId: u.id,
-      role: appRole,
+      role: roleForBootstrap,
       email: u.email ?? null,
       firstName: typeof meta?.first_name === "string" ? meta.first_name : null,
       lastName: typeof meta?.last_name === "string" ? meta.last_name : null,
@@ -109,10 +117,31 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
       notify(formatAuthErrorMessage(t, error.message));
       return;
     }
-    await bootstrapProfileAfterSession(appRole);
+    const bootOk = await bootstrapProfileAfterSession(appRole);
+    if (!bootOk) {
+      setBusy(false);
+      notify(t("msgProfileBootstrapFailed"));
+      return;
+    }
     clearPendingAppRoleCookieClient();
     setBusy(false);
-    window.location.assign(postSignInRedirectPath(redirectAfterLogin, appRole));
+    const supabaseAfter = createEmpathyBrowserSupabase();
+    let redirectRole: PendingAppRole = appRole;
+    if (supabaseAfter) {
+      const {
+        data: { session },
+      } = await supabaseAfter.auth.getSession();
+      const uid = session?.user?.id;
+      if (uid) {
+        const { data: prof } = await supabaseAfter
+          .from("app_user_profiles")
+          .select("role")
+          .eq("user_id", uid)
+          .maybeSingle();
+        if ((prof as { role?: PendingAppRole } | null)?.role === "coach") redirectRole = "coach";
+      }
+    }
+    window.location.assign(postSignInRedirectPath(redirectAfterLogin, redirectRole));
   }
 
   async function onSignUp(e: React.FormEvent) {

@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
-import type { PlatformModuleId, PlatformReport } from "@/lib/admin/platform-report-types";
+import type {
+  PlatformLinkedCoach,
+  PlatformModuleId,
+  PlatformReport,
+  PlatformRosterOperatorRow,
+} from "@/lib/admin/platform-report-types";
 import { PLATFORM_REPORT_MODULE_COUNT } from "@/lib/admin/platform-report-types";
 import { Pro2Button } from "@/components/ui/empathy";
 
@@ -34,6 +39,24 @@ function coachStatusLabel(t: (key: string) => string, st: string | null): string
   if (st === "approved") return t("coachStatus.approved");
   if (st === "suspended") return t("coachStatus.suspended");
   return t("coachStatus.pending");
+}
+
+function rosterOperatorIssueLabel(t: (key: string) => string, issue: PlatformRosterOperatorRow["issue"]): string {
+  if (issue === "missing_coach_role") return t("rosterIssue.missingRole");
+  if (issue === "coach_suspended") return t("rosterIssue.suspended");
+  return t("rosterIssue.pending");
+}
+
+function linkedCoachesCell(t: (key: string) => string, coaches: PlatformLinkedCoach[]): string {
+  if (!coaches.length) return t("linkedCoachesNone");
+  return coaches
+    .map((c) => {
+      const email = c.email ?? c.userId.slice(0, 8);
+      if (c.coachConsoleOperational) return email;
+      if (c.role !== "coach") return `${email} (${t("linkedCoachAthleteAccount")})`;
+      return `${email} (${t("linkedCoachNotActive")})`;
+    })
+    .join(" · ");
 }
 
 export function AdminPlatformReportSection() {
@@ -160,6 +183,33 @@ export function AdminPlatformReportSection() {
             <p className="px-4 py-2 text-xs text-gray-500">{t("modulesFootnote")}</p>
           </div>
 
+          {report.rosterOperatorsNeedingFix.length > 0 ? (
+            <div className="overflow-x-auto rounded-2xl border border-amber-500/30 bg-amber-950/15">
+              <h3 className="border-b border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm font-semibold text-amber-100">
+                {t("rosterMismatchHeading")}
+              </h3>
+              <p className="px-4 py-2 text-xs text-amber-200/80">{t("rosterMismatchHint")}</p>
+              <table className="min-w-full text-left text-sm text-gray-300">
+                <thead className="border-b border-amber-500/20 text-xs uppercase tracking-wide text-amber-200/70">
+                  <tr>
+                    <th className="px-4 py-2">{t("thCoach")}</th>
+                    <th className="px-4 py-2">{t("thRosterIssue")}</th>
+                    <th className="px-4 py-2">{t("thAthleteCount")}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {report.rosterOperatorsNeedingFix.map((op) => (
+                    <tr key={op.coachUserId} className="border-b border-amber-500/10 last:border-0">
+                      <td className="px-4 py-2 text-gray-200">{op.email ?? op.coachUserId.slice(0, 8)}</td>
+                      <td className="px-4 py-2 text-amber-100">{rosterOperatorIssueLabel(t, op.issue)}</td>
+                      <td className="px-4 py-2 font-medium text-white">{op.athleteCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+
           <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25">
             <h3 className="border-b border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white">
               {t("coachesHeading")}
@@ -273,7 +323,9 @@ export function AdminPlatformReportSection() {
                           {a.displayName ?? a.email ?? a.athleteId.slice(0, 8)}
                         </td>
                         <td className="px-4 py-2 text-gray-400">{a.accountEmail ?? "—"}</td>
-                        <td className="px-4 py-2">{a.linkedCoachCount}</td>
+                        <td className="max-w-xs px-4 py-2 text-xs text-gray-400">
+                          {linkedCoachesCell(t, a.linkedCoaches)}
+                        </td>
                         <td className="max-w-xs px-4 py-2 text-xs text-gray-400">{modulesCell(t, a.modulesUsed)}</td>
                         <td className="px-4 py-2">
                           <span

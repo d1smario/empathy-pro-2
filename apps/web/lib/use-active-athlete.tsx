@@ -315,14 +315,6 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
          */
 
         if (resolvedAthleteId) {
-          await supabase.from("app_user_profiles").upsert(
-            {
-              user_id: user.id,
-              role: "private",
-              athlete_id: resolvedAthleteId,
-            },
-            { onConflict: "user_id" },
-          );
           writeActiveAthleteId(resolvedAthleteId);
         } else {
           clearPro2ClientSessionKeys();
