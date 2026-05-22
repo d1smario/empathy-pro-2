@@ -402,6 +402,22 @@ function weeksBetween(a: string, b: string): number {
   return Math.max(1, Math.ceil((end - start + 1) / (1000 * 60 * 60 * 24 * 7)));
 }
 
+/** Durata predefinita passo 3 (piano medio-corto). */
+const DEFAULT_AEROBIC_PLAN_WEEKS = 12;
+
+function planWindowEndForWeeks(start: string, weeks: number): string {
+  return addDays(start, Math.max(1, weeks) * 7 - 1);
+}
+
+function aerobicPhasesMatchWindow(phases: PhasePlan[], windowStart: string, windowEnd: string): boolean {
+  if (!phases.length || !windowStart || !windowEnd) return false;
+  return (
+    phases[0]!.start === windowStart &&
+    phases[phases.length - 1]!.end === windowEnd &&
+    weeksBetween(phases[0]!.start, phases[phases.length - 1]!.end) === weeksBetween(windowStart, windowEnd)
+  );
+}
+
 function phaseColor(phase: PhaseType): string {
   const map: Record<PhaseType, string> = {
     base: "#00c2ff",
@@ -513,7 +529,7 @@ function aggregateGoalTargets(targets: MultiSportTarget[]): GoalTargets {
   };
 }
 
-/** Quattro macro-fasi aerobiche ripartite sulla finestra passo 3 (base · build · taper · picco). */
+/** Quattro macro-fasi aerobiche ripartite sulla finestra passo 3 (base · costruzione · rifinitura · forma). */
 function buildAerobicClassicPhases(s: string, e: string): PhasePlan[] {
   const startMs = new Date(s).getTime();
   const endMs = new Date(e).getTime();
@@ -539,9 +555,9 @@ function buildAerobicClassicPhases(s: string, e: string): PhasePlan[] {
       end: baseEnd,
       phase: "base",
       mesocycle: "M1",
-      weeklyTss: 440,
+      weeklyTss: 460,
       sessionsPerWeek: 6,
-      notes: "Preparazione di base — volume e fondamentali",
+      notes: "Volume progressivo + lavori estensivi",
     },
     {
       id: crypto.randomUUID(),
@@ -549,19 +565,19 @@ function buildAerobicClassicPhases(s: string, e: string): PhasePlan[] {
       end: buildEnd,
       phase: "build",
       mesocycle: "M2",
-      weeklyTss: 540,
+      weeklyTss: 560,
       sessionsPerWeek: 7,
-      notes: "Costruzione — incremento carico specifico",
+      notes: "Incremento qualità + intensità controllata",
     },
     {
       id: crypto.randomUUID(),
       start: addDays(buildEnd, 1),
       end: taperEnd,
-      phase: "deload",
+      phase: "refine",
       mesocycle: "M3",
-      weeklyTss: 380,
-      sessionsPerWeek: 5,
-      notes: "Tapering pre-evento — riduzione volume",
+      weeklyTss: 510,
+      sessionsPerWeek: 6,
+      notes: "Rifinitura specifica evento",
     },
     {
       id: crypto.randomUUID(),
@@ -569,15 +585,15 @@ function buildAerobicClassicPhases(s: string, e: string): PhasePlan[] {
       end: e,
       phase: "peak",
       mesocycle: "M4",
-      weeklyTss: 420,
+      weeklyTss: 430,
       sessionsPerWeek: 5,
-      notes: "Picco di forma — qualità e intensità",
+      notes: "Picco forma + taper graduale",
     },
   ];
 }
 
 function defaultPhases(start: string): PhasePlan[] {
-  return buildAerobicClassicPhases(start, addDays(start, 154));
+  return buildAerobicClassicPhases(start, planWindowEndForWeeks(start, DEFAULT_AEROBIC_PLAN_WEEKS));
 }
 
 function phasesCoverGymWindow(phases: PhasePlan[], gymStart: string, gymEnd: string): boolean {
@@ -708,10 +724,7 @@ export function ViryaAnnualPlanOrchestrator({
   const [viryaStep, setViryaStep] = useState<1 | 2 | 3 | 4 | 5>(1);
   const [adaptationControlPct, setAdaptationControlPct] = useState<0 | 50 | 70 | 100>(100);
   const [planWindowStart, setPlanWindowStart] = useState(start);
-  const [planWindowEnd, setPlanWindowEnd] = useState(() => {
-    const d = defaultPhases(start);
-    return d[d.length - 1]?.end ?? addDays(start, 160);
-  });
+  const [planWindowEnd, setPlanWindowEnd] = useState(() => planWindowEndForWeeks(start, DEFAULT_AEROBIC_PLAN_WEEKS));
   const [weeklyProgramOverrides, setWeeklyProgramOverrides] = useState<
     Record<
       string,
@@ -892,8 +905,9 @@ export function ViryaAnnualPlanOrchestrator({
     [adaptationControlPct, baseProgramWeekRows, viryaRetuneProposal],
   );
 
-  const annualLoad = programWeekRows.slice(0, 52).map((w) => w.displayTss);
-  while (annualLoad.length < 52) annualLoad.push(0);
+  const annualLoadWeekCap = planWindowWeekCount > 0 ? planWindowWeekCount : 52;
+  const annualLoad = programWeekRows.slice(0, annualLoadWeekCap).map((w) => w.displayTss);
+  while (annualLoad.length < annualLoadWeekCap) annualLoad.push(0);
   const maxAnnual = Math.max(...annualLoad, 1);
 
   const totalSessions = programWeekRows.reduce((sum, w) => sum + w.displaySessions, 0);
@@ -1113,17 +1127,14 @@ export function ViryaAnnualPlanOrchestrator({
   }, [sportFamily, annualProjection, selectedLifestyleWeekStart]);
 
   useEffect(() => {
-    if (viryaStep !== 5 || sportFamily !== "aerobic") return;
+    if (sportFamily !== "aerobic") return;
     const s = planWindowStart.trim();
     const e = planWindowEnd.trim();
     if (!s || !e || new Date(e) < new Date(s)) return;
-    const targetWeeks = weeksBetween(s, e);
-    const phaseWeeks =
-      phases.length > 0 ? weeksBetween(phases[0]!.start, phases[phases.length - 1]!.end) : 0;
-    if (phases[0]?.start === s && phases[phases.length - 1]?.end === e && phaseWeeks === targetWeeks) return;
+    if (aerobicPhasesMatchWindow(phases, s, e)) return;
     const next = buildAerobicClassicPhases(s, e);
     if (next.length) setPhases(next);
-  }, [viryaStep, sportFamily, planWindowStart, planWindowEnd, phases]);
+  }, [sportFamily, planWindowStart, planWindowEnd, phases]);
 
   function updatePhase(id: string, patch: Partial<PhasePlan>) {
     setPhases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -1858,9 +1869,7 @@ export function ViryaAnnualPlanOrchestrator({
       sportFamily === "aerobic" &&
       aerobicWindowStart &&
       aerobicWindowEnd &&
-      (phases[0]?.start !== aerobicWindowStart ||
-        phases[phases.length - 1]?.end !== aerobicWindowEnd ||
-        programWeekRows.length !== planWindowWeekCount);
+      !aerobicPhasesMatchWindow(phases, aerobicWindowStart, aerobicWindowEnd);
     const effectivePhases = syncGymPhasesToWindow
       ? buildGymMacroPhases(strengthWindowStart, strengthWindowEnd, gymMacroPhaseCount).map((p) => ({
           ...p,
@@ -2808,7 +2817,12 @@ export function ViryaAnnualPlanOrchestrator({
                 <button
                   key={p.w}
                   type="button"
-                  className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:border-amber-400/45 hover:bg-amber-500/10"
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-xs font-medium transition",
+                    planWindowWeekCount === p.w
+                      ? "border-amber-400/60 bg-amber-500/20 text-amber-50"
+                      : "border-white/15 bg-white/5 text-slate-300 hover:border-amber-400/45 hover:bg-amber-500/10",
+                  )}
                   onClick={() => applyPlanWindowPreset(p.w)}
                 >
                   {p.label}
@@ -2825,8 +2839,11 @@ export function ViryaAnnualPlanOrchestrator({
               Applica periodo alle fasi
             </button>
             <span className="text-xs text-slate-500">
-              I preset aggiornano date e macro-fasi insieme. «Applica periodo» o «Continua» ripartiscono base · build · taper · picco
-              sulla finestra ({planWindowWeekCount > 0 ? `${planWindowWeekCount} sett.` : "—"}).
+              Durata attiva:{" "}
+              <span className="font-mono font-semibold text-amber-100">
+                {planWindowWeekCount > 0 ? `${planWindowWeekCount} sett.` : "—"}
+              </span>
+              . Preset, date o «Continua» riallineano subito fasi e griglia settimanale (base · costruzione · rifinitura · forma).
             </span>
           </div>
           <div className="mt-5 flex flex-wrap justify-between gap-2">
@@ -2939,7 +2956,7 @@ export function ViryaAnnualPlanOrchestrator({
           <Pro2SectionCard
             accent="violet"
             title="Macro-periodi di preparazione"
-            subtitle="Base, costruzione, taper pre-evento, picco — genera quattro fasi sulle date del passo 3"
+            subtitle="Base, costruzione, rifinitura, forma — quattro fasi sulla durata scelta al passo 3"
             icon={CalendarRange}
           >
             <p className="mb-3 text-xs text-slate-400">
@@ -2952,7 +2969,7 @@ export function ViryaAnnualPlanOrchestrator({
               className="rounded-xl border border-violet-500/45 bg-violet-500/15 px-4 py-2.5 text-sm font-semibold text-violet-100 hover:bg-violet-500/25"
               onClick={applyClassicPeriodization}
             >
-              Genera fasi classiche (base · costruzione · taper · picco)
+              Genera fasi classiche (base · costruzione · rifinitura · forma)
             </button>
             <p className="mt-2 text-[0.7rem] text-slate-500">
               Sovrascrive l’elenco fasi attuale e azzera le personalizzazioni settimanali finché non le reimposti al passo 5.
