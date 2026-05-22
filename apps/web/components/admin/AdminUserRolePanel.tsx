@@ -84,7 +84,7 @@ export function AdminUserRolePanel({ onRolesChanged }: Props) {
         setSearching(false);
       }
     },
-    [query, t],
+    [query, t, selected?.userId],
   );
 
   const applyProfile = useCallback(

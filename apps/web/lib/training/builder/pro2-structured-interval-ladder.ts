@@ -181,7 +181,7 @@ function expandContractBlock(block: Pro2BuilderBlockContract, contract: Pro2Buil
           z,
           "steady",
           wattsTripleForZoneLabel(z, ftpW),
-          { firstInBlock: i === 1, barIntensityScore, pyramidLinearT },
+          { firstInBlock: i === 1, extras: { barIntensityScore, pyramidLinearT } },
         ),
       );
     }
