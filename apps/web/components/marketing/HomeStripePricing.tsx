@@ -27,6 +27,8 @@ type HomeStripePricingProps = {
   sectionId?: string;
   /** Email sessione (es. pagina `/access/plan` post-registrazione). */
   prefillEmail?: string | null;
+  /** Gate post-registrazione: solo prova con carta (no skip dashboard). */
+  signupCheckoutGate?: boolean;
 };
 
 function planPriceConfigured(id: EmpathyBasePlanId, a: HostedCheckoutAvailability): boolean {
@@ -54,6 +56,7 @@ export function HomeStripePricing({
   hideSectionTitle,
   sectionId = "piani",
   prefillEmail,
+  signupCheckoutGate = false,
 }: HomeStripePricingProps) {
   const t = useTranslations("Checkout");
   const [basePlanId, setBasePlanId] = useState<EmpathyBasePlanId>("silver");
@@ -260,30 +263,52 @@ export function HomeStripePricing({
           disabled={loading !== false}
         />
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-          <Pro2Button
-            type="button"
-            variant="primary"
-            className="justify-center px-8"
-            disabled={loading !== false}
-            onClick={() => goCheckout(false)}
-          >
-            {loading === "subscribe" ? t("redirecting") : t("subscribeAndPay")}
-          </Pro2Button>
-          <Pro2Button
-            type="button"
-            variant="secondary"
-            className="justify-center px-8"
-            disabled={loading !== false || !trialEligible}
-            onClick={() => goCheckout(true)}
-            title={!trialEligible ? t("trialNotEligible") : undefined}
-          >
-            {loading === "trial"
-              ? t("redirecting")
-              : trialDaysConfigured
-                ? t("freeTrialWithDays", { days: trialDaysConfigured })
-                : t("freeTrial")}
-          </Pro2Button>
+          {signupCheckoutGate ? (
+            <Pro2Button
+              type="button"
+              variant="primary"
+              className="justify-center px-8"
+              disabled={loading !== false || !trialEligible}
+              onClick={() => goCheckout(true)}
+              title={!trialEligible ? t("trialNotEligible") : undefined}
+            >
+              {loading === "trial"
+                ? t("redirecting")
+                : trialDaysConfigured
+                  ? t("signupTrialCta", { days: trialDaysConfigured })
+                  : t("freeTrial")}
+            </Pro2Button>
+          ) : (
+            <>
+              <Pro2Button
+                type="button"
+                variant="primary"
+                className="justify-center px-8"
+                disabled={loading !== false}
+                onClick={() => goCheckout(false)}
+              >
+                {loading === "subscribe" ? t("redirecting") : t("subscribeAndPay")}
+              </Pro2Button>
+              <Pro2Button
+                type="button"
+                variant="secondary"
+                className="justify-center px-8"
+                disabled={loading !== false || !trialEligible}
+                onClick={() => goCheckout(true)}
+                title={!trialEligible ? t("trialNotEligible") : undefined}
+              >
+                {loading === "trial"
+                  ? t("redirecting")
+                  : trialDaysConfigured
+                    ? t("freeTrialWithDays", { days: trialDaysConfigured })
+                    : t("freeTrial")}
+              </Pro2Button>
+            </>
+          )}
         </div>
+        {signupCheckoutGate ? (
+          <p className="mt-3 text-xs text-gray-400">{t("signupTrialCardHint")}</p>
+        ) : null}
         {trialDaysConfigured == null ? (
           <p className="mt-3 text-xs text-gray-600">{t("trialNotConfigured")}</p>
         ) : null}
@@ -292,14 +317,16 @@ export function HomeStripePricing({
             {err}
           </p>
         ) : null}
-        <div className="mt-8 flex flex-wrap gap-3 border-t border-white/10 pt-6">
-          <Pro2Link href="/access" variant="ghost" className="justify-center px-6">
-            {t("haveAccount")}
-          </Pro2Link>
-          <Pro2Link href="/dashboard" variant="ghost" className="justify-center px-6">
-            {t("enterApp")}
-          </Pro2Link>
-        </div>
+        {!signupCheckoutGate ? (
+          <div className="mt-8 flex flex-wrap gap-3 border-t border-white/10 pt-6">
+            <Pro2Link href="/access" variant="ghost" className="justify-center px-6">
+              {t("haveAccount")}
+            </Pro2Link>
+            <Pro2Link href="/dashboard" variant="ghost" className="justify-center px-6">
+              {t("enterApp")}
+            </Pro2Link>
+          </div>
+        ) : null}
       </div>
     </section>
   );

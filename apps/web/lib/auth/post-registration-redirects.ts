@@ -1,7 +1,8 @@
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
+import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
 
 /** Atleta: dopo registrazione → prova / checkout Stripe. */
-export const ACCESS_POST_SIGNUP_PLAN_PATH = "/access/plan";
+export const ACCESS_POST_SIGNUP_PLAN_PATH = ACCESS_PLAN_PATH;
 
 /**
  * Destinazione dopo **registrazione** (sessione immediata o link email con `next` già impostato).

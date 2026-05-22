@@ -3,7 +3,8 @@ import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { createStripeServerClient } from "@empathy/integrations-stripe";
 import { stripeCheckoutCancelUrl, stripeCheckoutSuccessUrl } from "@/lib/billing/stripe-app-url";
-import { isAnonymousStripeCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
+import { isStripeHostedCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
+import { isPostSignupCheckoutRequired } from "@/lib/billing/paywall-config";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { readStripeSecretKey, readStripeSecretKeyKind } from "@/lib/billing/stripe-secret";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
@@ -30,16 +31,24 @@ async function readOptionalCheckoutUser(): Promise<{ userId: string; email: stri
 
 /**
  * Checkout subscription Silver/Gold (+ coach add-on opzionale), allineato agli env V1.
- * Solo con `STRIPE_CHECKOUT_ANON_ENABLED` attivo (`1`, `true` o `yes`) — demo/staging.
+ * Richiede `STRIPE_CHECKOUT_ANON_ENABLED=1` oppure paywall commerciale attivo (default).
  */
 export async function POST(req: NextRequest) {
-  if (!isAnonymousStripeCheckoutEnabled()) {
+  if (!isStripeHostedCheckoutEnabled()) {
     return NextResponse.json(
       {
         error:
-          "Checkout anonimo disabilitato. Imposta STRIPE_CHECKOUT_ANON_ENABLED=1 (o true) solo per demo/staging.",
+          "Checkout Stripe non abilitato. Configura STRIPE_SECRET_KEY, STRIPE_PRICE_* e STRIPE_CHECKOUT_ANON_ENABLED=1 (o paywall attivo).",
       },
       { status: 403 },
+    );
+  }
+
+  const authUser = await readOptionalCheckoutUser();
+  if (isPostSignupCheckoutRequired() && !authUser) {
+    return NextResponse.json(
+      { error: "Accedi o registrati prima di avviare il checkout abbonamento." },
+      { status: 401 },
     );
   }
 
@@ -80,8 +89,6 @@ export async function POST(req: NextRequest) {
 
   const basePriceId = stripePriceIdForBasePlan(body.basePlanId)!;
   const addonPriceId = coachAddOnId ? stripePriceIdForCoachAddOn(coachAddOnId)! : null;
-
-  const authUser = await readOptionalCheckoutUser();
 
   let customerEmail: string | undefined;
   if (typeof body.email === "string") {
@@ -128,8 +135,9 @@ export async function POST(req: NextRequest) {
       success_url: stripeCheckoutSuccessUrl(),
       cancel_url: stripeCheckoutCancelUrl(),
       allow_promotion_codes: true,
+      payment_method_collection: "always",
       ...(customerEmail ? { customer_email: customerEmail } : {}),
-      client_reference_id: `pro2-anon:${body.basePlanId}${coachAddOnId ? `+${coachAddOnId}` : ""}`,
+      client_reference_id: `pro2:${body.basePlanId}${coachAddOnId ? `+${coachAddOnId}` : ""}`,
       metadata,
       subscription_data: {
         metadata,

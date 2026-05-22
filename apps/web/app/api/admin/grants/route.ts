@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requirePlatformAdminSession } from "@/lib/auth/require-platform-admin";
 import { grantEndsAtFromMonths } from "@/lib/billing/access-entitlement";
+import { buildGrantNoticeCopy, insertUserAccountNotice } from "@/lib/billing/grant-user-notice";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -142,5 +143,32 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false as const, error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true as const, grant: data as GrantRow | null });
+  const grant = data as GrantRow | null;
+  let noticeSent = false;
+  let noticeError: string | null = null;
+  if (grant) {
+    const copy = buildGrantNoticeCopy({
+      kind,
+      durationMonths,
+      endsAt,
+      note,
+    });
+    const notice = await insertUserAccountNotice(admin, {
+      userId,
+      title: copy.title,
+      body: copy.body,
+      grantId: grant.id,
+      kind,
+      durationMonths,
+    });
+    noticeSent = notice.ok;
+    noticeError = notice.error ?? null;
+  }
+
+  return NextResponse.json({
+    ok: true as const,
+    grant,
+    noticeSent,
+    noticeError,
+  });
 }

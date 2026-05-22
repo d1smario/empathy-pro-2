@@ -119,10 +119,15 @@
   },
   "AccessPlan": {
     "eyebrow": "Subscription",
-    "title": "Choose your plan",
-    "subtitle": "Start with a free trial when available, or subscribe with Stripe. After checkout you can use Empathy as an athlete on your profile.",
+    "title": "Activate your free trial",
+    "subtitle": "Athlete access requires a subscription. Enter your card on Stripe: the free trial starts immediately and you are not charged until it ends (when configured). Admins can also extend access with dedicated grants.",
     "backAccess": "Back to Access",
+    "requiredAlert": "To use Training, VIRYA, integrations, and your profile you need to activate the trial with a card (or an admin-granted access).",
     "skipIfAlready": "I already subscribed — dashboard"
+  },
+  "AccountNotices": {
+    "eyebrow": "Platform message",
+    "dismiss": "Got it"
   },
   "Checkout": {
     "billingSuccess": "Done. You can enter the app from Access or the dashboard.",
@@ -147,6 +152,8 @@
     "trialNotConfigured": "Free trial is not active in this environment.",
     "haveAccount": "I already have an account — Access",
     "enterApp": "Enter the app",
+    "signupTrialCta": "Free trial {days} days — add card",
+    "signupTrialCardHint": "Stripe requires a payment method to start the trial; billing begins only after the trial period ends.",
     "errPayNotReady": "Online subscriptions are not yet enabled in this environment. Ask the team to finish configuration, or use Access if you already have an account.",
     "errGenericWithStatus": "Error {status}",
     "errStripeKeyKind": "Stripe key: {kind}",
@@ -398,6 +405,7 @@
     "noGrants": "No grants for this user.",
     "revoke": "Revoke",
     "presetPromo1": "Promo 1 month",
+    "presetAmbassador12": "Ambassador 12 months",
     "presetTestimonial3": "Testimonial 3 months",
     "presetTestimonial6": "Testimonial 6 months",
     "presetTestimonial9": "Testimonial 9 months",
@@ -418,6 +426,8 @@
     },
     "info": {
       "grantCreated": "Grant created.",
+      "grantCreatedWithNotice": "Grant created — in-app notice sent to the user.",
+      "noticeFailed": "notice not saved",
       "revoked": "Grant revoked."
     },
     "revokePrompt": "Revoke reason (optional):",

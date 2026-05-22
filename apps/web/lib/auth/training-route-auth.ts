@@ -3,6 +3,7 @@ import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { NextRequest } from "next/server";
 import { canAccessAthleteData } from "@/lib/athlete/can-access-athlete-data";
+import { assertPlatformEntitlementForApi } from "@/lib/billing/assert-platform-entitlement";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
@@ -80,6 +81,7 @@ export async function requireTrainingAthleteWriteContext(
   }
 
   const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
+  await assertPlatformEntitlementForApi(userId, rlsClient);
   const allowed = await canAccessAthleteData(rlsClient, userId, target, null);
   if (!allowed) {
     throw new TrainingRouteAuthError(403, "forbidden");
@@ -109,6 +111,7 @@ export async function requireTrainingAthleteReadContext(
   }
 
   const { userId, rlsClient } = await requireAuthenticatedTrainingUser(req);
+  await assertPlatformEntitlementForApi(userId, rlsClient);
   const allowed = await canAccessAthleteData(rlsClient, userId, target, null);
   if (!allowed) {
     throw new TrainingRouteAuthError(403, "forbidden");

@@ -18,7 +18,28 @@ export function AccessRedirectIfSession({ nextPath }: { nextPath: string }) {
       if (!supabase) return;
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
-      if (data.session) router.replace(nextPath);
+      if (!data.session) return;
+      try {
+        const entRes = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const ent = (await entRes.json()) as {
+          ok?: boolean;
+          hasAthleteAccess?: boolean;
+          hasOperatorAccess?: boolean;
+        };
+        if (entRes.ok && ent.ok) {
+          if (ent.hasOperatorAccess && !ent.hasAthleteAccess) {
+            router.replace("/athletes");
+            return;
+          }
+          if (ent.hasAthleteAccess) {
+            router.replace(nextPath);
+            return;
+          }
+        }
+      } catch {
+        /* entitlement check failed — server RSC gate will apply on navigation */
+      }
+      router.replace("/access/plan");
     })();
     return () => {
       cancelled = true;

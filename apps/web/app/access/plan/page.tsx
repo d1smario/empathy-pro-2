@@ -9,6 +9,7 @@ import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,11 @@ export const metadata: Metadata = {
  * Gate post-registrazione atleta: prova gratuita (se configurata) o abbonamento Stripe.
  * Richiede sessione; coach → `/athletes`; già con accesso atleta → dashboard.
  */
-export default async function AccessPlanPage() {
+export default async function AccessPlanPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   if (!getSupabasePublicConfig()) {
     redirect("/access?error=config");
   }
@@ -43,7 +48,8 @@ export default async function AccessPlanPage() {
     redirect("/athletes");
   }
 
-  const entitlement = await loadUserAccessEntitlement(sb, user.id);
+  const admin = createSupabaseAdminClient();
+  const entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
   if (entitlement.hasAthleteAccess) {
     redirect("/dashboard");
   }
@@ -53,6 +59,14 @@ export default async function AccessPlanPage() {
   const payReady = checkoutPayReady();
   const trialDaysConfigured = readCheckoutTrialDays();
   const t = await getTranslations("AccessPlan");
+  const billingFlash =
+    searchParams?.billing === "success"
+      ? ("success" as const)
+      : searchParams?.billing === "cancel"
+        ? ("cancel" as const)
+        : undefined;
+  const showRequired =
+    typeof searchParams?.required === "string" && searchParams.required === "subscription";
 
   return (
     <BrutalistAppBackdrop matrix>
@@ -67,12 +81,14 @@ export default async function AccessPlanPage() {
             {t("title")}
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-400">{t("subtitle")}</p>
+          {showRequired ? (
+            <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
+              {t("requiredAlert")}
+            </p>
+          ) : null}
           <div className="mt-6 flex flex-wrap justify-center gap-3 sm:justify-start">
             <Pro2Link href="/access" variant="ghost" className="justify-center border border-white/15 text-gray-300">
               {t("backAccess")}
-            </Pro2Link>
-            <Pro2Link href="/dashboard" variant="secondary" className="justify-center border border-white/15">
-              {t("skipIfAlready")}
             </Pro2Link>
           </div>
         </header>
@@ -88,6 +104,8 @@ export default async function AccessPlanPage() {
           hideSectionTitle
           sectionId="access-plan-checkout"
           prefillEmail={user.email ?? null}
+          signupCheckoutGate
+          billingFlash={billingFlash}
         />
       </main>
     </BrutalistAppBackdrop>

@@ -7,6 +7,9 @@ import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { safeAppInternalPath } from "@/core/routing/guards";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { Pro2Link } from "@/components/ui/empathy";
+import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
+import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +38,19 @@ export default async function AccessPage({
       const {
         data: { user },
       } = await sb.auth.getUser();
-      if (user) redirect(safeNext);
+      if (user) {
+        const admin = createSupabaseAdminClient();
+        const { data: prof } = await sb
+          .from("app_user_profiles")
+          .select("role")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        const role = (prof as { role?: string } | null)?.role;
+        if (role === "coach") redirect("/athletes");
+        const ent = await loadUserAccessEntitlement(admin ?? sb, user.id);
+        if (ent.hasAthleteAccess) redirect(safeNext);
+        redirect(ACCESS_PLAN_PATH);
+      }
     }
   }
 
@@ -67,9 +82,6 @@ export default async function AccessPage({
         ) : null}
         <AccessAuthPanel redirectAfterLogin={safeNext} />
         <div className="flex w-full max-w-xs flex-col gap-3">
-          <Pro2Link href={safeNext} variant="primary" className="justify-center">
-            {t("goToProduct")}
-          </Pro2Link>
           <Pro2Link href="/#piani" variant="secondary" className="justify-center">
             {t("goToPlans")}
           </Pro2Link>

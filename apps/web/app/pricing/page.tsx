@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
 import { EmpathyPublicHome } from "@/components/marketing/EmpathyPublicHome";
 
 export const metadata: Metadata = {
@@ -20,8 +22,11 @@ export default async function PricingPage({ searchParams }: PageProps) {
   const billingRaw = searchParams?.billing;
   const billing = billingRaw === "success" ? "success" : billingRaw === "cancel" ? "cancel" : undefined;
   const required = typeof searchParams?.required === "string" ? searchParams.required : null;
+  if (required === "athlete_access" || required === "subscription") {
+    redirect(`${ACCESS_PLAN_PATH}?required=subscription`);
+  }
   const t = await getTranslations("Pricing");
-  const showPaywallBanner = required === "athlete_access";
+  const showPaywallBanner = false;
 
   return (
     <>

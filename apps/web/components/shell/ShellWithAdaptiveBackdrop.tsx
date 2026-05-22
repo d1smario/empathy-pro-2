@@ -5,6 +5,7 @@ import { isGenerativePath } from "@/core/navigation/generative-modules";
 import { requiresResolvedAthleteForPath } from "@/lib/shell/requires-resolved-athlete-path";
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { Pro2AthleteRequiredGate } from "@/components/shell/Pro2AthleteRequiredGate";
+import { AccountNoticeBanner } from "@/components/shell/AccountNoticeBanner";
 import { ProductSidebar } from "@/components/navigation/ProductSidebar";
 
 /**
@@ -28,6 +29,7 @@ export function ShellWithAdaptiveBackdrop({ children }: { children: React.ReactN
               : "min-w-0 flex-1 scroll-mt-0 outline-none"
           }
         >
+          <AccountNoticeBanner />
           <Pro2AthleteRequiredGate enabled={athleteGate}>{children}</Pro2AthleteRequiredGate>
         </main>
       </div>

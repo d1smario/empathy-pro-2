@@ -119,10 +119,15 @@
   },
   "AccessPlan": {
     "eyebrow": "Abbonamento",
-    "title": "Scegli il tuo piano",
-    "subtitle": "Inizia con la prova gratuita se attiva, oppure sottoscrivi con Stripe. Dopo il pagamento potrai usare Empathy come atleta sul tuo profilo.",
+    "title": "Attiva la prova gratuita",
+    "subtitle": "Per usare Empathy come atleta serve un abbonamento. Inserisci la carta su Stripe: la prova gratuita parte subito e non viene addebitato fino alla scadenza (se configurata). L’admin può anche prolungare l’accesso con grant dedicati.",
     "backAccess": "Torna ad Access",
+    "requiredAlert": "Per usare Training, VIRYA, integrazioni e profilo serve attivare la prova con carta (o un accesso concesso dall’admin).",
     "skipIfAlready": "Ho già pagato — dashboard"
+  },
+  "AccountNotices": {
+    "eyebrow": "Messaggio piattaforma",
+    "dismiss": "Ho capito"
   },
   "Checkout": {
     "billingSuccess": "Operazione completata. Puoi entrare in app da Access o dalla dashboard.",
@@ -147,6 +152,8 @@
     "trialNotConfigured": "In questo ambiente la prova gratuita non è attiva.",
     "haveAccount": "Ho già un account — Access",
     "enterApp": "Entra in app",
+    "signupTrialCta": "Prova gratuita {days} giorni — inserisci carta",
+    "signupTrialCardHint": "Stripe richiede un metodo di pagamento per avviare la prova; l’addebito parte solo dopo la fine del periodo di prova.",
     "errPayNotReady": "Abbonamento online non ancora abilitato su questo ambiente. Chiedi al team di completare la configurazione oppure usa Access se hai già un account.",
     "errGenericWithStatus": "Errore {status}",
     "errStripeKeyKind": "Chiave Stripe: {kind}",
@@ -398,6 +405,7 @@
     "noGrants": "Nessun grant per questo utente.",
     "revoke": "Revoca",
     "presetPromo1": "Promo 1 mese",
+    "presetAmbassador12": "Ambassador 12 mesi",
     "presetTestimonial3": "Testimonial 3 mesi",
     "presetTestimonial6": "Testimonial 6 mesi",
     "presetTestimonial9": "Testimonial 9 mesi",
@@ -418,6 +426,8 @@
     },
     "info": {
       "grantCreated": "Grant concesso.",
+      "grantCreatedWithNotice": "Grant concesso — notifica inviata all’utente in app.",
+      "noticeFailed": "notifica non salvata",
       "revoked": "Grant revocato."
     },
     "revokePrompt": "Motivo revoca (opzionale):",

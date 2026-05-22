@@ -1,4 +1,5 @@
 import type { EmpathyBasePlanId } from "@empathy/contracts";
+import { isPaywallEnforced } from "@/lib/billing/paywall-config";
 import { stripePriceIdForBasePlan, stripePriceIdForCoachAddOn } from "@/lib/billing/stripe-price-ids";
 import { readStripeSecretKey } from "@/lib/billing/stripe-secret";
 
@@ -9,14 +10,19 @@ export type HostedCheckoutAvailability = Record<EmpathyBasePlanId, boolean> & {
 };
 
 /**
- * Checkout hosted senza utente Supabase (solo Pro 2 demo / staging).
- * Produzione: preferire flusso V1 autenticato + `billing_customers`.
- *
- * Valori considerati attivi: `1`, `true`, `yes` (case-insensitive, trim).
+ * Checkout hosted Stripe (registrazione atleta + landing).
+ * Attivo se: secret + prezzi configurati E (flag esplicito O paywall commerciale attivo).
  */
-export function isAnonymousStripeCheckoutEnabled(): boolean {
+export function isStripeHostedCheckoutEnabled(): boolean {
   const v = process.env.STRIPE_CHECKOUT_ANON_ENABLED?.trim().toLowerCase();
-  return v === "1" || v === "true" || v === "yes";
+  if (v === "1" || v === "true" || v === "yes") return true;
+  if (v === "0" || v === "false" || v === "no") return false;
+  return isPaywallEnforced();
+}
+
+/** @deprecated alias */
+export function isAnonymousStripeCheckoutEnabled(): boolean {
+  return isStripeHostedCheckoutEnabled();
 }
 
 function disabledHosted(): HostedCheckoutAvailability {
@@ -30,7 +36,7 @@ function disabledHosted(): HostedCheckoutAvailability {
 }
 
 export function hostedCheckoutAvailability(): HostedCheckoutAvailability {
-  if (!isAnonymousStripeCheckoutEnabled()) {
+  if (!isStripeHostedCheckoutEnabled()) {
     return disabledHosted();
   }
   if (readStripeSecretKey() == null) {
@@ -45,9 +51,8 @@ export function hostedCheckoutAvailability(): HostedCheckoutAvailability {
   };
 }
 
-/** True se un checkout abbonamento può completarsi (anon + secret + almeno un prezzo base). */
 export function checkoutPayReady(): boolean {
-  if (!isAnonymousStripeCheckoutEnabled()) return false;
+  if (!isStripeHostedCheckoutEnabled()) return false;
   if (readStripeSecretKey() == null) return false;
   return stripePriceIdForBasePlan("silver") != null || stripePriceIdForBasePlan("gold") != null;
 }

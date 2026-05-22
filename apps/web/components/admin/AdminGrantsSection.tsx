@@ -12,6 +12,7 @@ import { Pro2Button } from "@/components/ui/empathy";
 
 const PRESET_DEFS = [
   { translationKey: "presetPromo1" as const, months: 1, kind: "promo" as const },
+  { translationKey: "presetAmbassador12" as const, months: 12, kind: "comp" as const, defaultNote: "Ambassador — accesso gratuito" },
   { translationKey: "presetTestimonial3" as const, months: 3, kind: "testimonial" as const },
   { translationKey: "presetTestimonial6" as const, months: 6, kind: "testimonial" as const },
   { translationKey: "presetTestimonial9" as const, months: 9, kind: "testimonial" as const },
@@ -192,14 +193,27 @@ export function AdminGrantsSection({
             userId: selected.userId,
             kind: preset.kind,
             durationMonths: preset.months,
-            note: note.trim() || undefined,
+            note:
+              note.trim() ||
+              ("defaultNote" in preset && typeof preset.defaultNote === "string" ? preset.defaultNote : undefined),
           }),
         });
-        const j = (await res.json()) as { ok?: boolean; error?: string };
+        const j = (await res.json()) as {
+          ok?: boolean;
+          error?: string;
+          noticeSent?: boolean;
+          noticeError?: string | null;
+        };
         if (!res.ok || !j.ok) {
           setErr(j.error ?? t("errors.createFailed"));
         } else {
-          setInfo(t("info.grantCreated"));
+          setInfo(
+            j.noticeSent
+              ? t("info.grantCreatedWithNotice")
+              : j.noticeError
+                ? `${t("info.grantCreated")} (${t("info.noticeFailed")})`
+                : t("info.grantCreated"),
+          );
           setNote("");
           await loadGrants(selected.userId);
           await runSearch();

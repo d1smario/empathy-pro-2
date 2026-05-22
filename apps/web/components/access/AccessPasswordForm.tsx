@@ -6,7 +6,11 @@ import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
-import { postSignInRedirectPath, postSignupRegistrationPath } from "@/lib/auth/post-registration-redirects";
+import {
+  ACCESS_POST_SIGNUP_PLAN_PATH,
+  postSignInRedirectPath,
+  postSignupRegistrationPath,
+} from "@/lib/auth/post-registration-redirects";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
@@ -141,7 +145,19 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
         if ((prof as { role?: PendingAppRole } | null)?.role === "coach") redirectRole = "coach";
       }
     }
-    window.location.assign(postSignInRedirectPath(redirectAfterLogin, redirectRole));
+    let target = postSignInRedirectPath(redirectAfterLogin, redirectRole);
+    if (redirectRole !== "coach") {
+      try {
+        const entRes = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const ent = (await entRes.json()) as { ok?: boolean; hasAthleteAccess?: boolean };
+        if (!entRes.ok || !ent.ok || !ent.hasAthleteAccess) {
+          target = ACCESS_POST_SIGNUP_PLAN_PATH;
+        }
+      } catch {
+        target = ACCESS_POST_SIGNUP_PLAN_PATH;
+      }
+    }
+    window.location.assign(target);
   }
 
   async function onSignUp(e: React.FormEvent) {
