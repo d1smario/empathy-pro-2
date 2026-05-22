@@ -166,14 +166,16 @@ function targetFromAdaptation(adaptation: string): string {
   return label || "Performance";
 }
 
-function blockKindFromEngineMethod(method: string): BlockKind {
+function blockKindFromEngineMethod(method: string, label: string): BlockKind {
+  if (/warm-up|riscaldamento/i.test(label)) return "ramp";
+  if (/cool-down|defaticamento/i.test(label)) return "ramp";
   if (method === "interval" || method === "repeated_sprint") return "interval2";
   return "steady";
 }
 
 /**
  * Preset Virya / motore in `intensityCue` → work/recovery/repeats per blocchi interval
- * (solo label "Main block" per non alterare warm-up / cool-down).
+ * (solo blocco serie principali / legacy "Main block" — non riscaldamento / defaticamento).
  */
 function intervalShapeFromViryaPreset(
   label: string,
@@ -181,7 +183,8 @@ function intervalShapeFromViryaPreset(
   intensityCue: string,
   durationMinutes: number,
 ): { workSeconds: number; recoverSeconds: number; repeats: number } | null {
-  if (label !== "Main block") return null;
+  const isMainSeries = /main block|serie principali|blocco principale/i.test(label);
+  if (!isMainSeries) return null;
   if (method !== "interval" && method !== "repeated_sprint") return null;
   const c = intensityCue;
   const totalSec = Math.max(600, Math.round(durationMinutes * 60 * 0.72));
@@ -252,11 +255,14 @@ export function mapEngineSessionToTrainingBlocks(input: MaterializeEngineInput):
     const method = String(block.kind ?? "steady");
     const intensityCue = String(block.intensityCue ?? "");
     const labelStr = String(block.label ?? `Block ${index + 1}`);
-    const primaryZone = /warm-up|cool-down/i.test(labelStr)
-      ? method === "flow_recovery"
-        ? "Z1"
-        : "Z2"
-      : zoneFromIntensityCue(intensityCue, method === "flow_recovery" ? "Z1" : "Z2");
+    const blockKind = blockKindFromEngineMethod(method, labelStr);
+    const isWarm = /warm-up|riscaldamento/i.test(labelStr);
+    const isCool = /cool-down|defaticamento/i.test(labelStr);
+    const primaryZone = isWarm
+      ? "Z1"
+      : isCool
+        ? "Z2"
+        : zoneFromIntensityCue(intensityCue, method === "flow_recovery" ? "Z1" : "Z2");
     const secondaryZone = method === "interval" || method === "repeated_sprint" ? "Z1" : "Z2";
     const durationMinutes = Math.max(4, Math.round(Number(block.durationMinutes ?? 10) || 10));
     const presetShape = intervalShapeFromViryaPreset(labelStr, method, intensityCue, durationMinutes);
@@ -271,12 +277,12 @@ export function mapEngineSessionToTrainingBlocks(input: MaterializeEngineInput):
       : Math.max(3, Math.round(durationMinutes / 4));
 
     return {
-      ...defaultBlock(blockKindFromEngineMethod(method), labelStr),
+      ...defaultBlock(blockKind, labelStr),
       minutes: durationMinutes,
       seconds: 0,
       intensity: primaryZone,
-      startIntensity: method === "flow_recovery" ? "Z1" : primaryZone,
-      endIntensity: primaryZone,
+      startIntensity: isWarm ? "Z1" : isCool ? "Z2" : method === "flow_recovery" ? "Z1" : primaryZone,
+      endIntensity: isWarm ? "Z2" : isCool ? "Z1" : primaryZone,
       intensity2: secondaryZone,
       intensity3: "Z5",
       repeats: intervalRepeats,

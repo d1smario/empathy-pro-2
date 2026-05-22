@@ -112,20 +112,23 @@ export function generateTrainingSession(
     method: SessionMethod;
     target: SessionGoalRequest["adaptationTarget"];
   }> = [
-    { label: "Warm-up", ratio: distribution[0], method: "flow_recovery" as const, target: "recovery" as const },
+    { label: "Riscaldamento", ratio: distribution[0], method: "flow_recovery" as const, target: "recovery" as const },
     {
-      label: "Main block",
+      label: mainMethod === "interval" || mainMethod === "repeated_sprint" ? "Serie principali" : "Blocco principale",
       ratio: distribution[1],
       method: mainMethod,
       target: requestEffective.adaptationTarget,
     },
     {
-      label: "Secondary block",
+      label:
+        mainMethod === "interval" || mainMethod === "repeated_sprint"
+          ? "Volume complementare"
+          : "Blocco secondario",
       ratio: distribution[2],
       method: secondaryMethod,
       target: requestEffective.adaptationTarget,
     },
-    { label: "Cool-down", ratio: distribution[3], method: "flow_recovery" as const, target: "recovery" as const },
+    { label: "Defaticamento", ratio: distribution[3], method: "flow_recovery" as const, target: "recovery" as const },
   ];
 
   const gymProfile = domain === "gym" ? requestEffective.gymProfile : undefined;
@@ -139,7 +142,7 @@ export function generateTrainingSession(
         adaptationTarget: tmpl.target,
         gymProfile,
       },
-      tmpl.label === "Main block" ? 4 : 2,
+      /serie principali|main block|blocco principale/i.test(tmpl.label) ? 4 : 2,
     );
     const mainCue =
       tmpl.method === "flow_recovery"

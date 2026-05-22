@@ -25,6 +25,14 @@ const LIFESTYLE_CATS: readonly LifestylePracticeCategory[] = [
   "stretch",
 ];
 
+function formatSegDuration(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m <= 0) return `${s}s`;
+  if (s === 0) return `${m}′`;
+  return `${m}′${String(s).padStart(2, "0")}″`;
+}
+
 function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory {
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
@@ -292,7 +300,7 @@ export function CalendarPlannedBuilderDetail({
                 compact
               />
 
-              {family !== "strength" ? (
+              {family !== "strength" && !hasBlockChart ? (
                 <ul className="flex flex-col gap-3">
                   {(contract.blocks ?? []).map((block, idx) => (
                     <li

@@ -6,6 +6,7 @@ import {
   type Pro2BuilderSessionContract,
 } from "@/lib/training/builder/pro2-session-contract";
 import type { Pro2SessionMultilevelSource } from "@/lib/training/session-multilevel-analysis-strip";
+import { pro2BuilderContractToExpandedChartSegments } from "@/lib/training/builder/pro2-contract-chart-segments";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
 
 /**
@@ -63,34 +64,9 @@ export function intensityLabelForContractBlock(b: Pro2BuilderBlockContract): str
   return "Z3";
 }
 
-/** Segmenti per `SessionBlockIntensityChart` da blocchi con `chart` o solo `durationMinutes`. */
+/** Segmenti per `SessionBlockIntensityChart` — espansione lavoro/recupero come export ZWO (non un barra per blocco logico). */
 export function pro2BuilderContractToChartSegments(contract: Pro2BuilderSessionContract): ChartSegment[] {
-  const blocks = contract.blocks ?? [];
-  let order = 1;
-  const out: ChartSegment[] = [];
-  for (const b of blocks) {
-    const ch = b.chart;
-    const dm = Number(b.durationMinutes);
-    let durationSeconds: number;
-    if (Number.isFinite(dm) && dm > 0) {
-      durationSeconds = Math.max(30, Math.round(dm * 60));
-    } else if (ch) {
-      const min = Math.max(0, ch.minutes || 0) + Math.max(0, Math.min(59, ch.seconds || 0)) / 60;
-      durationSeconds = min > 0 ? Math.max(30, Math.round(min * 60)) : Math.max(60, Math.round(Math.max(0.25, 1) * 60));
-    } else {
-      durationSeconds = Math.max(60, Math.round(Math.max(0.25, b.durationMinutes || 1) * 60));
-    }
-    const intensity = intensityLabelForContractBlock(b);
-    out.push({
-      id: b.id,
-      order: order++,
-      label: b.label,
-      durationSeconds,
-      intensityLabel: intensity,
-      intensityScore: intensityScore(intensity),
-    });
-  }
-  return out;
+  return pro2BuilderContractToExpandedChartSegments(contract);
 }
 
 export function estimatedTssFromPro2Contract(contract: Pro2BuilderSessionContract): number {
