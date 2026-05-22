@@ -513,49 +513,71 @@ function aggregateGoalTargets(targets: MultiSportTarget[]): GoalTargets {
   };
 }
 
-function defaultPhases(start: string): PhasePlan[] {
+/** Quattro macro-fasi aerobiche ripartite sulla finestra passo 3 (base · build · taper · picco). */
+function buildAerobicClassicPhases(s: string, e: string): PhasePlan[] {
+  const startMs = new Date(s).getTime();
+  const endMs = new Date(e).getTime();
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs < startMs) {
+    return [];
+  }
+  const totalDays = Math.max(7, Math.floor((endMs - startMs) / 86400000) + 1);
+  let n1 = Math.max(7, Math.floor(totalDays * 0.28));
+  let n2 = Math.max(7, Math.floor(totalDays * 0.36));
+  let n3 = Math.max(5, Math.floor(totalDays * 0.16));
+  let n4 = totalDays - n1 - n2 - n3;
+  if (n4 < 7) {
+    n4 = 7;
+    n2 = Math.max(7, n2 - (7 - (totalDays - n1 - n2 - n3)));
+  }
+  const baseEnd = addDays(s, n1 - 1);
+  const buildEnd = addDays(baseEnd, n2);
+  const taperEnd = addDays(buildEnd, n3);
   return [
     {
       id: crypto.randomUUID(),
-      start,
-      end: addDays(start, 55),
+      start: s,
+      end: baseEnd,
       phase: "base",
       mesocycle: "M1",
-      weeklyTss: 460,
+      weeklyTss: 440,
       sessionsPerWeek: 6,
-      notes: "Volume progressivo + lavori estensivi",
+      notes: "Preparazione di base — volume e fondamentali",
     },
     {
       id: crypto.randomUUID(),
-      start: addDays(start, 56),
-      end: addDays(start, 111),
+      start: addDays(baseEnd, 1),
+      end: buildEnd,
       phase: "build",
       mesocycle: "M2",
-      weeklyTss: 560,
+      weeklyTss: 540,
       sessionsPerWeek: 7,
-      notes: "Incremento qualità + intensità controllata",
+      notes: "Costruzione — incremento carico specifico",
     },
     {
       id: crypto.randomUUID(),
-      start: addDays(start, 112),
-      end: addDays(start, 139),
-      phase: "refine",
+      start: addDays(buildEnd, 1),
+      end: taperEnd,
+      phase: "deload",
       mesocycle: "M3",
-      weeklyTss: 510,
-      sessionsPerWeek: 6,
-      notes: "Rifinitura specifica evento",
+      weeklyTss: 380,
+      sessionsPerWeek: 5,
+      notes: "Tapering pre-evento — riduzione volume",
     },
     {
       id: crypto.randomUUID(),
-      start: addDays(start, 140),
-      end: addDays(start, 154),
+      start: addDays(taperEnd, 1),
+      end: e,
       phase: "peak",
       mesocycle: "M4",
-      weeklyTss: 430,
+      weeklyTss: 420,
       sessionsPerWeek: 5,
-      notes: "Picco forma + taper graduale",
+      notes: "Picco di forma — qualità e intensità",
     },
   ];
+}
+
+function defaultPhases(start: string): PhasePlan[] {
+  return buildAerobicClassicPhases(start, addDays(start, 154));
 }
 
 function phasesCoverGymWindow(phases: PhasePlan[], gymStart: string, gymEnd: string): boolean {
@@ -662,7 +684,10 @@ export function ViryaAnnualPlanOrchestrator({
   const [selectedGymWeekStart, setSelectedGymWeekStart] = useState<string>("");
   const [selectedTechnicalWeekStart, setSelectedTechnicalWeekStart] = useState<string>("");
   const [selectedLifestyleWeekStart, setSelectedLifestyleWeekStart] = useState<string>("");
-  const [phases, setPhases] = useState<PhasePlan[]>(defaultPhases(start));
+  const [phases, setPhases] = useState<PhasePlan[]>(() => {
+    const end = defaultPhases(start)[3]?.end ?? addDays(start, 154);
+    return buildAerobicClassicPhases(start, end);
+  });
   const [races, setRaces] = useState<RacePlan[]>([
     { id: crypto.randomUUID(), date: addDays(start, 70), name: "Gara test #1", raceType: "test", priority: "B" },
     { id: crypto.randomUUID(), date: addDays(start, 150), name: "Gara obiettivo", raceType: "goal", priority: "A" },
@@ -710,6 +735,13 @@ export function ViryaAnnualPlanOrchestrator({
   const viryaRetuneDirective = viryaContext?.viryaRetuneDirective ?? null;
   const viryaRetuneProposalVm = viryaContext?.viryaRetuneProposal ?? null;
 
+  const planWindowWeekCount = useMemo(() => {
+    const ws = planWindowStart.trim();
+    const we = planWindowEnd.trim();
+    if (!ws || !we) return 0;
+    return weeksBetween(ws, we);
+  }, [planWindowStart, planWindowEnd]);
+
   const annualProjection = useMemo(() => {
     const weeks: {
       week: number;
@@ -748,8 +780,20 @@ export function ViryaAnnualPlanOrchestrator({
         idx += 1;
       }
     }
-    return weeks;
-  }, [phases, sportFamily, gymWeekCustomizations, technicalWeekCustomizations, lifestyleWeekCustomizations]);
+    const ws = planWindowStart.trim();
+    const we = planWindowEnd.trim();
+    if (!ws || !we) return weeks;
+    const inWindow = weeks.filter((row) => row.weekStart >= ws && row.weekStart <= we);
+    return inWindow.map((row, i) => ({ ...row, week: i + 1 }));
+  }, [
+    phases,
+    sportFamily,
+    gymWeekCustomizations,
+    technicalWeekCustomizations,
+    lifestyleWeekCustomizations,
+    planWindowStart,
+    planWindowEnd,
+  ]);
 
   const baseProgramWeekRows = useMemo(
     () =>
@@ -1067,6 +1111,19 @@ export function ViryaAnnualPlanOrchestrator({
       setSelectedLifestyleWeekStart(firstWeekStart);
     }
   }, [sportFamily, annualProjection, selectedLifestyleWeekStart]);
+
+  useEffect(() => {
+    if (viryaStep !== 5 || sportFamily !== "aerobic") return;
+    const s = planWindowStart.trim();
+    const e = planWindowEnd.trim();
+    if (!s || !e || new Date(e) < new Date(s)) return;
+    const targetWeeks = weeksBetween(s, e);
+    const phaseWeeks =
+      phases.length > 0 ? weeksBetween(phases[0]!.start, phases[phases.length - 1]!.end) : 0;
+    if (phases[0]?.start === s && phases[phases.length - 1]?.end === e && phaseWeeks === targetWeeks) return;
+    const next = buildAerobicClassicPhases(s, e);
+    if (next.length) setPhases(next);
+  }, [viryaStep, sportFamily, planWindowStart, planWindowEnd, phases]);
 
   function updatePhase(id: string, patch: Partial<PhasePlan>) {
     setPhases((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
@@ -1795,12 +1852,23 @@ export function ViryaAnnualPlanOrchestrator({
     const syncGymPhasesToWindow =
       sportFamily === "strength" &&
       !phasesCoverGymWindow(phases, strengthWindowStart, strengthWindowEnd);
+    const aerobicWindowStart = planWindowStart.trim();
+    const aerobicWindowEnd = planWindowEnd.trim();
+    const aerobicPhasesMismatch =
+      sportFamily === "aerobic" &&
+      aerobicWindowStart &&
+      aerobicWindowEnd &&
+      (phases[0]?.start !== aerobicWindowStart ||
+        phases[phases.length - 1]?.end !== aerobicWindowEnd ||
+        programWeekRows.length !== planWindowWeekCount);
     const effectivePhases = syncGymPhasesToWindow
       ? buildGymMacroPhases(strengthWindowStart, strengthWindowEnd, gymMacroPhaseCount).map((p) => ({
           ...p,
           sessionsPerWeek: Math.max(1, Math.min(7, gymTrainingDaysPerWeek)),
         }))
-      : phases;
+      : aerobicPhasesMismatch
+        ? buildAerobicClassicPhases(aerobicWindowStart, aerobicWindowEnd)
+        : phases;
     const rows: {
       athlete_id: string;
       date: string;
@@ -2160,12 +2228,12 @@ export function ViryaAnnualPlanOrchestrator({
     }
   }
 
-  function applyPlanPeriod() {
+  function applyPlanPeriod(): boolean {
     const s = planWindowStart.trim();
     const e = planWindowEnd.trim();
     if (!s || !e || new Date(e) < new Date(s)) {
       setError("Intervallo date non valido (fine prima dell’inizio).");
-      return;
+      return false;
     }
     setError(null);
     if (sportFamily === "strength") {
@@ -2176,7 +2244,7 @@ export function ViryaAnnualPlanOrchestrator({
         sessionsPerWeek: Math.max(1, Math.min(7, gymTrainingDaysPerWeek)),
       }));
       setPhases(next);
-      return;
+      return true;
     }
     if (sportFamily === "technical") {
       setTechnicalPlanStart(s);
@@ -2187,7 +2255,7 @@ export function ViryaAnnualPlanOrchestrator({
           sessionsPerWeek: Math.max(1, Math.min(7, technicalTrainingDaysPerWeek)),
         })),
       );
-      return;
+      return true;
     }
     if (sportFamily === "lifestyle") {
       setLifestylePlanStart(s);
@@ -2198,12 +2266,15 @@ export function ViryaAnnualPlanOrchestrator({
           sessionsPerWeek: Math.max(1, Math.min(7, lifestyleTrainingDaysPerWeek)),
         })),
       );
-      return;
+      return true;
     }
-    const next = defaultPhases(s);
-    if (next.length === 0) return;
-    next[next.length - 1] = { ...next[next.length - 1], end: e };
+    const next = buildAerobicClassicPhases(s, e);
+    if (!next.length) {
+      setError("Intervallo date non valido (fine prima dell’inizio).");
+      return false;
+    }
     setPhases(next);
+    return true;
   }
 
   function applyClassicPeriodization() {
@@ -2214,64 +2285,59 @@ export function ViryaAnnualPlanOrchestrator({
       return;
     }
     setError(null);
-    const startMs = new Date(s).getTime();
-    const endMs = new Date(e).getTime();
-    const totalDays = Math.max(7, Math.floor((endMs - startMs) / 86400000) + 1);
-    let n1 = Math.max(7, Math.floor(totalDays * 0.28));
-    let n2 = Math.max(7, Math.floor(totalDays * 0.36));
-    let n3 = Math.max(5, Math.floor(totalDays * 0.16));
-    let n4 = totalDays - n1 - n2 - n3;
-    if (n4 < 7) {
-      n4 = 7;
-      n2 = Math.max(7, n2 - (7 - (totalDays - n1 - n2 - n3)));
-    }
-    const baseEnd = addDays(s, n1 - 1);
-    const buildEnd = addDays(baseEnd, n2);
-    const taperEnd = addDays(buildEnd, n3);
-    const peakEnd = e;
-    setPhases([
-      {
-        id: crypto.randomUUID(),
-        start: s,
-        end: baseEnd,
-        phase: "base",
-        mesocycle: "M1",
-        weeklyTss: 440,
-        sessionsPerWeek: 6,
-        notes: "Preparazione di base — volume e fondamentali",
-      },
-      {
-        id: crypto.randomUUID(),
-        start: addDays(baseEnd, 1),
-        end: buildEnd,
-        phase: "build",
-        mesocycle: "M2",
-        weeklyTss: 540,
-        sessionsPerWeek: 7,
-        notes: "Costruzione — incremento carico specifico",
-      },
-      {
-        id: crypto.randomUUID(),
-        start: addDays(buildEnd, 1),
-        end: taperEnd,
-        phase: "deload",
-        mesocycle: "M3",
-        weeklyTss: 380,
-        sessionsPerWeek: 5,
-        notes: "Tapering pre-evento — riduzione volume",
-      },
-      {
-        id: crypto.randomUUID(),
-        start: addDays(taperEnd, 1),
-        end: peakEnd,
-        phase: "peak",
-        mesocycle: "M4",
-        weeklyTss: 420,
-        sessionsPerWeek: 5,
-        notes: "Picco di forma — qualità e intensità",
-      },
-    ]);
+    const next = buildAerobicClassicPhases(s, e);
+    if (!next.length) return;
+    setPhases(next);
     setWeeklyProgramOverrides({});
+  }
+
+  function applyPlanWindowPreset(weeks: number) {
+    const base = planWindowStart.trim() || start;
+    const end = addDays(base, weeks * 7 - 1);
+    setPlanWindowStart(base);
+    setPlanWindowEnd(end);
+    if (sportFamily === "strength") {
+      setGymPlanStart(base);
+      setGymPlanEnd(end);
+      setPhases(
+        buildGymMacroPhases(base, end, gymMacroPhaseCount).map((p) => ({
+          ...p,
+          sessionsPerWeek: Math.max(1, Math.min(7, gymTrainingDaysPerWeek)),
+        })),
+      );
+      setError(null);
+      return;
+    }
+    if (sportFamily === "technical") {
+      setTechnicalPlanStart(base);
+      setTechnicalPlanEnd(end);
+      setPhases(
+        buildGymMacroPhases(base, end, technicalMacroPhaseCount).map((p) => ({
+          ...p,
+          sessionsPerWeek: Math.max(1, Math.min(7, technicalTrainingDaysPerWeek)),
+        })),
+      );
+      setError(null);
+      return;
+    }
+    if (sportFamily === "lifestyle") {
+      setLifestylePlanStart(base);
+      setLifestylePlanEnd(end);
+      setPhases(
+        buildGymMacroPhases(base, end, lifestyleMacroPhaseCount).map((p) => ({
+          ...p,
+          sessionsPerWeek: Math.max(1, Math.min(7, lifestyleTrainingDaysPerWeek)),
+        })),
+      );
+      setError(null);
+      return;
+    }
+    const next = buildAerobicClassicPhases(base, end);
+    if (next.length) {
+      setPhases(next);
+      setWeeklyProgramOverrides({});
+      setError(null);
+    }
   }
 
   function patchWeeklyOverride(
@@ -2743,11 +2809,7 @@ export function ViryaAnnualPlanOrchestrator({
                   key={p.w}
                   type="button"
                   className="rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-slate-300 hover:border-amber-400/45 hover:bg-amber-500/10"
-                  onClick={() => {
-                    const base = planWindowStart || start;
-                    setPlanWindowStart(base);
-                    setPlanWindowEnd(addDays(base, p.w * 7 - 1));
-                  }}
+                  onClick={() => applyPlanWindowPreset(p.w)}
                 >
                   {p.label}
                 </button>
@@ -2763,7 +2825,8 @@ export function ViryaAnnualPlanOrchestrator({
               Applica periodo alle fasi
             </button>
             <span className="text-xs text-slate-500">
-              Rigenera mesocicli dalla data di inizio; l’ultima fase termina alla data fine.
+              I preset aggiornano date e macro-fasi insieme. «Applica periodo» o «Continua» ripartiscono base · build · taper · picco
+              sulla finestra ({planWindowWeekCount > 0 ? `${planWindowWeekCount} sett.` : "—"}).
             </span>
           </div>
           <div className="mt-5 flex flex-wrap justify-between gap-2">
@@ -2777,7 +2840,9 @@ export function ViryaAnnualPlanOrchestrator({
             <button
               type="button"
               className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/45 bg-cyan-500/15 px-4 py-2.5 text-sm font-semibold text-cyan-50 hover:bg-cyan-500/25"
-              onClick={() => setViryaStep(4)}
+              onClick={() => {
+                if (applyPlanPeriod()) setViryaStep(4);
+              }}
             >
               Obiettivo, eventi e fasi <ChevronRight className="h-4 w-4" aria-hidden />
             </button>
@@ -3130,7 +3195,7 @@ export function ViryaAnnualPlanOrchestrator({
             accent="violet"
             className="!border-pink-500/35 !bg-black bg-none from-transparent via-transparent to-transparent shadow-[inset_0_1px_0_rgba(251,113,133,0.12)]"
             title="5 · Programma settimanale"
-            subtitle={`${VIRYA_LOAD_LABEL}, sedute, ore disponibili e focus fisiologici — usati in generazione Calendar`}
+            subtitle={`${programWeekRows.length} settimane (periodo passo 3: ${planWindowWeekCount || "—"}) · ${VIRYA_LOAD_LABEL}, sedute, ore e focus — usati in Calendar`}
             icon={TableProperties}
           >
             <div className="max-h-[min(520px,60vh)] overflow-auto rounded-xl border border-pink-500/20 bg-black">
