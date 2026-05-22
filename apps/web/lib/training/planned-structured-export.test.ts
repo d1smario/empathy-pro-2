@@ -117,3 +117,105 @@ test("serializePro2BuilderContractToZwo contains workout and SteadyState", () =>
   assert.match(z, /<SteadyState /i);
   assert.match(z, /Power="/);
 });
+
+test("serializePro2BuilderContractToZwo: block notes → nested textevent on first step", () => {
+  const z = serializePro2BuilderContractToZwo(
+    baseAerobicContract({
+      blocks: [
+        {
+          id: "w1",
+          label: "Warm",
+          kind: "steady",
+          durationMinutes: 5,
+          intensityCue: "Z2",
+          notes: "Spin smooth",
+          chart: {
+            minutes: 5,
+            seconds: 0,
+            intensity: "Z2",
+            startIntensity: "Z2",
+            endIntensity: "Z2",
+            intensity2: "Z1",
+            intensity3: "Z3",
+            repeats: 1,
+            workSeconds: 180,
+            recoverSeconds: 90,
+            step1Seconds: 120,
+            step2Seconds: 90,
+            step3Seconds: 60,
+            pyramidSteps: 5,
+            pyramidStepSeconds: 180,
+            pyramidStartTarget: 100,
+            pyramidEndTarget: 200,
+            distanceKm: 0,
+            gradePercent: 0,
+            elevationMeters: 0,
+            cadence: "",
+            frequencyHint: "",
+            loadFactor: 1,
+          },
+        },
+      ],
+    }),
+  );
+  assert.match(z, /<textevent /i);
+  assert.match(z, /message="Spin smooth"/);
+  const rows = pro2BuilderContractToStructuredIntervalRows(
+    baseAerobicContract({
+      blocks: [
+        {
+          id: "i1",
+          label: "Series",
+          kind: "interval2",
+          durationMinutes: 30,
+          intensityCue: "Z4",
+          notes: "Hold form",
+          chart: {
+            minutes: 30,
+            seconds: 0,
+            intensity: "Z4",
+            startIntensity: "Z3",
+            endIntensity: "Z5",
+            intensity2: "Z1",
+            intensity3: "Z3",
+            repeats: 2,
+            workSeconds: 120,
+            recoverSeconds: 60,
+            step1Seconds: 120,
+            step2Seconds: 90,
+            step3Seconds: 60,
+            pyramidSteps: 5,
+            pyramidStepSeconds: 180,
+            pyramidStartTarget: 200,
+            pyramidEndTarget: 280,
+            distanceKm: 0,
+            gradePercent: 0,
+            elevationMeters: 0,
+            cadence: "",
+            frequencyHint: "",
+            loadFactor: 1,
+          },
+        },
+      ],
+    }),
+  );
+  assert.equal(rows.length, 4);
+  assert.equal(rows[0]!.coachNote, "Hold form");
+  assert.equal(rows[1]!.coachNote, undefined);
+  assert.ok(rows[0]!.textEvents?.length === 1);
+});
+
+test("pro2BuilderContractToStructuredIntervalRows: zoneLabel from intensityCue", () => {
+  const rows = pro2BuilderContractToStructuredIntervalRows(
+    baseAerobicContract({
+      blocks: [
+        {
+          ...baseAerobicContract().blocks[0]!,
+          label: "Endurance",
+          intensityCue: "Z2",
+        },
+      ],
+    }),
+  );
+  assert.equal(rows[0]!.zoneLabel, "Z2");
+});

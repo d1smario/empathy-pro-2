@@ -1,7 +1,10 @@
 import { FitWriter } from "@markw65/fit-file-writer";
-import type { Pro2BlockChart, Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
-import { zoneForTargetValue, zoneFromIntensityCue, zoneRelativeRange } from "@/lib/training/builder/pro2-intensity";
-import { intensityLabelForContractBlock } from "@/lib/training/builder/pro2-session-notes";
+import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import {
+  expandContractToLadderSteps,
+  ladderStepsToStructuredIntervalRows,
+} from "@/lib/training/builder/pro2-structured-interval-ladder";
+import { formatZwoTextEventXml } from "@/lib/training/builder/zwo-step-text-events";
 import type { StructuredIntervalRow } from "@/lib/training/planned-structured-interval-csv";
 import { formatStructuredIntervalLadderCsv } from "@/lib/training/planned-structured-interval-csv";
 
@@ -35,177 +38,9 @@ function xmlEscape(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function zoneLabelForBlock(block: Pro2BuilderBlockContract): string {
-  return intensityLabelForContractBlock(block);
-}
-
-function wattsTripleForZoneLabel(label: string, ftpW: number): { low: number; high: number; avg: number } {
-  const z = zoneFromIntensityCue(label, "Z3");
-  const r = zoneRelativeRange(z);
-  const low = Math.max(45, Math.round(r.min * ftpW));
-  const high = Math.max(low, Math.round(r.max * ftpW));
-  const avg = Math.max(45, Math.round(((r.min + r.max) / 2) * ftpW));
-  return { low, high, avg };
-}
-
-function blockDurationSeconds(
-  block: Pro2BuilderBlockContract,
-  lengthMode: "time" | "distance",
-  speedRefKmh: number,
-): number {
-  const ch = block.chart;
-  if (lengthMode === "distance" && ch && (ch.distanceKm ?? 0) > 0) {
-    return Math.max(30, Math.round((Math.max(0.1, ch.distanceKm) / Math.max(1, speedRefKmh)) * 3600));
-  }
-  const dm = Number(block.durationMinutes);
-  if (Number.isFinite(dm) && dm > 0) return Math.max(30, Math.round(dm * 60));
-  if (ch) {
-    const sec = Math.max(0, ch.minutes * 60 + Math.min(59, ch.seconds));
-    return Math.max(30, sec > 0 ? sec : 60);
-  }
-  return Math.max(60, Math.round(Math.max(0.25, Number(block.durationMinutes) || 1) * 60));
-}
-
-function chartOrDefaults(block: Pro2BuilderBlockContract): Pro2BlockChart {
-  const ch = block.chart;
-  if (ch) return ch;
-  return {
-    minutes: Math.max(0, Math.floor(block.durationMinutes)),
-    seconds: 0,
-    intensity: "",
-    startIntensity: "",
-    endIntensity: "",
-    intensity2: "",
-    intensity3: "",
-    repeats: 1,
-    workSeconds: 180,
-    recoverSeconds: 90,
-    step1Seconds: 120,
-    step2Seconds: 90,
-    step3Seconds: 60,
-    pyramidSteps: 5,
-    pyramidStepSeconds: 180,
-    pyramidStartTarget: 100,
-    pyramidEndTarget: 200,
-    distanceKm: 0,
-    gradePercent: 0,
-    elevationMeters: 0,
-    cadence: "",
-    frequencyHint: "",
-    loadFactor: 1,
-  };
-}
-
-/**
- * Espande il contratto Builder in righe «scala intervalli» (watt + durata), allineato allo spirito di
- * `manualPlanBlocksToChartSegments` + import FIT/ZWO.
- */
+/** Espande il contratto Builder in righe scala intervalli (tabella TP, ZWO/FIT). */
 export function pro2BuilderContractToStructuredIntervalRows(contract: Pro2BuilderSessionContract): StructuredIntervalRow[] {
-  const ftpW = Math.max(1, contract.renderProfile?.ftpW ?? 250);
-  const lengthMode = contract.renderProfile?.lengthMode ?? "time";
-  const speedRef = contract.renderProfile?.speedRefKmh ?? 35;
-  const blocks = contract.blocks ?? [];
-  const out: StructuredIntervalRow[] = [];
-
-  const pushSteady = (durationSec: number, label: string | undefined, zoneLabel: string) => {
-    const { low, high, avg } = wattsTripleForZoneLabel(zoneLabel, ftpW);
-    out.push({
-      index: out.length + 1,
-      durationSec: Math.max(1, Math.round(durationSec)),
-      powerAvgW: avg,
-      powerLowW: low,
-      powerHighW: high,
-      durationType: "time",
-      kind: "steady",
-      label: label?.slice(0, 120),
-    });
-  };
-
-  for (const block of blocks) {
-    const kind = (block.kind ?? "steady").toLowerCase();
-    const ch = chartOrDefaults(block);
-    const dur = blockDurationSeconds(block, lengthMode, speedRef);
-
-    if (kind === "interval2") {
-      const reps = Math.max(1, Math.round(ch.repeats || 1));
-      const work = Math.max(10, Math.round(ch.workSeconds || 180));
-      const rec = Math.max(10, Math.round(ch.recoverSeconds || 90));
-      const zOn = zoneFromIntensityCue(String(ch.intensity || block.intensityCue || ""), "Z4");
-      const zOff = zoneFromIntensityCue(String(ch.intensity2 || ""), "Z2");
-      for (let i = 0; i < reps; i += 1) {
-        pushSteady(work, `${block.label} · lavoro`, zOn);
-        pushSteady(rec, `${block.label} · recupero`, zOff);
-      }
-      continue;
-    }
-
-    if (kind === "interval3") {
-      const reps = Math.max(1, Math.round(ch.repeats || 1));
-      const a = Math.max(10, Math.round(ch.step1Seconds || 120));
-      const b = Math.max(10, Math.round(ch.step2Seconds || 90));
-      const c = Math.max(10, Math.round(ch.step3Seconds || 60));
-      const z1 = zoneFromIntensityCue(String(ch.intensity || ""), "Z4");
-      const z2 = zoneFromIntensityCue(String(ch.intensity2 || ""), "Z3");
-      const z3 = zoneFromIntensityCue(String(ch.intensity3 || ""), "Z2");
-      for (let i = 0; i < reps; i += 1) {
-        pushSteady(a, `${block.label} · A`, z1);
-        pushSteady(b, `${block.label} · B`, z2);
-        pushSteady(c, `${block.label} · C`, z3);
-      }
-      continue;
-    }
-
-    if (kind === "pyramid") {
-      const steps = Math.max(1, Math.round(ch.pyramidSteps || 1));
-      const stepSec = Math.max(20, Math.round(ch.pyramidStepSeconds || 60));
-      const start = ch.pyramidStartTarget || 0.75 * ftpW;
-      const end = ch.pyramidEndTarget || 1.05 * ftpW;
-      const span = end - start;
-      for (let i = 1; i <= steps; i += 1) {
-        const targetW = Math.round(start + (span * i) / steps);
-        const z = zoneForTargetValue(targetW, "watt", ftpW, contract.renderProfile?.hrMax ?? 190);
-        const { low, high, avg } = wattsTripleForZoneLabel(z, ftpW);
-        out.push({
-          index: out.length + 1,
-          durationSec: stepSec,
-          powerAvgW: avg,
-          powerLowW: low,
-          powerHighW: high,
-          durationType: "time",
-          kind: "steady",
-          label: `${block.label} ${i}/${steps}`.slice(0, 120),
-        });
-      }
-      continue;
-    }
-
-    if (kind === "ramp") {
-      const zStart = zoneFromIntensityCue(String(ch.startIntensity || ""), "Z2");
-      const zEnd = zoneFromIntensityCue(String(ch.endIntensity || ch.intensity || ""), "Z4");
-      const a = wattsTripleForZoneLabel(zStart, ftpW);
-      const b = wattsTripleForZoneLabel(zEnd, ftpW);
-      out.push({
-        index: out.length + 1,
-        durationSec: Math.max(1, Math.round(dur)),
-        powerAvgW: Math.round((a.avg + b.avg) / 2),
-        powerLowW: Math.min(a.low, b.low),
-        powerHighW: Math.max(a.high, b.high),
-        durationType: "time",
-        kind: "ramp",
-        label: block.label?.slice(0, 120),
-      });
-      continue;
-    }
-
-    /* steady / endurance / default */
-    const z = zoneLabelForBlock(block);
-    pushSteady(dur, block.label, z);
-  }
-
-  for (let i = 0; i < out.length; i += 1) {
-    out[i]!.index = i + 1;
-  }
-  return out;
+  return ladderStepsToStructuredIntervalRows(expandContractToLadderSteps(contract));
 }
 
 export function assertStructuredTrainingExportSupported(contract: Pro2BuilderSessionContract): void {
@@ -246,16 +81,29 @@ export function serializeStructuredIntervalRowsToZwo(input: {
 
   for (const r of input.rows) {
     const d = Math.max(1, Math.round(r.durationSec));
+    const events = r.textEvents?.length ? formatZwoTextEventXml(r.textEvents, "      ") : [];
     if (r.kind === "ramp") {
       const low = ftpFracFromWatts(r.powerLowW, ftp);
       const high = ftpFracFromWatts(r.powerHighW, ftp);
-      lines.push(
-        `    <Ramp Duration="${d}" PowerLow="${low.toFixed(4)}" PowerHigh="${high.toFixed(4)}" FlatRoad="1"/>`,
-      );
+      if (events.length) {
+        lines.push(`    <Ramp Duration="${d}" PowerLow="${low.toFixed(4)}" PowerHigh="${high.toFixed(4)}" FlatRoad="1">`);
+        lines.push(...events);
+        lines.push(`    </Ramp>`);
+      } else {
+        lines.push(
+          `    <Ramp Duration="${d}" PowerLow="${low.toFixed(4)}" PowerHigh="${high.toFixed(4)}" FlatRoad="1"/>`,
+        );
+      }
       continue;
     }
     const p = ftpFracFromWatts(r.powerAvgW, ftp);
-    lines.push(`    <SteadyState Duration="${d}" Power="${p.toFixed(4)}" FlatRoad="1"/>`);
+    if (events.length) {
+      lines.push(`    <SteadyState Duration="${d}" Power="${p.toFixed(4)}" FlatRoad="1">`);
+      lines.push(...events);
+      lines.push(`    </SteadyState>`);
+    } else {
+      lines.push(`    <SteadyState Duration="${d}" Power="${p.toFixed(4)}" FlatRoad="1"/>`);
+    }
   }
 
   lines.push(`  </workout>`, `</workout_file>`, "");

@@ -1,5 +1,7 @@
 /** CSV scala intervalli (TrainingPeaks-style) — nessuna dipendenza server-only / FIT binary. */
 
+import type { ZwoTextEvent } from "@/lib/training/builder/zwo-step-text-events";
+
 export type StructuredIntervalRow = {
   index: number;
   durationSec: number;
@@ -9,9 +11,12 @@ export type StructuredIntervalRow = {
   durationType: string;
   kind: "steady" | "ramp";
   label?: string;
+  zoneLabel?: string;
+  coachNote?: string;
+  textEvents?: ZwoTextEvent[];
 };
 
-function formatDurationMmss(totalSec: number): string {
+export function formatDurationMmss(totalSec: number): string {
   const s = Math.max(0, Math.round(totalSec));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);

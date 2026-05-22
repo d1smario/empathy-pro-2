@@ -5,6 +5,8 @@ import { BuilderPlannedSessionViz } from "@/components/training/BuilderPlannedSe
 import { Pro2GymSchedaBlockList } from "@/components/training/Pro2GymSchedaBlockList";
 import { SessionMultilevelAnalysisStrip } from "@/components/training/SessionMultilevelAnalysisStrip";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
+import { StructuredWorkoutStepTable } from "@/components/training/StructuredWorkoutStepTable";
+import { pro2BuilderContractToStructuredIntervalRows } from "@/lib/training/planned-structured-export";
 import { LifestylePracticeMediaThumb } from "@/components/training/LifestylePracticeMediaThumb";
 import { Pro2Link } from "@/components/ui/empathy";
 import {
@@ -76,6 +78,14 @@ export function CalendarPlannedBuilderDetail({
   const contract = useMemo(() => parsePro2BuilderSessionFromNotes(workout.notes ?? null), [workout.notes]);
 
   const segments = useMemo(() => (contract ? pro2BuilderContractToChartSegments(contract) : []), [contract]);
+
+  const stepRows = useMemo(
+    () =>
+      contract && contract.family === "aerobic" && contract.renderProfile?.intensityUnit === "watt"
+        ? pro2BuilderContractToStructuredIntervalRows(contract)
+        : [],
+    [contract],
+  );
 
   const hasBlockChart = segments.length > 0 && contract?.family !== "strength";
   const [structureOpen, setStructureOpen] = useState(() => hasBlockChart);
@@ -244,7 +254,7 @@ export function CalendarPlannedBuilderDetail({
           ) : null}
 
           {hasBlockChart ? (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
               <SessionBlockIntensityChart
                 segments={segments}
                 title={
@@ -254,6 +264,14 @@ export function CalendarPlannedBuilderDetail({
                 }
                 estimatedTss={tssEst > 0 ? tssEst : undefined}
               />
+              {stepRows.length > 0 ? (
+                <StructuredWorkoutStepTable
+                  rows={stepRows}
+                  ftpW={contract.renderProfile?.ftpW}
+                  compact
+                  title="Workout details"
+                />
+              ) : null}
             </div>
           ) : contract && (contract.blocks ?? []).length === 0 ? (
             <p className="mt-4 text-sm text-amber-200/90">

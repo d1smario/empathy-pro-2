@@ -48,18 +48,22 @@ generateTrainingSession / VIRYA brief
   → BUILDER_SESSION_JSON in planned_workouts.notes
 ```
 
-**UI Calendar / Session:** `pro2BuilderContractToExpandedChartSegments` — **stessa espansione** di `pro2BuilderContractToStructuredIntervalRows` (ZWO), così il grafico non collassa un blocco interval in una sola barra.
+**UI Calendar / Session:** `expandContractToLadderSteps` in `pro2-structured-interval-ladder.ts` — unica espansione per grafico (`ladderStepsToChartSegments`), tabella (`ladderStepsToStructuredIntervalRows`) e ZWO.
+
+**Note coach → Zwift:** `block.notes` sul **primo step** di ogni blocco logico → `coachNote` / `textEvents` in export; XML annidato `<textevent timeoffset="0" message="…"/>` dentro `SteadyState` / `Ramp` (helper `zwo-step-text-events.ts`). Nessun messaggio automatico «Riscaldamento/Lavoro».
 
 ## Gap risolti (2026-05)
 
-1. **Grafico Calendar** mostrava 4 barre (warm / main / secondary / cool) invece di lavoro+recupero ripetuti → fix `pro2-contract-chart-segments.ts`.
+1. **Grafico Calendar** mostrava 4 barre (warm / main / secondary / cool) invece di lavoro+recupero ripetuti → ladder condiviso.
 2. **Label** allineate IT: Riscaldamento, Serie principali, Defaticamento.
 3. **Warm/cool** mappati a `ramp` nel contratto (non solo steady generico).
+4. **Workout details** — `StructuredWorkoutStepTable` sotto il grafico (Calendar + Giornata via `CalendarPlannedBuilderDetail`).
+5. **ZWO TextEvents** — solo `block.notes` (editing note in Builder: fase successiva).
 
 ## Prossimi passi (roadmap)
 
-- [ ] Lista step stile TP sotto il grafico (tabella: durata, target W, zona, note) da `StructuredIntervalRow[]`.
-- [ ] TextEvents ZWO (`!TextEvents:{…}`) da note coach.
+- [x] Lista step stile TP sotto il grafico (tabella: durata, target W, zona, note) da `StructuredIntervalRow[]`.
+- [x] TextEvents ZWO annidati da `block.notes` (primo step del blocco).
 - [ ] Microciclo settimanale: distribuzione carico tra giorni con vincolo «max 2 quality» + long steady (VIRYA planner).
 - [ ] Run/swim: stesso shell con `renderProfile` pace / HR e export FIT dove supportato.
 
