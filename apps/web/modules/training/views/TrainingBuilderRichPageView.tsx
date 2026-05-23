@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { CoachWorkoutLibraryPanel } from "@/components/training/CoachWorkoutLibraryPanel";
 import { BuilderGymManualComposer } from "@/components/training/BuilderGymManualComposer";
 import { BuilderLifestyleManualComposer } from "@/components/training/BuilderLifestyleManualComposer";
 import { BuilderManualComposer } from "@/components/training/BuilderManualComposer";
@@ -64,6 +65,7 @@ import { macroIdForSport, SPORT_MACRO_SECTORS, type SportMacroId } from "@/lib/t
 import { trainingDomainForPaletteSport } from "@/lib/training/sport-domain-map";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
 import { serializePro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { buildPro2ContractFromEngineGeneration } from "@/lib/training/builder/engine-session-contract-for-calendar";
 import { GymExerciseMediaThumb } from "@/components/training/GymExerciseMediaThumb";
 import {
   TECHNICAL_ATHLETIC_QUALITY_OPTIONS,
@@ -871,6 +873,33 @@ export default function TrainingBuilderRichPageView() {
         phase,
       });
       extraNotesLines = [serializePro2BuilderSessionContract(contract)];
+    } else {
+      const loadScale =
+        "operationalScaling" in genResult &&
+        genResult.operationalScaling?.applied &&
+        genResult.operationalScaling.loadScale > 0
+          ? genResult.operationalScaling.loadScale
+          : 1;
+      const builderFamily =
+        activeMacroId === "aerobic" ? "aerobic" : activeMacroId === "technical" ? "technical" : "lifestyle";
+      const contract = buildPro2ContractFromEngineGeneration({
+        session: genResult.session,
+        blockExercises: "blockExercises" in genResult ? genResult.blockExercises : undefined,
+        renderProfile,
+        family: builderFamily,
+        discipline: currentSportLabel || sport.trim() || "Endurance",
+        sessionName: manualSessionName.trim() || genResult.session.goalLabel || "Sessione Pro 2",
+        adaptationTarget: adaptation,
+        phase,
+        plannedSessionDurationMinutes:
+          dayAdaptation?.ok && dayAdaptation.targetPlanned
+            ? dayAdaptation.targetPlanned.adaptedDurationMinutes
+            : sessionMinutes,
+        loadScale,
+      });
+      if (contract) {
+        extraNotesLines = [serializePro2BuilderSessionContract(contract)];
+      }
     }
 
     if (replacePlannedIdFromQuery) {
@@ -1046,6 +1075,124 @@ export default function TrainingBuilderRichPageView() {
     phase,
     activeMacroId,
   ]);
+
+  const libraryContractToSave = useMemo(() => {
+    const renderProfile = {
+      intensityUnit,
+      ftpW: Math.max(1, ftpW),
+      hrMax: Math.max(1, hrMax),
+      lengthMode,
+      speedRefKmh: Math.max(1, speedRefKmh),
+    };
+    if (genResult && "ok" in genResult && genResult.ok) {
+      if (activeMacroId === "strength") {
+        return buildPro2GymSchedaSessionContract({
+          rows: gymManualRows,
+          renderProfile,
+          discipline: currentSportLabel || sport.trim() || "Gym",
+          sessionName: manualSessionName.trim() || "Scheda Pro 2",
+          adaptationTarget: adaptation,
+          phase,
+        });
+      }
+      const loadScale =
+        "operationalScaling" in genResult &&
+        genResult.operationalScaling?.applied &&
+        genResult.operationalScaling.loadScale > 0
+          ? genResult.operationalScaling.loadScale
+          : 1;
+      const builderFamily =
+        activeMacroId === "aerobic" ? "aerobic" : activeMacroId === "technical" ? "technical" : "lifestyle";
+      return (
+        buildPro2ContractFromEngineGeneration({
+          session: genResult.session,
+          blockExercises: "blockExercises" in genResult ? genResult.blockExercises : undefined,
+          renderProfile,
+          family: builderFamily,
+          discipline: currentSportLabel || sport.trim() || "Endurance",
+          sessionName: manualSessionName.trim() || genResult.session.goalLabel || "Sessione Pro 2",
+          adaptationTarget: adaptation,
+          phase,
+          plannedSessionDurationMinutes:
+            dayAdaptation?.ok && dayAdaptation.targetPlanned
+              ? dayAdaptation.targetPlanned.adaptedDurationMinutes
+              : sessionMinutes,
+          loadScale,
+        }) ?? null
+      );
+    }
+    if (!manualSession) return null;
+    if (activeMacroId === "strength") {
+      return buildPro2GymSchedaSessionContract({
+        rows: gymManualRows,
+        renderProfile,
+        discipline: currentSportLabel || sport.trim() || "Gym",
+        sessionName: manualSessionName.trim() || "Scheda Pro 2",
+        adaptationTarget: adaptation,
+        phase,
+      });
+    }
+    if (activeMacroId === "lifestyle") {
+      return buildPro2LifestyleSchedaSessionContract({
+        rows: lifestyleManualRows,
+        renderProfile,
+        discipline: currentSportLabel || sport.trim() || "Lifestyle",
+        sessionName: manualSessionName.trim() || "Scheda lifestyle Pro 2",
+        adaptationTarget: adaptation,
+        phase,
+      });
+    }
+    if (activeMacroId === "technical") {
+      return buildPro2TechnicalSchedaSessionContract({
+        rows: technicalManualRows,
+        renderProfile,
+        discipline: currentSportLabel || sport.trim() || "Sport tecnico",
+        sessionName: manualSessionName.trim() || "Scheda tecnica Pro 2",
+        adaptationTarget: adaptation,
+        phase,
+        technicalModuleFocus: {
+          workPhase: techWorkPhase,
+          gameContext: techGameContext,
+          athleticQualities: techQualities,
+        },
+      });
+    }
+    return buildPro2BuilderSessionContract({
+      blocks: manualPlanBlocks,
+      renderProfile,
+      discipline: sport.trim() || "Endurance",
+      sessionName: manualSessionName.trim() || "Sessione Pro 2",
+      adaptationTarget: adaptation,
+      phase,
+      family: activeMacroId,
+    });
+  }, [
+    genResult,
+    manualSession,
+    activeMacroId,
+    gymManualRows,
+    lifestyleManualRows,
+    technicalManualRows,
+    techWorkPhase,
+    techGameContext,
+    techQualities,
+    manualPlanBlocks,
+    intensityUnit,
+    ftpW,
+    hrMax,
+    lengthMode,
+    speedRefKmh,
+    currentSportLabel,
+    sport,
+    manualSessionName,
+    adaptation,
+    phase,
+    dayAdaptation,
+    sessionMinutes,
+  ]);
+
+  const libraryTargetDate =
+    genResult && "ok" in genResult && genResult.ok ? plannedDate : manualPlannedDate;
 
   const upcoming = useMemo(() => {
     const today = localCalendarDateString();
@@ -2206,6 +2353,14 @@ export default function TrainingBuilderRichPageView() {
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
           />
         )}
+
+        <CoachWorkoutLibraryPanel
+          athleteId={athleteId}
+          targetDate={libraryTargetDate}
+          contractToSave={libraryContractToSave}
+          saveTitle={manualSessionName.trim() || undefined}
+          onApplied={() => setCalendarRefresh((n) => n + 1)}
+        />
 
         <section
           aria-label="Prossime sessioni pianificate"

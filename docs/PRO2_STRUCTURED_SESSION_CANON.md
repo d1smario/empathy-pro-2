@@ -60,6 +60,14 @@ generateTrainingSession / VIRYA brief
 4. **Workout details** — `StructuredWorkoutStepTable` sotto il grafico (Calendar + Giornata via `CalendarPlannedBuilderDetail`).
 5. **ZWO TextEvents** — solo `block.notes` (editing note in Builder: fase successiva).
 
+## Coach Workout Library (rollout progressivo)
+
+- **Migration 062** — `coach_workout_library_items` / `folders`: template `Pro2BuilderSessionContract` riusabili (coach-only).
+- **Migration 063** — `athlete_workout_archetype_traces`: read spine memoria atleta (aderenza planned vs executed per archetype).
+- **Apply** — `POST /api/training/library/items/[id]/apply` inserisce su `planned_workouts` via `contractToPlannedWorkoutRow` (stesso contratto builder, nessun motore parallelo).
+- **Scaling opt-in** — checkbox «Adatta carico» → `applyScaling: true` usa bundle operativo giornaliero + hint tracce; default **senza** scaling.
+- **Export ZWO** — da item library, stesso path di calendario (`serializePro2BuilderContractToZwo`).
+
 ## Prossimi passi (roadmap)
 
 - [x] Lista step stile TP sotto il grafico (tabella: durata, target W, zona, note) da `StructuredIntervalRow[]`.

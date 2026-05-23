@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { tryRecordArchetypeTraceFromExecuted } from "@/lib/training/library/try-record-archetype-trace";
 import type { Pro2BuilderBlockContract, Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { intensityToRelativeLoad } from "@/lib/training/builder/pro2-intensity";
 import { estimateTssFromWattBlocks } from "@/lib/training/builder/tss-estimate";
@@ -387,10 +388,28 @@ export async function upsertStructuredCompanionExecuted(
       .select("id")
       .single();
     if (up.error) return { status: "error", message: up.error.message };
-    return { status: "ok", executedId: String(up.data?.id ?? existing.data.id), mode };
+    const executedId = String(up.data?.id ?? existing.data.id);
+    void tryRecordArchetypeTraceFromExecuted({
+      db,
+      athleteId: input.athleteId,
+      plannedWorkoutId: input.plannedWorkoutId,
+      executedWorkoutId: executedId,
+      executedTss: tss,
+      observedAt: input.date,
+    });
+    return { status: "ok", executedId, mode };
   }
 
   const ins = await db.from("executed_workouts").insert(payload).select("id").single();
   if (ins.error) return { status: "error", message: ins.error.message };
-  return { status: "ok", executedId: String(ins.data?.id ?? ""), mode };
+  const executedId = String(ins.data?.id ?? "");
+  void tryRecordArchetypeTraceFromExecuted({
+    db,
+    athleteId: input.athleteId,
+    plannedWorkoutId: input.plannedWorkoutId,
+    executedWorkoutId: executedId,
+    executedTss: tss,
+    observedAt: input.date,
+  });
+  return { status: "ok", executedId, mode };
 }

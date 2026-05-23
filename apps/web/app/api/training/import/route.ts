@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
+import { tryRecordArchetypeTraceFromExecuted } from "@/lib/training/library/try-record-archetype-trace";
 import {
   normalizeTrainingImportIntent,
   resolveTrainingImportRoute,
@@ -429,6 +430,17 @@ export async function POST(req: NextRequest) {
           errors: [err instanceof Error ? err.message : "unknown"],
         }))
       : null;
+
+    if (data?.id && payload.planned_workout_id) {
+      void tryRecordArchetypeTraceFromExecuted({
+        db,
+        athleteId,
+        plannedWorkoutId: String(payload.planned_workout_id),
+        executedWorkoutId: String(data.id),
+        executedTss: Number(payload.tss ?? 0),
+        observedAt: date,
+      });
+    }
 
     if (importJobId) {
       await db

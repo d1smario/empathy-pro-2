@@ -85,6 +85,25 @@ export type AthleteRealityMemory = {
   recentIngestions: RealityIngestionRecord[];
 };
 
+export type AthleteWorkoutArchetypeTraceMemoryItem = {
+  id: string;
+  archetypeKey: string;
+  libraryItemId?: string | null;
+  plannedTss: number;
+  executedTss: number;
+  adherencePct: number;
+  responseSignal: "positive" | "neutral" | "negative";
+  source: string;
+  observedAt: string;
+  metadata?: Record<string, unknown>;
+};
+
+/** Read spine opzionale — library traces + tag preferiti (default []). */
+export type AthleteTrainingMemory = {
+  libraryArchetypeTraces: AthleteWorkoutArchetypeTraceMemoryItem[];
+  preferredTags: string[];
+};
+
 export type AthleteMemory = {
   athleteId: string;
   identity: AthleteIdentityMemory;
@@ -98,6 +117,7 @@ export type AthleteMemory = {
     items: AthleteEvidenceMemoryItem[];
   };
   knowledge?: AthleteKnowledgeMemory;
+  training?: AthleteTrainingMemory;
   audit: {
     computedAt: IsoDateTime;
     sources: AthleteMemoryPatchSource[];

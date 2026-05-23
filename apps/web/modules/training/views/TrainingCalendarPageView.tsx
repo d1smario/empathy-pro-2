@@ -9,6 +9,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { CalendarDaySessionDetail } from "@/components/training/CalendarDaySessionDetail";
 import { CalendarDayWellnessDetail } from "@/components/training/CalendarDayWellnessDetail";
 import { CalendarPlannedBuilderDetail } from "@/components/training/CalendarPlannedBuilderDetail";
+import { CoachWorkoutLibraryPanel } from "@/components/training/CoachWorkoutLibraryPanel";
 import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
 import { TrainingViryaActivePlanStrip } from "@/components/training/TrainingViryaActivePlanStrip";
 import { TrainingCalendarAnalyzer } from "@/components/training/TrainingCalendarAnalyzer";
@@ -19,6 +20,7 @@ import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { Pro2Link } from "@/components/ui/empathy";
 import { normalizeDateKey, traceRecord, workoutDayKey } from "@/lib/training/calendar-analyzer-helpers";
+import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
 import { LOAD_CHIP_LABEL } from "@/lib/training/load-metrics-labels";
 import {
@@ -407,6 +409,12 @@ export default function TrainingCalendarPageView() {
 
   const dayPlanned = plannedByDate.get(selectedDate) ?? [];
   const dayExecuted = executedByDate.get(selectedDate) ?? [];
+
+  const calendarLibraryContract = useMemo(() => {
+    const first = dayPlanned[0];
+    if (!first) return null;
+    return parsePro2BuilderSessionFromNotes(first.notes ?? null);
+  }, [dayPlanned]);
 
   const monthLabel = monthCursor.toLocaleDateString("it-IT", { month: "long", year: "numeric" });
 
@@ -927,6 +935,17 @@ export default function TrainingCalendarPageView() {
               </Pro2SectionCard>
             </div>
           ) : null}
+
+          <div className="mb-8 w-full min-w-0">
+            <CoachWorkoutLibraryPanel
+              athleteId={athleteId}
+              targetDate={selectedDate}
+              contractToSave={calendarLibraryContract}
+              saveTitle={calendarLibraryContract?.sessionName ?? undefined}
+              sourcePlannedId={dayPlanned[0]?.id ?? null}
+              onApplied={() => void loadMonth()}
+            />
+          </div>
 
           <div className="mb-8 w-full min-w-0">
             <TrainingPeriodVolumeSummary athleteId={athleteId} />

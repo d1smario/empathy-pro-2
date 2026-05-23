@@ -7,6 +7,7 @@ import type {
   AthleteMemoryPatchSource,
   AthleteNutritionMemory,
   AthleteRealityMemory,
+  AthleteTrainingMemory,
 } from "@/lib/empathy/schemas";
 import type { AthleteProfile, PhysiologyState, TwinState } from "@/lib/empathy/schemas";
 
@@ -20,6 +21,7 @@ export type AthleteMemoryPatch = {
   reality?: Partial<AthleteRealityMemory>;
   evidenceItems?: AthleteEvidenceMemoryItem[];
   knowledge?: AthleteKnowledgeMemory;
+  training?: AthleteTrainingMemory;
   source: AthleteMemoryPatchSource;
 };
 
@@ -84,6 +86,7 @@ export function applyAthleteMemoryPatch(
         }
       : memory.evidenceMemory,
     knowledge: patch.knowledge ?? memory.knowledge,
+    training: patch.training ?? memory.training,
     audit: {
       computedAt: patch.source.updatedAt,
       sources: [...memory.audit.sources, patch.source],

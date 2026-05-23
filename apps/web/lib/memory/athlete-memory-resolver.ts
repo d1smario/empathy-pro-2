@@ -26,6 +26,7 @@ import { resolveCanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import { coachOrgIdForDb } from "@/lib/coach-org-id";
 import { coachApplicationTraceRowsToEvidenceItems } from "@/lib/memory/coach-application-traces";
 import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
+import { preferredTagsFromTraces, type AthleteWorkoutArchetypeTraceView } from "@/lib/training/library/athlete-workout-archetype-traces";
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
 
@@ -268,6 +269,7 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     knowledge,
     diaryRes,
     nutritionConstraintsRes,
+    archetypeTracesRes,
   ] =
     await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
@@ -384,6 +386,14 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .order("created_at", { ascending: false })
       .limit(500),
     supabase.from("nutrition_constraints").select("*").eq("athlete_id", athleteId).maybeSingle(),
+    supabase
+      .from("athlete_workout_archetype_traces")
+      .select(
+        "id, athlete_id, library_item_id, planned_workout_id, executed_workout_id, archetype_key, planned_tss, executed_tss, adherence_pct, response_signal, source, observed_at, metadata",
+      )
+      .eq("athlete_id", athleteId)
+      .order("observed_at", { ascending: false })
+      .limit(24),
   ]);
 
   if (profileRes.error) throw new Error(profileRes.error.message);
@@ -625,6 +635,53 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
     source: {
       domain: "knowledge",
       source: "resolver.derived_candidate_bindings",
+      sourceId: athleteId,
+      updatedAt: now,
+    },
+  });
+
+  let archetypeTraceViews: AthleteWorkoutArchetypeTraceView[] = [];
+  if (archetypeTracesRes.error) {
+    if (!isMissingRelationError(archetypeTracesRes.error)) {
+      throw new Error(archetypeTracesRes.error.message);
+    }
+  } else {
+    archetypeTraceViews = ((archetypeTracesRes.data ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id ?? ""),
+      athleteId: String(row.athlete_id ?? athleteId),
+      libraryItemId: row.library_item_id != null ? String(row.library_item_id) : null,
+      plannedWorkoutId: row.planned_workout_id != null ? String(row.planned_workout_id) : null,
+      executedWorkoutId: row.executed_workout_id != null ? String(row.executed_workout_id) : null,
+      archetypeKey: String(row.archetype_key ?? ""),
+      plannedTss: Number(row.planned_tss ?? 0),
+      executedTss: Number(row.executed_tss ?? 0),
+      adherencePct: Number(row.adherence_pct ?? 0),
+      responseSignal: (row.response_signal as AthleteWorkoutArchetypeTraceView["responseSignal"]) ?? "neutral",
+      source: row.source === "library_apply" ? "library_apply" : "planned_vs_executed",
+      observedAt: String(row.observed_at ?? now),
+      metadata: (row.metadata as Record<string, unknown>) ?? {},
+    }));
+  }
+
+  memory = applyAthleteMemoryPatch(memory, {
+    training: {
+      libraryArchetypeTraces: archetypeTraceViews.map((t) => ({
+        id: t.id,
+        archetypeKey: t.archetypeKey,
+        libraryItemId: t.libraryItemId,
+        plannedTss: t.plannedTss,
+        executedTss: t.executedTss,
+        adherencePct: t.adherencePct,
+        responseSignal: t.responseSignal,
+        source: t.source,
+        observedAt: t.observedAt,
+        metadata: t.metadata,
+      })),
+      preferredTags: preferredTagsFromTraces(archetypeTraceViews),
+    },
+    source: {
+      domain: "training",
+      source: "supabase.athlete_workout_archetype_traces",
       sourceId: athleteId,
       updatedAt: now,
     },
