@@ -928,6 +928,7 @@ export default function TrainingCalendarPageView() {
                           if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
                           void loadMonth();
                         }}
+                        onCalendarMutated={() => void loadMonth()}
                       />
                     </li>
                   ))}

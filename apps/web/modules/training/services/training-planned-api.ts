@@ -54,6 +54,7 @@ export async function patchPlannedWorkout(input: {
   id: string;
   athleteId: string;
   patch: {
+    date?: string;
     duration_minutes?: number;
     tss_target?: number;
     kcal_target?: number | null;

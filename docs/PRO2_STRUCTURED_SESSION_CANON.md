@@ -69,6 +69,7 @@ generateTrainingSession / VIRYA brief
 - **Export ZWO** — da item library, stesso path di calendario (`serializePro2BuilderContractToZwo`).
 - **Starter pack Fase 4** — `POST /api/training/library/seed-starter-pack` importa 20 template aerobic curati (cartella «Empathy · Aerobic Starter»), idempotente per coach.
 - **Export VIRYA Fase 5** — passo 5 VIRYA «Salva settimana in libreria»: materializza la settimana selezionata con la stessa pipeline del Calendar (`buildViryaPlannedRows` → `materializeViryaSessionContract`) e scrive N item via `POST /api/training/library/import-from-virya-week` (metadata `virya_phase`, `virya_week_objective`). Filtro fase in pannello libreria.
+- **Calendar copy/move** — dettaglio seduta: **Copia** (`POST /api/training/planned/clone`) e **Sposta** (`PATCH /api/training/planned` con `date`).
 
 ## Prossimi passi (roadmap)
 

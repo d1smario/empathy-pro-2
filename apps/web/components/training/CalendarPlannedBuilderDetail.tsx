@@ -40,9 +40,10 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   return "mobility";
 }
 import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
-import { ChevronDown, ExternalLink, Trash2, Download } from "lucide-react";
+import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
 import { useMemo, useState } from "react";
-import { deletePlannedWorkout } from "@/modules/training/services/training-planned-api";
+import { deletePlannedWorkout, patchPlannedWorkout } from "@/modules/training/services/training-planned-api";
+import { clonePlannedWorkout } from "@/modules/training/services/training-library-api";
 
 function familyLabel(family: string | undefined): string {
   switch (family) {
@@ -70,10 +71,12 @@ export function CalendarPlannedBuilderDetail({
   workout,
   athleteId,
   onDeleted,
+  onCalendarMutated,
 }: {
   workout: PlannedWorkout;
   athleteId?: string | null;
   onDeleted?: (removedPlannedId: string) => void;
+  onCalendarMutated?: () => void;
 }) {
   const contract = useMemo(() => parsePro2BuilderSessionFromNotes(workout.notes ?? null), [workout.notes]);
 
@@ -90,6 +93,11 @@ export function CalendarPlannedBuilderDetail({
   const hasBlockChart = segments.length > 0 && contract?.family !== "strength";
   const [structureOpen, setStructureOpen] = useState(() => hasBlockChart);
   const [deleting, setDeleting] = useState(false);
+  const [targetDate, setTargetDate] = useState(workout.date);
+  const [calendarBusy, setCalendarBusy] = useState<"copy" | "move" | null>(null);
+  const [calendarActionMsg, setCalendarActionMsg] = useState<string | null>(null);
+
+  const resolvedAthleteId = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
 
   const tssEst = useMemo(() => (contract ? estimatedTssFromPro2Contract(contract) : 0), [contract]);
 
@@ -105,7 +113,7 @@ export function CalendarPlannedBuilderDetail({
   const sessionHref = `/training/session/${workout.date}`;
   const builderHref = `/training/builder?date=${encodeURIComponent(workout.date)}&replace_planned_id=${encodeURIComponent(workout.id)}`;
 
-  const exportAid = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+  const exportAid = resolvedAthleteId;
   const exportHref = (fmt: string) =>
     exportAid
       ? `/api/training/planned/${encodeURIComponent(workout.id)}/export?athleteId=${encodeURIComponent(exportAid)}&format=${fmt}`
@@ -152,7 +160,7 @@ export function CalendarPlannedBuilderDetail({
           >
             Adatta
           </Pro2Link>
-          {workout.athleteId?.trim() || athleteId?.trim() ? (
+          {resolvedAthleteId ? (
             <button
               type="button"
               disabled={deleting}
@@ -160,7 +168,7 @@ export function CalendarPlannedBuilderDetail({
               title="Rimuove questa riga da planned_workouts"
               onClick={async () => {
                 if (!window.confirm("Eliminare questa seduta pianificata dal calendario?")) return;
-                const aid = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+                const aid = resolvedAthleteId;
                 if (!aid) {
                   window.alert("Manca athleteId: impossibile allineare DELETE a planned-window.");
                   return;
@@ -182,6 +190,80 @@ export function CalendarPlannedBuilderDetail({
           ) : null}
         </div>
       </div>
+
+      {resolvedAthleteId ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-white/10 pt-3">
+          <label className="flex flex-col gap-1 text-[0.65rem] text-gray-500">
+            Data destinazione
+            <input
+              type="date"
+              className="rounded-lg border border-white/15 bg-black/50 px-2 py-1.5 text-sm text-white"
+              value={targetDate}
+              onChange={(e) => setTargetDate(e.target.value)}
+              disabled={calendarBusy != null}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={calendarBusy != null || !targetDate.trim()}
+            className="inline-flex items-center gap-1 rounded-lg border border-violet-400/45 bg-violet-500/15 px-2.5 py-1.5 text-xs font-bold text-violet-100 hover:bg-violet-500/25 disabled:opacity-40"
+            title="Duplica la seduta su un'altra data (la riga originale resta invariata)"
+            onClick={async () => {
+              setCalendarActionMsg(null);
+              setCalendarBusy("copy");
+              try {
+                const r = await clonePlannedWorkout({
+                  sourceId: workout.id,
+                  athleteId: resolvedAthleteId,
+                  date: targetDate.trim(),
+                });
+                if (!r.ok) throw new Error(r.error ?? "Copia non riuscita");
+                setCalendarActionMsg(`Copiata al ${targetDate.trim()}`);
+                onCalendarMutated?.();
+              } catch (e) {
+                setCalendarActionMsg(e instanceof Error ? e.message : "Copia non riuscita");
+              } finally {
+                setCalendarBusy(null);
+              }
+            }}
+          >
+            <Copy className="h-3.5 w-3.5" aria-hidden />
+            {calendarBusy === "copy" ? "Copio…" : "Copia"}
+          </button>
+          <button
+            type="button"
+            disabled={calendarBusy != null || !targetDate.trim() || targetDate.trim() === workout.date}
+            className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/45 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-40"
+            title="Sposta la seduta su un'altra data"
+            onClick={async () => {
+              if (!window.confirm(`Spostare questa seduta dal ${workout.date} al ${targetDate.trim()}?`)) return;
+              setCalendarActionMsg(null);
+              setCalendarBusy("move");
+              try {
+                await patchPlannedWorkout({
+                  id: workout.id,
+                  athleteId: resolvedAthleteId,
+                  patch: { date: targetDate.trim() },
+                });
+                setCalendarActionMsg(`Spostata al ${targetDate.trim()}`);
+                onCalendarMutated?.();
+              } catch (e) {
+                setCalendarActionMsg(e instanceof Error ? e.message : "Spostamento non riuscito");
+              } finally {
+                setCalendarBusy(null);
+              }
+            }}
+          >
+            <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
+            {calendarBusy === "move" ? "Sposto…" : "Sposta"}
+          </button>
+          {calendarActionMsg ? (
+            <p className="w-full text-xs text-emerald-300/90" role="status">
+              {calendarActionMsg}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {exportAid && contract ? (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
