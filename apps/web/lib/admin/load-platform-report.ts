@@ -13,10 +13,9 @@ import type {
   PlatformReport,
   PlatformRosterOperatorRow,
 } from "@/lib/admin/platform-report-types";
+import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { loadAccessEntitlementsForUserIds } from "@/lib/billing/access-entitlement";
 
-const AUTH_PAGE_SIZE = 200;
-const AUTH_MAX_PAGES = 50;
 const ROLLUP_CHUNK = 250;
 const ENTITLEMENT_CHUNK = 400;
 
@@ -37,23 +36,22 @@ async function loadAuthUserIndex(admin: SupabaseClient): Promise<{
   const emailByUserId = new Map<string, string>();
   const lastSignInByUserId = new Map<string, string | null>();
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  let totalAuthUsers = 0;
   let signInLast30Days = 0;
 
-  for (let page = 1; page <= AUTH_MAX_PAGES; page += 1) {
-    const { data: pageData, error } = await admin.auth.admin.listUsers({ page, perPage: AUTH_PAGE_SIZE });
-    if (error) throw new Error(error.message);
-    for (const u of pageData.users) {
-      totalAuthUsers += 1;
-      if (u.email) emailByUserId.set(u.id, u.email);
-      const last = u.last_sign_in_at ?? null;
-      lastSignInByUserId.set(u.id, last);
-      if (last && new Date(last).getTime() >= cutoff) signInLast30Days += 1;
-    }
-    if (pageData.users.length < AUTH_PAGE_SIZE) break;
+  const allUsers = await listAllAuthUsers(admin);
+  for (const u of allUsers) {
+    if (u.email) emailByUserId.set(u.id, u.email);
+    const last = u.last_sign_in_at ?? null;
+    lastSignInByUserId.set(u.id, last);
+    if (last && new Date(last).getTime() >= cutoff) signInLast30Days += 1;
   }
 
-  return { emailByUserId, lastSignInByUserId, totalAuthUsers, signInLast30Days };
+  return {
+    emailByUserId,
+    lastSignInByUserId,
+    totalAuthUsers: allUsers.length,
+    signInLast30Days,
+  };
 }
 
 async function loadRollupsBatched(

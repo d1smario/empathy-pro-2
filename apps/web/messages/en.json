@@ -317,6 +317,7 @@
   "AdminDirectory": {
     "title": "Registered users",
     "subtitle": "Supabase Auth list · page {page} · {perPage} per page",
+    "subtitleRange": "{from}–{to} of {total} users · page {page} · {perPage} per page",
     "fullListNote": "Paginate with Next/Previous. CSV is this page only. Apply migrations 058 + 059 on Supabase for activity + ingest rollups (read-only RPC for admin stats).",
     "prev": "Previous",
     "next": "Next",

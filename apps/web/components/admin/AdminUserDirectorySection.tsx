@@ -11,6 +11,7 @@ type DirectoryJson = {
   users?: AdminDirectoryUserRow[];
   page?: number;
   perPage?: number;
+  totalUsers?: number;
   hasMore?: boolean;
   error?: string;
 };
@@ -135,6 +136,7 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
   const [page, setPage] = useState(1);
   const perPage = 50;
   const [rows, setRows] = useState<AdminDirectoryUserRow[]>([]);
+  const [totalUsers, setTotalUsers] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -152,10 +154,12 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
       if (!res.ok || !j.ok) {
         setErr(j.error ?? t("errors.load"));
         setRows([]);
+        setTotalUsers(0);
         setHasMore(false);
         return;
       }
       setRows(j.users ?? []);
+      setTotalUsers(j.totalUsers ?? j.users?.length ?? 0);
       setHasMore(Boolean(j.hasMore));
     } catch {
       setErr(t("errors.network"));
@@ -307,6 +311,8 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
   );
 
   const colCount = 13;
+  const shownFrom = totalUsers === 0 ? 0 : (page - 1) * perPage + 1;
+  const shownTo = totalUsers === 0 ? 0 : Math.min(page * perPage, totalUsers);
 
   return (
     <section aria-labelledby="admin-directory-heading" className="space-y-4">
@@ -315,7 +321,11 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
           <h2 id="admin-directory-heading" className="text-lg font-semibold text-white">
             {t("title")}
           </h2>
-          <p className="mt-1 text-sm text-gray-500">{t("subtitle", { page, perPage })}</p>
+          <p className="mt-1 text-sm text-gray-500">
+            {totalUsers > 0
+              ? t("subtitleRange", { from: shownFrom, to: shownTo, total: totalUsers, page, perPage })
+              : t("subtitle", { page, perPage })}
+          </p>
           <p className="mt-1 text-xs text-gray-600">{t("fullListNote")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -340,9 +350,9 @@ export function AdminUserDirectorySection({ onPrefillGrantEmail }: Props) {
         </p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-2xl border border-white/10 bg-black/25">
+      <div className="max-h-[min(70vh,720px)] overflow-auto rounded-2xl border border-white/10 bg-black/25">
         <table className="min-w-[1280px] text-left text-sm text-gray-300">
-          <thead className="border-b border-white/10 bg-white/5 text-xs font-semibold uppercase tracking-wide text-gray-500">
+          <thead className="sticky top-0 z-10 border-b border-white/10 bg-zinc-950 text-xs font-semibold uppercase tracking-wide text-gray-500">
             <tr>
               <th className="px-2 py-3 font-semibold">{t("thEmail")}</th>
               <th className="px-2 py-3 font-semibold">{t("thJoined")}</th>

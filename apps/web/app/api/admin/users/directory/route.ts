@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { AdminDirectoryUserRow } from "@/lib/admin/user-directory-types";
 import { loadAdminAthleteActivityRollups } from "@/lib/admin/load-activity-rollups";
+import { listAllAuthUsers } from "@/lib/admin/list-all-auth-users";
 import { requirePlatformAdminSession } from "@/lib/auth/require-platform-admin";
 import { loadAccessEntitlementsForUserIds } from "@/lib/billing/access-entitlement";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -34,12 +35,17 @@ export async function GET(req: Request) {
   const perPageRaw = Number(url.searchParams.get("perPage") ?? String(DEFAULT_PER_PAGE)) || DEFAULT_PER_PAGE;
   const perPage = Math.max(1, Math.min(MAX_PER_PAGE, perPageRaw));
 
-  const { data: pageData, error: listErr } = await admin.auth.admin.listUsers({ page, perPage });
-  if (listErr) {
-    return NextResponse.json({ ok: false as const, error: listErr.message }, { status: 500 });
+  let allUsers;
+  try {
+    allUsers = await listAllAuthUsers(admin);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Errore elenco utenti Auth.";
+    return NextResponse.json({ ok: false as const, error: message }, { status: 500 });
   }
 
-  const users = pageData.users;
+  const totalUsers = allUsers.length;
+  const start = (page - 1) * perPage;
+  const users = allUsers.slice(start, start + perPage);
   const userIds = users.map((u) => u.id);
   const batch = await loadAccessEntitlementsForUserIds(admin, userIds);
 
@@ -78,7 +84,8 @@ export async function GET(req: Request) {
     ok: true as const,
     page,
     perPage,
-    hasMore: users.length === perPage,
+    totalUsers,
+    hasMore: start + perPage < totalUsers,
     users: rows,
   });
 }
