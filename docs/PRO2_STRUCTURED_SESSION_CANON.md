@@ -67,6 +67,7 @@ generateTrainingSession / VIRYA brief
 - **Apply** — `POST /api/training/library/items/[id]/apply` inserisce su `planned_workouts` via `contractToPlannedWorkoutRow` (stesso contratto builder, nessun motore parallelo).
 - **Scaling opt-in** — checkbox «Adatta carico» → `applyScaling: true` usa bundle operativo giornaliero + hint tracce; default **senza** scaling.
 - **Export ZWO** — da item library, stesso path di calendario (`serializePro2BuilderContractToZwo`).
+- **Starter pack Fase 4** — `POST /api/training/library/seed-starter-pack` importa 20 template aerobic curati (cartella «Empathy · Aerobic Starter»), idempotente per coach.
 
 ## Prossimi passi (roadmap)
 

@@ -10,6 +10,7 @@ import {
   clonePlannedWorkout,
   fetchCoachLibraryItemContract,
   fetchCoachLibraryItems,
+  importEmpathyAerobicStarterPack,
   saveCoachLibraryItem,
 } from "@/modules/training/services/training-library-api";
 import { serializePro2BuilderContractToZwo } from "@/lib/training/planned-structured-export";
@@ -106,6 +107,20 @@ export function CoachWorkoutLibraryPanel({
     onApplied?.();
   }
 
+  async function handleImportStarterPack() {
+    setBusy("starter");
+    setErr(null);
+    setOkMsg(null);
+    const r = await importEmpathyAerobicStarterPack();
+    setBusy(null);
+    if (!r.ok) {
+      setErr(r.error ?? "Import pack fallito");
+      return;
+    }
+    setOkMsg(`Pack Empathy: ${r.imported ?? 0} nuovi, ${r.skipped ?? 0} già presenti (${r.total ?? 20} totali).`);
+    void refresh();
+  }
+
   async function handleExportZwo(item: CoachWorkoutLibraryItemView) {
     setBusy(`zwo-${item.id}`);
     setErr(null);
@@ -169,6 +184,14 @@ export function CoachWorkoutLibraryPanel({
                 {busy === "save" ? "Salvo…" : "Salva sessione in libreria"}
               </Pro2Button>
             ) : null}
+            <Pro2Button
+              type="button"
+              variant="secondary"
+              disabled={busy != null}
+              onClick={() => void handleImportStarterPack()}
+            >
+              {busy === "starter" ? "Importo…" : "Importa pack Empathy (20)"}
+            </Pro2Button>
             {sourcePlannedId ? (
               <Pro2Button
                 type="button"

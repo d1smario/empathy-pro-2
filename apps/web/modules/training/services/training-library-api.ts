@@ -126,6 +126,32 @@ export async function fetchCoachLibraryItemContract(
   return { ok: true, contract: json.contract, title: json.item?.title };
 }
 
+export async function importEmpathyAerobicStarterPack(): Promise<{
+  ok: boolean;
+  imported?: number;
+  skipped?: number;
+  total?: number;
+  error?: string;
+}> {
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const res = await fetch("/api/training/library/seed-starter-pack", {
+    method: "POST",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify({ pack: "aerobic_v1" }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    imported?: number;
+    skipped?: number;
+    total?: number;
+    error?: string;
+  };
+  if (!res.ok || json.ok !== true) return { ok: false, error: json.error ?? "library_seed_failed" };
+  return { ok: true, imported: json.imported, skipped: json.skipped, total: json.total };
+}
+
 export async function clonePlannedWorkout(input: {
   sourceId: string;
   athleteId: string;
