@@ -14,6 +14,7 @@ import {
   saveCoachLibraryItem,
 } from "@/modules/training/services/training-library-api";
 import { serializePro2BuilderContractToZwo } from "@/lib/training/planned-structured-export";
+import { STARTER_PACK_TEMPLATE_COUNT } from "@/lib/training/library/starter-pack-aerobic";
 
 export type CoachWorkoutLibraryPanelProps = {
   athleteId: string | null;
@@ -121,7 +122,7 @@ export function CoachWorkoutLibraryPanel({
       setErr(r.error ?? "Import pack fallito");
       return;
     }
-    setOkMsg(`Pack Empathy: ${r.imported ?? 0} nuovi, ${r.skipped ?? 0} già presenti (${r.total ?? 20} totali).`);
+    setOkMsg(`Pack Empathy: ${r.imported ?? 0} nuovi, ${r.skipped ?? 0} già presenti (${r.total ?? STARTER_PACK_TEMPLATE_COUNT} totali).`);
     void refresh();
   }
 
@@ -194,7 +195,7 @@ export function CoachWorkoutLibraryPanel({
               disabled={busy != null}
               onClick={() => void handleImportStarterPack()}
             >
-              {busy === "starter" ? "Importo…" : "Importa pack Empathy (20)"}
+              {busy === "starter" ? "Importo…" : `Importa catalogo Empathy (${STARTER_PACK_TEMPLATE_COUNT})`}
             </Pro2Button>
             {sourcePlannedId ? (
               <Pro2Button

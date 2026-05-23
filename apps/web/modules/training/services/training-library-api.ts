@@ -172,7 +172,7 @@ export async function importEmpathyAerobicStarterPack(): Promise<{
     method: "POST",
     headers,
     credentials: "same-origin",
-    body: JSON.stringify({ pack: "aerobic_v1" }),
+    body: JSON.stringify({ pack: "catalog_v2" }),
     cache: "no-store",
   });
   const json = (await res.json().catch(() => ({}))) as {

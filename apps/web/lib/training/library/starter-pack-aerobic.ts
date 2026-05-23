@@ -1,116 +1,24 @@
-import type {
-  Pro2BlockChart,
-  Pro2BuilderBlockContract,
-  Pro2BuilderSessionContract,
-  Pro2RenderProfile,
-} from "@/lib/training/builder/pro2-session-contract";
+import { AEROBIC_CATALOG_EXTENSION_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog";
+import {
+  buildStarterContractFromPreset,
+  shell,
+  type AerobicStarterBlockSpec,
+  type AerobicStarterPreset,
+} from "@/lib/training/library/starter-pack-aerobic-helpers";
+import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 
-export const EMPATHY_AEROBIC_STARTER_PACK_ID = "empathy_aerobic_starter_v1";
-export const EMPATHY_AEROBIC_STARTER_FOLDER_NAME = "Empathy · Aerobic Starter";
+export { buildStarterContractFromPreset } from "@/lib/training/library/starter-pack-aerobic-helpers";
 
-const DEFAULT_RENDER: Pro2RenderProfile = {
-  intensityUnit: "watt",
-  ftpW: 250,
-  hrMax: 190,
-  lengthMode: "time",
-  speedRefKmh: 35,
-};
+/** Pack v2 — catalogo esteso multi-disciplina (import idempotente per presetId). */
+export const EMPATHY_AEROBIC_STARTER_PACK_ID = "empathy_workout_catalog_v2";
+/** Legacy pack id (20 template cycling v1). */
+export const EMPATHY_AEROBIC_STARTER_PACK_V1 = "empathy_aerobic_starter_v1";
+export const EMPATHY_AEROBIC_STARTER_FOLDER_NAME = "Empathy · Workout Catalog";
 
-export type AerobicStarterBlockSpec = {
-  label: string;
-  kind: "steady" | "ramp" | "interval2";
-  durationMinutes: number;
-  intensityCue: string;
-  startIntensity?: string;
-  endIntensity?: string;
-  intensity2?: string;
-  repeats?: number;
-  workSeconds?: number;
-  recoverSeconds?: number;
-};
+export type { AerobicStarterBlockSpec, AerobicStarterPreset };
 
-export type AerobicStarterPreset = {
-  presetId: string;
-  title: string;
-  description: string;
-  discipline: string;
-  adaptationTarget: string;
-  phase: string;
-  viryaWeekObjective?: string;
-  tags: string[];
-  plannedMinutes: number;
-  tss: number;
-  blocks: AerobicStarterBlockSpec[];
-};
-
-function defaultChart(
-  minutes: number,
-  intensity: string,
-  extra?: Partial<Pro2BlockChart>,
-): Pro2BlockChart {
-  return {
-    minutes: Math.floor(minutes),
-    seconds: Math.round((minutes % 1) * 60),
-    intensity,
-    startIntensity: extra?.startIntensity ?? intensity,
-    endIntensity: extra?.endIntensity ?? intensity,
-    intensity2: extra?.intensity2 ?? "Z1",
-    intensity3: "Z5",
-    repeats: extra?.repeats ?? 1,
-    workSeconds: extra?.workSeconds ?? 180,
-    recoverSeconds: extra?.recoverSeconds ?? 90,
-    step1Seconds: 120,
-    step2Seconds: 90,
-    step3Seconds: 60,
-    pyramidSteps: 5,
-    pyramidStepSeconds: 180,
-    pyramidStartTarget: 100,
-    pyramidEndTarget: 200,
-    distanceKm: 0,
-    gradePercent: 0,
-    elevationMeters: 0,
-    cadence: "",
-    frequencyHint: "",
-    loadFactor: 1,
-  };
-}
-
-function blockFromSpec(spec: AerobicStarterBlockSpec, index: number): Pro2BuilderBlockContract {
-  const isWarm = /riscaldamento|warm/i.test(spec.label);
-  const isCool = /defaticamento|cool/i.test(spec.label);
-  const primary = spec.intensityCue.split("/")[0]?.trim() || "Z2";
-  const chart = defaultChart(spec.durationMinutes, primary, {
-    startIntensity: spec.startIntensity ?? (isWarm ? "Z1" : isCool ? "Z2" : primary),
-    endIntensity: spec.endIntensity ?? (isWarm ? "Z2" : isCool ? "Z1" : primary),
-    intensity2: spec.intensity2 ?? "Z1",
-    repeats: spec.repeats ?? 1,
-    workSeconds: spec.workSeconds ?? 180,
-    recoverSeconds: spec.recoverSeconds ?? 90,
-  });
-  return {
-    id: `sp-${index + 1}`,
-    label: spec.label,
-    kind: spec.kind,
-    durationMinutes: spec.durationMinutes,
-    intensityCue: spec.intensityCue,
-    chart,
-  };
-}
-
-function shell(
-  warmMin: number,
-  coolMin: number,
-  main: AerobicStarterBlockSpec[],
-): AerobicStarterBlockSpec[] {
-  return [
-    { label: "Riscaldamento", kind: "ramp", durationMinutes: warmMin, intensityCue: "Z1->Z2", startIntensity: "Z1", endIntensity: "Z2" },
-    ...main,
-    { label: "Defaticamento", kind: "ramp", durationMinutes: coolMin, intensityCue: "Z2->Z1", startIntensity: "Z2", endIntensity: "Z1" },
-  ];
-}
-
-/** 20 template aerobic curati (cycling) — contratto Builder v1. */
-export const AEROBIC_STARTER_PRESETS: AerobicStarterPreset[] = [
+/** 20 template cycling legacy (v1) — conservati per presetId stabili. */
+const LEGACY_CYCLING_PRESETS: AerobicStarterPreset[] = [
   {
     presetId: "recovery_45_z1",
     title: "Recovery · 45′ Z1",
@@ -446,30 +354,12 @@ export const AEROBIC_STARTER_PRESETS: AerobicStarterPreset[] = [
   },
 ];
 
-export function buildStarterContractFromPreset(preset: AerobicStarterPreset): Pro2BuilderSessionContract {
-  const durationSec = Math.max(60, preset.plannedMinutes * 60);
-  const avgPowerW = Math.max(80, Math.round((preset.tss * 1000) / Math.max(durationSec / 3600, 0.25) / 36));
-  const blocks = preset.blocks.map((b, i) => blockFromSpec(b, i));
-  return {
-    version: 1,
-    source: "builder",
-    family: "aerobic",
-    discipline: preset.discipline,
-    sessionName: preset.title,
-    adaptationTarget: preset.adaptationTarget,
-    phase: preset.phase,
-    plannedSessionDurationMinutes: preset.plannedMinutes,
-    summary: {
-      durationSec,
-      tss: preset.tss,
-      kcal: Math.round(preset.tss * 9.3),
-      kj: Math.round(preset.tss * 39),
-      avgPowerW,
-    },
-    renderProfile: DEFAULT_RENDER,
-    blocks,
-  };
-}
+export const AEROBIC_STARTER_PRESETS: AerobicStarterPreset[] = [
+  ...LEGACY_CYCLING_PRESETS,
+  ...AEROBIC_CATALOG_EXTENSION_PRESETS,
+];
+
+export const STARTER_PACK_TEMPLATE_COUNT = AEROBIC_STARTER_PRESETS.length;
 
 export function empathyAerobicStarterContracts(): Array<{
   preset: AerobicStarterPreset;

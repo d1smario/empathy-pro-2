@@ -3,16 +3,43 @@ import assert from "node:assert/strict";
 import {
   AEROBIC_STARTER_PRESETS,
   EMPATHY_AEROBIC_STARTER_PACK_ID,
+  STARTER_PACK_TEMPLATE_COUNT,
   buildStarterContractFromPreset,
   empathyAerobicStarterContracts,
 } from "./starter-pack-aerobic";
 import { parsePro2BuilderSessionContract } from "./library-item-from-contract";
 
-test("empathy aerobic starter pack: 20 unique presets", () => {
-  assert.equal(AEROBIC_STARTER_PRESETS.length, 20);
+test("empathy workout catalog: expanded unique presets", () => {
+  assert.ok(AEROBIC_STARTER_PRESETS.length >= 120, `expected >=120 presets, got ${AEROBIC_STARTER_PRESETS.length}`);
+  assert.equal(AEROBIC_STARTER_PRESETS.length, STARTER_PACK_TEMPLATE_COUNT);
   const ids = new Set(AEROBIC_STARTER_PRESETS.map((p) => p.presetId));
-  assert.equal(ids.size, 20);
-  assert.equal(EMPATHY_AEROBIC_STARTER_PACK_ID, "empathy_aerobic_starter_v1");
+  assert.equal(ids.size, AEROBIC_STARTER_PRESETS.length);
+  assert.equal(EMPATHY_AEROBIC_STARTER_PACK_ID, "empathy_workout_catalog_v2");
+});
+
+test("workout catalog covers methodologies and disciplines", () => {
+  const tags = new Set(AEROBIC_STARTER_PRESETS.flatMap((p) => p.tags));
+  for (const required of [
+    "norwegian",
+    "polarized",
+    "lactate",
+    "vo2",
+    "hit",
+    "hypoxic",
+    "heat",
+    "time_trial",
+    "sprint",
+    "force",
+    "swimming",
+    "running",
+    "canoe",
+  ]) {
+    assert.ok(tags.has(required), `missing tag ${required}`);
+  }
+  const disciplines = new Set(AEROBIC_STARTER_PRESETS.map((p) => p.discipline));
+  for (const d of ["Cycling", "Running", "Swimming", "Canoe"]) {
+    assert.ok(disciplines.has(d), `missing discipline ${d}`);
+  }
 });
 
 test("buildStarterContractFromPreset: valid Pro2 contract", () => {

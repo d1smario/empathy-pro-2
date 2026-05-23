@@ -67,7 +67,7 @@ generateTrainingSession / VIRYA brief
 - **Apply** — `POST /api/training/library/items/[id]/apply` inserisce su `planned_workouts` via `contractToPlannedWorkoutRow` (stesso contratto builder, nessun motore parallelo).
 - **Scaling opt-in** — checkbox «Adatta carico» → `applyScaling: true` usa bundle operativo giornaliero + hint tracce; default **senza** scaling.
 - **Export ZWO** — da item library, stesso path di calendario (`serializePro2BuilderContractToZwo`).
-- **Starter pack Fase 4** — `POST /api/training/library/seed-starter-pack` importa 20 template aerobic curati (cartella «Empathy · Aerobic Starter»), idempotente per coach.
+- **Starter pack Fase 4 → catalogo v2** — `POST /api/training/library/seed-starter-pack` (`pack=catalog_v2`) importa **~145** template (cycling legacy + multi-disciplina: bike/run/swim/canoe) — Z2/Z3, norvegese Z4, polarizzato, lattacido, VO₂, anaerobico, HIT, ipossico sim, caldo, TT, sprint, forza, 30-30 / 20-40. Idempotente per `presetId`. Cartella «Empathy · Workout Catalog».
 - **Export VIRYA Fase 5** — passo 5 VIRYA «Salva settimana in libreria»: materializza la settimana selezionata con la stessa pipeline del Calendar (`buildViryaPlannedRows` → `materializeViryaSessionContract`) e scrive N item via `POST /api/training/library/import-from-virya-week` (metadata `virya_phase`, `virya_week_objective`). Filtro fase in pannello libreria.
 - **Calendar copy/move** — dettaglio seduta: **Copia** (`POST /api/training/planned/clone`) e **Sposta** (`PATCH /api/training/planned` con `date`).
 
