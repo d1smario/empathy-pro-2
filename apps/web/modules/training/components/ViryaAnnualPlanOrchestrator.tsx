@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  BookMarked,
   CalendarRange,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +22,7 @@ import type { TrainingPlannerContextViewModel } from "@/api/training/contracts";
 import {
   serializePro2BuilderSessionContract,
   type Pro2BuilderBlockContract,
+  type Pro2BuilderSessionContract,
 } from "@/lib/training/builder/pro2-session-contract";
 import {
   buildPro2BlockSessionContract,
@@ -29,6 +31,7 @@ import {
   summarizeBlocks,
 } from "@/lib/training/builder/engine-blocks-to-session-contract";
 import { finalizeViryaPro2ContractAsBuilderFile } from "@/lib/training/builder/finalize-virya-pro2-contract-as-builder-file";
+import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import {
   getLifestyleProtocolMediaUrl,
   getLifestyleProtocolsForDiscipline,
@@ -44,6 +47,7 @@ import { materializeViryaGymBuilderSession } from "@/lib/training/virya/material
 import { isGenericViryaPlanName, suggestedViryaPlanName, viryaPlanTag } from "@/lib/training/virya/virya-plan-name";
 import { resolveAerobicViryaPrescription } from "@/lib/training/engine/aerobic-virya-prescription";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
+import { importViryaWeekToLibrary } from "@/modules/training/services/training-library-api";
 import {
   deleteViryaCalendarPlan,
   fetchViryaCalendarPlans,
@@ -719,6 +723,8 @@ export function ViryaAnnualPlanOrchestrator({
   >({});
   const [replacePrevious, setReplacePrevious] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingLibrary, setSavingLibrary] = useState(false);
+  const [libraryWeekStart, setLibraryWeekStart] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [viryaStep, setViryaStep] = useState<1 | 2 | 3 | 4 | 5>(1);
@@ -904,6 +910,12 @@ export function ViryaAnnualPlanOrchestrator({
       }),
     [adaptationControlPct, baseProgramWeekRows, viryaRetuneProposal],
   );
+
+  useEffect(() => {
+    if (!programWeekRows.length) return;
+    if (libraryWeekStart && programWeekRows.some((r) => r.weekStart === libraryWeekStart)) return;
+    setLibraryWeekStart(programWeekRows[0]!.weekStart);
+  }, [libraryWeekStart, programWeekRows]);
 
   const annualLoadWeekCap = planWindowWeekCount > 0 ? planWindowWeekCount : 52;
   const annualLoad = programWeekRows.slice(0, annualLoadWeekCap).map((w) => w.displayTss);
@@ -1841,20 +1853,19 @@ export function ViryaAnnualPlanOrchestrator({
     ];
   }
 
-  async function generateOnCalendar() {
-    setError(null);
-    setSuccess(null);
-    if (!selectedAthleteId) {
-      setError("Atleta non disponibile per la generazione.");
-      return;
-    }
-    if (!phases.length) {
-      setError("Aggiungi almeno una fase.");
-      return;
-    }
-    setSaving(true);
+  async function buildViryaPlannedRows(onlyWeekStart?: string | null) {
     const tag = viryaPlanTag(planName);
     let gymSchedaSessions = 0;
+    const athleteId = selectedAthleteId;
+    if (!athleteId) {
+      return {
+        rows: [],
+        effectivePhases: phases,
+        syncGymPhasesToWindow: false,
+        gymSchedaSessions: 0,
+        tag,
+      };
+    }
     const contextHint = (viryaContext?.strategyHints ?? []).slice(0, 4).join(",");
     const strengthWindowStart =
       sportFamily === "strength" ? (planWindowStart.trim() || gymPlanStart.trim()) : gymPlanStart;
@@ -1899,6 +1910,7 @@ export function ViryaAnnualPlanOrchestrator({
       const weekCount = weeksBetween(phase.start, phase.end);
       for (let w = 0; w < weekCount; w += 1) {
         const weekStart = addDays(phase.start, w * 7);
+        if (onlyWeekStart && weekStart !== onlyWeekStart) continue;
         const wm = resolveWeekMetrics(phase, w, weekStart);
         const objNote = wm.objectives.length ? `week_focus=${wm.objectives.join("+")}` : "";
         if (sportFamily === "strength") {
@@ -1959,7 +1971,7 @@ export function ViryaAnnualPlanOrchestrator({
             const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
             const viryaMeta = `${tag} ${phaseLabels[phase.phase]} · ${phase.mesocycle} · ${objective} · GymGoal ${gymPrimaryGoal} · MacroObjective ${phaseObj} · LoadWeek ${loadPct}% (${loadStatusLabel(loadPct)}) · Giorno${module.dayIndex} distretti=${formatGymDistrictsLabel(module)} obiettivo=${module.districtObjective} esercizio=${module.exerciseType} metodologia=${module.methodology} · ${objNote} · Hints: ${contextHint || "none"} · ${viryaStructureTag()} · ${briefMeta}`;
             rows.push({
-              athlete_id: selectedAthleteId,
+              athlete_id: athleteId,
               date: addDays(weekStart, slot.weekdayOffset),
               type: "gym",
               duration_minutes: derived.sessionMinutes,
@@ -2025,7 +2037,7 @@ export function ViryaAnnualPlanOrchestrator({
             });
             const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
             rows.push({
-              athlete_id: selectedAthleteId,
+              athlete_id: athleteId,
               date: addDays(weekStart, slot.weekdayOffset),
               type: discipline.toLowerCase(),
               duration_minutes: derived.sessionMinutes,
@@ -2093,7 +2105,7 @@ export function ViryaAnnualPlanOrchestrator({
             });
             const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
             rows.push({
-              athlete_id: selectedAthleteId,
+              athlete_id: athleteId,
               date: addDays(weekStart, slot.weekdayOffset),
               type: discipline.toLowerCase(),
               duration_minutes: derived.sessionMinutes,
@@ -2162,7 +2174,7 @@ export function ViryaAnnualPlanOrchestrator({
               });
               const briefMeta = formatViryaBriefMetaLine(brief, derived, weekPlan.loadSum);
               rows.push({
-                athlete_id: selectedAthleteId,
+                athlete_id: athleteId,
                 date: addDays(weekStart, slot.weekdayOffset),
                 type: sportTarget.sport.toLowerCase(),
                 duration_minutes: derived.sessionMinutes,
@@ -2178,6 +2190,23 @@ export function ViryaAnnualPlanOrchestrator({
         }
       }
     }
+
+    return { rows, effectivePhases, syncGymPhasesToWindow, gymSchedaSessions, tag };
+  }
+
+  async function generateOnCalendar() {
+    setError(null);
+    setSuccess(null);
+    if (!selectedAthleteId) {
+      setError("Atleta non disponibile per la generazione.");
+      return;
+    }
+    if (!phases.length) {
+      setError("Aggiungi almeno una fase.");
+      return;
+    }
+    setSaving(true);
+    const { rows, effectivePhases, syncGymPhasesToWindow, gymSchedaSessions, tag } = await buildViryaPlannedRows();
 
     if (rows.length === 0) {
       setError(
@@ -2234,6 +2263,74 @@ export function ViryaAnnualPlanOrchestrator({
       setError(message);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function saveWeekToLibrary() {
+    setError(null);
+    setSuccess(null);
+    if (!selectedAthleteId) {
+      setError("Atleta non disponibile: serve il contesto atleta per materializzare le sedute.");
+      return;
+    }
+    const weekStart = libraryWeekStart.trim();
+    if (!weekStart) {
+      setError("Seleziona la settimana da esportare in libreria.");
+      return;
+    }
+    const weekRow = programWeekRows.find((r) => r.weekStart === weekStart);
+    setSavingLibrary(true);
+    try {
+      const { rows } = await buildViryaPlannedRows(weekStart);
+      if (!rows.length) {
+        setError(`Nessuna seduta materializzata per la settimana ${weekStart}.`);
+        return;
+      }
+      const sessions: Array<{
+        title: string;
+        contract: Pro2BuilderSessionContract;
+        weekdayOffset?: number;
+      }> = [];
+      for (const row of rows) {
+        const contract = parsePro2BuilderSessionFromNotes(row.notes);
+        if (!contract) continue;
+        const rowDate = new Date(`${row.date}T12:00:00`);
+        const weekDate = new Date(`${weekStart}T12:00:00`);
+        const weekdayOffset = Math.round((rowDate.getTime() - weekDate.getTime()) / 86_400_000);
+        sessions.push({
+          title: (contract.sessionName ?? `VIRYA · ${row.date}`).trim().slice(0, 200),
+          contract: contract as Pro2BuilderSessionContract,
+          weekdayOffset: Number.isFinite(weekdayOffset) ? weekdayOffset : undefined,
+        });
+      }
+      if (!sessions.length) {
+        setError("Contratti Builder non trovati nelle sedute materializzate.");
+        return;
+      }
+      const r = await importViryaWeekToLibrary({
+        weekStart,
+        viryaPlanName: planName.trim() || "VIRYA",
+        viryaPlanTag: viryaPlanTag(planName),
+        viryaPhase: weekRow?.phaseType,
+        viryaWeekNumber: weekRow?.week,
+        weekObjectives: weekRow?.objectives?.length ? weekRow.objectives : undefined,
+        sessions,
+      });
+      if (!r.ok) {
+        setError(
+          r.error === "coach_only" || r.error === "coach_not_approved"
+            ? "Export libreria riservato ai coach approvati."
+            : (r.error ?? "Export libreria fallito"),
+        );
+        return;
+      }
+      setSuccess(
+        `Settimana ${weekStart}: ${r.imported ?? sessions.length} sedute salvate in libreria coach (cartella VIRYA · settimane tipo).`,
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export libreria fallito");
+    } finally {
+      setSavingLibrary(false);
     }
   }
 
@@ -3463,6 +3560,50 @@ export function ViryaAnnualPlanOrchestrator({
               >
                 Apri Calendar →
               </Link>
+            </div>
+          </Pro2SectionCard>
+
+          <Pro2SectionCard
+            accent="violet"
+            title="Salva settimana in libreria"
+            subtitle="Export VIRYA → N template coach (contratto Builder, stessa materializzazione del Calendar)"
+            icon={BookMarked}
+          >
+            <p className="mb-3 text-sm text-slate-300">
+              Esporta una <strong className="text-white">settimana tipo</strong> come template riusabili nella libreria
+              coach — senza scrivere sul Calendar. Stessa pipeline di materializzazione del batch Calendar.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="flex flex-col gap-1 text-xs text-slate-400">
+                Settimana
+                <select
+                  className="min-w-[200px] rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
+                  value={libraryWeekStart}
+                  onChange={(e) => setLibraryWeekStart(e.target.value)}
+                  disabled={savingLibrary || !programWeekRows.length}
+                >
+                  {programWeekRows.map((w) => (
+                    <option key={w.weekStart} value={w.weekStart}>
+                      W{w.week} · {w.weekStart} · {w.phase} · {w.displaySessions} sed · TSS {w.displayTss}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                className="rounded-xl border border-violet-500/50 bg-violet-500/20 px-5 py-3 text-sm font-semibold text-violet-50 shadow-[0_0_24px_rgba(139,92,246,0.12)] hover:bg-violet-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => void saveWeekToLibrary()}
+                disabled={savingLibrary || saving || !selectedAthleteId || !libraryWeekStart}
+                title={
+                  !selectedAthleteId
+                    ? "Seleziona / carica contesto atleta"
+                    : !libraryWeekStart
+                      ? "Nessuna settimana nel piano"
+                      : undefined
+                }
+              >
+                {savingLibrary ? "Materializzazione…" : "Salva settimana in libreria"}
+              </button>
             </div>
           </Pro2SectionCard>
 

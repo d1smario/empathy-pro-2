@@ -39,12 +39,16 @@ export function CoachWorkoutLibraryPanel({
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [items, setItems] = useState<CoachWorkoutLibraryItemView[]>([]);
   const [filter, setFilter] = useState("");
+  const [viryaPhaseFilter, setViryaPhaseFilter] = useState("");
   const [applyScaling, setApplyScaling] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setErr(null);
-    const { items: rows, error } = await fetchCoachLibraryItems({ q: filter.trim() || undefined });
+    const { items: rows, error } = await fetchCoachLibraryItems({
+      q: filter.trim() || undefined,
+      viryaPhase: viryaPhaseFilter.trim() || undefined,
+    });
     setLoading(false);
     if (error) {
       setErr(
@@ -56,7 +60,7 @@ export function CoachWorkoutLibraryPanel({
       return;
     }
     setItems(rows);
-  }, [filter]);
+  }, [filter, viryaPhaseFilter]);
 
   useEffect(() => {
     if (!open) return;
@@ -212,6 +216,20 @@ export function CoachWorkoutLibraryPanel({
                 if (e.key === "Enter") void refresh();
               }}
             />
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
+              value={viryaPhaseFilter}
+              onChange={(e) => setViryaPhaseFilter(e.target.value)}
+              aria-label="Filtro fase VIRYA"
+            >
+              <option value="">Tutte le fasi</option>
+              <option value="base">Base</option>
+              <option value="build">Costruzione</option>
+              <option value="refine">Rifinitura</option>
+              <option value="peak">Forma</option>
+              <option value="deload">Scarico</option>
+              <option value="second_peak">Secondo picco</option>
+            </select>
             <Pro2Button type="button" variant="secondary" disabled={loading} onClick={() => void refresh()}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aggiorna"}
             </Pro2Button>

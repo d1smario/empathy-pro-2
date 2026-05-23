@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
     const { userId, db } = await requireCoachLibraryWriteContext(req);
     const folderId = req.nextUrl.searchParams.get("folderId")?.trim() || null;
     const family = req.nextUrl.searchParams.get("family")?.trim() || null;
+    const viryaPhase = req.nextUrl.searchParams.get("viryaPhase")?.trim() || null;
     const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() || "";
 
     let query = db
@@ -45,6 +46,14 @@ export async function GET(req: NextRequest) {
     if (error) throw new Error(error.message);
 
     let rows = (data ?? []) as CoachWorkoutLibraryItemRow[];
+    if (viryaPhase) {
+      rows = rows.filter((r) => {
+        const meta = (r.metadata ?? {}) as Record<string, unknown>;
+        const phase = typeof meta.virya_phase === "string" ? meta.virya_phase : "";
+        const objective = typeof meta.virya_week_objective === "string" ? meta.virya_week_objective : "";
+        return phase === viryaPhase || objective.includes(viryaPhase);
+      });
+    }
     if (q) {
       rows = rows.filter(
         (r) =>
