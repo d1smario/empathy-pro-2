@@ -6,6 +6,7 @@ import {
   parsePro2BuilderSessionContract,
 } from "@/lib/training/library/library-item-from-contract";
 import { mapLibraryItemRow, type CoachWorkoutLibraryItemRow } from "@/lib/training/library/coach-workout-library-types";
+import { filterCoachLibraryItemRows } from "@/lib/training/library/library-item-filters";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -20,13 +21,25 @@ function authError(err: unknown) {
   return NextResponse.json({ ok: false as const, error: message }, { status: 500, headers: NO_STORE });
 }
 
+function parseOptionalInt(raw: string | null): number | undefined {
+  if (!raw?.trim()) return undefined;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : undefined;
+}
+
 export async function GET(req: NextRequest) {
   try {
     const { userId, db } = await requireCoachLibraryWriteContext(req);
     const folderId = req.nextUrl.searchParams.get("folderId")?.trim() || null;
     const family = req.nextUrl.searchParams.get("family")?.trim() || null;
+    const discipline = req.nextUrl.searchParams.get("discipline")?.trim() || null;
+    const tag = req.nextUrl.searchParams.get("tag")?.trim() || null;
     const viryaPhase = req.nextUrl.searchParams.get("viryaPhase")?.trim() || null;
-    const q = req.nextUrl.searchParams.get("q")?.trim().toLowerCase() || "";
+    const q = req.nextUrl.searchParams.get("q")?.trim() || "";
+    const minDuration = parseOptionalInt(req.nextUrl.searchParams.get("minDuration"));
+    const maxDuration = parseOptionalInt(req.nextUrl.searchParams.get("maxDuration"));
+    const minTss = parseOptionalInt(req.nextUrl.searchParams.get("minTss"));
+    const maxTss = parseOptionalInt(req.nextUrl.searchParams.get("maxTss"));
 
     let query = db
       .from("coach_workout_library_items")
@@ -35,7 +48,7 @@ export async function GET(req: NextRequest) {
       )
       .eq("coach_user_id", userId)
       .order("updated_at", { ascending: false })
-      .limit(200);
+      .limit(400);
 
     if (folderId) query = query.eq("folder_id", folderId);
     if (family && ["aerobic", "strength", "technical", "lifestyle"].includes(family)) {
@@ -46,25 +59,20 @@ export async function GET(req: NextRequest) {
     if (error) throw new Error(error.message);
 
     let rows = (data ?? []) as CoachWorkoutLibraryItemRow[];
-    if (viryaPhase) {
-      rows = rows.filter((r) => {
-        const meta = (r.metadata ?? {}) as Record<string, unknown>;
-        const phase = typeof meta.virya_phase === "string" ? meta.virya_phase : "";
-        const objective = typeof meta.virya_week_objective === "string" ? meta.virya_week_objective : "";
-        return phase === viryaPhase || objective.includes(viryaPhase);
-      });
-    }
-    if (q) {
-      rows = rows.filter(
-        (r) =>
-          r.title.toLowerCase().includes(q) ||
-          r.discipline.toLowerCase().includes(q) ||
-          (r.description ?? "").toLowerCase().includes(q),
-      );
-    }
+    rows = filterCoachLibraryItemRows(rows, {
+      q: q || undefined,
+      family: family ?? undefined,
+      discipline: discipline ?? undefined,
+      tag: tag ?? undefined,
+      viryaPhase: viryaPhase ?? undefined,
+      minDuration,
+      maxDuration,
+      minTss,
+      maxTss,
+    });
 
     return NextResponse.json(
-      { ok: true as const, items: rows.map((r) => mapLibraryItemRow(r)) },
+      { ok: true as const, items: rows.map((r) => mapLibraryItemRow(r)), total: rows.length },
       { headers: NO_STORE },
     );
   } catch (err) {

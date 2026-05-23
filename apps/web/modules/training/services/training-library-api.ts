@@ -20,13 +20,25 @@ export async function fetchCoachLibraryFolders(): Promise<{ folders: LibraryFold
 export async function fetchCoachLibraryItems(input?: {
   folderId?: string;
   family?: string;
+  discipline?: string;
+  tag?: string;
   viryaPhase?: string;
+  minDuration?: number;
+  maxDuration?: number;
+  minTss?: number;
+  maxTss?: number;
   q?: string;
-}): Promise<{ items: CoachWorkoutLibraryItemView[]; error?: string }> {
+}): Promise<{ items: CoachWorkoutLibraryItemView[]; total?: number; error?: string }> {
   const params = new URLSearchParams();
   if (input?.folderId) params.set("folderId", input.folderId);
   if (input?.family) params.set("family", input.family);
+  if (input?.discipline) params.set("discipline", input.discipline);
+  if (input?.tag) params.set("tag", input.tag);
   if (input?.viryaPhase) params.set("viryaPhase", input.viryaPhase);
+  if (input?.minDuration != null) params.set("minDuration", String(input.minDuration));
+  if (input?.maxDuration != null) params.set("maxDuration", String(input.maxDuration));
+  if (input?.minTss != null) params.set("minTss", String(input.minTss));
+  if (input?.maxTss != null) params.set("maxTss", String(input.maxTss));
   if (input?.q) params.set("q", input.q);
   const headers = await buildSupabaseAuthHeaders();
   const res = await fetch(`/api/training/library/items?${params.toString()}`, {
@@ -37,10 +49,11 @@ export async function fetchCoachLibraryItems(input?: {
   const json = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     items?: CoachWorkoutLibraryItemView[];
+    total?: number;
     error?: string;
   };
   if (!res.ok || json.ok !== true) return { items: [], error: json.error ?? "library_items_failed" };
-  return { items: json.items ?? [] };
+  return { items: json.items ?? [], total: json.total };
 }
 
 export async function saveCoachLibraryItem(input: {

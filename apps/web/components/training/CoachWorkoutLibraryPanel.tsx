@@ -15,6 +15,12 @@ import {
 } from "@/modules/training/services/training-library-api";
 import { serializePro2BuilderContractToZwo } from "@/lib/training/planned-structured-export";
 import { STARTER_PACK_TEMPLATE_COUNT } from "@/lib/training/library/starter-pack-aerobic";
+import {
+  LIBRARY_DISCIPLINE_OPTIONS,
+  LIBRARY_FAMILY_OPTIONS,
+  LIBRARY_METHODOLOGY_TAG_OPTIONS,
+  LIBRARY_VIRYA_PHASE_OPTIONS,
+} from "@/lib/training/library/library-item-filters";
 
 export type CoachWorkoutLibraryPanelProps = {
   athleteId: string | null;
@@ -39,16 +45,30 @@ export function CoachWorkoutLibraryPanel({
   const [err, setErr] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [items, setItems] = useState<CoachWorkoutLibraryItemView[]>([]);
+  const [resultTotal, setResultTotal] = useState(0);
   const [filter, setFilter] = useState("");
+  const [familyFilter, setFamilyFilter] = useState("");
+  const [disciplineFilter, setDisciplineFilter] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
   const [viryaPhaseFilter, setViryaPhaseFilter] = useState("");
   const [applyScaling, setApplyScaling] = useState(false);
+
+  const hasActiveFilters =
+    Boolean(filter.trim()) ||
+    Boolean(familyFilter) ||
+    Boolean(disciplineFilter) ||
+    Boolean(tagFilter) ||
+    Boolean(viryaPhaseFilter);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setErr(null);
-    const { items: rows, error } = await fetchCoachLibraryItems({
+    const { items: rows, total, error } = await fetchCoachLibraryItems({
       q: filter.trim() || undefined,
-      viryaPhase: viryaPhaseFilter.trim() || undefined,
+      family: familyFilter || undefined,
+      discipline: disciplineFilter || undefined,
+      tag: tagFilter || undefined,
+      viryaPhase: viryaPhaseFilter || undefined,
     });
     setLoading(false);
     if (error) {
@@ -58,15 +78,25 @@ export function CoachWorkoutLibraryPanel({
           : error,
       );
       setItems([]);
+      setResultTotal(0);
       return;
     }
     setItems(rows);
-  }, [filter, viryaPhaseFilter]);
+    setResultTotal(total ?? rows.length);
+  }, [filter, familyFilter, disciplineFilter, tagFilter, viryaPhaseFilter]);
 
   useEffect(() => {
     if (!open) return;
     void refresh();
   }, [open, refresh]);
+
+  function clearFilters() {
+    setFilter("");
+    setFamilyFilter("");
+    setDisciplineFilter("");
+    setTagFilter("");
+    setViryaPhaseFilter("");
+  }
 
   async function handleSave() {
     if (!contractToSave) {
@@ -209,7 +239,7 @@ export function CoachWorkoutLibraryPanel({
             ) : null}
             <input
               type="search"
-              placeholder="Cerca…"
+              placeholder="Cerca titolo, disciplina…"
               className="min-w-[140px] flex-1 rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -217,24 +247,74 @@ export function CoachWorkoutLibraryPanel({
                 if (e.key === "Enter") void refresh();
               }}
             />
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
+              value={disciplineFilter}
+              onChange={(e) => setDisciplineFilter(e.target.value)}
+              aria-label="Filtro disciplina"
+            >
+              {LIBRARY_DISCIPLINE_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
+              value={tagFilter}
+              onChange={(e) => setTagFilter(e.target.value)}
+              aria-label="Filtro metodologia"
+            >
+              {LIBRARY_METHODOLOGY_TAG_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select
+              className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
+              value={familyFilter}
+              onChange={(e) => setFamilyFilter(e.target.value)}
+              aria-label="Filtro famiglia"
+            >
+              {LIBRARY_FAMILY_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
             <select
               className="rounded-lg border border-white/15 bg-black/40 px-2 py-1.5 text-xs text-white"
               value={viryaPhaseFilter}
               onChange={(e) => setViryaPhaseFilter(e.target.value)}
               aria-label="Filtro fase VIRYA"
             >
-              <option value="">Tutte le fasi</option>
-              <option value="base">Base</option>
-              <option value="build">Costruzione</option>
-              <option value="refine">Rifinitura</option>
-              <option value="peak">Forma</option>
-              <option value="deload">Scarico</option>
-              <option value="second_peak">Secondo picco</option>
+              {LIBRARY_VIRYA_PHASE_OPTIONS.map((o) => (
+                <option key={o.value || "all"} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
             </select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <Pro2Button type="button" variant="secondary" disabled={loading} onClick={() => void refresh()}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Aggiorna"}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Applica filtri"}
             </Pro2Button>
-            <label className="flex w-full items-center gap-2 text-[0.65rem] text-slate-400 sm:w-auto">
+            {hasActiveFilters ? (
+              <button
+                type="button"
+                className="text-xs font-semibold text-slate-400 underline decoration-white/20 hover:text-violet-200"
+                onClick={clearFilters}
+              >
+                Reset filtri
+              </button>
+            ) : null}
+            <span className="text-[0.65rem] text-slate-500">
+              {loading ? "…" : `${resultTotal} template`}
+            </span>
+            <label className="ml-auto flex items-center gap-2 text-[0.65rem] text-slate-400">
               <input
                 type="checkbox"
                 checked={applyScaling}
@@ -253,7 +333,7 @@ export function CoachWorkoutLibraryPanel({
               {okMsg}
             </p>
           ) : null}
-          <div className="max-h-52 overflow-y-auto rounded-xl border border-white/10">
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10">
             {loading && items.length === 0 ? (
               <p className="p-3 text-xs text-slate-500">Caricamento…</p>
             ) : items.length === 0 ? (
@@ -265,7 +345,8 @@ export function CoachWorkoutLibraryPanel({
                     <div className="min-w-0">
                       <div className="truncate text-xs font-semibold text-white">{item.title}</div>
                       <div className="text-[0.65rem] text-slate-500">
-                        {item.family} · {item.durationMinutes}′ · TSS {item.tssTarget}
+                        {item.discipline} · {item.family} · {item.durationMinutes}′ · TSS {item.tssTarget}
+                        {formatItemTags(item.metadata)}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -297,4 +378,14 @@ export function CoachWorkoutLibraryPanel({
       ) : null}
     </div>
   );
+}
+
+function formatItemTags(metadata: Record<string, unknown>): string {
+  const tags = metadata.tags;
+  if (!Array.isArray(tags) || tags.length === 0) return "";
+  const slice = tags
+    .filter((t): t is string => typeof t === "string")
+    .slice(0, 3)
+    .join(" · ");
+  return slice ? ` · ${slice}` : "";
 }
