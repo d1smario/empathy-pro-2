@@ -2,6 +2,7 @@
 
 import { BookMarked, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { CoachLibraryContractPreview } from "@/components/training/CoachLibraryContractPreview";
 import { Pro2Button } from "@/components/ui/empathy";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import type { CoachWorkoutLibraryItemView } from "@/lib/training/library/coach-workout-library-types";
@@ -52,6 +53,9 @@ export function CoachWorkoutLibraryPanel({
   const [tagFilter, setTagFilter] = useState("");
   const [viryaPhaseFilter, setViryaPhaseFilter] = useState("");
   const [applyScaling, setApplyScaling] = useState(false);
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [previewContract, setPreviewContract] = useState<Pro2BuilderSessionContract | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const hasActiveFilters =
     Boolean(filter.trim()) ||
@@ -59,6 +63,35 @@ export function CoachWorkoutLibraryPanel({
     Boolean(disciplineFilter) ||
     Boolean(tagFilter) ||
     Boolean(viryaPhaseFilter);
+
+  useEffect(() => {
+    if (!open || items.length === 0) {
+      setSelectedItemId(null);
+      setPreviewContract(null);
+      return;
+    }
+    if (!selectedItemId || !items.some((i) => i.id === selectedItemId)) {
+      setSelectedItemId(items[0]!.id);
+    }
+  }, [open, items, selectedItemId]);
+
+  useEffect(() => {
+    if (!selectedItemId) {
+      setPreviewContract(null);
+      setPreviewLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    void fetchCoachLibraryItemContract(selectedItemId).then((r) => {
+      if (cancelled) return;
+      setPreviewLoading(false);
+      setPreviewContract(r.ok && r.contract ? r.contract : null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedItemId]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -211,7 +244,7 @@ export function CoachWorkoutLibraryPanel({
       {open ? (
         <div className="space-y-3 border-t border-white/10 px-4 pb-4 pt-3">
           <p className="text-xs text-slate-500">
-            Template riusabili (contratto Builder). Apply inserisce una nuova riga su calendario.
+            Template riusabili (contratto Builder). Clicca un template per l&apos;anteprima a blocchi; Apply inserisce sul calendario.
           </p>
           <div className="flex flex-wrap gap-2">
             {contractToSave ? (
@@ -333,44 +366,86 @@ export function CoachWorkoutLibraryPanel({
               {okMsg}
             </p>
           ) : null}
-          <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10">
+          <div className="max-h-[min(32rem,70vh)] overflow-y-auto rounded-xl border border-white/10">
             {loading && items.length === 0 ? (
               <p className="p-3 text-xs text-slate-500">Caricamento…</p>
             ) : items.length === 0 ? (
               <p className="p-3 text-xs text-slate-500">Nessun template in libreria.</p>
             ) : (
               <ul className="divide-y divide-white/5">
-                {items.map((item) => (
-                  <li key={item.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-semibold text-white">{item.title}</div>
-                      <div className="text-[0.65rem] text-slate-500">
-                        {item.discipline} · {item.family} · {item.durationMinutes}′ · TSS {item.tssTarget}
-                        {formatItemTags(item.metadata)}
+                {items.map((item) => {
+                  const selected = item.id === selectedItemId;
+                  return (
+                    <li key={item.id}>
+                      <div
+                        className={`flex items-center justify-between gap-2 px-3 py-2 transition ${
+                          selected
+                            ? "border-l-2 border-fuchsia-400/80 bg-gradient-to-r from-violet-950/50 to-transparent"
+                            : "border-l-2 border-transparent hover:bg-white/[0.03]"
+                        }`}
+                      >
+                        <button
+                          type="button"
+                          className="min-w-0 flex-1 text-left"
+                          onClick={() => setSelectedItemId(item.id)}
+                        >
+                          <div className="truncate text-xs font-semibold text-white">{item.title}</div>
+                          <div className="text-[0.65rem] text-slate-500">
+                            {item.discipline} · {item.family} · {item.durationMinutes}′ · TSS {item.tssTarget}
+                            {formatItemTags(item.metadata)}
+                          </div>
+                        </button>
+                        <div className="flex shrink-0 gap-1">
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            className="!px-2 !py-1 text-[0.65rem]"
+                            disabled={busy != null}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleExportZwo(item);
+                            }}
+                          >
+                            {busy === `zwo-${item.id}` ? "…" : "ZWO"}
+                          </Pro2Button>
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            className="!px-2 !py-1 text-[0.65rem]"
+                            disabled={busy != null || !athleteId}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleApply(item);
+                            }}
+                          >
+                            {busy === `apply-${item.id}` ? "…" : "Applica"}
+                          </Pro2Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Pro2Button
-                        type="button"
-                        variant="secondary"
-                        className="!px-2 !py-1 text-[0.65rem]"
-                        disabled={busy != null}
-                        onClick={() => void handleExportZwo(item)}
-                      >
-                        {busy === `zwo-${item.id}` ? "…" : "ZWO"}
-                      </Pro2Button>
-                      <Pro2Button
-                        type="button"
-                        variant="secondary"
-                        className="!px-2 !py-1 text-[0.65rem]"
-                        disabled={busy != null || !athleteId}
-                        onClick={() => void handleApply(item)}
-                      >
-                        {busy === `apply-${item.id}` ? "…" : "Applica"}
-                      </Pro2Button>
-                    </div>
-                  </li>
-                ))}
+                      {selected ? (
+                        <div className="border-t border-fuchsia-500/15 bg-gradient-to-b from-violet-950/30 via-black/40 to-black/60 px-3 py-3">
+                          {previewLoading ? (
+                            <div className="flex items-center justify-center gap-2 py-6 text-xs text-slate-400">
+                              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                              Carico grafico a blocchi…
+                            </div>
+                          ) : previewContract ? (
+                            <CoachLibraryContractPreview
+                              contract={previewContract}
+                              title={item.title}
+                              tssFallback={item.tssTarget}
+                              compact
+                            />
+                          ) : (
+                            <p className="py-4 text-center text-xs text-amber-200/90">
+                              Struttura non disponibile per questo template.
+                            </p>
+                          )}
+                        </div>
+                      ) : null}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </div>

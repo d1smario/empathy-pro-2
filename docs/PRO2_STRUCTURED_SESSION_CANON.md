@@ -71,6 +71,7 @@ generateTrainingSession / VIRYA brief
 - **Export VIRYA Fase 5** — passo 5 VIRYA «Salva settimana in libreria»: materializza la settimana selezionata con la stessa pipeline del Calendar (`buildViryaPlannedRows` → `materializeViryaSessionContract`) e scrive N item via `POST /api/training/library/import-from-virya-week` (metadata `virya_phase`, `virya_week_objective`). Filtro fase in pannello libreria.
 - **Calendar copy/move** — dettaglio seduta: **Copia** (`POST /api/training/planned/clone`) e **Sposta** (`PATCH /api/training/planned` con `date`).
 - **Filtri libreria** — `GET /api/training/library/items` con `discipline`, `tag` (metodologia), `family`, `viryaPhase`, `q`; pannello coach con griglia filtri + reset.
+- **Anteprima struttura libreria** — click su un template nel pannello coach espande sotto la riga il **grafico a blocchi** (`SessionBlockIntensityChart`, stesso del calendario/builder).
 
 ## Prossimi passi (roadmap)
 

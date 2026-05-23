@@ -20,11 +20,14 @@ export function SessionBlockIntensityChart({
   segments,
   title = "Grafico a blocchi (intensità)",
   estimatedTss,
+  compact = false,
 }: {
   segments: ChartSegment[];
   title?: string;
   /** Stima TSS (IF² normalizzato: 60′ Z4 ≈ 100). */
   estimatedTss?: number;
+  /** Variante compatta per anteprime in lista (libreria coach). */
+  compact?: boolean;
 }) {
   const totalSec = segments.reduce((s, x) => s + x.durationSeconds, 0) || 1;
 
@@ -59,7 +62,7 @@ export function SessionBlockIntensityChart({
         role="img"
         aria-label={`Timeline sessione, ${totalSec} secondi`}
       >
-        <div className="flex min-h-[11rem] gap-1">
+        <div className={`flex gap-1 ${compact ? "min-h-[8rem]" : "min-h-[11rem]"}`}>
           {segments.map((seg) => {
             const heightScore = seg.barIntensityScore ?? seg.intensityScore;
             const pct = (heightScore / 7) * 100;
@@ -76,7 +79,7 @@ export function SessionBlockIntensityChart({
                 className="flex min-w-0 flex-col"
                 style={{ flexGrow: Math.max(1, seg.durationSeconds), flexBasis: 0 }}
               >
-                <div className="flex min-h-[7.5rem] flex-1 flex-col justify-end">
+                <div className={`flex flex-1 flex-col justify-end ${compact ? "min-h-[5rem]" : "min-h-[7.5rem]"}`}>
                   <div
                     className="mx-0.5 rounded-t-lg shadow-[inset_0_-2px_0_rgba(0,0,0,0.35)] ring-1 ring-violet-400/25 transition hover:brightness-110"
                     style={{
@@ -104,16 +107,18 @@ export function SessionBlockIntensityChart({
         </div>
       </div>
 
-      <p className="text-[0.6rem] leading-relaxed text-gray-600">
-        Colori = zona; larghezza = tempo. Altezza = carico (piramide: incremento lineare su W/bpm, non solo etichetta zona).
-        {typeof estimatedTss === "number" ? (
-          <>
-            {" "}
-            TSS stimato: modello somma <span className="text-violet-400/90">IF²</span> per segmento, calibrato su{" "}
-            <span className="text-fuchsia-400/85">60′ in Z4 ≈ 100 TSS</span>.
-          </>
-        ) : null}
-      </p>
+      {!compact ? (
+        <p className="text-[0.6rem] leading-relaxed text-gray-600">
+          Colori = zona; larghezza = tempo. Altezza = carico (piramide: incremento lineare su W/bpm, non solo etichetta zona).
+          {typeof estimatedTss === "number" ? (
+            <>
+              {" "}
+              TSS stimato: modello somma <span className="text-violet-400/90">IF²</span> per segmento, calibrato su{" "}
+              <span className="text-fuchsia-400/85">60′ in Z4 ≈ 100 TSS</span>.
+            </>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   );
 }
