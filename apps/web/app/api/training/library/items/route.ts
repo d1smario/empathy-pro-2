@@ -3,7 +3,7 @@ import { requireCoachLibraryWriteContext } from "@/lib/auth/coach-library-contex
 import { TrainingRouteAuthError } from "@/lib/auth/training-route-auth";
 import {
   denormalizedFieldsFromContract,
-  parsePro2BuilderSessionContract,
+  parseAndPreparePro2BuilderSessionContract,
 } from "@/lib/training/library/library-item-from-contract";
 import { mapLibraryItemRow, type CoachWorkoutLibraryItemRow } from "@/lib/training/library/coach-workout-library-types";
 import { filterCoachLibraryItemRows } from "@/lib/training/library/library-item-filters";
@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
       metadata?: Record<string, unknown>;
     };
 
-    const contract = parsePro2BuilderSessionContract(body.contract);
+    const contract = parseAndPreparePro2BuilderSessionContract(body.contract);
     if (!contract) {
       return NextResponse.json({ ok: false as const, error: "invalid_contract" }, { status: 400, headers: NO_STORE });
     }

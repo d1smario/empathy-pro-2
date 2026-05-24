@@ -1,4 +1,5 @@
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { preparePro2BuilderSessionContractForPersist } from "@/lib/training/builder/pro2-session-interpretation";
 
 const LIBRARY_FAMILIES = new Set(["aerobic", "strength", "technical", "lifestyle"]);
 
@@ -9,6 +10,13 @@ export function parsePro2BuilderSessionContract(raw: unknown): Pro2BuilderSessio
   if (c.version !== 1 || !sourceOk || typeof c.discipline !== "string") return null;
   if (!LIBRARY_FAMILIES.has(c.family)) return null;
   return c;
+}
+
+/** Validazione + snapshot interpretazione (salvataggio libreria / seed). */
+export function parseAndPreparePro2BuilderSessionContract(raw: unknown): Pro2BuilderSessionContract | null {
+  const c = parsePro2BuilderSessionContract(raw);
+  if (!c) return null;
+  return preparePro2BuilderSessionContractForPersist(c);
 }
 
 export function denormalizedFieldsFromContract(contract: Pro2BuilderSessionContract): {

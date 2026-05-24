@@ -22,6 +22,7 @@ import type {
   Pro2BuilderSessionContract,
   Pro2RenderProfile,
 } from "@/lib/training/builder/pro2-session-contract";
+import { preparePro2BuilderSessionContractForPersist } from "@/lib/training/builder/pro2-session-interpretation";
 import { PRO2_GYM_EXECUTION_STYLES } from "@/lib/training/builder/gym-execution-styles";
 
 export type PlanBlockKind = "steady" | "interval2" | "interval3" | "ramp" | "pyramid";
@@ -508,7 +509,7 @@ export function buildPro2BuilderSessionContract(input: {
     };
   });
 
-  return {
+  return preparePro2BuilderSessionContractForPersist({
     version: 1,
     source: "builder",
     family: input.family ?? "aerobic",
@@ -523,5 +524,5 @@ export function buildPro2BuilderSessionContract(input: {
     summary,
     renderProfile: input.renderProfile,
     blocks: contractBlocks,
-  };
+  });
 }

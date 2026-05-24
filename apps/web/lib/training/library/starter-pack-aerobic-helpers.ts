@@ -4,6 +4,7 @@ import type {
   Pro2BuilderSessionContract,
   Pro2RenderProfile,
 } from "@/lib/training/builder/pro2-session-contract";
+import { preparePro2BuilderSessionContractForPersist } from "@/lib/training/builder/pro2-session-interpretation";
 
 export const DEFAULT_STARTER_RENDER: Pro2RenderProfile = {
   intensityUnit: "watt",
@@ -228,7 +229,7 @@ export function buildStarterContractFromPreset(preset: AerobicStarterPreset): Pr
   const durationSec = Math.max(60, preset.plannedMinutes * 60);
   const avgPowerW = Math.max(80, Math.round((preset.tss * 1000) / Math.max(durationSec / 3600, 0.25) / 36));
   const blocks = preset.blocks.map((b, i) => blockFromSpec(b, i));
-  return {
+  return preparePro2BuilderSessionContractForPersist({
     version: 1,
     source: "builder",
     family: "aerobic",
@@ -246,5 +247,5 @@ export function buildStarterContractFromPreset(preset: AerobicStarterPreset): Pr
     },
     renderProfile: DEFAULT_STARTER_RENDER,
     blocks,
-  };
+  });
 }

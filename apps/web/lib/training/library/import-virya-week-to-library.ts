@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   denormalizedFieldsFromContract,
+  parseAndPreparePro2BuilderSessionContract,
   parsePro2BuilderSessionContract,
 } from "@/lib/training/library/library-item-from-contract";
 
@@ -89,7 +90,7 @@ export async function importViryaWeekToCoachLibrary(input: {
 
   let imported = 0;
   for (const session of input.sessions) {
-    const contract = parsePro2BuilderSessionContract(session.contract);
+    const contract = parseAndPreparePro2BuilderSessionContract(session.contract);
     if (!contract) throw new Error("invalid_contract");
 
     const title = String(session.title ?? contract.sessionName ?? "Seduta VIRYA").trim().slice(0, 200);

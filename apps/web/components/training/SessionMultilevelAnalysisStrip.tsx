@@ -8,6 +8,7 @@ import {
   buildSessionMultilevelAnalysisStrip,
   type Pro2SessionMultilevelSource,
 } from "@/lib/training/session-multilevel-analysis-strip";
+import { viewModelFromSessionInterpretation } from "@/lib/training/builder/pro2-session-interpretation";
 
 function pillsForCategory(
   category: SessionAnalysisFacetCategory,
@@ -41,16 +42,31 @@ export function SessionMultilevelAnalysisStrip({
   fallbackDurationMin?: number | null;
   compact?: boolean;
 }) {
-  const vm = useMemo(
-    () => buildSessionMultilevelAnalysisStrip({ contract, fallbackTss, fallbackDurationMin }),
-    [contract, fallbackTss, fallbackDurationMin],
-  );
-
-  const activeCount = vm.stripSlots.filter((s) => s.valueLineIt !== "—").length;
+  const vm = useMemo(() => {
+    const interp = contract?.sessionInterpretation;
+    if (interp?.modelVersion === 1 && interp.sectors.length > 0) {
+      return viewModelFromSessionInterpretation(interp);
+    }
+    return buildSessionMultilevelAnalysisStrip({ contract, fallbackTss, fallbackDurationMin });
+  }, [contract, fallbackTss, fallbackDurationMin]);
 
   const boxes = useMemo(
-    () =>
-      vm.stripSlots
+    () => {
+      const interp = contract?.sessionInterpretation;
+      if (interp?.modelVersion === 1 && interp.sectors.length > 0) {
+        return interp.sectors.map((s) => ({
+          id: s.facetId,
+          shortLabel: s.shortLabelIt,
+          valueLine: s.valueLineIt,
+          detailLine: s.detailHintIt,
+          pills: s.pathwayPills?.map((p) => ({
+            id: p.id,
+            text: p.text,
+            direction: p.direction,
+          })),
+        }));
+      }
+      return vm.stripSlots
         .filter((s) => s.valueLineIt !== "—")
         .map((s) => ({
           id: s.facetId,
@@ -58,9 +74,12 @@ export function SessionMultilevelAnalysisStrip({
           valueLine: s.valueLineIt,
           detailLine: s.detailHintIt,
           pills: pillsForCategory(s.category, vm.facets),
-        })),
-    [vm.stripSlots, vm.facets],
+        }));
+    },
+    [contract?.sessionInterpretation, vm.stripSlots, vm.facets],
   );
+
+  const activeCount = boxes.length;
 
   return (
     <div
@@ -124,6 +143,11 @@ export function SessionMultilevelAnalysisStrip({
           {vm.facets.map((f) => (
             <li key={`all-${f.id}`}>
               <span className="font-semibold text-gray-400">{f.categoryLabelIt}</span> · {f.pillLabelIt} — {f.hintIt}
+            </li>
+          ))}
+          {contract?.sessionInterpretation?.sectors.map((s) => (
+            <li key={`sec-${s.facetId}`}>
+              <span className="font-semibold text-gray-400">{s.shortLabelIt}</span> · {s.valueLineIt} — {s.detailHintIt}
             </li>
           ))}
         </ul>

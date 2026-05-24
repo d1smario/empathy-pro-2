@@ -7,13 +7,14 @@ import type {
 } from "@/api/training/contracts";
 import type { SessionKnowledgePacket } from "@/lib/empathy/schemas/knowledge";
 import type { AdaptationTarget } from "@/lib/training/engine/types";
-import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import type { Pro2BuilderSessionContract, Pro2SessionInterpretation } from "@/lib/training/builder/pro2-session-contract";
 import { pro2BuilderContractToExpandedChartSegments } from "@/lib/training/builder/pro2-contract-chart-segments";
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
 
 /** Contratto builder Pro 2 con campi opzionali V1-compat (knowledge / struttura) se presenti nel JSON. */
 export type Pro2SessionMultilevelSource = Pro2BuilderSessionContract & {
   sessionKnowledge?: SessionKnowledgePacket | null;
+  sessionInterpretation?: Pro2SessionInterpretation;
   structure?: {
     descriptor?: string;
     objective?: string;

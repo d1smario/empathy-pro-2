@@ -120,8 +120,35 @@ export type Pro2BuilderSessionContract = {
   blocks?: Pro2BuilderBlockContract[];
   /** Allineato al pannello generativo Macro C (fase · contesto · qualità). */
   technicalModuleFocus?: TechnicalModuleFocus;
+  /**
+   * Interpretazione multilivello deterministica (domande coach, facilitazioni, settori attivi).
+   * Serializzata con il contratto in notes / libreria coach.
+   */
+  sessionInterpretation?: Pro2SessionInterpretation;
+};
+
+export type Pro2SessionInterpretationSector = {
+  category: string;
+  shortLabelIt: string;
+  valueLineIt: string;
+  detailHintIt: string;
+  facetId: string;
+  pathwayPills?: Array<{ id: string; text: string; direction: "forward" | "reverse" }>;
+};
+
+export type Pro2SessionInterpretation = {
+  modelVersion: 1;
+  layer: "deterministic_session_facet_template";
+  coachPrompts: string[];
+  facilitationHints: string[];
+  sectors: Pro2SessionInterpretationSector[];
+  /** ISO timestamp generazione snapshot (persist). */
+  generatedAt?: string;
 };
 
 export function serializePro2BuilderSessionContract(contract: Pro2BuilderSessionContract): string {
-  return `${BUILDER_SESSION_JSON_TAG}${encodeURIComponent(JSON.stringify(contract))}`;
+  const { preparePro2BuilderSessionContractForPersist } =
+    require("@/lib/training/builder/pro2-session-interpretation") as typeof import("@/lib/training/builder/pro2-session-interpretation");
+  const prepared = preparePro2BuilderSessionContractForPersist(contract);
+  return `${BUILDER_SESSION_JSON_TAG}${encodeURIComponent(JSON.stringify(prepared))}`;
 }

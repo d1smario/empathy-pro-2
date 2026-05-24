@@ -434,6 +434,7 @@ export function CoachWorkoutLibraryPanel({
                               contract={previewContract}
                               title={item.title}
                               tssFallback={item.tssTarget}
+                              durationFallback={item.durationMinutes}
                               compact
                             />
                           ) : (

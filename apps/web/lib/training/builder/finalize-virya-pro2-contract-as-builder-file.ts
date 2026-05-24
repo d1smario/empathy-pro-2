@@ -4,6 +4,7 @@ import type {
   Pro2BuilderSessionContract,
   Pro2RenderProfile,
 } from "@/lib/training/builder/pro2-session-contract";
+import { preparePro2BuilderSessionContractForPersist } from "@/lib/training/builder/pro2-session-interpretation";
 
 /**
  * Allinea un contratto VIRYA al formato “file Builder” Pro 2: `source: "builder"`, `renderProfile`,
@@ -96,10 +97,10 @@ export function finalizeViryaPro2ContractAsBuilderFile(input: {
     };
   });
 
-  return {
+  return preparePro2BuilderSessionContractForPersist({
     ...input.contract,
     source: "builder",
     renderProfile,
     blocks,
-  };
+  });
 }
