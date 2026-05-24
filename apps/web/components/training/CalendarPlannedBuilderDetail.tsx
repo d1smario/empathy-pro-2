@@ -91,7 +91,7 @@ export function CalendarPlannedBuilderDetail({
   );
 
   const hasBlockChart = segments.length > 0 && contract?.family !== "strength";
-  const [structureOpen, setStructureOpen] = useState(() => hasBlockChart);
+  const [structureOpen, setStructureOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [targetDate, setTargetDate] = useState(workout.date);
   const [calendarBusy, setCalendarBusy] = useState<"copy" | "move" | null>(null);
@@ -354,6 +354,12 @@ export function CalendarPlannedBuilderDetail({
                   title="Workout details"
                 />
               ) : null}
+              <SessionMultilevelAnalysisStrip
+                contract={contract}
+                fallbackTss={titleTss}
+                fallbackDurationMin={titleDurationMin}
+                compact
+              />
             </div>
           ) : contract && (contract.blocks ?? []).length === 0 ? (
             <p className="mt-4 text-sm text-amber-200/90">
@@ -372,7 +378,7 @@ export function CalendarPlannedBuilderDetail({
                 {family === "strength"
                   ? "Dettaglio tecnico · lista blocchi"
                   : hasBlockChart
-                    ? "Dettaglio blocchi · zone e note"
+                    ? "Dettaglio blocchi · note"
                     : "Struttura · apri / chiudi"}
               </span>
               <ChevronDown
@@ -389,16 +395,18 @@ export function CalendarPlannedBuilderDetail({
                 />
               ) : null}
 
-              {family !== "strength" ? (
+              {!hasBlockChart ? (
                 <BuilderPlannedSessionViz contract={contract} title="Profilo zone (builder V1)" compact />
               ) : null}
 
-              <SessionMultilevelAnalysisStrip
-                contract={contract}
-                fallbackTss={titleTss}
-                fallbackDurationMin={titleDurationMin}
-                compact
-              />
+              {!hasBlockChart ? (
+                <SessionMultilevelAnalysisStrip
+                  contract={contract}
+                  fallbackTss={titleTss}
+                  fallbackDurationMin={titleDurationMin}
+                  compact
+                />
+              ) : null}
 
               {family !== "strength" && !hasBlockChart ? (
                 <ul className="flex flex-col gap-3">

@@ -8,6 +8,8 @@ import type {
 import type { SessionKnowledgePacket } from "@/lib/empathy/schemas/knowledge";
 import type { AdaptationTarget } from "@/lib/training/engine/types";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { pro2BuilderContractToExpandedChartSegments } from "@/lib/training/builder/pro2-contract-chart-segments";
+import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
 
 /** Contratto builder Pro 2 con campi opzionali V1-compat (knowledge / struttura) se presenti nel JSON. */
 export type Pro2SessionMultilevelSource = Pro2BuilderSessionContract & {
@@ -61,9 +63,10 @@ const STRIP_SHORT_LABEL: Record<SessionAnalysisFacetCategory, string> = {
 const SOURCE_RANK: Record<SessionAnalysisFacetSource, number> = {
   session_knowledge: 0,
   session_structure: 1,
-  session_family: 2,
-  adaptation_target: 3,
-  load_proxy: 4,
+  chart_profile: 2,
+  session_family: 3,
+  adaptation_target: 4,
+  load_proxy: 5,
 };
 
 const ALL_ADAPTATION_TARGETS: readonly AdaptationTarget[] = [
@@ -210,6 +213,20 @@ function facetsFromAdaptationTarget(target: AdaptationTarget): Array<Omit<Sessio
         category: "muscle_cellular",
         pillLabelIt: "Buffer · microambiente",
         hintIt: "Capacità tampone e trasportatori (es. MCT) come asse cellulare (contesto, non lab).",
+        source: "adaptation_target",
+      });
+      out.push({
+        id: "at_lt_hyp",
+        category: "oxygen_hypoxia",
+        pillLabelIt: "Gradiente O₂ · blocchi soglia",
+        hintIt: "Ripetute ondate ipossiche transitorie durante lavoro LT2/LT1: contesto adattivo HIF (non misura invasiva).",
+        source: "adaptation_target",
+      });
+      out.push({
+        id: "at_lt_neuro",
+        category: "neuro_adrenergic",
+        pillLabelIt: "Drive adrenergico · soglia",
+        hintIt: "Blocco sopra LT: reclutamento fibre veloci e picco catecolaminergico acuto.",
         source: "adaptation_target",
       });
       break;
@@ -430,8 +447,155 @@ function facetsFromLoadProxy(tss: number, durationMin: number): Array<Omit<Sessi
       hintIt: "Alto TSS: picco simpatico e bisogno di recovery strutturato.",
       source: "load_proxy",
     });
+    out.push({
+      id: "load_hpa",
+      category: "endocrine_stress",
+      pillLabelIt: "Allostasi · HPA",
+      hintIt: "Carico globale elevato: monitorare sonno, HRV e segnali di overreaching nelle 48–72h.",
+      source: "load_proxy",
+    });
+  }
+  if (tss >= 60 && durationMin >= 75) {
+    out.push({
+      id: "load_mito",
+      category: "bioenergetics",
+      pillLabelIt: "Volume ossidativo sostenuto",
+      hintIt: "Durata + carico medio-alto: elevato fabbisogno mitocondriale e substrati.",
+      source: "load_proxy",
+    });
   }
   return out;
+}
+
+function isHighIntensityLabel(label: string): boolean {
+  const u = label.toUpperCase();
+  return /\b(Z[4567]|LT1|LT2|VO2|VO₂|FTP|ANAEROBIC)\b/.test(u);
+}
+
+function facetsFromChartProfile(
+  contract: Pro2SessionMultilevelSource,
+  segments: ChartSegment[],
+): Array<Omit<SessionAnalysisFacetViewModel, "categoryLabelIt">> {
+  const out: Array<Omit<SessionAnalysisFacetViewModel, "categoryLabelIt">> = [];
+  if (!segments.length) return out;
+
+  const totalSec = segments.reduce((s, x) => s + x.durationSeconds, 0) || 1;
+  let highSec = 0;
+  let recoverySec = 0;
+  for (const seg of segments) {
+    if (isHighIntensityLabel(seg.intensityLabel)) highSec += seg.durationSeconds;
+    if (/Z1|Z2|RECOVERY|RECUPERO|WARM|COOL|FatMax/i.test(seg.intensityLabel)) recoverySec += seg.durationSeconds;
+  }
+  const highFrac = highSec / totalSec;
+  const recoveryFrac = recoverySec / totalSec;
+
+  if (highFrac >= 0.12) {
+    out.push({
+      id: "chart_hypox",
+      category: "oxygen_hypoxia",
+      pillLabelIt: "Ipossia funzionale · blocchi",
+      hintIt: `~${Math.round(highFrac * 100)}% del tempo sopra soglia: gradiente O₂ muscolo ↔ mitocondri durante i lavori.`,
+      source: "chart_profile",
+    });
+    out.push({
+      id: "chart_neuro",
+      category: "neuro_adrenergic",
+      pillLabelIt: "Catecolamine · intervalli",
+      hintIt: "Segmenti intensi: drive simpatico e reclutamento fibre veloci (modelo da profilo blocchi).",
+      source: "chart_profile",
+    });
+  }
+
+  if (highFrac >= 0.08 && recoveryFrac >= 0.2) {
+    out.push({
+      id: "chart_lactate_shuttle",
+      category: "glycolysis",
+      pillLabelIt: "Shuttle lattato · work:rest",
+      hintIt: "Alternanza lavoro/recupero: produzione e riossidazione lattato come shuttle energetico.",
+      source: "chart_profile",
+    });
+  }
+
+  if (contract.family === "aerobic" && highFrac >= 0.05) {
+    out.push({
+      id: "chart_pgc1",
+      category: "genetic_regulation",
+      pillLabelIt: "Segnali adattivi · PGC-1α",
+      hintIt: "Contesto allenamento aerobico strutturato: biogenesi mitocondriale e regolazione trascrizionale (non test genetico).",
+      source: "chart_profile",
+    });
+  }
+
+  if (highFrac >= 0.1 || (contract.summary?.tss ?? 0) >= 85) {
+    out.push({
+      id: "chart_mtor_timing",
+      category: "repair_anabolic",
+      pillLabelIt: "Recovery anabolico post-carico",
+      hintIt: "Dopo blocchi intensi: finestra proteine + CHO per ripristino glicogeno e segnale mTOR (timing, non prescrizione).",
+      source: "chart_profile",
+    });
+  }
+
+  return out;
+}
+
+function buildCoachPrompts(input: {
+  contract: Pro2SessionMultilevelSource;
+  tss: number;
+  durationMin: number;
+  facets: SessionAnalysisFacetViewModel[];
+  highIntensityFrac: number;
+}): string[] {
+  const prompts: string[] = [];
+  const target = String(input.contract.adaptationTarget ?? "").trim();
+
+  if (target === "lactate_tolerance" || target === "lactate_clearance") {
+    prompts.push("RPE e potenza sui blocchi LT2: c’è drift (>5%) rispetto al target pianificato?");
+    prompts.push("CHO nelle 3h pre-seduta: adeguati al volume di lavoro sopra soglia?");
+  }
+  if (input.tss >= 85) {
+    prompts.push("Sonno e HRV nelle 48h precedenti: compatibili con questo carico o conviene ridurre un blocco?");
+  }
+  if (input.highIntensityFrac >= 0.15) {
+    prompts.push("Recupero tra i blocchi intensi: percezione di clearance lattato vs target Z1/Z2?");
+  }
+  if (input.contract.family === "aerobic" && input.durationMin >= 75) {
+    prompts.push("Idratazione ed elettroliti: sufficienti per la durata e la frazione sopra soglia?");
+  }
+  if (!prompts.length && input.facets.length > 0) {
+    prompts.push("Confronta percezione (RPE) vs target di zona sui blocchi principali.");
+    prompts.push("Recovery nelle 24h post: sonno, energia e DOMS coerenti con lo stimolo pianificato?");
+  }
+  return prompts.slice(0, 4);
+}
+
+function buildFacilitationHints(input: {
+  contract: Pro2SessionMultilevelSource;
+  tss: number;
+  facets: SessionAnalysisFacetViewModel[];
+}): string[] {
+  const hints: string[] = [];
+  const cats = new Set(input.facets.map((f) => f.category));
+
+  if (cats.has("glycolysis") || input.tss >= 70) {
+    hints.push("→ CHO pre/post e intra se sessione >75′ o TSS elevato: supporto glicogeno e shuttle lattato.");
+  }
+  if (cats.has("oxygen_hypoxia") || cats.has("bioenergetics")) {
+    hints.push("→ Recovery attivo Z1–Z2 tra blocchi (già in struttura): facilita riossidazione e clearance.");
+  }
+  if (cats.has("repair_anabolic")) {
+    hints.push("← Proteine + CHO entro 2h post: modulatore timing mTOR / ripristino (Nutrizione · diario).");
+  }
+  if (cats.has("endocrine_stress") || input.tss >= 90) {
+    hints.push("← Sonno, idratazione e giorno leggero successivo: modulatori HPA / allostasi.");
+  }
+  if (cats.has("microbiota_gut")) {
+    hints.push("← Fibre fermentabili + varietà vegetale: modulatori SCFA / assorbimento (Health · Nutrizione).");
+  }
+  if (!hints.length && input.contract.family === "aerobic") {
+    hints.push("→ Idrosolubili + minerali su sessioni lunghe; verifica fueling plan in export JSON.");
+  }
+  return hints.slice(0, 4);
 }
 
 function sortFacets(facets: SessionAnalysisFacetViewModel[]): SessionAnalysisFacetViewModel[] {
@@ -468,8 +632,19 @@ export function buildSessionMultilevelAnalysisStrip(
       notes: [
         "Nessun contract builder: collega una sessione generata dal builder per attivare le pillole di analisi multilivello.",
       ],
+      coachPrompts: [],
+      facilitationHints: [],
     };
   }
+
+  const segments =
+    contract.family !== "strength" ? pro2BuilderContractToExpandedChartSegments(contract) : [];
+  let highIntensitySec = 0;
+  const totalSegSec = segments.reduce((s, x) => s + x.durationSeconds, 0) || 1;
+  for (const seg of segments) {
+    if (isHighIntensityLabel(seg.intensityLabel)) highIntensitySec += seg.durationSeconds;
+  }
+  const highIntensityFrac = highIntensitySec / totalSegSec;
 
   const targetStr = String(contract.adaptationTarget ?? "").trim();
   if (targetStr && isAdaptationTarget(targetStr)) {
@@ -486,21 +661,39 @@ export function buildSessionMultilevelAnalysisStrip(
   const blob = knowledgeBlob(contract);
   for (const f of facetsFromKnowledgeBlob(blob)) pushFacet(raw, f);
 
-  const tss = contract.summary?.tss ?? input.fallbackTss ?? 0;
+  for (const f of facetsFromChartProfile(contract, segments)) pushFacet(raw, f);
+
+  const summaryTss = contract.summary?.tss;
+  const fallbackTss = input.fallbackTss ?? 0;
+  const tss = Math.max(
+    typeof summaryTss === "number" && Number.isFinite(summaryTss) && summaryTss > 0 ? summaryTss : 0,
+    typeof fallbackTss === "number" && Number.isFinite(fallbackTss) && fallbackTss > 0 ? fallbackTss : 0,
+  );
   const durMin = contract.summary?.durationSec
     ? Math.max(1, Math.round(contract.summary.durationSec / 60))
     : input.fallbackDurationMin ?? 0;
   for (const f of facetsFromLoadProxy(tss, durMin)) pushFacet(raw, f);
 
   const facets = sortFacets(raw);
+  const coachPrompts = buildCoachPrompts({
+    contract,
+    tss,
+    durationMin: durMin,
+    facets,
+    highIntensityFrac,
+  });
+  const facilitationHints = buildFacilitationHints({ contract, tss, facets });
+
   return {
     modelVersion: 1,
     layer: "deterministic_session_facet_template",
     facets,
     stripSlots: buildStripSlotsFromFacets(facets),
     notes: [
-      "Interpretazione strutturata da target adattativo, famiglia sessione, knowledge packet e proxy di carico — non diagnosi e non decisione clinica.",
+      "Interpretazione strutturata da target adattativo, profilo blocchi, knowledge packet e proxy di carico — non diagnosi e non decisione clinica.",
       "Nutrizione, microbiota e genetica sono modulatori transversali: usa Nutrizione / Health per approfondire con evidenza e tracce ricerca.",
     ],
+    coachPrompts,
+    facilitationHints,
   };
 }

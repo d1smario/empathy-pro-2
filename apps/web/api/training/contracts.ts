@@ -440,7 +440,8 @@ export type SessionAnalysisFacetSource =
   | "session_family"
   | "session_knowledge"
   | "load_proxy"
-  | "session_structure";
+  | "session_structure"
+  | "chart_profile";
 
 export type SessionAnalysisFacetViewModel = {
   id: string;
@@ -471,5 +472,9 @@ export type SessionMultilevelAnalysisStripViewModel = {
   /** Allineato a CATEGORY_ORDER: sempre tutte le categorie, valore “—” se assente. */
   stripSlots: SessionMultilevelStripSlotViewModel[];
   notes: string[];
+  /** Domande coach deterministiche (interpretazione, non prescrizione). */
+  coachPrompts: string[];
+  /** Facilitazioni / modulatori transversali (nutrizione, recovery). */
+  facilitationHints: string[];
 };
 
