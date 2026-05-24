@@ -176,6 +176,7 @@ export async function importViryaWeekToLibrary(input: {
 export async function importEmpathyAerobicStarterPack(): Promise<{
   ok: boolean;
   imported?: number;
+  updated?: number;
   skipped?: number;
   total?: number;
   error?: string;
@@ -191,12 +192,13 @@ export async function importEmpathyAerobicStarterPack(): Promise<{
   const json = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     imported?: number;
+    updated?: number;
     skipped?: number;
     total?: number;
     error?: string;
   };
   if (!res.ok || json.ok !== true) return { ok: false, error: json.error ?? "library_seed_failed" };
-  return { ok: true, imported: json.imported, skipped: json.skipped, total: json.total };
+  return { ok: true, imported: json.imported, updated: json.updated, skipped: json.skipped, total: json.total };
 }
 
 export async function clonePlannedWorkout(input: {

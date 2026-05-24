@@ -9,9 +9,26 @@ import {
 export type ImportStarterPackResult = {
   folderId: string | null;
   imported: number;
+  updated: number;
   skipped: number;
   total: number;
 };
+
+async function findExistingItemByPresetId(
+  db: SupabaseClient,
+  coachUserId: string,
+  presetId: string,
+): Promise<{ id: string } | null> {
+  const { data, error } = await db
+    .from("coach_workout_library_items")
+    .select("id")
+    .eq("coach_user_id", coachUserId)
+    .contains("metadata", { starterPack: EMPATHY_AEROBIC_STARTER_PACK_ID, presetId })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.id != null ? { id: String(data.id) } : null;
+}
 
 async function ensureStarterFolder(
   db: SupabaseClient,
@@ -62,6 +79,7 @@ async function existingPresetIds(
 
 /**
  * Import idempotente del pack Empathy aerobic nella libreria del coach.
+ * Template già presenti (stesso presetId) vengono aggiornati (contratto + sessionInterpretation).
  */
 export async function importEmpathyAerobicStarterPack(input: {
   db: SupabaseClient;
@@ -73,13 +91,10 @@ export async function importEmpathyAerobicStarterPack(input: {
   const templates = empathyAerobicStarterContracts();
 
   let imported = 0;
+  let updated = 0;
   let skipped = 0;
 
   for (const { preset, contract } of templates) {
-    if (have.has(preset.presetId)) {
-      skipped += 1;
-      continue;
-    }
     const fields = denormalizedFieldsFromContract(contract);
     const metadata: Record<string, unknown> = {
       starterPack: EMPATHY_AEROBIC_STARTER_PACK_ID,
@@ -88,6 +103,34 @@ export async function importEmpathyAerobicStarterPack(input: {
     };
     if (preset.viryaWeekObjective) {
       metadata.virya_week_objective = preset.viryaWeekObjective;
+    }
+
+    if (have.has(preset.presetId)) {
+      const existing = await findExistingItemByPresetId(input.db, input.coachUserId, preset.presetId);
+      if (!existing) {
+        skipped += 1;
+        continue;
+      }
+      const { error } = await input.db
+        .from("coach_workout_library_items")
+        .update({
+          folder_id: folderId,
+          title: preset.title,
+          description: preset.description,
+          family: fields.family,
+          discipline: fields.discipline,
+          sport_tags: fields.sportTags,
+          duration_minutes: fields.durationMinutes,
+          tss_target: fields.tssTarget,
+          contract_json: contract,
+          metadata,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", existing.id)
+        .eq("coach_user_id", input.coachUserId);
+      if (error) throw new Error(error.message);
+      updated += 1;
+      continue;
     }
 
     const { error } = await input.db.from("coach_workout_library_items").insert({
@@ -109,5 +152,5 @@ export async function importEmpathyAerobicStarterPack(input: {
     imported += 1;
   }
 
-  return { folderId, imported, skipped, total: templates.length };
+  return { folderId, imported, updated, skipped, total: templates.length };
 }

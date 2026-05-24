@@ -185,7 +185,9 @@ export function CoachWorkoutLibraryPanel({
       setErr(r.error ?? "Import pack fallito");
       return;
     }
-    setOkMsg(`Pack Empathy: ${r.imported ?? 0} nuovi, ${r.skipped ?? 0} già presenti (${r.total ?? STARTER_PACK_TEMPLATE_COUNT} totali).`);
+    setOkMsg(
+      `Pack Empathy: ${r.imported ?? 0} nuovi, ${r.updated ?? 0} aggiornati, ${r.skipped ?? 0} saltati (${r.total ?? STARTER_PACK_TEMPLATE_COUNT} totali).`,
+    );
     void refresh();
   }
 
@@ -258,7 +260,7 @@ export function CoachWorkoutLibraryPanel({
               disabled={busy != null}
               onClick={() => void handleImportStarterPack()}
             >
-              {busy === "starter" ? "Importo…" : `Importa catalogo Empathy (${STARTER_PACK_TEMPLATE_COUNT})`}
+              {busy === "starter" ? "Importo…" : `Importa / aggiorna catalogo (${STARTER_PACK_TEMPLATE_COUNT})`}
             </Pro2Button>
             {sourcePlannedId ? (
               <Pro2Button
