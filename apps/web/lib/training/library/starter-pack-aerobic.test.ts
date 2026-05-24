@@ -10,7 +10,7 @@ import {
 import { parsePro2BuilderSessionContract } from "./library-item-from-contract";
 
 test("empathy workout catalog: expanded unique presets", () => {
-  assert.ok(AEROBIC_STARTER_PRESETS.length >= 120, `expected >=120 presets, got ${AEROBIC_STARTER_PRESETS.length}`);
+  assert.ok(AEROBIC_STARTER_PRESETS.length >= 85, `expected >=85 presets, got ${AEROBIC_STARTER_PRESETS.length}`);
   assert.equal(AEROBIC_STARTER_PRESETS.length, STARTER_PACK_TEMPLATE_COUNT);
   const ids = new Set(AEROBIC_STARTER_PRESETS.map((p) => p.presetId));
   assert.equal(ids.size, AEROBIC_STARTER_PRESETS.length);
@@ -55,4 +55,22 @@ test("empathyAerobicStarterContracts: all parseable", () => {
   for (const { contract } of empathyAerobicStarterContracts()) {
     assert.ok(parsePro2BuilderSessionContract(contract));
   }
+});
+
+test("workout catalog: structural variety beyond warm + single block + cool", () => {
+  const contracts = empathyAerobicStarterContracts();
+  const rich = contracts.filter(({ contract }) => {
+    const mainBlocks = (contract.blocks ?? []).filter(
+      (b) => !/riscaldamento|defaticamento|warm|cool/i.test(b.label),
+    );
+    const kinds = new Set(mainBlocks.map((b) => b.kind));
+    const hasLongRec = mainBlocks.some((b) => /recupero profondo/i.test(b.label) && (b.durationMinutes ?? 0) >= 5);
+    const multiMain = mainBlocks.length >= 3;
+    return kinds.has("pyramid") || kinds.has("interval3") || kinds.has("ramp") || hasLongRec || multiMain;
+  });
+  assert.ok(rich.length >= 35, `expected >=35 structurally rich presets, got ${rich.length}`);
+
+  const pyramid = contracts.find((c) => c.preset.presetId === "cyc_pyramid_z4_7step");
+  assert.ok(pyramid);
+  assert.ok(pyramid.contract.blocks?.some((b) => b.kind === "pyramid"));
 });

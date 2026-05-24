@@ -1,11 +1,17 @@
 import {
   ALL_DISCIPLINES,
+  DISCIPLINE_SCALES,
+  i3,
   iv,
   preset,
   presetForDisciplines,
+  py,
+  rec,
+  rm,
   st,
   type AerobicStarterPreset,
 } from "@/lib/training/library/starter-pack-aerobic-helpers";
+import { STRUCTURE_RICH_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-structures";
 
 function z2Endurance75(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
@@ -38,30 +44,26 @@ function z2Endurance105(discipline: string): Omit<AerobicStarterPreset, "presetI
 function z3Tempo2x12(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Tempo Z3 · 2×12′ · ${discipline}`,
-    description: "Soglia aerobica bassa / tempo sostenuto.",
+    description: "Soglia aerobica bassa / tempo sostenuto — recupero visibile tra blocchi.",
     adaptationTarget: "lactate_clearance",
     phase: "build",
     tags: ["tempo", "z3", "quality"],
     plannedMinutes: 70,
     tss: 62,
-    blocks: [
-      st("Tempo 1", 12, "Z3"),
-      st("Recupero attivo", 4, "Z1"),
-      st("Tempo 2", 12, "Z3"),
-    ],
+    blocks: [st("Tempo 1", 12, "Z3"), rec(4), st("Tempo 2", 12, "Z3")],
   };
 }
 
 function z3Progressive(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Z2→Z3 progressivo · 90′ · ${discipline}`,
-    description: "Progressione aerobica da Z2 a Z3 senza salti bruschi.",
+    description: "Progressione aerobica: Z2 lungo, rampa, chiusura Z3.",
     adaptationTarget: "aerobic_base",
     phase: "build",
-    tags: ["z2", "z3", "progressive"],
+    tags: ["z2", "z3", "progressive", "ramp"],
     plannedMinutes: 90,
     tss: 58,
-    blocks: [st("Z2 base", 35, "Z2"), st("Z2 alto", 20, "Z2"), st("Z3 mod", 15, "Z3")],
+    blocks: [st("Z2 base", 30, "Z2"), rm("Rampa Z2→Z3", 15, "Z2", "Z3"), st("Z3 mod", 15, "Z3")],
   };
 }
 
@@ -82,17 +84,13 @@ function norwegianThreshold5x3(discipline: string): Omit<AerobicStarterPreset, "
 function norwegianDouble4x4(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Norvegese · 2×(4×4′) · ${discipline}`,
-    description: "Doppia serie 4×4′ — formato nordico classico per VO₂/soglia.",
+    description: "Doppia serie 4×4′ con 10′ Z1 tra blocchi — formato nordico completo.",
     adaptationTarget: "vo2max",
     phase: "build",
     tags: ["norwegian", "vo2", "4x4", "quality"],
-    plannedMinutes: 95,
-    tss: 98,
-    blocks: [
-      iv("Serie A 4×4′", 4, 240, 240, "Z5", "Z1"),
-      st("Recupero tra serie", 8, "Z1"),
-      iv("Serie B 4×4′", 4, 240, 240, "Z5", "Z1"),
-    ],
+    plannedMinutes: 105,
+    tss: 108,
+    blocks: [iv("Serie A 4×4′", 4, 240, 240, "Z5", "Z1"), rec(10), iv("Serie B 4×4′", 4, 240, 240, "Z5", "Z1")],
   };
 }
 
@@ -125,41 +123,41 @@ function interval20x40x12(discipline: string): Omit<AerobicStarterPreset, "prese
 function polarized9015(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Polarizzato · 90′ · ${discipline}`,
-    description: "Modello 80/20 — volume Z2 + 4×4′ Z5.",
+    description: "Volume Z2 isolato, poi tier VO₂ separato da recupero profondo.",
     adaptationTarget: "aerobic_base",
     phase: "build",
     tags: ["polarized", "z2", "vo2", "quality"],
     plannedMinutes: 90,
     tss: 78,
     viryaWeekObjective: "quality",
-    blocks: [st("Volume Z2", 55, "Z2"), iv("Quality Z5", 4, 240, 240, "Z5", "Z1"), st("Flush Z2", 8, "Z2")],
+    blocks: [st("Volume Z2", 50, "Z2"), rec(5), iv("Quality Z5", 4, 240, 240, "Z5", "Z1"), st("Flush Z2", 8, "Z2")],
   };
 }
 
 function polarized120(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Polarizzato long · 120′ · ${discipline}`,
-    description: "Long Z2 con chiusura 3×5′ Z5 — settimana polarizzata.",
+    description: "Long Z2 + tier VO₂ 3×5′ con 8′ rec tra volume e qualità.",
     adaptationTarget: "aerobic_base",
     phase: "build",
     tags: ["polarized", "long", "z2", "vo2"],
     plannedMinutes: 120,
     tss: 92,
     viryaWeekObjective: "long",
-    blocks: [st("Volume Z2", 75, "Z2"), iv("Z5 blocks", 3, 300, 300, "Z5", "Z1"), st("Cool flush", 10, "Z2")],
+    blocks: [st("Volume Z2", 70, "Z2"), rec(8), iv("Z5 blocks", 3, 300, 300, "Z5", "Z1"), st("Cool flush", 10, "Z2")],
   };
 }
 
 function lactateTolerance2x15(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
     title: `Lattacido · 2×15′ Z4 · ${discipline}`,
-    description: "Toleranza lattato — soglia alta con recupero moderato.",
+    description: "Due blocchi soglia lunghi — 12′ recupero profondo tra i lavori.",
     adaptationTarget: "lactate_clearance",
     phase: "build",
     tags: ["lactate", "threshold", "z4"],
-    plannedMinutes: 80,
-    tss: 86,
-    blocks: [st("Blocco 1", 15, "Z4"), st("Recupero", 5, "Z1"), st("Blocco 2", 15, "Z4")],
+    plannedMinutes: 85,
+    tss: 90,
+    blocks: [st("Blocco 1", 15, "Z4"), rec(12), st("Blocco 2", 15, "Z4")],
   };
 }
 
@@ -178,15 +176,20 @@ function lactate6x5(discipline: string): Omit<AerobicStarterPreset, "presetId" |
 
 function vo2_5x5(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
-    title: `VO₂ · 5×5′ · ${discipline}`,
-    description: "Intervalli VO₂max classici — 5′ on / 5′ off.",
+    title: `VO₂ tier · 3×5′ + 8′ + 2×5′ · ${discipline}`,
+    description: "VO₂max in due tier separati da recupero profondo 8′.",
     adaptationTarget: "vo2max",
     phase: "build",
-    tags: ["vo2", "intervals", "quality"],
-    plannedMinutes: 85,
-    tss: 92,
+    tags: ["vo2", "intervals", "quality", "tier"],
+    plannedMinutes: 95,
+    tss: 98,
     viryaWeekObjective: "quality",
-    blocks: [iv("5×5′ VO₂", 5, 300, 300, "Z5", "Z1")],
+    blocks: [
+      iv("Tier A · 3×5′", 3, 300, 180, "Z5", "Z1"),
+      rec(8),
+      iv("Tier B · 2×5′", 2, 300, 240, "Z5", "Z1"),
+      st("Z2 flush", 10, "Z2"),
+    ],
   };
 }
 
@@ -218,14 +221,14 @@ function anaerobic8x45(discipline: string): Omit<AerobicStarterPreset, "presetId
 
 function hitTabata(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
-    title: `HIT · Tabata 8×(20″/10″) · ${discipline}`,
-    description: "High-intensity interval training — formato Tabata.",
+    title: `HIT · Tabata + flush · ${discipline}`,
+    description: "Tabata 8×(20″/10″) poi Z2 flush — densità HIT isolata.",
     adaptationTarget: "vo2max",
     phase: "build",
     tags: ["hit", "tabata", "intervals"],
-    plannedMinutes: 45,
-    tss: 55,
-    blocks: [iv("Tabata", 8, 20, 10, "Z6", "Z1", "HIT Tabata")],
+    plannedMinutes: 50,
+    tss: 58,
+    blocks: [st("Priming Z2", 12, "Z2"), iv("Tabata", 8, 20, 10, "Z6", "Z1", "HIT Tabata"), rec(5), st("Z2 flush", 8, "Z2")],
   };
 }
 
@@ -389,27 +392,34 @@ function sweetSpot3x15(discipline: string): Omit<AerobicStarterPreset, "presetId
 
 function overUnderNorwegian(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
-    title: `Over-under · 4×(2′Z4/2′Z3) · ${discipline}`,
-    description: "Oscillazioni sopra/sotto soglia — metodo norvegese OU.",
+    title: `Over-under · 3×(2′Z4/1′Z3/2′Z4) · ${discipline}`,
+    description: "Oscillazioni sopra/sotto soglia — interval3 con recupero tra blocchi.",
     adaptationTarget: "lactate_clearance",
     phase: "build",
     tags: ["over_under", "norwegian", "z4", "z3"],
-    plannedMinutes: 72,
-    tss: 78,
+    plannedMinutes: 78,
+    tss: 82,
     blocks: [
-      iv("OU set 1", 4, 120, 120, "Z4", "Z3"),
-      st("Rec", 4, "Z1"),
-      iv("OU set 2", 4, 120, 120, "Z4", "Z3"),
+      i3("OU block 1", 3, 120, 60, 120, "Z4", "Z3", "Z4"),
+      rec(5),
+      i3("OU block 2", 3, 120, 60, 120, "Z4", "Z3", "Z4"),
     ],
   };
 }
 
-const MULTI_TEMPLATES: Array<{
+const SIMPLE_MULTI_TEMPLATES: Array<{
   baseId: string;
   build: (discipline: string) => Omit<AerobicStarterPreset, "presetId" | "discipline">;
 }> = [
   { baseId: "endurance_z2_75", build: z2Endurance75 },
   { baseId: "long_z2_105", build: z2Endurance105 },
+  { baseId: "heat_z2_90", build: heatEndurance90 },
+];
+
+const CYCLING_QUALITY_TEMPLATES: Array<{
+  baseId: string;
+  build: (discipline: string) => Omit<AerobicStarterPreset, "presetId" | "discipline">;
+}> = [
   { baseId: "tempo_z3_2x12", build: z3Tempo2x12 },
   { baseId: "z2_z3_progressive_90", build: z3Progressive },
   { baseId: "norwegian_5x3_z4", build: norwegianThreshold5x3 },
@@ -427,7 +437,6 @@ const MULTI_TEMPLATES: Array<{
   { baseId: "hit_12x1", build: hit12x1 },
   { baseId: "hit_40_20_x8", build: hit40x20x8 },
   { baseId: "hypoxic_sim_4x6", build: hypoxicSim4x6 },
-  { baseId: "heat_z2_90", build: heatEndurance90 },
   { baseId: "heat_z3_60", build: heatTempo60 },
   { baseId: "tt_2x20", build: tt2x20 },
   { baseId: "tt_40k_sim", build: tt40kSim },
@@ -440,7 +449,7 @@ const MULTI_TEMPLATES: Array<{
 
 function buildMultiDisciplinePresets(): AerobicStarterPreset[] {
   const out: AerobicStarterPreset[] = [];
-  for (const tpl of MULTI_TEMPLATES) {
+  for (const tpl of SIMPLE_MULTI_TEMPLATES) {
     out.push(
       ...presetForDisciplines(tpl.baseId, ALL_DISCIPLINES, (discipline, durationScale) => {
         const base = tpl.build(discipline);
@@ -450,6 +459,11 @@ function buildMultiDisciplinePresets(): AerobicStarterPreset[] {
         }));
         return { ...base, blocks: scaledMain };
       }),
+    );
+  }
+  for (const tpl of CYCLING_QUALITY_TEMPLATES) {
+    out.push(
+      ...presetForDisciplines(tpl.baseId, [DISCIPLINE_SCALES.cycling], (discipline) => tpl.build(discipline)),
     );
   }
   return out;
@@ -639,6 +653,7 @@ const CANOE_ONLY: AerobicStarterPreset[] = [
 
 export const AEROBIC_CATALOG_EXTENSION_PRESETS: AerobicStarterPreset[] = [
   ...buildMultiDisciplinePresets(),
+  ...STRUCTURE_RICH_PRESETS,
   ...CYCLING_ONLY,
   ...SWIMMING_ONLY,
   ...RUNNING_ONLY,

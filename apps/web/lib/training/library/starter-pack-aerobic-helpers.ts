@@ -16,15 +16,23 @@ export const DEFAULT_STARTER_RENDER: Pro2RenderProfile = {
 
 export type AerobicStarterBlockSpec = {
   label: string;
-  kind: "steady" | "ramp" | "interval2";
+  kind: "steady" | "ramp" | "interval2" | "interval3" | "pyramid";
   durationMinutes: number;
   intensityCue: string;
   startIntensity?: string;
   endIntensity?: string;
   intensity2?: string;
+  intensity3?: string;
   repeats?: number;
   workSeconds?: number;
   recoverSeconds?: number;
+  step1Seconds?: number;
+  step2Seconds?: number;
+  step3Seconds?: number;
+  pyramidSteps?: number;
+  pyramidStepSeconds?: number;
+  pyramidStartTarget?: number;
+  pyramidEndTarget?: number;
   notes?: string;
 };
 
@@ -78,6 +86,7 @@ export function blockFromSpec(spec: AerobicStarterBlockSpec, index: number): Pro
   const isWarm = /riscaldamento|warm/i.test(spec.label);
   const isCool = /defaticamento|cool/i.test(spec.label);
   const primary = spec.intensityCue.split("/")[0]?.trim() || "Z2";
+  const ftp = DEFAULT_STARTER_RENDER.ftpW;
   const chart = defaultChart(spec.durationMinutes, primary, {
     startIntensity: spec.startIntensity ?? (isWarm ? "Z1" : isCool ? "Z2" : primary),
     endIntensity: spec.endIntensity ?? (isWarm ? "Z2" : isCool ? "Z1" : primary),
@@ -86,6 +95,20 @@ export function blockFromSpec(spec: AerobicStarterBlockSpec, index: number): Pro
     workSeconds: spec.workSeconds ?? 180,
     recoverSeconds: spec.recoverSeconds ?? 90,
   });
+  if (spec.kind === "interval3") {
+    chart.intensity2 = spec.intensity2 ?? "Z3";
+    chart.intensity3 = spec.intensity3 ?? primary;
+    chart.step1Seconds = spec.step1Seconds ?? 120;
+    chart.step2Seconds = spec.step2Seconds ?? 60;
+    chart.step3Seconds = spec.step3Seconds ?? 120;
+    chart.repeats = spec.repeats ?? 1;
+  }
+  if (spec.kind === "pyramid") {
+    chart.pyramidSteps = spec.pyramidSteps ?? 5;
+    chart.pyramidStepSeconds = spec.pyramidStepSeconds ?? 180;
+    chart.pyramidStartTarget = spec.pyramidStartTarget ?? Math.round(ftp * 0.72);
+    chart.pyramidEndTarget = spec.pyramidEndTarget ?? Math.round(ftp * 1.06);
+  }
   return {
     id: `sp-${index + 1}`,
     label: spec.label,
@@ -149,6 +172,87 @@ export function iv(
     workSeconds,
     recoverSeconds,
     notes,
+  };
+}
+
+/** Three-phase interval block (over-under, cruise sets, etc.). */
+export function i3(
+  label: string,
+  repeats: number,
+  step1Seconds: number,
+  step2Seconds: number,
+  step3Seconds: number,
+  zoneA: string,
+  zoneB: string,
+  zoneC: string,
+  notes?: string,
+): AerobicStarterBlockSpec {
+  const durationMinutes = Math.max(1, Math.ceil((repeats * (step1Seconds + step2Seconds + step3Seconds)) / 60));
+  return {
+    label,
+    kind: "interval3",
+    durationMinutes,
+    intensityCue: `${zoneA}/${zoneB}/${zoneC}`,
+    intensity2: zoneB,
+    intensity3: zoneC,
+    repeats,
+    step1Seconds,
+    step2Seconds,
+    step3Seconds,
+    notes,
+  };
+}
+
+/** Pyramid block — progressive watt targets on chart. */
+export function py(
+  label: string,
+  steps: number,
+  stepSeconds: number,
+  startTargetW: number,
+  endTargetW: number,
+  notes?: string,
+): AerobicStarterBlockSpec {
+  const durationMinutes = Math.max(1, Math.ceil((steps * stepSeconds) / 60));
+  return {
+    label,
+    kind: "pyramid",
+    durationMinutes,
+    intensityCue: "Z2→Z5→Z2",
+    pyramidSteps: steps,
+    pyramidStepSeconds: stepSeconds,
+    pyramidStartTarget: startTargetW,
+    pyramidEndTarget: endTargetW,
+    notes,
+  };
+}
+
+/** Main-work ramp (Z2→LT2, openers, etc.). */
+export function rm(
+  label: string,
+  durationMinutes: number,
+  startZone: string,
+  endZone: string,
+  notes?: string,
+): AerobicStarterBlockSpec {
+  return {
+    label,
+    kind: "ramp",
+    durationMinutes,
+    intensityCue: `${startZone}→${endZone}`,
+    startIntensity: startZone,
+    endIntensity: endZone,
+    notes,
+  };
+}
+
+/** Long recovery between work blocks — visible as its own segment. */
+export function rec(durationMinutes: number, zone = "Z1", notes?: string): AerobicStarterBlockSpec {
+  return {
+    label: `Recupero profondo · ${durationMinutes}′`,
+    kind: "steady",
+    durationMinutes,
+    intensityCue: zone,
+    notes: notes ?? "Recupero generoso tra blocchi di lavoro",
   };
 }
 
