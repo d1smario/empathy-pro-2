@@ -22,6 +22,7 @@ import {
   type GarminSummaryBackfillStream,
 } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
+import { SUPPLEMENT_BRANDS, SUPPLEMENT_CATEGORIES } from "@/lib/profile/supplement-category-catalog";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
 type AthleteProfileRow = {
@@ -159,23 +160,6 @@ const dietOptions = [
   "low-fodmap",
   "carnivore",
   "gluten-free",
-];
-
-const supplementCategories: { id: string; label: string; items: string[] }[] = [
-  { id: "carboidrati", label: "Carboidrati", items: ["Maltodestrina", "Fruttosio", "Glucosio", "Destrosio", "Vitargo", "Isomaltulosio", "Cluster Dextrin", "Mais ceroso"] },
-  { id: "formati", label: "Formati", items: ["Gel", "Barrette", "Bevande", "Gommose", "Polvere", "Cibo Solido"] },
-  { id: "elettro", label: "Elettroliti", items: ["Sodio", "Potassio", "Magnesio", "Calcio", "Cloruro", "Bicarbonato", "Mix elettroliti"] },
-  { id: "amino", label: "Aminosangue", items: ["BCAA", "EAA", "Leucina", "Isoleucina", "Valina", "Glutammina", "Whey", "Caseina", "Proteine vegetali"] },
-  { id: "ergo", label: "Ergo", items: ["Creatina", "Beta-Alanina", "Citrullina", "Caffeina", "Nitrati", "Taurina", "Rhodiola"] },
-  { id: "micro", label: "Micro", items: ["Vitamina D", "Vitamina B12", "Vitamina C", "Ferro", "Zinco", "Magnesio bisglicinato", "Probiotici", "Enzimi digestivi"] },
-];
-
-const supplementBrands = [
-  "Maurten", "SIS", "Precision Fuel & Hydration", "Neversecond", "Tailwind", "Skratch Labs", "Enervit", "Named Sport",
-  "PowerBar", "Santa Madre", "4 Endurance", "HIGH5", "GU", "Clif", "Spring Energy", "Huma", "BPN", "Nuun", "SaltStick",
-  "Thorne", "NOW Foods", "Pure Encapsulations", "Life Extension", "Jarrow", "Solgar", "Yamamoto", "Biotech USA", "Bulk",
-  "MyProtein", "Optimum Nutrition", "Dymatize", "Scitec", "Applied Nutrition", "Kaged", "Transparent Labs", "Momentous",
-  "NutriSport", "EthicSport", "KeForma", "Enforma",
 ];
 
 const weekDays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -2431,14 +2415,14 @@ export default function ProfilePage() {
               {activeNutritionTab === "supplements" && (
                 <div>
                   <div className="page-tabs theme-multi profile-editor-subtabs" style={{ marginBottom: "10px" }}>
-                    {supplementCategories.map((cat) => (
+                    {SUPPLEMENT_CATEGORIES.map((cat) => (
                       <button key={cat.id} type="button" className={`page-tab ${activeSupplementCategory === cat.id ? "page-tab-active" : ""}`} onClick={() => setActiveSupplementCategory(cat.id)}>
                         {cat.label}
                       </button>
                     ))}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-                    {(supplementCategories.find((c) => c.id === activeSupplementCategory)?.items ?? []).map((item) => {
+                    {(SUPPLEMENT_CATEGORIES.find((c) => c.id === activeSupplementCategory)?.items ?? []).map((item) => {
                       const token = `${activeSupplementCategory}:${item}`;
                       const selected = form.supplements.split(",").map((s) => s.trim()).filter(Boolean).includes(token);
                       return (
@@ -2450,7 +2434,7 @@ export default function ProfilePage() {
                   </div>
                   <h4 className="section-title" style={{ fontSize: "14px" }}>Brand preferiti (40)</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-                    {supplementBrands.map((brand) => {
+                    {SUPPLEMENT_BRANDS.map((brand) => {
                       const selected = form.supplement_brands.split(",").map((s) => s.trim()).filter(Boolean).includes(brand);
                       return (
                         <button key={brand} type="button" className={`profile-black-chip ${selected ? "active" : ""}`} onClick={() => setForm((f) => ({ ...f, supplement_brands: toggleCsvToken(f.supplement_brands, brand) }))}>
