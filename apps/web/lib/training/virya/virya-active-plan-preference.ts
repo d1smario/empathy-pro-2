@@ -23,11 +23,7 @@ export function writeActiveViryaPlanTag(athleteId: string, tag: string | null): 
   }
 }
 
-export function extractViryaTagFromNotes(notes: string | null | undefined): string | null {
-  if (!notes) return null;
-  const m = notes.match(/\[VIRYA:([^\]]+)\]/);
-  return m ? `[VIRYA:${m[1]}]` : null;
-}
+export { extractViryaTagFromPlannedNotes as extractViryaTagFromNotes } from "@/lib/training/virya/virya-planned-notes";
 
 /** Piano VIRYA da mostrare come “attivo” (preferenza utente → giorno selezionato → più recente). */
 export function resolveDefaultActiveViryaPlan(

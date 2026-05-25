@@ -242,6 +242,10 @@ export default function TrainingCalendarPageView() {
    * (es. dopo elimina seduta: due fetch in parallelo → la vecchia ripristina la riga).
    */
   const plannedWindowFetchGenRef = useRef(0);
+  const calendarReadyRef = useRef(false);
+  /** Id eliminati in-sessione: filtra fetch stale che ripresentano la riga prima che il DB sia allineato. */
+  const locallyRemovedPlannedIdsRef = useRef<Set<string>>(new Set());
+  const [viryaReappearWarning, setViryaReappearWarning] = useState<string | null>(null);
   /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
   const trainingImportInFlightRef = useRef(false);
 
@@ -260,11 +264,12 @@ export default function TrainingCalendarPageView() {
       setPlannedProvenanceSummary(null);
       setErr("Nessun atleta attivo.");
       setLoading(false);
+      calendarReadyRef.current = false;
       setCalendarReady(false);
       setMonthRefreshing(false);
       return;
     }
-    if (calendarReady) {
+    if (calendarReadyRef.current) {
       setMonthRefreshing(true);
     } else {
       setLoading(true);
@@ -312,7 +317,19 @@ export default function TrainingCalendarPageView() {
       }
       const p = json.planned ?? [];
       const ex = json.executed ?? [];
-      setPlanned(p);
+      const removed = locallyRemovedPlannedIdsRef.current;
+      const stillPresent = p.filter((row) => removed.has(row.id));
+      if (stillPresent.length > 0) {
+        setViryaReappearWarning(
+          `Il server ha ancora ${stillPresent.length} seduta/e appena eliminate (id duplicato o refresh in ritardo). Usa «Tutto il piano VIRYA» se è un piano annuale, oppure attendi e riprova.`,
+        );
+      } else {
+        setViryaReappearWarning(null);
+        for (const id of removed) {
+          if (!p.some((row) => row.id === id)) removed.delete(id);
+        }
+      }
+      setPlanned(p.filter((row) => !removed.has(row.id)));
       setExecuted(ex);
       setReadSpineCoverage(json.readSpineCoverage ?? null);
       setTwinContextStrip(json.twinContextStrip ?? null);
@@ -341,11 +358,12 @@ export default function TrainingCalendarPageView() {
       if (!isStale()) {
         setLoading(false);
         setMonthRefreshing(false);
+        calendarReadyRef.current = true;
         setCalendarReady(true);
       }
     }
   },
-  [athleteId, calendarReady, ctxLoading, fetchFrom, fetchTo],
+  [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
 
   useEffect(() => {
@@ -733,6 +751,12 @@ export default function TrainingCalendarPageView() {
         </p>
       ) : null}
 
+      {viryaReappearWarning ? (
+        <p className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="alert">
+          {viryaReappearWarning}
+        </p>
+      ) : null}
+
       {err ? (
         <p className="mb-6 text-sm text-amber-300/90" role="alert">
           {err}
@@ -941,7 +965,10 @@ export default function TrainingCalendarPageView() {
                         workout={w}
                         athleteId={athleteId}
                         onDeleted={async (removedId) => {
-                          if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
+                          if (removedId) {
+                            locallyRemovedPlannedIdsRef.current.add(removedId);
+                            setPlanned((prev) => prev.filter((x) => x.id !== removedId));
+                          }
                           await loadMonth();
                         }}
                         onCalendarMutated={async () => {
@@ -991,7 +1018,10 @@ export default function TrainingCalendarPageView() {
               athleteId={athleteId}
               onExecutedChanged={() => void loadMonth()}
               onPlannedChanged={(removedId) => {
-                if (removedId) setPlanned((prev) => prev.filter((w) => w.id !== removedId));
+                if (removedId) {
+                  locallyRemovedPlannedIdsRef.current.add(removedId);
+                  setPlanned((prev) => prev.filter((w) => w.id !== removedId));
+                }
                 void loadMonth();
               }}
             />

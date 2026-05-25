@@ -43,7 +43,12 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
-import { deletePlannedWorkout, patchPlannedWorkout } from "@/modules/training/services/training-planned-api";
+import {
+  deletePlannedWorkout,
+  deleteViryaCalendarPlan,
+  patchPlannedWorkout,
+} from "@/modules/training/services/training-planned-api";
+import { extractViryaTagFromPlannedNotes, planNameFromViryaTag } from "@/lib/training/virya/virya-planned-notes";
 import { clonePlannedWorkout } from "@/modules/training/services/training-library-api";
 
 function familyLabel(family: string | undefined): string {
@@ -104,6 +109,8 @@ export function CalendarPlannedBuilderDetail({
   const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
 
   const resolvedAthleteId = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+  const viryaTag = useMemo(() => extractViryaTagFromPlannedNotes(workout.notes ?? null), [workout.notes]);
+  const isViryaSession = viryaTag != null;
 
   useEffect(() => {
     setTargetDate(workout.date);
@@ -181,41 +188,89 @@ export function CalendarPlannedBuilderDetail({
           </button>
           {resolvedAthleteId ? (
             deleteConfirmOpen ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-rose-400/40 bg-rose-950/40 px-2 py-1.5">
-                <span className="text-xs text-rose-100">Rimuovere dal calendario?</span>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  className="rounded-lg border border-rose-300/50 bg-rose-500/25 px-2 py-1 text-xs font-bold text-white hover:bg-rose-500/40 disabled:opacity-40"
-                  onClick={async () => {
-                    const aid = resolvedAthleteId;
-                    setActionFeedback(null);
-                    setDeleting(true);
-                    try {
-                      await deletePlannedWorkout({ id: workout.id, athleteId: aid });
-                      setDeleteConfirmOpen(false);
-                      setActionFeedback({ tone: "ok", text: "Seduta rimossa dal calendario." });
-                      onDeleted?.(workout.id);
-                    } catch (e) {
-                      setActionFeedback({
-                        tone: "err",
-                        text: e instanceof Error ? e.message : "Eliminazione non riuscita",
-                      });
-                    } finally {
-                      setDeleting(false);
-                    }
-                  }}
-                >
-                  {deleting ? "Elimino…" : "Conferma"}
-                </button>
-                <button
-                  type="button"
-                  disabled={deleting}
-                  className="rounded-lg border border-white/15 px-2 py-1 text-xs text-gray-300 hover:bg-white/10 disabled:opacity-40"
-                  onClick={() => setDeleteConfirmOpen(false)}
-                >
-                  Annulla
-                </button>
+              <div className="flex max-w-md flex-col gap-2 rounded-lg border border-rose-400/40 bg-rose-950/40 px-2 py-2">
+                <span className="text-xs text-rose-100">
+                  {isViryaSession
+                    ? `Seduta VIRYA (${planNameFromViryaTag(viryaTag)}). Non è memoria AI: è una riga in planned_workouts.`
+                    : "Rimuovere dal calendario?"}
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    className="rounded-lg border border-rose-300/50 bg-rose-500/25 px-2 py-1 text-xs font-bold text-white hover:bg-rose-500/40 disabled:opacity-40"
+                    onClick={async () => {
+                      const aid = resolvedAthleteId;
+                      setActionFeedback(null);
+                      setDeleting(true);
+                      try {
+                        const r = await deletePlannedWorkout({
+                          id: workout.id,
+                          athleteId: aid,
+                          purgeViryaDayDuplicates: isViryaSession,
+                        });
+                        setDeleteConfirmOpen(false);
+                        const extra =
+                          r.purgedViryaDayDuplicates && r.purgedViryaDayDuplicates > 0
+                            ? ` (+${r.purgedViryaDayDuplicates} duplicati VIRYA stesso giorno)`
+                            : "";
+                        setActionFeedback({ tone: "ok", text: `Seduta rimossa dal calendario.${extra}` });
+                        onDeleted?.(workout.id);
+                      } catch (e) {
+                        setActionFeedback({
+                          tone: "err",
+                          text: e instanceof Error ? e.message : "Eliminazione non riuscita",
+                        });
+                      } finally {
+                        setDeleting(false);
+                      }
+                    }}
+                  >
+                    {deleting ? "Elimino…" : isViryaSession ? "Solo questo giorno" : "Conferma"}
+                  </button>
+                  {isViryaSession && viryaTag ? (
+                    <button
+                      type="button"
+                      disabled={deleting}
+                      className="rounded-lg border border-amber-400/45 bg-amber-500/20 px-2 py-1 text-xs font-bold text-amber-100 hover:bg-amber-500/30 disabled:opacity-40"
+                      title="Rimuove tutte le sedute con lo stesso tag VIRYA sul calendario"
+                      onClick={async () => {
+                        setActionFeedback(null);
+                        setDeleting(true);
+                        try {
+                          const n = await deleteViryaCalendarPlan({
+                            athleteId: resolvedAthleteId,
+                            tag: viryaTag,
+                          });
+                          setDeleteConfirmOpen(false);
+                          setActionFeedback({
+                            tone: "ok",
+                            text: `Piano VIRYA rimosso (${n} sedute). Per ripubblicare: VIRYA → Salva su Calendar.`,
+                          });
+                          onDeleted?.(workout.id);
+                          onCalendarMutated?.();
+                        } catch (e) {
+                          setActionFeedback({
+                            tone: "err",
+                            text: e instanceof Error ? e.message : "Eliminazione piano VIRYA non riuscita",
+                          });
+                        } finally {
+                          setDeleting(false);
+                        }
+                      }}
+                    >
+                      Tutto il piano VIRYA
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    className="rounded-lg border border-white/15 px-2 py-1 text-xs text-gray-300 hover:bg-white/10 disabled:opacity-40"
+                    onClick={() => setDeleteConfirmOpen(false)}
+                  >
+                    Annulla
+                  </button>
+                </div>
               </div>
             ) : (
               <button

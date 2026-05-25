@@ -4,12 +4,17 @@ import {
   requireAthleteReadContext,
   requireAthleteWriteContext,
 } from "@/lib/auth/athlete-read-context";
+import {
+  extractViryaTagFromPlannedNotes,
+  ilikeContainsViryaTag,
+  planNameFromViryaTag,
+  VIRYA_NOTES_ILIKE_MARKER,
+} from "@/lib/training/virya/virya-planned-notes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const NO_STORE = { "Cache-Control": "no-store" as const };
-const VIRYA_NOTES_MARKER = "%\\[VIRYA:%";
 
 export type ViryaCalendarPlanSummary = {
   tag: string;
@@ -18,31 +23,6 @@ export type ViryaCalendarPlanSummary = {
   dateMin: string;
   dateMax: string;
 };
-
-function extractViryaTag(notes: string | null | undefined): string | null {
-  if (!notes) return null;
-  const m = notes.match(/\[VIRYA:([^\]]+)\]/);
-  return m ? `[VIRYA:${m[1]}]` : null;
-}
-
-function planNameFromTag(tag: string): string {
-  const m = tag.match(/\[VIRYA:([^\]]+)\]/);
-  return (m?.[1] ?? "Annual").trim() || "Annual";
-}
-
-/** Pattern ILIKE sicuro per tag completo (es. `[VIRYA:Piano gym]`). */
-function ilikeContainsTag(tag: string): string {
-  const escaped = tag
-    .split("")
-    .map((c) => {
-      if (c === "\\") return "\\\\";
-      if (c === "%" || c === "_") return `\\${c}`;
-      if (c === "[") return "\\[";
-      return c;
-    })
-    .join("");
-  return `%${escaped}%`;
-}
 
 export async function GET(req: NextRequest) {
   try {
@@ -55,14 +35,14 @@ export async function GET(req: NextRequest) {
       .from("planned_workouts")
       .select("id, date, notes")
       .eq("athlete_id", athleteId)
-      .ilike("notes", VIRYA_NOTES_MARKER)
+      .ilike("notes", VIRYA_NOTES_ILIKE_MARKER)
       .order("date", { ascending: true });
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
     }
     const byTag = new Map<string, { count: number; dateMin: string; dateMax: string }>();
     for (const row of data ?? []) {
-      const tag = extractViryaTag(typeof row.notes === "string" ? row.notes : null);
+      const tag = extractViryaTagFromPlannedNotes(typeof row.notes === "string" ? row.notes : null);
       if (!tag) continue;
       const date = String(row.date ?? "").slice(0, 10);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
@@ -78,7 +58,7 @@ export async function GET(req: NextRequest) {
     const plans: ViryaCalendarPlanSummary[] = Array.from(byTag.entries())
       .map(([tag, agg]) => ({
         tag,
-        planName: planNameFromTag(tag),
+        planName: planNameFromViryaTag(tag),
         sessionCount: agg.count,
         dateMin: agg.dateMin,
         dateMax: agg.dateMax,
@@ -103,7 +83,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Missing athleteId or valid VIRYA tag" }, { status: 400, headers: NO_STORE });
     }
     const { db } = await requireAthleteWriteContext(req, athleteId);
-    const pattern = ilikeContainsTag(tag);
+    const pattern = ilikeContainsViryaTag(tag);
     const { error: delErr, count } = await db
       .from("planned_workouts")
       .delete({ count: "exact" })

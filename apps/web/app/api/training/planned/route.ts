@@ -10,6 +10,11 @@ import {
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 import { insertSinglePlannedWorkout, toPlannedWorkoutInsertRecord } from "@/lib/training/planned/insert-planned-workout";
+import {
+  extractViryaTagFromPlannedNotes,
+  ilikeContainsViryaTag,
+  VIRYA_NOTES_ILIKE_MARKER,
+} from "@/lib/training/virya/virya-planned-notes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -112,7 +117,7 @@ export async function POST(req: NextRequest) {
         if (dateStrs.length) {
           const minD = dateStrs.reduce((a, b) => (a < b ? a : b));
           const maxD = dateStrs.reduce((a, b) => (a > b ? a : b));
-          const viryaMarker = "%\\[VIRYA:%";
+          const viryaMarker = VIRYA_NOTES_ILIKE_MARKER;
           const { error: delErr } = await db
             .from("planned_workouts")
             .delete()
@@ -201,7 +206,12 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   let deleteProbe = "init";
   try {
-    const body = (await req.json().catch(() => ({}))) as { id?: string; athleteId?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      id?: string;
+      athleteId?: string;
+      /** Per sedute VIRYA: rimuove anche altre righe stesso giorno + stesso tag (duplicati ripubblicazione). */
+      purgeViryaDayDuplicates?: boolean;
+    };
     let id = String(body.id ?? "").trim();
     let athleteIdHint = String(body.athleteId ?? "").trim();
     if (!id) {
@@ -237,7 +247,7 @@ export async function DELETE(req: NextRequest) {
         const { db } = await requireAthleteReadContext(req, athleteIdHint);
         const strict = await db
           .from("planned_workouts")
-          .select("id, athlete_id")
+          .select("id, athlete_id, date, notes")
           .eq("id", id)
           .eq("athlete_id", athleteIdHint)
           .limit(1);
@@ -291,7 +301,7 @@ export async function DELETE(req: NextRequest) {
       const probeDb = adminOnce ?? supabaseForAthleteTableRead(rlsClient);
       const { data: probeRows, error: readErr } = await probeDb
         .from("planned_workouts")
-        .select("id, athlete_id")
+        .select("id, athlete_id, date, notes")
         .eq("id", id)
         .limit(1);
       if (readErr) {
@@ -345,9 +355,38 @@ export async function DELETE(req: NextRequest) {
         { status: 404, headers: deleteProbeHeaders(`${deleteProbe};delete=noop`) },
       );
     }
+
+    let purgedViryaDayDuplicates = 0;
+    if (body.purgeViryaDayDuplicates === true && row0) {
+      const notes = typeof row0.notes === "string" ? row0.notes : "";
+      const viryaTag = extractViryaTagFromPlannedNotes(notes);
+      const dateKey = typeof row0.date === "string" ? row0.date.trim().slice(0, 10) : "";
+      if (viryaTag && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+        const { data: purged, error: purgeErr } = await db
+          .from("planned_workouts")
+          .delete()
+          .eq("athlete_id", rowAthleteId)
+          .eq("date", dateKey)
+          .ilike("notes", ilikeContainsViryaTag(viryaTag))
+          .neq("id", id)
+          .select("id");
+        if (purgeErr) {
+          return NextResponse.json(
+            { error: purgeErr.message, errorCode: "planned_virya_day_purge_failed" },
+            { status: 500, headers: deleteProbeHeaders(`${deleteProbe};purge=error`) },
+          );
+        }
+        purgedViryaDayDuplicates = purged?.length ?? 0;
+      }
+    }
+
     return NextResponse.json(
-      { status: "ok" as const, athleteMemory: await memoryOrNull(rowAthleteId) },
-      { headers: deleteProbeHeaders(`${deleteProbe};delete=ok`) },
+      {
+        status: "ok" as const,
+        athleteMemory: await memoryOrNull(rowAthleteId),
+        purgedViryaDayDuplicates,
+      },
+      { headers: deleteProbeHeaders(`${deleteProbe};delete=ok;purge=${purgedViryaDayDuplicates}`) },
     );
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
