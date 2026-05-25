@@ -34,6 +34,7 @@ import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
 import {
+  deletePlannedWorkoutsOnDate,
   deleteViryaCalendarPlan,
   fetchViryaCalendarPlans,
 } from "@/modules/training/services/training-planned-api";
@@ -254,6 +255,12 @@ export default function TrainingCalendarPageView() {
   /** Id eliminati in-sessione: filtra fetch stale che ripresentano la riga prima che il DB sia allineato. */
   const locallyRemovedPlannedIdsRef = useRef<Set<string>>(new Set());
   const [viryaReappearWarning, setViryaReappearWarning] = useState<string | null>(null);
+  const [dayDeleteAllBusy, setDayDeleteAllBusy] = useState(false);
+  const [dayDeleteAllConfirm, setDayDeleteAllConfirm] = useState(false);
+
+  useEffect(() => {
+    setDayDeleteAllConfirm(false);
+  }, [selectedDate]);
   /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
   const trainingImportInFlightRef = useRef(false);
 
@@ -989,6 +996,66 @@ export default function TrainingCalendarPageView() {
                 subtitle={`${selectedDate} · ${dayPlanned.length} in giornata — scheda gym / struttura builder`}
                 icon={CalendarDays}
               >
+                {dayPlanned.length >= 2 && athleteId ? (
+                  <div className="mb-4 rounded-xl border border-amber-400/35 bg-amber-950/30 px-3 py-3">
+                    <p className="text-xs leading-relaxed text-amber-100/95">
+                      Su questo giorno ci sono <strong>{dayPlanned.length}</strong> righe distinte in{" "}
+                      <code className="rounded bg-black/40 px-1">planned_workouts</code>. Elimina una sola seduta
+                      lascia le altre visibili (non è un ripristino automatico).
+                    </p>
+                    {dayDeleteAllConfirm ? (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={dayDeleteAllBusy}
+                          className="rounded-lg border border-rose-300/50 bg-rose-500/25 px-2 py-1 text-xs font-bold text-white hover:bg-rose-500/40 disabled:opacity-40"
+                          onClick={async () => {
+                            setDayDeleteAllBusy(true);
+                            setSuccess(null);
+                            setErr(null);
+                            try {
+                              const r = await deletePlannedWorkoutsOnDate({
+                                athleteId,
+                                date: selectedDate,
+                              });
+                              for (const w of dayPlanned) {
+                                locallyRemovedPlannedIdsRef.current.add(w.id);
+                              }
+                              setPlanned((prev) => prev.filter((x) => workoutDayKey(x) !== selectedDate));
+                              setDayDeleteAllConfirm(false);
+                              setSuccess(
+                                `Rimosse ${r.deletedOnDateCount} sedute pianificate del ${selectedDate}.`,
+                              );
+                              await loadMonth();
+                            } catch (e) {
+                              setErr(e instanceof Error ? e.message : "Eliminazione giorno non riuscita");
+                            } finally {
+                              setDayDeleteAllBusy(false);
+                            }
+                          }}
+                        >
+                          {dayDeleteAllBusy ? "Elimino…" : `Conferma: elimina tutte (${dayPlanned.length})`}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={dayDeleteAllBusy}
+                          className="rounded-lg border border-white/15 px-2 py-1 text-xs text-gray-300 hover:bg-white/10"
+                          onClick={() => setDayDeleteAllConfirm(false)}
+                        >
+                          Annulla
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        className="mt-2 rounded-lg border border-rose-400/45 bg-rose-500/15 px-2.5 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-500/25"
+                        onClick={() => setDayDeleteAllConfirm(true)}
+                      >
+                        Elimina tutte le sedute di questo giorno
+                      </button>
+                    )}
+                  </div>
+                ) : null}
                 <ul className="space-y-5">
                   {dayPlanned.map((w) => (
                     <li key={w.id}>

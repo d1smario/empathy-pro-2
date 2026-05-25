@@ -80,6 +80,36 @@ export async function patchPlannedWorkout(input: {
   }
 }
 
+export async function deletePlannedWorkoutsOnDate(input: {
+  athleteId: string;
+  date: string;
+}): Promise<{ deletedOnDateCount: number }> {
+  const athleteId = input.athleteId.trim();
+  const date = input.date.trim().slice(0, 10);
+  if (!athleteId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("athleteId e data (YYYY-MM-DD) richiesti per eliminare il giorno.");
+  }
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const res = await fetch("/api/training/planned", {
+    method: "DELETE",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify({ athleteId, deleteAllOnDate: date }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    errorCode?: string;
+    deletedOnDateCount?: number;
+    deleteHints?: Record<string, unknown>;
+  };
+  if (!res.ok) {
+    const extra = [json.errorCode, json.deleteHints ? JSON.stringify(json.deleteHints) : ""].filter(Boolean).join(" · ");
+    throw new Error([json.error ?? "Eliminazione giorno non riuscita", extra].filter(Boolean).join(" — "));
+  }
+  return { deletedOnDateCount: json.deletedOnDateCount ?? 0 };
+}
+
 export async function deletePlannedWorkout(input: {
   id: string;
   athleteId: string;

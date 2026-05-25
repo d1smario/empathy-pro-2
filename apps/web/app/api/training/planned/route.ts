@@ -209,6 +209,8 @@ export async function DELETE(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as {
       id?: string;
       athleteId?: string;
+      /** Rimuove tutte le righe `planned_workouts` per atleta + data (duplicati builder/demo stesso giorno). */
+      deleteAllOnDate?: string;
       /** Per sedute VIRYA: rimuove anche altre righe stesso giorno + stesso tag (duplicati ripubblicazione). */
       purgeViryaDayDuplicates?: boolean;
       /** Elimina tutte le righe con questo tag VIRYA (stesso effetto di DELETE /api/training/virya/plans). */
@@ -216,6 +218,7 @@ export async function DELETE(req: NextRequest) {
     };
     let id = String(body.id ?? "").trim();
     let athleteIdHint = String(body.athleteId ?? "").trim();
+    const deleteAllOnDate = String(body.deleteAllOnDate ?? "").trim().slice(0, 10);
     if (!id) {
       id = (req.nextUrl.searchParams.get("id") ?? "").trim();
     }
@@ -224,13 +227,71 @@ export async function DELETE(req: NextRequest) {
     }
     id = normalizeUuidParam(id);
     if (athleteIdHint) athleteIdHint = normalizeUuidParam(athleteIdHint);
-    if (!id) {
-      return NextResponse.json({ error: "Missing id" }, { status: 400, headers: deleteProbeHeaders("bad_request_no_id") });
-    }
 
     const { rlsClient } = await requireAuthenticatedTrainingUser(req);
     const adminOnce = createSupabaseAdminClient();
     const hadServiceRole = adminOnce != null;
+
+    if (deleteAllOnDate && /^\d{4}-\d{2}-\d{2}$/.test(deleteAllOnDate)) {
+      if (!athleteIdHint) {
+        return NextResponse.json(
+          { error: "Missing athleteId for deleteAllOnDate", errorCode: "planned_delete_day_missing_athlete" },
+          { status: 400, headers: deleteProbeHeaders("bad_request_day_no_athlete") },
+        );
+      }
+      const { db } = await requireAthleteWriteContext(req, athleteIdHint);
+      const deleteDb = adminOnce ?? db;
+      const { data: deletedRows, error: dayDelErr } = await deleteDb
+        .from("planned_workouts")
+        .delete()
+        .eq("athlete_id", athleteIdHint)
+        .eq("date", deleteAllOnDate)
+        .select("id");
+      if (dayDelErr) {
+        return NextResponse.json(
+          { error: dayDelErr.message, errorCode: "planned_delete_day_failed" },
+          { status: 500, headers: deleteProbeHeaders("delete_day=error") },
+        );
+      }
+      const deletedOnDateCount = deletedRows?.length ?? 0;
+      const { data: remain, error: remainErr } = await deleteDb
+        .from("planned_workouts")
+        .select("id")
+        .eq("athlete_id", athleteIdHint)
+        .eq("date", deleteAllOnDate)
+        .limit(1);
+      if (remainErr) {
+        return NextResponse.json(
+          { error: remainErr.message, errorCode: "planned_delete_day_verify_failed" },
+          { status: 500, headers: deleteProbeHeaders("delete_day_verify=error") },
+        );
+      }
+      if (remain?.length) {
+        return NextResponse.json(
+          {
+            error:
+              "Restano sedute pianificate su questa data dopo DELETE giorno: verifica RLS o SUPABASE_SERVICE_ROLE_KEY su Vercel.",
+            errorCode: "planned_delete_day_verify_failed",
+            deletedOnDateCount,
+          },
+          { status: 409, headers: deleteProbeHeaders("delete_day_verify=still_there") },
+        );
+      }
+      return NextResponse.json(
+        {
+          status: "ok" as const,
+          deletedOnDateCount,
+          date: deleteAllOnDate,
+          athleteMemory: await memoryOrNull(athleteIdHint),
+          deleteHints: { hadServiceRole, mode: "delete_all_on_date" },
+        },
+        { headers: deleteProbeHeaders(`delete_day=ok;n=${deletedOnDateCount}`) },
+      );
+    }
+
+    if (!id) {
+      return NextResponse.json({ error: "Missing id" }, { status: 400, headers: deleteProbeHeaders("bad_request_no_id") });
+    }
 
     /**
      * 1) `requireAthleteReadContext` + stesso stack lettura training (`admin ?? rls`) di planned-window.
