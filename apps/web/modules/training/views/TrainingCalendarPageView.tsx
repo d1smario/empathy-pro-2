@@ -1021,7 +1021,9 @@ export default function TrainingCalendarPageView() {
                               for (const w of dayPlanned) {
                                 locallyRemovedPlannedIdsRef.current.add(w.id);
                               }
-                              setPlanned((prev) => prev.filter((x) => workoutDayKey(x) !== selectedDate));
+                              setPlanned((prev) =>
+                                prev.filter((x) => normalizeDateKey(x.date) !== selectedDate),
+                              );
                               setDayDeleteAllConfirm(false);
                               setSuccess(
                                 `Rimosse ${r.deletedOnDateCount} sedute pianificate del ${selectedDate}.`,
