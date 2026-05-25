@@ -85,7 +85,13 @@ export async function deletePlannedWorkout(input: {
   athleteId: string;
   /** Sedute VIRYA: elimina anche duplicati stesso giorno + tag in `notes`. */
   purgeViryaDayDuplicates?: boolean;
-}): Promise<{ alreadyDeleted?: boolean; purgedViryaDayDuplicates?: number }> {
+  /** Rimuove tutte le righe con tag `[VIRYA:…]` (piano intero). */
+  deleteViryaPlanTag?: string;
+}): Promise<{
+  alreadyDeleted?: boolean;
+  purgedViryaDayDuplicates?: number;
+  deletedViryaPlanRows?: number;
+}> {
   const hint = input.athleteId.trim();
   if (!hint) {
     throw new Error("athleteId mancante: impossibile allineare DELETE a planned-window.");
@@ -99,6 +105,9 @@ export async function deletePlannedWorkout(input: {
       id: input.id.trim(),
       athleteId: hint,
       purgeViryaDayDuplicates: input.purgeViryaDayDuplicates === true,
+      deleteViryaPlanTag: input.deleteViryaPlanTag?.trim().startsWith("[VIRYA:")
+        ? input.deleteViryaPlanTag.trim()
+        : undefined,
     }),
     cache: "no-store",
   });
@@ -117,12 +126,16 @@ export async function deletePlannedWorkout(input: {
     const extra = [json.errorCode, probe, hints].filter(Boolean).join(" · ");
     throw new Error([json.error ?? "Eliminazione seduta pianificata non riuscita", extra].filter(Boolean).join(" — "));
   }
+  const payload = json as {
+    purgedViryaDayDuplicates?: number;
+    deletedViryaPlanRows?: number;
+  };
   return {
     alreadyDeleted: json.alreadyDeleted === true,
     purgedViryaDayDuplicates:
-      typeof (json as { purgedViryaDayDuplicates?: unknown }).purgedViryaDayDuplicates === "number"
-        ? (json as { purgedViryaDayDuplicates: number }).purgedViryaDayDuplicates
-        : 0,
+      typeof payload.purgedViryaDayDuplicates === "number" ? payload.purgedViryaDayDuplicates : 0,
+    deletedViryaPlanRows:
+      typeof payload.deletedViryaPlanRows === "number" ? payload.deletedViryaPlanRows : 0,
   };
 }
 

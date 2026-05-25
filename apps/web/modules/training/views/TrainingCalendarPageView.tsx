@@ -33,6 +33,14 @@ import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
+import {
+  deleteViryaCalendarPlan,
+  fetchViryaCalendarPlans,
+} from "@/modules/training/services/training-planned-api";
+import {
+  activeViryaCalendarTombstones,
+  clearViryaCalendarTombstone,
+} from "@/lib/training/virya/virya-calendar-tombstone";
 
 function toDateKey(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -367,8 +375,31 @@ export default function TrainingCalendarPageView() {
 );
 
   useEffect(() => {
-    void loadMonth();
-  }, [loadMonth]);
+    void (async () => {
+      if (athleteId) {
+        const tombs = activeViryaCalendarTombstones(athleteId);
+        if (tombs.length) {
+          try {
+            const plans = await fetchViryaCalendarPlans(athleteId);
+            for (const t of tombs) {
+              if (plans.some((p) => p.tag === t.tag)) {
+                await deleteViryaCalendarPlan({ athleteId, tag: t.tag });
+              } else {
+                clearViryaCalendarTombstone(athleteId, t.tag);
+              }
+            }
+          } catch (e) {
+            setViryaReappearWarning(
+              e instanceof Error
+                ? `Piano VIRYA eliminato in precedenza ma ancora presente sul server: ${e.message}`
+                : "Piano VIRYA eliminato in precedenza ma ancora presente sul server.",
+            );
+          }
+        }
+      }
+      await loadMonth();
+    })();
+  }, [athleteId, loadMonth]);
 
   const plannedByDate = useMemo(() => {
     const m = new Map<string, PlannedWorkout[]>();

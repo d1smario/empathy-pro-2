@@ -211,6 +211,8 @@ export async function DELETE(req: NextRequest) {
       athleteId?: string;
       /** Per sedute VIRYA: rimuove anche altre righe stesso giorno + stesso tag (duplicati ripubblicazione). */
       purgeViryaDayDuplicates?: boolean;
+      /** Elimina tutte le righe con questo tag VIRYA (stesso effetto di DELETE /api/training/virya/plans). */
+      deleteViryaPlanTag?: string;
     };
     let id = String(body.id ?? "").trim();
     let athleteIdHint = String(body.athleteId ?? "").trim();
@@ -261,7 +263,7 @@ export async function DELETE(req: NextRequest) {
         if (!row0) {
           const relaxed = await db
             .from("planned_workouts")
-            .select("id, athlete_id")
+            .select("id, athlete_id, date, notes")
             .eq("id", id)
             .limit(1);
           if (relaxed.error) {
@@ -335,25 +337,96 @@ export async function DELETE(req: NextRequest) {
     }
 
     const { db } = await requireAthleteWriteContext(req, rowAthleteId);
-    /**
-     * Dopo il gate su `rowAthleteId`, cancelliamo solo per PK `id` (come insert materializza una riga per id).
-     * Un secondo `.eq("athlete_id", …)` può dare 0 righe se c’è disallineamento tipo/formato pur con accesso ok.
-     */
-    const { data: deletedRows, error } = await db.from("planned_workouts").delete().eq("id", id).select("id");
-    if (error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500, headers: deleteProbeHeaders(`${deleteProbe};delete=error`) },
-      );
-    }
-    if (!deletedRows?.length) {
-      return NextResponse.json(
-        {
-          error: "Delete non ha rimosso righe: controlla RLS/policies su planned_workouts per il ruolo usato dall’API.",
-          errorCode: "planned_delete_noop",
-        },
-        { status: 404, headers: deleteProbeHeaders(`${deleteProbe};delete=noop`) },
-      );
+    const deleteDb = adminOnce ?? db;
+
+    let deletedViryaPlanRows = 0;
+    const deleteViryaPlanTagBody = (body.deleteViryaPlanTag ?? "").trim();
+    if (deleteViryaPlanTagBody.startsWith("[VIRYA:")) {
+      const pattern = ilikeContainsViryaTag(deleteViryaPlanTagBody);
+      const { data: planRows, error: planDelErr } = await deleteDb
+        .from("planned_workouts")
+        .delete()
+        .eq("athlete_id", rowAthleteId)
+        .ilike("notes", pattern)
+        .select("id");
+      if (planDelErr) {
+        return NextResponse.json(
+          { error: planDelErr.message, errorCode: "planned_virya_plan_purge_failed" },
+          { status: 500, headers: deleteProbeHeaders(`${deleteProbe};virya_plan=error`) },
+        );
+      }
+      deletedViryaPlanRows = planRows?.length ?? 0;
+      deleteProbe = `${deleteProbe};virya_plan=${deletedViryaPlanRows}`;
+      const { data: planRemain, error: planRemainErr } = await deleteDb
+        .from("planned_workouts")
+        .select("id")
+        .eq("athlete_id", rowAthleteId)
+        .ilike("notes", pattern)
+        .limit(1);
+      if (planRemainErr) {
+        return NextResponse.json(
+          { error: planRemainErr.message, errorCode: "virya_plan_delete_verify_failed" },
+          { status: 500, headers: deleteProbeHeaders(`${deleteProbe};virya_verify=error`) },
+        );
+      }
+      if (planRemain?.length) {
+        return NextResponse.json(
+          {
+            error:
+              "Dopo eliminazione piano VIRYA restano righe con lo stesso tag in planned_workouts (RLS o ripubblicazione).",
+            errorCode: "virya_plan_delete_verify_failed",
+            deletedViryaPlanRows,
+          },
+          { status: 409, headers: deleteProbeHeaders(`${deleteProbe};virya_verify=still_there`) },
+        );
+      }
+    } else {
+      const { data: deletedRows, error } = await deleteDb
+        .from("planned_workouts")
+        .delete()
+        .eq("id", id)
+        .eq("athlete_id", rowAthleteId)
+        .select("id");
+      if (error) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: 500, headers: deleteProbeHeaders(`${deleteProbe};delete=error`) },
+        );
+      }
+      if (!deletedRows?.length) {
+        return NextResponse.json(
+          {
+            error:
+              "Delete non ha rimosso righe: RLS o athlete_id non allineato. Verifica coach_athletes / app_user_profiles.",
+            errorCode: "planned_delete_noop",
+            deleteHints: { scoped, global, hadServiceRole, rowAthleteId, athleteIdHint: athleteIdHint || null },
+          },
+          { status: 404, headers: deleteProbeHeaders(`${deleteProbe};delete=noop`) },
+        );
+      }
+
+      const { data: verifyGone, error: verifyErr } = await deleteDb
+        .from("planned_workouts")
+        .select("id")
+        .eq("id", id)
+        .eq("athlete_id", rowAthleteId)
+        .maybeSingle();
+      if (verifyErr) {
+        return NextResponse.json(
+          { error: verifyErr.message, errorCode: "planned_delete_verify_failed" },
+          { status: 500, headers: deleteProbeHeaders(`${deleteProbe};verify=error`) },
+        );
+      }
+      if (verifyGone) {
+        return NextResponse.json(
+          {
+            error:
+              "La riga risulta ancora in planned_workouts dopo DELETE: possibile disallineamento RLS/service role.",
+            errorCode: "planned_delete_verify_failed",
+          },
+          { status: 409, headers: deleteProbeHeaders(`${deleteProbe};verify=still_there`) },
+        );
+      }
     }
 
     let purgedViryaDayDuplicates = 0;
@@ -362,7 +435,7 @@ export async function DELETE(req: NextRequest) {
       const viryaTag = extractViryaTagFromPlannedNotes(notes);
       const dateKey = typeof row0.date === "string" ? row0.date.trim().slice(0, 10) : "";
       if (viryaTag && /^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-        const { data: purged, error: purgeErr } = await db
+        const { data: purged, error: purgeErr } = await deleteDb
           .from("planned_workouts")
           .delete()
           .eq("athlete_id", rowAthleteId)
@@ -385,8 +458,13 @@ export async function DELETE(req: NextRequest) {
         status: "ok" as const,
         athleteMemory: await memoryOrNull(rowAthleteId),
         purgedViryaDayDuplicates,
+        deletedViryaPlanRows,
       },
-      { headers: deleteProbeHeaders(`${deleteProbe};delete=ok;purge=${purgedViryaDayDuplicates}`) },
+      {
+        headers: deleteProbeHeaders(
+          `${deleteProbe};delete=ok;purge=${purgedViryaDayDuplicates};virya_plan_rows=${deletedViryaPlanRows}`,
+        ),
+      },
     );
   } catch (err) {
     if (err instanceof AthleteReadContextError) {

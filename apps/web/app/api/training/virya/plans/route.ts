@@ -84,16 +84,39 @@ export async function DELETE(req: NextRequest) {
     }
     const { db } = await requireAthleteWriteContext(req, athleteId);
     const pattern = ilikeContainsViryaTag(tag);
-    const { error: delErr, count } = await db
+    const { data: deletedRows, error: delErr } = await db
       .from("planned_workouts")
-      .delete({ count: "exact" })
+      .delete()
       .eq("athlete_id", athleteId)
-      .ilike("notes", pattern);
+      .ilike("notes", pattern)
+      .select("id");
     if (delErr) {
       return NextResponse.json({ error: delErr.message }, { status: 500, headers: NO_STORE });
     }
+    const deletedCount = deletedRows?.length ?? 0;
+    const { data: remaining, error: remainErr } = await db
+      .from("planned_workouts")
+      .select("id")
+      .eq("athlete_id", athleteId)
+      .ilike("notes", pattern)
+      .limit(1);
+    if (remainErr) {
+      return NextResponse.json({ error: remainErr.message }, { status: 500, headers: NO_STORE });
+    }
+    if (remaining?.length) {
+      return NextResponse.json(
+        {
+          error:
+            "Dopo DELETE restano righe VIRYA con lo stesso tag: verifica RLS o ripubblica da VIRYA con «Sostituisci» disattivo.",
+          errorCode: "virya_plan_delete_verify_failed",
+          deletedCount,
+          remainingCount: remaining.length,
+        },
+        { status: 409, headers: NO_STORE },
+      );
+    }
     return NextResponse.json(
-      { status: "ok" as const, deletedCount: count ?? 0 },
+      { status: "ok" as const, deletedCount },
       { headers: NO_STORE },
     );
   } catch (err) {

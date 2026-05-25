@@ -43,12 +43,9 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
-import {
-  deletePlannedWorkout,
-  deleteViryaCalendarPlan,
-  patchPlannedWorkout,
-} from "@/modules/training/services/training-planned-api";
+import { deletePlannedWorkout, patchPlannedWorkout } from "@/modules/training/services/training-planned-api";
 import { extractViryaTagFromPlannedNotes, planNameFromViryaTag } from "@/lib/training/virya/virya-planned-notes";
+import { writeViryaCalendarTombstone } from "@/lib/training/virya/virya-calendar-tombstone";
 import { clonePlannedWorkout } from "@/modules/training/services/training-library-api";
 
 function familyLabel(family: string | undefined): string {
@@ -238,10 +235,13 @@ export function CalendarPlannedBuilderDetail({
                         setActionFeedback(null);
                         setDeleting(true);
                         try {
-                          const n = await deleteViryaCalendarPlan({
+                          const r = await deletePlannedWorkout({
+                            id: workout.id,
                             athleteId: resolvedAthleteId,
-                            tag: viryaTag,
+                            deleteViryaPlanTag: viryaTag,
                           });
+                          writeViryaCalendarTombstone(resolvedAthleteId, viryaTag);
+                          const n = r.deletedViryaPlanRows ?? 0;
                           setDeleteConfirmOpen(false);
                           setActionFeedback({
                             tone: "ok",
