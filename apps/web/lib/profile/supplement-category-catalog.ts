@@ -1,13 +1,23 @@
-/** Tab integratori in Profilo → Nutrition Systems → Supplements. */
+/** Tab integratori in Profilo → Nutrition Systems → Integratori. */
 export type SupplementCategory = {
   id: string;
   label: string;
   items: string[];
 };
 
+/** ID legacy (V1 / export) → id canonico Pro 2. */
+export const SUPPLEMENT_CATEGORY_LEGACY_IDS: Record<string, string> = {
+  aminoacidi: "amino",
+  aminoacido: "amino",
+  ergogenici: "ergo",
+  ergogenico: "ergo",
+  micronutrienti: "micro",
+  micronutriente: "micro",
+};
+
 /**
- * Etichette tab (UI): Aminosangue · Ergo · Micro
- * (non aminoacidi / ergogenici / micronutrienti).
+ * Etichette tab UI (corte): Aminosangue · Ergo · Micro
+ * — non aminoacidi / ergogenici / micronutrienti.
  * Token salvati: `{id}:{item}` es. `amino:BCAA`.
  */
 export const SUPPLEMENT_CATEGORIES: SupplementCategory[] = [
@@ -42,6 +52,42 @@ export const SUPPLEMENT_CATEGORIES: SupplementCategory[] = [
     items: ["Vitamina D", "Vitamina B12", "Vitamina C", "Ferro", "Zinco", "Magnesio bisglicinato", "Probiotici", "Enzimi digestivi"],
   },
 ];
+
+const CATEGORY_BY_ID = new Map(SUPPLEMENT_CATEGORIES.map((c) => [c.id, c]));
+
+/** Normalizza id categoria (legacy → canonico). */
+export function normalizeSupplementCategoryId(raw: string): string {
+  const key = raw.trim().toLowerCase();
+  if (!key) return "carboidrati";
+  return SUPPLEMENT_CATEGORY_LEGACY_IDS[key] ?? key;
+}
+
+export function findSupplementCategory(rawId: string): SupplementCategory | undefined {
+  return CATEGORY_BY_ID.get(normalizeSupplementCategoryId(rawId));
+}
+
+export function getSupplementCategoryLabel(rawId: string): string {
+  return findSupplementCategory(rawId)?.label ?? rawId;
+}
+
+/** Migra token `aminoacidi:BCAA` → `amino:BCAA` nel csv profilo. */
+export function normalizeSupplementToken(token: string): string {
+  const trimmed = token.trim();
+  if (!trimmed) return "";
+  const sep = trimmed.indexOf(":");
+  if (sep <= 0) return trimmed;
+  const prefix = trimmed.slice(0, sep);
+  const item = trimmed.slice(sep + 1);
+  return `${normalizeSupplementCategoryId(prefix)}:${item}`;
+}
+
+export function normalizeSupplementTokensCsv(csv: string): string {
+  return csv
+    .split(",")
+    .map((t) => normalizeSupplementToken(t))
+    .filter(Boolean)
+    .join(", ");
+}
 
 export const SUPPLEMENT_BRANDS = [
   "Maurten",

@@ -22,7 +22,14 @@ import {
   type GarminSummaryBackfillStream,
 } from "@/lib/integrations/garmin-summary-backfill-streams";
 import { createProfilePayload, fetchProfileViewModel, updateProfilePayload } from "@/modules/profile/services/profile-api";
-import { SUPPLEMENT_BRANDS, SUPPLEMENT_CATEGORIES } from "@/lib/profile/supplement-category-catalog";
+import {
+  findSupplementCategory,
+  normalizeSupplementCategoryId,
+  normalizeSupplementToken,
+  normalizeSupplementTokensCsv,
+  SUPPLEMENT_BRANDS,
+  SUPPLEMENT_CATEGORIES,
+} from "@/lib/profile/supplement-category-catalog";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
 type AthleteProfileRow = {
@@ -1016,7 +1023,7 @@ export default function ProfilePage() {
       food_exclusions: (p.food_exclusions ?? []).join(", "),
       intolerances: (p.intolerances ?? []).join(", "),
       allergies: (p.allergies ?? []).join(", "),
-      supplements: (p.supplements ?? []).join(", "),
+      supplements: normalizeSupplementTokensCsv((p.supplements ?? []).join(", ")),
       supplement_brands: selectedBrands.join(", "),
     }));
   }
@@ -1029,6 +1036,9 @@ export default function ProfilePage() {
     startEditProfile(currentProfile);
     setActiveSection(section);
     if (nutritionTab) setActiveNutritionTab(nutritionTab);
+    if (nutritionTab === "supplements") {
+      setActiveSupplementCategory(normalizeSupplementCategoryId(activeSupplementCategory));
+    }
   }
 
   function updateRoutineDay(day: WeekDay, patch: Partial<RoutineDayConfig>) {
@@ -1097,7 +1107,7 @@ export default function ProfilePage() {
     };
 
     const supplementConfig = {
-      selected_tokens: parseCsvList(form.supplements) ?? [],
+      selected_tokens: (parseCsvList(normalizeSupplementTokensCsv(form.supplements)) ?? []).map(normalizeSupplementToken),
       selected_brands: parseCsvList(form.supplement_brands) ?? [],
     };
 
@@ -1132,7 +1142,7 @@ export default function ProfilePage() {
       intolerances: parseCsvList(form.intolerances),
       allergies: parseCsvList(form.allergies),
       supplements: joinUnique([
-        ...(parseCsvList(form.supplements) ?? []),
+        ...(parseCsvList(normalizeSupplementTokensCsv(form.supplements)) ?? []).map(normalizeSupplementToken),
         ...(parseCsvList(form.supplement_brands) ?? []),
       ]),
     };
@@ -1593,7 +1603,7 @@ export default function ProfilePage() {
                 className={editorTabClass(activeSection === "nutrition" && activeNutritionTab === "supplements", "rose")}
                 onClick={() => openEditSubsection("nutrition", "supplements")}
               >
-                Supplements
+                Integratori
               </button>
               <button type="button" className={editorTabClass(false, "slate")} onClick={() => openEditSubsection("personal")}>
                 Devices
@@ -2334,7 +2344,7 @@ export default function ProfilePage() {
               <div className="page-tabs theme-multi profile-editor-subtabs" style={{ marginBottom: "12px" }}>
                 <button type="button" className={`page-tab ${activeNutritionTab === "diet" ? "page-tab-active" : ""}`} onClick={() => setActiveNutritionTab("diet")}>Diet</button>
                 <button type="button" className={`page-tab ${activeNutritionTab === "intolerances" ? "page-tab-active" : ""}`} onClick={() => setActiveNutritionTab("intolerances")}>Intolerances</button>
-                <button type="button" className={`page-tab ${activeNutritionTab === "supplements" ? "page-tab-active" : ""}`} onClick={() => setActiveNutritionTab("supplements")}>Supplements</button>
+                <button type="button" className={`page-tab ${activeNutritionTab === "supplements" ? "page-tab-active" : ""}`} onClick={() => setActiveNutritionTab("supplements")}>Integratori</button>
               </div>
 
               {activeNutritionTab === "diet" && (
@@ -2416,14 +2426,20 @@ export default function ProfilePage() {
                 <div>
                   <div className="page-tabs theme-multi profile-editor-subtabs" style={{ marginBottom: "10px" }}>
                     {SUPPLEMENT_CATEGORIES.map((cat) => (
-                      <button key={cat.id} type="button" className={`page-tab ${activeSupplementCategory === cat.id ? "page-tab-active" : ""}`} onClick={() => setActiveSupplementCategory(cat.id)}>
+                      <button
+                        key={cat.id}
+                        type="button"
+                        className={`page-tab ${normalizeSupplementCategoryId(activeSupplementCategory) === cat.id ? "page-tab-active" : ""}`}
+                        onClick={() => setActiveSupplementCategory(cat.id)}
+                      >
                         {cat.label}
                       </button>
                     ))}
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "8px", marginBottom: "12px" }}>
-                    {(SUPPLEMENT_CATEGORIES.find((c) => c.id === activeSupplementCategory)?.items ?? []).map((item) => {
-                      const token = `${activeSupplementCategory}:${item}`;
+                    {(findSupplementCategory(activeSupplementCategory)?.items ?? []).map((item) => {
+                      const categoryId = normalizeSupplementCategoryId(activeSupplementCategory);
+                      const token = `${categoryId}:${item}`;
                       const selected = form.supplements.split(",").map((s) => s.trim()).filter(Boolean).includes(token);
                       return (
                         <button key={item} type="button" className={`profile-black-chip ${selected ? "active" : ""}`} onClick={() => setForm((f) => ({ ...f, supplements: toggleCsvToken(f.supplements, token) }))}>
