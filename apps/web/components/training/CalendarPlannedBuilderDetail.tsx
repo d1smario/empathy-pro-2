@@ -17,6 +17,10 @@ import {
   pro2BuilderContractToChartSegments,
 } from "@/lib/training/builder/pro2-session-notes";
 import type { LifestylePracticeCategory } from "@/lib/training/builder/lifestyle-playbook-catalog";
+import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
+import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 
 const LIFESTYLE_CATS: readonly LifestylePracticeCategory[] = [
   "yoga",
@@ -39,9 +43,6 @@ function asLifestyleCategory(raw: string | undefined): LifestylePracticeCategory
   if (raw && (LIFESTYLE_CATS as readonly string[]).includes(raw)) return raw as LifestylePracticeCategory;
   return "mobility";
 }
-import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
-import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
-import { useMemo, useState } from "react";
 import { deletePlannedWorkout, patchPlannedWorkout } from "@/modules/training/services/training-planned-api";
 import { clonePlannedWorkout } from "@/modules/training/services/training-library-api";
 
@@ -91,13 +92,26 @@ export function CalendarPlannedBuilderDetail({
   );
 
   const hasBlockChart = segments.length > 0 && contract?.family !== "strength";
+  const router = useRouter();
   const [structureOpen, setStructureOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [adaptNavigating, setAdaptNavigating] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [targetDate, setTargetDate] = useState(workout.date);
   const [calendarBusy, setCalendarBusy] = useState<"copy" | "move" | null>(null);
   const [calendarActionMsg, setCalendarActionMsg] = useState<string | null>(null);
+  const [moveConfirmOpen, setMoveConfirmOpen] = useState(false);
 
   const resolvedAthleteId = (workout.athleteId?.trim() || athleteId?.trim() || "").trim();
+
+  useEffect(() => {
+    setTargetDate(workout.date);
+    setDeleteConfirmOpen(false);
+    setMoveConfirmOpen(false);
+    setActionFeedback(null);
+    setAdaptNavigating(false);
+  }, [workout.id, workout.date]);
 
   const tssEst = useMemo(() => (contract ? estimatedTssFromPro2Contract(contract) : 0), [contract]);
 
@@ -147,49 +161,91 @@ export function CalendarPlannedBuilderDetail({
             </p>
           ) : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="relative z-20 flex flex-wrap gap-2 pointer-events-auto">
           <Pro2Link href={sessionHref} variant="ghost" className="border border-orange-500/35 bg-orange-500/10 text-xs">
             Giornata
             <ExternalLink className="ml-1 inline h-3 w-3 opacity-70" aria-hidden />
           </Pro2Link>
-          <Pro2Link
-            href={builderHref}
-            variant="ghost"
-            className="border border-fuchsia-500/35 bg-fuchsia-500/10 text-xs"
+          <button
+            type="button"
+            disabled={adaptNavigating}
+            className="inline-flex items-center justify-center rounded-full border border-fuchsia-500/35 bg-fuchsia-500/10 px-5 py-2.5 text-xs font-bold text-white transition hover:bg-fuchsia-500/20 disabled:opacity-40"
             title="Apre il builder con adattamento giornaliero e sostituisce questa riga al salvataggio."
+            onClick={() => {
+              setActionFeedback(null);
+              setAdaptNavigating(true);
+              router.push(builderHref);
+            }}
           >
-            Adatta
-          </Pro2Link>
+            {adaptNavigating ? "Apertura builder…" : "Adatta"}
+          </button>
           {resolvedAthleteId ? (
-            <button
-              type="button"
-              disabled={deleting}
-              className="inline-flex items-center gap-1 rounded-lg border border-rose-400/45 bg-rose-500/15 px-2.5 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-500/25 disabled:opacity-40"
-              title="Rimuove questa riga da planned_workouts"
-              onClick={async () => {
-                if (!window.confirm("Eliminare questa seduta pianificata dal calendario?")) return;
-                const aid = resolvedAthleteId;
-                if (!aid) {
-                  window.alert("Manca athleteId: impossibile allineare DELETE a planned-window.");
-                  return;
-                }
-                setDeleting(true);
-                try {
-                  await deletePlannedWorkout({ id: workout.id, athleteId: aid });
-                  onDeleted?.(workout.id);
-                } catch (e) {
-                  window.alert(e instanceof Error ? e.message : "Eliminazione non riuscita");
-                } finally {
-                  setDeleting(false);
-                }
-              }}
-            >
-              <Trash2 className="h-3.5 w-3.5" aria-hidden />
-              {deleting ? "…" : "Elimina"}
-            </button>
-          ) : null}
+            deleteConfirmOpen ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-rose-400/40 bg-rose-950/40 px-2 py-1.5">
+                <span className="text-xs text-rose-100">Rimuovere dal calendario?</span>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  className="rounded-lg border border-rose-300/50 bg-rose-500/25 px-2 py-1 text-xs font-bold text-white hover:bg-rose-500/40 disabled:opacity-40"
+                  onClick={async () => {
+                    const aid = resolvedAthleteId;
+                    setActionFeedback(null);
+                    setDeleting(true);
+                    try {
+                      await deletePlannedWorkout({ id: workout.id, athleteId: aid });
+                      setDeleteConfirmOpen(false);
+                      setActionFeedback({ tone: "ok", text: "Seduta rimossa dal calendario." });
+                      onDeleted?.(workout.id);
+                    } catch (e) {
+                      setActionFeedback({
+                        tone: "err",
+                        text: e instanceof Error ? e.message : "Eliminazione non riuscita",
+                      });
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  {deleting ? "Elimino…" : "Conferma"}
+                </button>
+                <button
+                  type="button"
+                  disabled={deleting}
+                  className="rounded-lg border border-white/15 px-2 py-1 text-xs text-gray-300 hover:bg-white/10 disabled:opacity-40"
+                  onClick={() => setDeleteConfirmOpen(false)}
+                >
+                  Annulla
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={deleting}
+                className="inline-flex items-center gap-1 rounded-lg border border-rose-400/45 bg-rose-500/15 px-2.5 py-1.5 text-xs font-bold text-rose-100 hover:bg-rose-500/25 disabled:opacity-40"
+                title="Rimuove questa riga da planned_workouts"
+                onClick={() => {
+                  setActionFeedback(null);
+                  setDeleteConfirmOpen(true);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                Elimina
+              </button>
+            )
+          ) : (
+            <span className="text-xs text-amber-200/90">Elimina: contesto atleta non disponibile.</span>
+          )}
         </div>
       </div>
+
+      {actionFeedback ? (
+        <p
+          className={`mt-2 text-xs ${actionFeedback.tone === "ok" ? "text-emerald-300/95" : "text-rose-300/95"}`}
+          role="status"
+        >
+          {actionFeedback.text}
+        </p>
+      ) : null}
 
       {resolvedAthleteId ? (
         <div className="mt-3 flex flex-wrap items-end gap-2 border-t border-white/10 pt-3">
@@ -230,33 +286,60 @@ export function CalendarPlannedBuilderDetail({
             <Copy className="h-3.5 w-3.5" aria-hidden />
             {calendarBusy === "copy" ? "Copio…" : "Copia"}
           </button>
-          <button
-            type="button"
-            disabled={calendarBusy != null || !targetDate.trim() || targetDate.trim() === workout.date}
-            className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/45 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-40"
-            title="Sposta la seduta su un'altra data"
-            onClick={async () => {
-              if (!window.confirm(`Spostare questa seduta dal ${workout.date} al ${targetDate.trim()}?`)) return;
-              setCalendarActionMsg(null);
-              setCalendarBusy("move");
-              try {
-                await patchPlannedWorkout({
-                  id: workout.id,
-                  athleteId: resolvedAthleteId,
-                  patch: { date: targetDate.trim() },
-                });
-                setCalendarActionMsg(`Spostata al ${targetDate.trim()}`);
-                onCalendarMutated?.();
-              } catch (e) {
-                setCalendarActionMsg(e instanceof Error ? e.message : "Spostamento non riuscito");
-              } finally {
-                setCalendarBusy(null);
-              }
-            }}
-          >
-            <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
-            {calendarBusy === "move" ? "Sposto…" : "Sposta"}
-          </button>
+          {moveConfirmOpen ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-cyan-400/35 bg-cyan-950/30 px-2 py-1.5">
+              <span className="text-xs text-cyan-100">
+                Spostare dal {workout.date} al {targetDate.trim()}?
+              </span>
+              <button
+                type="button"
+                disabled={calendarBusy != null}
+                className="rounded-lg border border-cyan-300/50 bg-cyan-500/25 px-2 py-1 text-xs font-bold text-white disabled:opacity-40"
+                onClick={async () => {
+                  setCalendarActionMsg(null);
+                  setCalendarBusy("move");
+                  try {
+                    await patchPlannedWorkout({
+                      id: workout.id,
+                      athleteId: resolvedAthleteId,
+                      patch: { date: targetDate.trim() },
+                    });
+                    setMoveConfirmOpen(false);
+                    setCalendarActionMsg(`Spostata al ${targetDate.trim()}`);
+                    onCalendarMutated?.();
+                  } catch (e) {
+                    setCalendarActionMsg(e instanceof Error ? e.message : "Spostamento non riuscito");
+                  } finally {
+                    setCalendarBusy(null);
+                  }
+                }}
+              >
+                {calendarBusy === "move" ? "Sposto…" : "Conferma"}
+              </button>
+              <button
+                type="button"
+                disabled={calendarBusy != null}
+                className="rounded-lg border border-white/15 px-2 py-1 text-xs text-gray-300 hover:bg-white/10 disabled:opacity-40"
+                onClick={() => setMoveConfirmOpen(false)}
+              >
+                Annulla
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={calendarBusy != null || !targetDate.trim() || targetDate.trim() === workout.date}
+              className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/45 bg-cyan-500/15 px-2.5 py-1.5 text-xs font-bold text-cyan-100 hover:bg-cyan-500/25 disabled:opacity-40"
+              title="Sposta la seduta su un'altra data"
+              onClick={() => {
+                setCalendarActionMsg(null);
+                setMoveConfirmOpen(true);
+              }}
+            >
+              <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden />
+              Sposta
+            </button>
+          )}
           {calendarActionMsg ? (
             <p className="w-full text-xs text-emerald-300/90" role="status">
               {calendarActionMsg}

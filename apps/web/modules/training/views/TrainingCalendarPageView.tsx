@@ -199,6 +199,8 @@ export default function TrainingCalendarPageView() {
   const daysInMonth = monthEnd.getDate();
 
   const [loading, setLoading] = useState(true);
+  const [calendarReady, setCalendarReady] = useState(false);
+  const [monthRefreshing, setMonthRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -258,9 +260,15 @@ export default function TrainingCalendarPageView() {
       setPlannedProvenanceSummary(null);
       setErr("Nessun atleta attivo.");
       setLoading(false);
+      setCalendarReady(false);
+      setMonthRefreshing(false);
       return;
     }
-    setLoading(true);
+    if (calendarReady) {
+      setMonthRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setErr(null);
     try {
       let from = fetchFrom;
@@ -332,10 +340,12 @@ export default function TrainingCalendarPageView() {
     } finally {
       if (!isStale()) {
         setLoading(false);
+        setMonthRefreshing(false);
+        setCalendarReady(true);
       }
     }
   },
-  [athleteId, ctxLoading, fetchFrom, fetchTo],
+  [athleteId, calendarReady, ctxLoading, fetchFrom, fetchTo],
 );
 
   useEffect(() => {
@@ -710,11 +720,17 @@ export default function TrainingCalendarPageView() {
         </p>
       </div>
 
-      {ctxLoading || loading ? (
+      {ctxLoading || (loading && !calendarReady) ? (
         <div className="mb-8 space-y-2">
           <div className="h-3 w-full max-w-2xl animate-pulse rounded-lg bg-cyan-500/10" />
           <div className="h-[280px] w-full animate-pulse rounded-2xl bg-white/5" />
         </div>
+      ) : null}
+
+      {monthRefreshing ? (
+        <p className="mb-3 text-xs text-cyan-300/90" role="status">
+          Aggiornamento calendario…
+        </p>
       ) : null}
 
       {err ? (
@@ -759,7 +775,7 @@ export default function TrainingCalendarPageView() {
         </div>
       ) : null}
 
-      {!ctxLoading && !loading && !err ? (
+      {!ctxLoading && calendarReady && !err ? (
         <Fragment>
           <TrainingViryaActivePlanStrip athleteId={athleteId} selectedDate={selectedDate} />
           <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
@@ -924,11 +940,13 @@ export default function TrainingCalendarPageView() {
                       <CalendarPlannedBuilderDetail
                         workout={w}
                         athleteId={athleteId}
-                        onDeleted={(removedId) => {
+                        onDeleted={async (removedId) => {
                           if (removedId) setPlanned((prev) => prev.filter((x) => x.id !== removedId));
-                          void loadMonth();
+                          await loadMonth();
                         }}
-                        onCalendarMutated={() => void loadMonth()}
+                        onCalendarMutated={async () => {
+                          await loadMonth();
+                        }}
                       />
                     </li>
                   ))}
