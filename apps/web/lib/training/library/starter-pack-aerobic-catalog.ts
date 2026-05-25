@@ -12,6 +12,12 @@ import {
   type AerobicStarterPreset,
 } from "@/lib/training/library/starter-pack-aerobic-helpers";
 import { STRUCTURE_RICH_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-structures";
+import { STRUCTURE_RICH_PRESETS_EXT } from "@/lib/training/library/starter-pack-aerobic-catalog-structures-ext";
+import { XC_SKI_CATALOG_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-xcski";
+import { TRAIL_RUNNING_CATALOG_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-trail";
+import { WAVE3_MULTISPORT_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-wave3-multisport";
+import { ENDURANCE_MATRIX_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-endurance-matrix";
+import { WAVE4_CATALOG_PRESETS } from "@/lib/training/library/starter-pack-aerobic-catalog-wave4";
 
 function z2Endurance75(discipline: string): Omit<AerobicStarterPreset, "presetId" | "discipline"> {
   return {
@@ -654,6 +660,12 @@ const CANOE_ONLY: AerobicStarterPreset[] = [
 export const AEROBIC_CATALOG_EXTENSION_PRESETS: AerobicStarterPreset[] = [
   ...buildMultiDisciplinePresets(),
   ...STRUCTURE_RICH_PRESETS,
+  ...STRUCTURE_RICH_PRESETS_EXT,
+  ...XC_SKI_CATALOG_PRESETS,
+  ...TRAIL_RUNNING_CATALOG_PRESETS,
+  ...WAVE3_MULTISPORT_PRESETS,
+  ...ENDURANCE_MATRIX_PRESETS,
+  ...WAVE4_CATALOG_PRESETS,
   ...CYCLING_ONLY,
   ...SWIMMING_ONLY,
   ...RUNNING_ONLY,

@@ -14,6 +14,8 @@ export const LIBRARY_DISCIPLINE_OPTIONS = [
   { value: "Running", label: "Running" },
   { value: "Swimming", label: "Nuoto" },
   { value: "Canoe", label: "Canoa / kayak" },
+  { value: "XC Ski", label: "Sci di fondo / XC" },
+  { value: "Trail Running", label: "Trail / skyrunning" },
   { value: "Gym", label: "Gym" },
 ] as const;
 
@@ -37,6 +39,13 @@ export const LIBRARY_METHODOLOGY_TAG_OPTIONS = [
   { value: "recovery", label: "Recupero" },
   { value: "30-30", label: "30″/30″" },
   { value: "20-40", label: "20″/40″" },
+  { value: "xc_ski", label: "XC ski / nordico" },
+  { value: "trail", label: "Trail / verticale" },
+  { value: "double_pole", label: "Double pole" },
+  { value: "vertical", label: "Vertical / D+" },
+  { value: "skyrunning", label: "Skyrunning" },
+  { value: "pyramid", label: "Piramide" },
+  { value: "tier", label: "Tier / multi-blocco" },
 ] as const;
 
 export const LIBRARY_VIRYA_PHASE_OPTIONS = [
@@ -103,6 +112,9 @@ export function libraryRowMatchesTag(row: CoachWorkoutLibraryItemRow, tag: strin
   if (needle === "sprint" && (hay.includes("neuromuscular") || hay.includes("sprinter"))) return true;
   if (needle === "force" && (hay.includes("strength") || hay.includes("climbing") || hay.includes("hill"))) return true;
   if (needle === "heat" && hay.includes("temperature")) return true;
+  if (needle === "trail" && (hay.includes("trail") || hay.includes("vertical") || hay.includes("skyrunning"))) return true;
+  if (needle === "xc_ski" && (hay.includes("xc_ski") || hay.includes("nordic") || hay.includes("double_pole"))) return true;
+  if (needle === "vertical" && (hay.includes("vertical") || hay.includes("d+") || hay.includes("uphill"))) return true;
 
   return false;
 }

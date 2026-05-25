@@ -1,8 +1,10 @@
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import type { Pro2BlockChart } from "@/lib/training/builder/pro2-session-contract";
 
-function clampScale(scale: number): number {
-  return Math.max(0.35, Math.min(1.05, scale));
+function clampScale(scale: number, opts?: { clampMin?: number; clampMax?: number }): number {
+  const min = opts?.clampMin ?? 0.35;
+  const max = opts?.clampMax ?? 1.05;
+  return Math.max(min, Math.min(max, scale));
 }
 
 function scaleRounded(value: number, scale: number, minimum = 1): number {
@@ -31,8 +33,9 @@ function scaleChart(chart: Pro2BlockChart, scale: number): Pro2BlockChart {
 export function scaleLibraryContract(
   contract: Pro2BuilderSessionContract,
   loadScaleRaw: number,
+  opts?: { clampMin?: number; clampMax?: number },
 ): Pro2BuilderSessionContract {
-  const loadScale = clampScale(loadScaleRaw);
+  const loadScale = clampScale(loadScaleRaw, opts);
   if (loadScale >= 0.999 && loadScale <= 1.001) {
     return contract;
   }

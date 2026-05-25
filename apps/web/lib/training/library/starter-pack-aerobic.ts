@@ -368,6 +368,9 @@ export const AEROBIC_STARTER_PRESETS: AerobicStarterPreset[] = [
 
 export const STARTER_PACK_TEMPLATE_COUNT = AEROBIC_STARTER_PRESETS.length;
 
+/** Obiettivo crescita progressiva del catalogo (import incrementale per presetId). */
+export { AEROBIC_CATALOG_GROWTH_TARGET } from "@/lib/training/library/starter-pack-aerobic-helpers";
+
 export function empathyAerobicStarterContracts(): Array<{
   preset: AerobicStarterPreset;
   contract: Pro2BuilderSessionContract;

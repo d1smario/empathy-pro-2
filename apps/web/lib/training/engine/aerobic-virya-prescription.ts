@@ -2,8 +2,8 @@ import type { AdaptationTarget } from "@/lib/training/engine/types";
 import { pickAerobicSessionArchetype } from "@/lib/training/engine/aerobic-session-archetypes";
 
 /**
- * Prescrizioni Virya (endurance): catalogo di **archetipi** (3–4 per fase) con scale durata/TSS,
- * poi materializzazione motore + `PRESET_*` per intervalli. Nessun LLM.
+ * Prescrizioni Virya (endurance): archetipo → template catalogo Empathy (libreria coach),
+ * con scale durata/TSS sullo slot microciclo. Fallback motore solo se nessun match catalogo.
  */
 export type ViryaMacroPhaseForAerobicPrescription =
   | "base"

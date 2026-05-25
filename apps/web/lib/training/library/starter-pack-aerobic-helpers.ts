@@ -320,6 +320,8 @@ export const DISCIPLINE_SCALES = {
   running: { discipline: "Running", slug: "run", durationScale: 0.82, tssScale: 0.88 },
   swimming: { discipline: "Swimming", slug: "swm", durationScale: 0.62, tssScale: 0.72 },
   canoe: { discipline: "Canoe", slug: "can", durationScale: 0.88, tssScale: 0.9 },
+  xcSki: { discipline: "XC Ski", slug: "xcs", durationScale: 0.9, tssScale: 0.92 },
+  trailRunning: { discipline: "Trail Running", slug: "trl", durationScale: 0.85, tssScale: 0.86 },
 } as const;
 
 export const ALL_DISCIPLINES = [
@@ -327,7 +329,12 @@ export const ALL_DISCIPLINES = [
   DISCIPLINE_SCALES.running,
   DISCIPLINE_SCALES.swimming,
   DISCIPLINE_SCALES.canoe,
+  DISCIPLINE_SCALES.xcSki,
+  DISCIPLINE_SCALES.trailRunning,
 ];
+
+/** Obiettivo crescita catalogo (import incrementale per presetId). */
+export const AEROBIC_CATALOG_GROWTH_TARGET = 500;
 
 export function buildStarterContractFromPreset(preset: AerobicStarterPreset): Pro2BuilderSessionContract {
   const durationSec = Math.max(60, preset.plannedMinutes * 60);

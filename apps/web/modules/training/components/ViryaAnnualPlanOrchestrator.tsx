@@ -46,6 +46,7 @@ import { materializePro2BlocksFromEngine } from "@/lib/training/virya/materializ
 import { materializeViryaGymBuilderSession } from "@/lib/training/virya/materialize-virya-gym-builder-session";
 import { isGenericViryaPlanName, suggestedViryaPlanName, viryaPlanTag } from "@/lib/training/virya/virya-plan-name";
 import { resolveAerobicViryaPrescription } from "@/lib/training/engine/aerobic-virya-prescription";
+import { materializeViryaAerobicFromCatalog } from "@/lib/training/virya/materialize-virya-aerobic-from-catalog";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
 import { importViryaWeekToLibrary } from "@/modules/training/services/training-library-api";
 import {
@@ -1663,6 +1664,38 @@ export function ViryaAnnualPlanOrchestrator({
         methodology: input.methodology,
         blocks: gymBuilt.fallbackBlocks.length ? gymBuilt.fallbackBlocks : fallbackBlocks,
       });
+    }
+
+    if (input.family === "aerobic") {
+      const prescription =
+        input.builderInstructions?.aerobicPrescription ??
+        resolveAerobicViryaPrescription({
+          viryaPhase: input.phase,
+          goalSummary: input.objective ?? "",
+          weekObjectives: input.weekObjectives ?? [],
+          sessionIndexInWeek: input.sessionIndexInWeek ?? 0,
+          sessionsInWeek: Math.max(1, input.sessionsInWeek ?? 1),
+        });
+      const physiologyEarly = viryaContext?.physiologyState;
+      const ftpEarly = Number(physiologyEarly?.physiologicalProfile.ftpWatts ?? 0);
+      const hrEarly = Number(physiologyEarly?.performanceProfile.maxHrBpm ?? 0);
+      const catalogSerialized = materializeViryaAerobicFromCatalog({
+        prescription,
+        discipline: input.discipline,
+        sessionName: input.sessionName,
+        phase: input.phase,
+        targetDurationMinutes: input.durationMinutes,
+        targetTss: input.tss,
+        targetKcal: input.kcal,
+        sessionIndexInWeek: input.sessionIndexInWeek ?? 0,
+        ftpW: Number.isFinite(ftpEarly) && ftpEarly > 0 ? ftpEarly : 250,
+        hrMax: Number.isFinite(hrEarly) && hrEarly > 0 ? hrEarly : 185,
+        viryaStructureTag: viryaStructureTag(),
+        methodology: input.methodology,
+      });
+      if (catalogSerialized) {
+        return catalogSerialized;
+      }
     }
 
     const engineRes = await generateBuilderSession({
