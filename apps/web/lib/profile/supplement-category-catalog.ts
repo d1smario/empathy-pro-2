@@ -5,10 +5,11 @@ export type SupplementCategory = {
   items: string[];
 };
 
-/** ID legacy (V1 / export) → id canonico Pro 2. */
+/** Alias id tab → id canonico token (`amino`, `ergo`, `micro`). */
 export const SUPPLEMENT_CATEGORY_LEGACY_IDS: Record<string, string> = {
   aminoacidi: "amino",
   aminoacido: "amino",
+  aminosangue: "amino",
   ergogenici: "ergo",
   ergogenico: "ergo",
   micronutrienti: "micro",
@@ -16,8 +17,7 @@ export const SUPPLEMENT_CATEGORY_LEGACY_IDS: Record<string, string> = {
 };
 
 /**
- * Etichette tab UI (corte): Aminosangue · Ergo · Micro
- * — non aminoacidi / ergogenici / micronutrienti.
+ * Etichette tab UI: Aminoacidi · Ergogenici · Micronutrienti.
  * Token salvati: `{id}:{item}` es. `amino:BCAA`.
  */
 export const SUPPLEMENT_CATEGORIES: SupplementCategory[] = [
@@ -38,17 +38,17 @@ export const SUPPLEMENT_CATEGORIES: SupplementCategory[] = [
   },
   {
     id: "amino",
-    label: "Aminosangue",
+    label: "Aminoacidi",
     items: ["BCAA", "EAA", "Leucina", "Isoleucina", "Valina", "Glutammina", "Whey", "Caseina", "Proteine vegetali"],
   },
   {
     id: "ergo",
-    label: "Ergo",
+    label: "Ergogenici",
     items: ["Creatina", "Beta-Alanina", "Citrullina", "Caffeina", "Nitrati", "Taurina", "Rhodiola"],
   },
   {
     id: "micro",
-    label: "Micro",
+    label: "Micronutrienti",
     items: ["Vitamina D", "Vitamina B12", "Vitamina C", "Ferro", "Zinco", "Magnesio bisglicinato", "Probiotici", "Enzimi digestivi"],
   },
 ];

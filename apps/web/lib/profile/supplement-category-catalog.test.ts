@@ -13,13 +13,14 @@ test("normalizeSupplementCategoryId: legacy → canonico", () => {
   assert.equal(normalizeSupplementCategoryId("micronutrienti"), "micro");
 });
 
-test("getSupplementCategoryLabel: etichette tab corte", () => {
-  assert.equal(getSupplementCategoryLabel("amino"), "Aminosangue");
-  assert.equal(getSupplementCategoryLabel("aminoacidi"), "Aminosangue");
-  assert.equal(getSupplementCategoryLabel("ergo"), "Ergo");
-  assert.equal(getSupplementCategoryLabel("ergogenici"), "Ergo");
-  assert.equal(getSupplementCategoryLabel("micro"), "Micro");
-  assert.equal(getSupplementCategoryLabel("micronutrienti"), "Micro");
+test("getSupplementCategoryLabel: etichette tab profilo", () => {
+  assert.equal(getSupplementCategoryLabel("amino"), "Aminoacidi");
+  assert.equal(getSupplementCategoryLabel("aminoacidi"), "Aminoacidi");
+  assert.equal(getSupplementCategoryLabel("aminosangue"), "Aminoacidi");
+  assert.equal(getSupplementCategoryLabel("ergo"), "Ergogenici");
+  assert.equal(getSupplementCategoryLabel("ergogenici"), "Ergogenici");
+  assert.equal(getSupplementCategoryLabel("micro"), "Micronutrienti");
+  assert.equal(getSupplementCategoryLabel("micronutrienti"), "Micronutrienti");
 });
 
 test("normalizeSupplementTokensCsv: migra prefissi legacy", () => {
