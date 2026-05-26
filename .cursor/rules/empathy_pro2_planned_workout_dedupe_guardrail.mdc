@@ -29,7 +29,7 @@ Fingerprint: `planned-workout-dedupe-fingerprint.ts`.
 
 ## Lettura nutrition
 
-`dedupePlannedTrainingForNutritionEnergy` resta fallback lato read; **non** sostituisce questo guardrail write.
+`dedupePlannedWorkoutDbRows()` in `planned-workout-dedupe-fingerprint.ts` si applica anche in **lettura** (`queryPlannedExecutedWindow`, nutrition module/UI) con le stesse regole del write guardrail.
 
 ## Pulizia operativa
 

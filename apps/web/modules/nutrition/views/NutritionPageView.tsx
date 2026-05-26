@@ -75,6 +75,7 @@ import {
 } from "@/modules/nutrition/services/nutrition-actions-api";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 import { effectivePlannedWorkoutNutritionMetrics } from "@/lib/training/builder/pro2-session-notes";
 import { Pro2GymSchedaBlockList } from "@/components/training/Pro2GymSchedaBlockList";
 import { analyzePlannedSessionsForFueling } from "@/lib/nutrition/fueling-planned-session-analysis";
@@ -1118,10 +1119,20 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     loadData();
   }, [athleteId, pathname, nutritionContextVersion]);
 
-  const selectedPlanSessions = useMemo(
-    () => planned.filter((p) => String(p.date ?? "").slice(0, 10) === selectedPlanDate),
-    [planned, selectedPlanDate],
-  );
+  const selectedPlanSessions = useMemo(() => {
+    const dayRows = planned.filter((p) => String(p.date ?? "").slice(0, 10) === selectedPlanDate);
+    return dedupePlannedWorkoutDbRows(
+      dayRows.map((session) => ({
+        ...session,
+        type: session.type ?? "session",
+        duration_minutes: session.duration_minutes,
+        tss_target: session.tss_target ?? 0,
+        kcal_target: session.kcal_target,
+        notes: session.notes,
+        created_at: (session as { created_at?: string | null }).created_at ?? null,
+      })),
+    );
+  }, [planned, selectedPlanDate]);
   const selectedExecutedSessions = useMemo(
     () => executed.filter((session) => session.date.slice(0, 10) === selectedPlanDate),
     [executed, selectedPlanDate],

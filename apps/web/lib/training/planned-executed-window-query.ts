@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
 import { executedWorkoutSourceMatchesPreference, loadDataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
+import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 
 /**
  * Select e filtri condivisi tra `GET /api/training/planned-window` e `GET /api/nutrition/module`
@@ -12,7 +13,7 @@ import { executedWorkoutSourceMatchesPreference, loadDataSourcePreferenceMap } f
  * `loadBioenergeticDayMemorySlice`) per evitare una seconda query.
  */
 export const PLANNED_WORKOUTS_WINDOW_SELECT =
-  "id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, notes" as const;
+  "id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, notes, created_at" as const;
 
 export const EXECUTED_WORKOUTS_WINDOW_SELECT =
   "id, athlete_id, date, started_at, ended_at, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
@@ -62,7 +63,10 @@ export async function queryPlannedExecutedWindow(
   });
 
   return {
-    planned: { data: planned.data as unknown[] | null, error: planned.error },
+    planned: {
+      data: dedupePlannedWorkoutDbRows((planned.data ?? []) as Parameters<typeof dedupePlannedWorkoutDbRows>[0]),
+      error: planned.error,
+    },
     executed: { data: filteredExec, error: executed.error },
     executedHiddenBySourcePreference: Math.max(0, rawExec.length - filteredExec.length),
   };

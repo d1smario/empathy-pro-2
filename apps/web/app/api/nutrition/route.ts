@@ -3,7 +3,7 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
-import { dedupePlannedTrainingForNutritionEnergy } from "@/lib/nutrition/planned-training-energy-dedupe";
+import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 
 export const runtime = "nodejs";
@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
         .maybeSingle(),
       db
         .from("planned_workouts")
-        .select("id, duration_minutes, tss_target, kcal_target, notes")
+        .select("id, type, duration_minutes, tss_target, kcal_target, notes, created_at")
         .eq("athlete_id", athleteId)
         .eq("date", targetDate),
     ]);
@@ -68,9 +68,21 @@ export async function GET(req: NextRequest) {
     if (planErr) return NextResponse.json({ error: planErr.message }, { status: 500, headers: NO_STORE });
     if (plannedErr) return NextResponse.json({ error: plannedErr.message }, { status: 500, headers: NO_STORE });
 
-    const sessions = dedupePlannedTrainingForNutritionEnergy(
-      (plannedRows ?? []) as Array<{ notes?: string | null }>,
-    ) as NonNullable<typeof plannedRows>;
+    const sessions = dedupePlannedWorkoutDbRows(
+      (plannedRows ?? []).map((row) => {
+        const r = row as Record<string, unknown>;
+        return {
+          id: typeof r.id === "string" ? r.id : undefined,
+          date: targetDate,
+          type: String(r.type ?? "session"),
+          duration_minutes: Number(r.duration_minutes ?? 0),
+          tss_target: Number(r.tss_target ?? 0),
+          kcal_target: r.kcal_target == null ? null : Number(r.kcal_target),
+          notes: typeof r.notes === "string" ? r.notes : null,
+          created_at: typeof r.created_at === "string" ? r.created_at : null,
+        };
+      }),
+    );
     const explicit = (planRow as Record<string, unknown> | null) ?? null;
     const explicitKcal = explicit != null ? Number(explicit.kcal_target ?? 0) : 0;
 

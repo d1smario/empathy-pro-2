@@ -4,7 +4,7 @@ import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-s
 import { defaultFoodDiaryEntryTimeHmsForMealSlot } from "@/lib/nutrition/food-diary-entry-time";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
-import { dedupePlannedTrainingForNutritionEnergy } from "@/lib/nutrition/planned-training-energy-dedupe";
+import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
@@ -163,9 +163,14 @@ export async function loadNutritionPlanDayContext(
     const profile = profileRes.data as Record<string, unknown> | null;
     const memory = await resolveAthleteMemory(athleteId).catch(() => null);
     const athleteFtpW = memory?.physiology?.physiologicalProfile?.ftpWatts ?? null;
-    const dedupedPlanned = dedupePlannedTrainingForNutritionEnergy(
+    const dedupedPlanned = dedupePlannedWorkoutDbRows(
       plannedWorkouts.map((p) => ({
-        ...p,
+        id: String((p as { id?: string }).id ?? ""),
+        date: dateKey,
+        type: String((p as { type?: string }).type ?? "session"),
+        duration_minutes: Number((p as { durationMinutes?: number }).durationMinutes ?? 0),
+        tss_target: Number((p as { tssTarget?: number }).tssTarget ?? 0),
+        kcal_target: (p as { kcalTarget?: number | null }).kcalTarget ?? null,
         notes: (p as { notes?: string | null }).notes ?? null,
       })),
     );
@@ -174,9 +179,9 @@ export async function loadNutritionPlanDayContext(
       const builderSession = parsePro2BuilderSessionFromNotes(notes);
       const m = resolvePlannedSessionMetrics({
         contract: builderSession,
-        durationMinutesDb: Number(p.durationMinutes) || 0,
-        tssTargetDb: Number(p.tssTarget) || 0,
-        kcalTargetDb: Number(p.kcalTarget) || 0,
+        durationMinutesDb: Number(p.duration_minutes) || 0,
+        tssTargetDb: Number(p.tss_target) || 0,
+        kcalTargetDb: Number(p.kcal_target) || 0,
         athleteFtpWatts: athleteFtpW,
       });
       return {
