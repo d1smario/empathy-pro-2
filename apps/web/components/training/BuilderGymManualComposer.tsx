@@ -76,7 +76,7 @@ export type BuilderGymManualComposerProps = {
   paletteSport: string;
   currentSportLabel: string;
   manualSaveBusy: boolean;
-  onSaveManual: () => void;
+  onSaveManual: (targetDate: string) => void;
   manualSaveErr: string | null;
   manualSaveOkId: string | null;
   canSave: boolean;
@@ -634,7 +634,7 @@ export function BuilderGymManualComposer({
           type="button"
           className={btnPrimary}
           disabled={!athleteId || !canSave || manualSaveBusy}
-          onClick={() => onSaveManual()}
+          onClick={() => onSaveManual(manualPlannedDate)}
         >
           {manualSaveBusy ? "Salvataggio…" : "Salva nel calendario"}
         </button>

@@ -111,6 +111,11 @@ function localCalendarDateString(d: Date = new Date()): string {
   return `${y}-${m}-${day}`;
 }
 
+function normalizeCalendarTargetDay(raw: string): string | null {
+  const key = raw.trim().slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(key) ? key : null;
+}
+
 function addCalendarDays(isoDate: string, deltaDays: number): string {
   const key = isoDate.slice(0, 10);
   const base = new Date(`${key}T12:00:00`);
@@ -861,8 +866,13 @@ export default function TrainingBuilderRichPageView() {
     [athleteId, router],
   );
 
-  const saveToCalendar = useCallback(async () => {
+  const saveToCalendar = useCallback(async (targetDate: string) => {
     if (!athleteId || !genResult || !("ok" in genResult) || !genResult.ok) return;
+    const day = normalizeCalendarTargetDay(targetDate);
+    if (!day) {
+      setSaveErr("Data calendario non valida.");
+      return;
+    }
     setSaveBusy(true);
     setSaveErr(null);
     setSaveOkId(null);
@@ -940,7 +950,7 @@ export default function TrainingBuilderRichPageView() {
 
     const res = await insertPlannedWorkoutFromEngineSession({
       athleteId,
-      date: plannedDate,
+      date: day,
       session,
       extraNotesLines,
       plannedDurationMinutesOverride:
@@ -954,7 +964,7 @@ export default function TrainingBuilderRichPageView() {
       return;
     }
     await finalizeCalendarSave({
-      date: plannedDate,
+      date: day,
       plannedWorkoutId: res.plannedWorkoutId,
       setOkId: setSaveOkId,
       setErrMsg: setSaveErr,
@@ -1015,8 +1025,13 @@ export default function TrainingBuilderRichPageView() {
     hrMax,
   ]);
 
-  const saveManualToCalendar = useCallback(async () => {
+  const saveManualToCalendar = useCallback(async (targetDate: string) => {
     if (!athleteId || !manualSession) return;
+    const day = normalizeCalendarTargetDay(targetDate);
+    if (!day) {
+      setManualSaveErr("Data calendario non valida.");
+      return;
+    }
     setManualSaveBusy(true);
     setManualSaveErr(null);
     setManualSaveOkId(null);
@@ -1072,7 +1087,7 @@ export default function TrainingBuilderRichPageView() {
     const jsonLine = serializePro2BuilderSessionContract(contract);
     const res = await insertPlannedWorkoutFromEngineSession({
       athleteId,
-      date: plannedDate,
+      date: day,
       session: manualSession,
       extraNotesLines: [jsonLine],
     });
@@ -1082,7 +1097,7 @@ export default function TrainingBuilderRichPageView() {
       return;
     }
     await finalizeCalendarSave({
-      date: plannedDate,
+      date: day,
       plannedWorkoutId: res.plannedWorkoutId,
       setOkId: setManualSaveOkId,
       setErrMsg: setManualSaveErr,
@@ -1090,7 +1105,6 @@ export default function TrainingBuilderRichPageView() {
   }, [
     athleteId,
     manualSession,
-    plannedDate,
     manualPlanBlocks,
     gymManualRows,
     lifestyleManualRows,
@@ -2211,7 +2225,7 @@ export default function TrainingBuilderRichPageView() {
                   variant="secondary"
                   className="!border-orange-400/40 !bg-orange-500/15 !text-orange-100"
                   disabled={saveBusy || wahooPushBusy}
-                  onClick={() => void saveToCalendar()}
+                  onClick={() => void saveToCalendar(plannedDate)}
                 >
                   {saveBusy ? "Salvataggio…" : "Salva nel calendario"}
                 </Pro2Button>
@@ -2286,7 +2300,7 @@ export default function TrainingBuilderRichPageView() {
             paletteSport={sport}
             currentSportLabel={currentSportLabel}
             manualSaveBusy={manualSaveBusy}
-            onSaveManual={() => void saveManualToCalendar()}
+            onSaveManual={(date) => void saveManualToCalendar(date)}
             manualSaveErr={manualSaveErr}
             manualSaveOkId={manualSaveOkId}
             canSave={Boolean(manualSession)}
@@ -2313,7 +2327,7 @@ export default function TrainingBuilderRichPageView() {
             manualSessionDurationMinutes={manualSessionDurationMinutes}
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
             manualSaveBusy={manualSaveBusy}
-            onSaveManual={() => void saveManualToCalendar()}
+            onSaveManual={(date) => void saveManualToCalendar(date)}
             manualSaveErr={manualSaveErr}
             manualSaveOkId={manualSaveOkId}
             canSave={Boolean(manualSession)}
@@ -2335,7 +2349,7 @@ export default function TrainingBuilderRichPageView() {
             paletteSport={sport}
             currentSportLabel={currentSportLabel}
             manualSaveBusy={manualSaveBusy}
-            onSaveManual={() => void saveManualToCalendar()}
+            onSaveManual={(date) => void saveManualToCalendar(date)}
             manualSaveErr={manualSaveErr}
             manualSaveOkId={manualSaveOkId}
             canSave={Boolean(manualSession)}
@@ -2366,7 +2380,7 @@ export default function TrainingBuilderRichPageView() {
             manualPlannedDate={plannedDate}
             setManualPlannedDate={setPlannedDate}
             manualSaveBusy={manualSaveBusy}
-            onSaveManual={() => void saveManualToCalendar()}
+            onSaveManual={(date) => void saveManualToCalendar(date)}
             manualSaveErr={manualSaveErr}
             manualSaveOkId={manualSaveOkId}
             canSave={Boolean(manualSession)}

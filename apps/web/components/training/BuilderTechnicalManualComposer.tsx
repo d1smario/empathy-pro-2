@@ -81,7 +81,7 @@ export type BuilderTechnicalManualComposerProps = {
   manualSessionDurationMinutes: number;
   setManualSessionDurationMinutes: React.Dispatch<React.SetStateAction<number>>;
   manualSaveBusy: boolean;
-  onSaveManual: () => void;
+  onSaveManual: (targetDate: string) => void;
   manualSaveErr: string | null;
   manualSaveOkId: string | null;
   canSave: boolean;
@@ -294,7 +294,7 @@ export function BuilderTechnicalManualComposer({
           <button
             type="button"
             disabled={!athleteId || manualSaveBusy || !canSave}
-            onClick={onSaveManual}
+            onClick={() => onSaveManual(manualPlannedDate)}
             className="inline-flex shrink-0 items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-lg transition disabled:opacity-40 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-orange-500 hover:brightness-110 border border-white/10"
           >
             <FileText className="h-4 w-4" aria-hidden />
@@ -635,7 +635,7 @@ export function BuilderTechnicalManualComposer({
         <button
           type="button"
           disabled={!athleteId || manualSaveBusy || !canSave}
-          onClick={onSaveManual}
+          onClick={() => onSaveManual(manualPlannedDate)}
           className="inline-flex items-center justify-center gap-2 rounded-full px-6 py-2.5 text-sm font-bold text-white shadow-lg transition disabled:opacity-40 bg-gradient-to-r from-violet-600 via-fuchsia-600 to-orange-500 hover:brightness-110 border border-white/10"
         >
           <FileText className="h-4 w-4" aria-hidden />

@@ -2,7 +2,7 @@
 
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/domain-training";
 import { formatExecutedWorkoutSummary } from "@empathy/domain-training";
-import { Activity, CalendarDays, FileUp, Heart, LineChart, Sparkles } from "lucide-react";
+import { Activity, CalendarDays, FileUp, Heart, LayoutGrid, LineChart, Sparkles } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import type { FormEvent } from "react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -661,7 +661,7 @@ export default function TrainingCalendarPageView() {
             variant="secondary"
             className="justify-center border border-fuchsia-500/35 bg-fuchsia-500/10 hover:bg-fuchsia-500/15"
           >
-            Builder · adatta giorno
+            Builder · crea seduta
           </Pro2Link>
           <Pro2Link
             href="/training"
@@ -772,6 +772,13 @@ export default function TrainingCalendarPageView() {
           >
             Oggi
           </button>
+          <Pro2Link
+            href={`/training/builder?date=${encodeURIComponent(selectedDate)}`}
+            variant="secondary"
+            className="ml-2 inline-flex rounded-xl border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-2 text-sm font-semibold text-fuchsia-100 hover:bg-fuchsia-500/15"
+          >
+            Builder · giorno
+          </Pro2Link>
           <button
             type="button"
             className="ml-2 rounded-xl border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-sm font-semibold text-violet-100 hover:bg-violet-500/15"
@@ -891,21 +898,16 @@ export default function TrainingCalendarPageView() {
                         type="button"
                         onClick={() => {
                           setSelectedDate(date);
-                          const target = pList.length
-                            ? "calendar-day-planned-detail"
-                            : hasExecuted
-                              ? "day-session-detail"
-                              : wellness
-                                ? "day-wellness-detail"
-                                : null;
-                          if (target) {
-                            window.setTimeout(() => {
-                              document.getElementById(target)?.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start",
-                              });
-                            }, 60);
-                          }
+                          const target =
+                            pList.length > 0
+                              ? "calendar-day-planned-detail"
+                              : "calendar-day-builder-actions";
+                          window.setTimeout(() => {
+                            document.getElementById(target)?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            });
+                          }, 60);
                         }}
                         className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
                       >
@@ -1010,6 +1012,56 @@ export default function TrainingCalendarPageView() {
               </div>
             </div>
           </section>
+
+          <div id="calendar-day-builder-actions" className="mb-8 scroll-mt-24 w-full min-w-0">
+            <Pro2SectionCard
+              accent="fuchsia"
+              title={dayPlanned.length > 0 ? "Builder · giornata" : "Genera seduta con Builder"}
+              subtitle={`${selectedDate} · crea o adatta il piano coach su questo giorno`}
+              icon={LayoutGrid}
+            >
+              <div className="flex flex-wrap items-center gap-3">
+                <Pro2Link
+                  href={`/training/builder?date=${encodeURIComponent(selectedDate)}`}
+                  variant="primary"
+                  className="justify-center border border-fuchsia-400/40 bg-gradient-to-r from-fuchsia-600/80 via-violet-600/80 to-orange-500/80 px-5 py-2.5 text-sm font-bold text-white shadow-lg hover:brightness-110"
+                >
+                  {dayPlanned.length > 0 ? "Apri Builder · aggiungi / adatta" : "Genera piano con Builder"}
+                </Pro2Link>
+                {dayPlanned[0] ? (
+                  <Pro2Link
+                    href={`/training/builder?date=${encodeURIComponent(selectedDate)}&replace_planned_id=${encodeURIComponent(dayPlanned[0].id)}`}
+                    variant="secondary"
+                    className="justify-center border border-orange-400/35 bg-orange-500/10 text-orange-100"
+                  >
+                    Sostituisci seduta esistente
+                  </Pro2Link>
+                ) : null}
+                <button
+                  type="button"
+                  className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-semibold text-gray-400 hover:border-violet-400/30 hover:text-violet-200"
+                  onClick={() => {
+                    setShowFileImport(true);
+                    setFileImportForm((f) => ({ ...f, date: selectedDate }));
+                    window.setTimeout(() => {
+                      document.getElementById("training-calendar-file-import")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }, 80);
+                  }}
+                >
+                  Oppure importa file esterno
+                </button>
+              </div>
+              {dayPlanned.length === 0 ? (
+                <p className="mt-3 text-sm text-gray-500">
+                  Nessuna seduta pianificata: il Builder è il percorso canonico Pro 2 (motore deterministico + salvataggio su{" "}
+                  <code className="text-fuchsia-200/90">planned_workouts</code>).
+                </p>
+              ) : null}
+            </Pro2SectionCard>
+          </div>
 
           {dayPlanned.length > 0 ? (
             <div id="calendar-day-planned-detail" className="mb-8 scroll-mt-24 w-full min-w-0">
@@ -1328,7 +1380,15 @@ export default function TrainingCalendarPageView() {
               >
                 <p className="font-mono text-xs text-gray-500">{selectedDate}</p>
 
-                <div className="mt-3">
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Pro2Link
+                    href={`/training/builder?date=${encodeURIComponent(selectedDate)}`}
+                    variant="primary"
+                    className="border border-fuchsia-400/40 bg-fuchsia-500/15 text-fuchsia-50"
+                  >
+                    <LayoutGrid className="mr-1 inline h-4 w-4" aria-hidden />
+                    Genera con Builder
+                  </Pro2Link>
                   <Pro2Link
                     href={`/physiology/daily/${encodeURIComponent(selectedDate)}`}
                     variant="ghost"
