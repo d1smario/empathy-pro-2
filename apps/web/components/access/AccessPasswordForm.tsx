@@ -6,11 +6,8 @@ import { accessAppOriginFromWindow } from "@/lib/auth/access-app-origin";
 import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "@/lib/auth/pending-app-role-client";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
-import {
-  ACCESS_POST_SIGNUP_PLAN_PATH,
-  postSignInRedirectPath,
-  postSignupRegistrationPath,
-} from "@/lib/auth/post-registration-redirects";
+import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
+import { ACCESS_POST_SIGNUP_PLAN_PATH, postSignupRegistrationPath } from "@/lib/auth/post-registration-redirects";
 import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
@@ -145,18 +142,32 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
         if ((prof as { role?: PendingAppRole } | null)?.role === "coach") redirectRole = "coach";
       }
     }
-    let target = postSignInRedirectPath(redirectAfterLogin, redirectRole);
+    let hasAthleteAccess = false;
+    let hasOperatorAccess = false;
     if (redirectRole !== "coach") {
       try {
         const entRes = await fetch("/api/billing/entitlement", { cache: "no-store" });
-        const ent = (await entRes.json()) as { ok?: boolean; hasAthleteAccess?: boolean };
-        if (!entRes.ok || !ent.ok || !ent.hasAthleteAccess) {
-          target = ACCESS_POST_SIGNUP_PLAN_PATH;
+        const ent = (await entRes.json()) as {
+          ok?: boolean;
+          hasAthleteAccess?: boolean;
+          hasOperatorAccess?: boolean;
+        };
+        if (entRes.ok && ent.ok) {
+          hasAthleteAccess = Boolean(ent.hasAthleteAccess);
+          hasOperatorAccess = Boolean(ent.hasOperatorAccess);
         }
       } catch {
-        target = ACCESS_POST_SIGNUP_PLAN_PATH;
+        /* gate piano se entitlement non leggibile */
       }
+    } else {
+      hasOperatorAccess = true;
     }
+    const target = resolvePostLoginDestination({
+      next: redirectAfterLogin,
+      appRole: redirectRole,
+      hasAthleteAccess,
+      hasOperatorAccess,
+    });
     window.location.assign(target);
   }
 

@@ -3,8 +3,11 @@ import { type NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { safeAppInternalPath } from "@/core/routing/guards";
 import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
+import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
 import { PENDING_APP_ROLE_COOKIE, parsePendingAppRole } from "@/lib/auth/pending-role-cookie";
+import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -69,7 +72,10 @@ export async function GET(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user && pending) {
+  if (!user) {
+    return NextResponse.redirect(`${origin}/access?error=auth`);
+  }
+  if (pending) {
     const meta = user.user_metadata as Record<string, unknown>;
     await bootstrapAppUserProfile(supabase, {
       userId: user.id,
@@ -81,10 +87,23 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  let dest = next;
-  if (pending === "coach") {
-    dest = "/athletes";
-  }
+  const admin = createSupabaseAdminClient();
+  const db = admin ?? supabase;
+  const { data: prof } = await supabase
+    .from("app_user_profiles")
+    .select("role")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const profileRole = (prof as { role?: string } | null)?.role;
+  const appRole = pending ?? (profileRole === "coach" ? "coach" : "private");
+  const entitlement = await loadUserAccessEntitlement(db, user.id);
+
+  const dest = resolvePostLoginDestination({
+    next,
+    appRole,
+    hasAthleteAccess: entitlement?.hasAthleteAccess ?? false,
+    hasOperatorAccess: entitlement?.hasOperatorAccess ?? false,
+  });
 
   return NextResponse.redirect(`${origin}${dest}`);
 }

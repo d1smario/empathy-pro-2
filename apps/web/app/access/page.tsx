@@ -7,8 +7,8 @@ import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { safeAppInternalPath } from "@/core/routing/guards";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { Pro2Link } from "@/components/ui/empathy";
+import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
 import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
-import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
@@ -46,10 +46,16 @@ export default async function AccessPage({
           .eq("user_id", user.id)
           .maybeSingle();
         const role = (prof as { role?: string } | null)?.role;
-        if (role === "coach") redirect("/athletes");
+        const appRole = role === "coach" ? "coach" : "private";
         const ent = await loadUserAccessEntitlement(admin ?? sb, user.id);
-        if (ent.hasAthleteAccess) redirect(safeNext);
-        redirect(ACCESS_PLAN_PATH);
+        redirect(
+          resolvePostLoginDestination({
+            next: safeNext,
+            appRole,
+            hasAthleteAccess: ent.hasAthleteAccess,
+            hasOperatorAccess: ent.hasOperatorAccess,
+          }),
+        );
       }
     }
   }

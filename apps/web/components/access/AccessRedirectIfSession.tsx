@@ -1,16 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
+import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
+import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 
 /**
- * Se la sessione Supabase esiste già nel browser ma la RSC non l’ha vista (timing/cookie),
+ * Se la sessione Supabase esiste già nel browser ma la RSC non l'ha vista (timing/cookie),
  * evita di mostrare di nuovo il form magic link.
+ *
+ * Usa `location.assign` (non `router.replace`) così i cookie di sessione sono inclusi
+ * nella richiesta successiva — stesso motivo di `AccessPasswordForm`.
  */
 export function AccessRedirectIfSession({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
-
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -19,7 +21,22 @@ export function AccessRedirectIfSession({ nextPath }: { nextPath: string }) {
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!data.session) return;
+
+      let appRole: PendingAppRole = "private";
+      let hasAthleteAccess = false;
+      let hasOperatorAccess = false;
+
       try {
+        const uid = data.session.user.id;
+        const { data: prof } = await supabase
+          .from("app_user_profiles")
+          .select("role")
+          .eq("user_id", uid)
+          .maybeSingle();
+        if ((prof as { role?: string } | null)?.role === "coach") {
+          appRole = "coach";
+        }
+
         const entRes = await fetch("/api/billing/entitlement", { cache: "no-store" });
         const ent = (await entRes.json()) as {
           ok?: boolean;
@@ -27,24 +44,27 @@ export function AccessRedirectIfSession({ nextPath }: { nextPath: string }) {
           hasOperatorAccess?: boolean;
         };
         if (entRes.ok && ent.ok) {
-          if (ent.hasOperatorAccess && !ent.hasAthleteAccess) {
-            router.replace("/athletes");
-            return;
-          }
-          if (ent.hasAthleteAccess) {
-            router.replace(nextPath);
-            return;
-          }
+          hasAthleteAccess = Boolean(ent.hasAthleteAccess);
+          hasOperatorAccess = Boolean(ent.hasOperatorAccess);
         }
       } catch {
-        /* entitlement check failed — server RSC gate will apply on navigation */
+        /* entitlement / profilo: il gate server sulla shell applicherà il paywall */
       }
-      router.replace("/access/plan");
+
+      if (cancelled) return;
+
+      const dest = resolvePostLoginDestination({
+        next: nextPath,
+        appRole,
+        hasAthleteAccess,
+        hasOperatorAccess,
+      });
+      window.location.assign(dest);
     })();
     return () => {
       cancelled = true;
     };
-  }, [nextPath, router]);
+  }, [nextPath]);
 
   return null;
 }

@@ -2400,6 +2400,7 @@ export default function MetabolicLabPage() {
             </details>
           ) : null}
 
+          {athleteId ? (
           <MultisportCpCurveSuggestionPanel
             athleteId={athleteId}
             bodyMassKg={labBodyMassKg}
@@ -2414,6 +2415,7 @@ export default function MetabolicLabPage() {
             }}
             onAfterApply={runProfileRecalc}
           />
+          ) : null}
 
           <Pro2SectionCard
             accent="violet"
