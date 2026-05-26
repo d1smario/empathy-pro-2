@@ -1,0 +1,57 @@
+---
+description: Meal plan generativo — Diet per giorno (week_plan) è l'unica fonte di pasti e % kcal; USDA solo composizione. Regola fissa, non reinterpretare.
+globs: apps/web/**/nutrition/**,apps/web/lib/nutrition/**,apps/web/app/api/nutrition/**
+alwaysApply: false
+---
+
+# EMPATHY Pro 2 — Meal plan generativo (regola fissa)
+
+**Non cambiare questa semantica** senza decisione esplicita del prodotto e aggiornamento di questo file + `docs/NUTRITION_DIET_MEAL_PLAN_RULES.md` + test.
+
+## Gerarchia (Ingest → Compute → Application)
+
+| Piano | Cosa fa il meal plan |
+|--------|----------------------|
+| **Reality / profilo** | L’utente (coach) salva **Profile → Diet** per ogni giorno della settimana. |
+| **Compute** | Solver energetico giorno (`daily-energy-solver`) + ripartizione slot da Diet. |
+| **Application** | Composer deterministico assembla **quali alimenti** (porzioni), non **quante kcal tra pasti**. |
+
+## Regola 1 — Diet per giorno (unica fonte ripartizione)
+
+- Per la **data** selezionata in Nutrizione: `weekday = profileWeekDayKeyFromIsoLocal(YYYY-MM-DD)`.
+- Leggere **solo** `athlete_profiles.nutrition_config.week_plan[weekday]`:
+  - `meal_count_mode` (1…6, fasting, semi-*)
+  - `caloric_distribution` (breakfast, lunch, dinner, snacks — % sul budget pasti)
+  - `daily_macros` (CHO/PRO/FAT %)
+  - `day_type_pct` (% calorie rispetto fabbisogno del giorno)
+- **Implementazione canonica:** `resolveNutritionDietDay()` → `buildDietMealSlotBudgets()`.
+- **Vietato:** preset globali fissi (es. 30/35/25/10) come default operativo; rollup USDA per ricalcolare % tra pasti; `caloric_split` in root che sovrascrive il week plan; salvataggio da Nutrizione che riscrive `week_plan` o `caloric_split`.
+
+## Regola 2 — USDA / FDC (solo composizione)
+
+- `nutrientRollup` e `nutrientsForMealPlanItem*` servono a **macro/micro/IG delle voci**, non a decidere la % kcal di colazione vs pranzo.
+- Le **card pasto** mostrano **target kcal/macro del solver** (da Diet), non la somma delle voci USDA se diverge.
+- Σ USDA in UI = controllo composizione, non nuova ripartizione calorica.
+
+## Regola 3 — Numero pasti
+
+- `meal_count_mode` nel Diet del **giorno** definisce gli slot attivi (es. 6 → include `snack_evening` con quota `snacks/3`).
+- Il request al meal-plan API invia **solo gli slot** prodotti da `buildDietMealSlotBudgets` (3–6 slot), non una griglia fissa 5+placeholder.
+
+## Regola 4 — Modulo Nutrizione non è editor Diet
+
+- Cambiare pasti/% → **Profile → Diet** (giorno settimana corretto), poi rigenerare meal plan sulla **stessa data**.
+- `handleSaveNutrition` / PATCH profilo da Nutrizione: **non** persistere `caloric_split` né `meal_plan.caloric_split` derivati dalla UI.
+
+## File canonici (non duplicare pipeline)
+
+- `apps/web/lib/nutrition/resolve-nutrition-diet-day.ts`
+- `apps/web/lib/nutrition/diet-meal-slot-budgets.ts`
+- `apps/web/lib/nutrition/daily-energy-solver.ts` (`dietDayMealsScalePct`)
+- `apps/web/lib/nutrition/deterministic-meal-plan-from-request.ts`
+- `apps/web/app/api/nutrition/intelligent-meal-plan/route.ts`
+
+## Test minimi obbligatori su modifica
+
+- `resolve-nutrition-diet-day.test.ts`
+- `diet-meal-slot-budgets.test.ts`

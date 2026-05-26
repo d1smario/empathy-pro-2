@@ -6,7 +6,7 @@ import type {
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 
-const LIGHT_SLOTS: ReadonlySet<MealSlotKey> = new Set(["breakfast", "snack_am", "snack_pm"]);
+const LIGHT_SLOTS: ReadonlySet<MealSlotKey> = new Set(["breakfast", "snack_am", "snack_pm", "snack_evening"]);
 
 /**
  * Colazione / spuntino: niente “contorno” da pranzo (legumi, foglie, patate da forno, primi completi, ecc.).

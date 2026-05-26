@@ -26,6 +26,8 @@ export type FlatMealTimes = {
   dinner: string;
   snack_am: string;
   snack_pm: string;
+  /** Spuntino serale (Profile routine `night_time` quando Diet = 6 pasti). */
+  snack_evening?: string;
 };
 
 /**
@@ -46,13 +48,15 @@ export function mealTimesFromRoutineWeekPlanForDate(
   const dt = nonEmptyTime(day.dinner_time);
   const st = nonEmptyTime(day.snack_time);
   const ast = nonEmptyTime(day.afternoon_snack_time);
-  if (!bt && !lt && !dt && !st && !ast) return flatFromRoutineRoot;
+  const nt = nonEmptyTime(day.night_time);
+  if (!bt && !lt && !dt && !st && !ast && !nt) return flatFromRoutineRoot;
   return {
     breakfast: bt ?? flatFromRoutineRoot.breakfast,
     lunch: lt ?? flatFromRoutineRoot.lunch,
     dinner: dt ?? flatFromRoutineRoot.dinner,
     snack_am: st ?? flatFromRoutineRoot.snack_am,
     snack_pm: ast ?? flatFromRoutineRoot.snack_pm,
+    snack_evening: nt ?? flatFromRoutineRoot.snack_evening,
   };
 }
 

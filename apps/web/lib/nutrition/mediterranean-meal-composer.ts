@@ -895,7 +895,9 @@ export function composeMediterraneanMeal(
   const breakfastCtx = ctx ?? createMediterraneanDayContext("");
   if (slot === "breakfast") return composeBreakfast(macros, seed, breakfastCtx);
   if (slot === "snack_am") return composeSnack(macros, seed, "snack_am", ctx);
-  if (slot === "snack_pm") return composeSnack(macros, seed, "snack_pm", ctx);
+  if (slot === "snack_pm" || slot === "snack_evening") {
+    return composeSnack(macros, seed, "snack_pm", ctx);
+  }
   return composeMainMeal(slot, macros, seed, ctx);
 }
 

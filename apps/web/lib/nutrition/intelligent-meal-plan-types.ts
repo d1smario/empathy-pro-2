@@ -5,10 +5,12 @@
 
 import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
 
-/** Ordine canonico pasti: due spuntini distinti (mattina / pomeriggio-sera). */
-export type MealSlotKey = "breakfast" | "lunch" | "dinner" | "snack_am" | "snack_pm";
+/** Ordine canonico pasti (5): due spuntini + tre principali. Il 6° pasto (serale) è `snack_evening` quando Diet = 6 pasti. */
+export type MealSlotKey = "breakfast" | "lunch" | "dinner" | "snack_am" | "snack_pm" | "snack_evening";
 
 export const MEAL_SLOT_ORDER: readonly MealSlotKey[] = ["breakfast", "lunch", "dinner", "snack_am", "snack_pm"];
+
+export const MEAL_SLOT_KEYS: readonly MealSlotKey[] = [...MEAL_SLOT_ORDER, "snack_evening"];
 
 export type MealPlanHydrationWindow = {
   labelIt: string;
@@ -217,10 +219,28 @@ export type IntelligentMealPlanResponseBody = IntelligentMealPlanAssembledCore &
   solverBasis: IntelligentMealPlanSolverBasis;
 };
 
-const SLOTS: MealSlotKey[] = [...MEAL_SLOT_ORDER];
+const SLOT_KEYS: MealSlotKey[] = [...MEAL_SLOT_KEYS];
 
 function isMealSlotKey(s: string): s is MealSlotKey {
-  return SLOTS.includes(s as MealSlotKey);
+  return SLOT_KEYS.includes(s as MealSlotKey);
+}
+
+function isValidMealPlanSlotSet(slots: IntelligentMealPlanSlotOut[]): boolean {
+  const seen = new Set<MealSlotKey>();
+  for (const s of slots) {
+    if (!isMealSlotKey(s.slot) || seen.has(s.slot)) return false;
+    seen.add(s.slot);
+  }
+  const n = seen.size;
+  if (n < 3 || n > 6) return false;
+  if (!seen.has("breakfast") || !seen.has("lunch") || !seen.has("dinner")) return false;
+  if (n === 6 && !seen.has("snack_evening")) return false;
+  if (n === 5) {
+    for (const k of MEAL_SLOT_ORDER) {
+      if (!seen.has(k)) return false;
+    }
+  }
+  return true;
 }
 
 function isMacroRole(s: string): s is IntelligentMealPlanItemOut["macroRole"] {
@@ -234,7 +254,7 @@ export function parseIntelligentMealPlanJson(raw: unknown): IntelligentMealPlanA
   const disclaimer = typeof o.disclaimer === "string" ? o.disclaimer : "";
   const dayInteractionSummary = typeof o.dayInteractionSummary === "string" ? o.dayInteractionSummary : "";
   const slotsIn = o.slots;
-  if (!Array.isArray(slotsIn) || slotsIn.length !== 5) return null;
+  if (!Array.isArray(slotsIn) || slotsIn.length < 3 || slotsIn.length > 6) return null;
 
   const slots: IntelligentMealPlanSlotOut[] = [];
   for (const row of slotsIn) {
@@ -266,15 +286,7 @@ export function parseIntelligentMealPlanJson(raw: unknown): IntelligentMealPlanA
     slots.push({ slot, targetKcalEcho, items, slotCoherence, slotTimingRationale });
   }
 
-  const seen = new Set<MealSlotKey>();
-  for (const s of slots) {
-    if (seen.has(s.slot)) return null;
-    seen.add(s.slot);
-  }
-  if (seen.size !== 5) return null;
-  for (const key of MEAL_SLOT_ORDER) {
-    if (!seen.has(key)) return null;
-  }
+  if (!isValidMealPlanSlotSet(slots)) return null;
 
   const assembled: IntelligentMealPlanAssembledCore = {
     layer: "deterministic_meal_assembly_v1",

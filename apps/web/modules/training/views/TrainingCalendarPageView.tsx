@@ -888,9 +888,9 @@ export default function TrainingCalendarPageView() {
           w.source.startsWith("file_import"),
       ) ? (
         <p className="mb-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="status">
-          Import FIT su questo giorno salvato come EXEC senza durata (import precedente in modalità «Attività»). Elimina la
-          riga o re-importa lo stesso file con modalità <strong className="text-amber-50">Auto</strong> per creare la seduta
-          PLAN con struttura Builder.
+          Import FIT su questo giorno salvato come EXEC senza durata (import precedente in modalità «Attività»). Re-importa lo
+          stesso file con modalità <strong className="text-amber-50">Auto</strong> (o «Workout pianificato»): crea la riga PLAN
+          con grafico a blocchi, durata, TSS e kJ come nel Builder; la riga EXEC vuota viene rimossa in automatico.
         </p>
       ) : null}
 

@@ -31,6 +31,8 @@ type NutritionDailyEnergySolverInput = {
   recoveryStrainScore?: number | null;
   /** When set, scales training-derived energy, meal/fueling split, and intra CHO/h deterministically. */
   performanceIntegration?: NutritionPerformanceIntegrationDials | null;
+  /** Profile Diet → % calorie rispetto fabbisogno per il giorno (es. 100 normo, 80 deficit). */
+  dietDayMealsScalePct?: number | null;
 };
 
 const LIFESTYLE_PCT: Record<LifestyleActivityClass, number> = {
@@ -290,8 +292,13 @@ export function computeNutritionDailyEnergyModel(
       ? round(input.ftpWatts * (training.avgIntensityPctFtp / 100))
       : null;
 
-  const totalDailyKcal = round(bmr.bmrKcal + lifestyleKcal + trainingKcalScaled);
-  const mealsKcal = round(bmr.bmrKcal + lifestyleKcal + trainingKcalScaled * mealTrainingFraction);
+  const dietScale =
+    input.dietDayMealsScalePct != null && Number.isFinite(input.dietDayMealsScalePct)
+      ? clamp(input.dietDayMealsScalePct, 0, 200) / 100
+      : 1;
+
+  const totalDailyKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcalScaled) * dietScale);
+  const mealsKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcalScaled * mealTrainingFraction) * dietScale);
   const fuelingKcal = round(trainingKcalScaled * (1 - mealTrainingFraction));
   const recoveryStatus = input.recoveryStatus ?? "unknown";
   const split =
@@ -366,6 +373,9 @@ export function computeNutritionDailyEnergyModel(
       `Integrazione performance: scala energia training ×${trainingEnergyScale}, quota pasti sul training ${Math.round(mealTrainingFraction * 100)}%, CHO/h ×${fuelingChoScale}.`,
     );
     notes.push(...integration.rationale);
+  }
+  if (dietScale !== 1) {
+    notes.push(`Profile Diet: fabbisogno pasti scalato al ${Math.round(dietScale * 100)}% del giorno (day_type_pct).`);
   }
 
   return {

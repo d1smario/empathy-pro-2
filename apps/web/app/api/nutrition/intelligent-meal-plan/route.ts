@@ -53,8 +53,11 @@ export async function POST(req: NextRequest) {
     if (request.athleteId !== athleteId) {
       return NextResponse.json({ error: "athleteId mismatch" }, { status: 400 });
     }
-    if (!Array.isArray(request.slots) || request.slots.length !== 5) {
-      return NextResponse.json({ error: "plan.slots must have 5 entries (breakfast, lunch, dinner, snack_am, snack_pm)" }, { status: 400 });
+    if (!Array.isArray(request.slots) || request.slots.length < 3 || request.slots.length > 6) {
+      return NextResponse.json(
+        { error: "plan.slots: da 3 a 6 pasti (da Profile Diet: meal_count_mode + caloric_distribution)" },
+        { status: 400 },
+      );
     }
     if (
       !request.mealPlanSolverMeta ||

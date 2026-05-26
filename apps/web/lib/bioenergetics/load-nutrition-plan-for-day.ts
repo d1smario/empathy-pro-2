@@ -11,12 +11,13 @@ import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { mealTimesFromRoutineWeekPlanForDate, type FlatMealTimes } from "@/lib/nutrition/routine-week-plan-meal-times";
 
 /** Peso kcal per slot (cinque pasti) — allineato al solver nutrizione. */
-const SLOT_KCAL_SHARE: Record<MealSlotKey, number> = {
+const SLOT_KCAL_SHARE: Partial<Record<MealSlotKey, number>> = {
   breakfast: 0.22,
   snack_am: 0.08,
   lunch: 0.32,
   snack_pm: 0.08,
   dinner: 0.3,
+  snack_evening: 0.033,
 };
 
 const DEFAULT_MEAL_TIMES: FlatMealTimes = {
@@ -92,7 +93,7 @@ function distributeMeals(
   const totalC = Math.max(0, carbsG);
   const out: BioPlannedMealRow[] = [];
   for (const slot of MEAL_SLOT_ORDER) {
-    const share = SLOT_KCAL_SHARE[slot];
+    const share = SLOT_KCAL_SHARE[slot] ?? 0;
     const slotKcal = Math.round(totalK * share);
     const slotCarbs = Math.round(totalC * share);
     const slotProtein = Math.round((slotKcal * 0.22) / 4);

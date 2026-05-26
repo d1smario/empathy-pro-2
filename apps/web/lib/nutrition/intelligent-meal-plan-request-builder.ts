@@ -5,7 +5,7 @@ import type {
 } from "@/api/nutrition/contracts";
 import { buildFunctionalFoodOptionGroupsForSlot } from "@/lib/nutrition/functional-food-option-groups";
 import type { IntelligentMealPlanRequest, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { MEAL_SLOT_KEYS } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
 import { buildPathwayTimingLinesForMealPlan } from "@/lib/nutrition/meal-plan-pathway-timing-lines";
@@ -23,7 +23,9 @@ export type PathwaySlotBundleInput = {
   foods?: UsdaRichFoodItemViewModel[];
 };
 
-const ORDER: MealSlotKey[] = [...MEAL_SLOT_ORDER];
+function isMealSlotKey(s: string): s is MealSlotKey {
+  return (MEAL_SLOT_KEYS as readonly string[]).includes(s);
+}
 
 function routineMealTimesFlat(routine: Record<string, unknown> | null | undefined): FlatMealTimes {
   const rc = routine && typeof routine === "object" && !Array.isArray(routine) ? routine : {};
@@ -116,7 +118,8 @@ export function buildIntelligentMealPlanRequest(input: {
       ? pathwayPathways.map((p) => p.pathwayLabel.trim()).filter(Boolean).join(" · ").slice(0, 320)
       : null;
 
-  const slots = ORDER.map((slot) => {
+  const slotOrder = mealRows.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
+  const slots = slotOrder.map((slot) => {
     const row = mealRows.find((r) => r.key === slot);
     const bundle = mealPathwayBySlot[slot];
     const targets = bundle?.pathwayTargets ?? [];

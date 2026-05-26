@@ -1,10 +1,10 @@
 import type { FunctionalFoodTargetViewModel } from "@/api/nutrition/contracts";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { MEAL_SLOT_KEYS } from "@/lib/nutrition/intelligent-meal-plan-types";
 
 export type PathwayMealSlotKey = MealSlotKey;
 
-const SLOTS: PathwayMealSlotKey[] = [...MEAL_SLOT_ORDER];
+const SLOTS: PathwayMealSlotKey[] = [...MEAL_SLOT_KEYS];
 
 /**
  * Distribuisce i target funzionali (vie metaboliche → nutrienti FDC catalog) sui 5 pasti in modo deterministico.
@@ -23,6 +23,7 @@ export function assignPathwayTargetsToMealSlots(input: {
     dinner: [],
     snack_am: [],
     snack_pm: [],
+    snack_evening: [],
   };
   if (!input.targets.length) return empty;
 

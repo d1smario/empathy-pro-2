@@ -30,6 +30,9 @@ function enrichSlot(slot: IntelligentMealPlanSlotOut, snapshot: FdcCanonicalSnap
  * Aggiunge stime nutrizionali dettagliate (macro/micro/aminoacidi/frazioni lipidiche/GI/II/GL) e routine idratazione
  * coerente con gli orari inviati nel request.
  *
+ * **Regola generativa:** `nutrientRollup` descrive solo la **composizione** delle voci scelte (USDA/canonical);
+ * kcal e % per pasto restano quelle del profilo Diet (`targetKcal` nel request), mai ricalcolate dal rollup.
+ *
  * Composizione preferita: cache USDA `nutrition_fdc_foods` (via `getOrImportFdcFood` → `nutrientsForMealPlanItemFromCache`).
  * Fallback automatico al `CANONICAL_FOOD_TABLE` TS quando una key non è ancora mappata o l'import USDA fallisce.
  *

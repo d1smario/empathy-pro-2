@@ -13,6 +13,7 @@ import {
   type StructuredIntervalRow,
   parseStructuredPlannedWorkoutFromBuffer,
 } from "@/lib/training/planned-structured-import";
+import { purgeGhostFileImportExecutedForDate } from "@/lib/training/purge-ghost-file-import-executed";
 import {
   type StructuredCompanionResult,
   upsertStructuredCompanionExecuted,
@@ -336,6 +337,13 @@ export async function runStructuredPlannedSingleImport(
   }
 
   const plannedWorkoutId = ins.data?.id != null ? String(ins.data.id) : null;
+
+  try {
+    await purgeGhostFileImportExecutedForDate(db, input.athleteId, row.date);
+  } catch {
+    /** Best-effort: non bloccare PLAN se la pulizia EXEC fantasma fallisce. */
+  }
+
   let structuredCompanion: StructuredCompanionResult | undefined;
   if (plannedWorkoutId) {
     structuredCompanion = await upsertStructuredCompanionExecuted(db, {

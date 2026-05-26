@@ -11,7 +11,7 @@ Ogni nuova feature, fix o estensione che tocca un sistema **già con linea gener
 
 - **Health ingest**: la pipeline canonica vive in `apps/web/app/api/health/upload-document/route.ts` con stadi `decode (parser deterministico → VLM fallback) → biomarker_panels.values → interpretation_staging_runs → normalize + causal_graph → Storage`. Re-analyze, ri-trigger e nuove sorgenti VLM **devono** chiamare le stesse funzioni di `lib/health/health-document-pipeline.ts` (o equivalenti se rinominate); **non** è permessa una seconda rotta che ricalca la decodifica o crea uno staging run con il proprio codice.
 - **Training session generation**: builder è la generazione canonica della singola sessione. VIRYA, calendario, integrazioni esterne **convogliano** nel builder (vedi `empathy_pro2_virya_builder_pipeline.mdc`). Vietato un secondo motore sessione.
-- **Nutrition meal plan**: solver deterministico unico. Non aggiungere ramo LLM che produce piani in parallelo.
+- **Nutrition meal plan**: solver deterministico unico. Non aggiungere ramo LLM che produce piani in parallelo. **Ripartizione kcal/pasti:** solo Profile Diet per giorno (`empathy_nutrition_diet_meal_plan_generative.mdc`); USDA non decide le %.
 - **Athlete memory**: `athlete_id` è chiave canonica unica; non creare twin o store ombra per lo stesso atleta (`empathy_athlete_memory.mdc`).
 - **Schema/SQL**: nessun fix isolato senza migration ordinata + uso nel codice; vedi `empathy_schema_whole_picture.mdc`.
 

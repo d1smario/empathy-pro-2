@@ -27,7 +27,6 @@ import {
   EmpathyMealPlanExpositionCard,
   EmpathyMealPlanGlycemicLegend,
 } from "@/modules/nutrition/components/EmpathyMealPlanExpositionCard";
-import { NUTRITION_MEAL_GRID } from "@/modules/nutrition/constants/nutrition-meal-plan-grid";
 import type { MealPathwaySlotBundle } from "@/modules/nutrition/types/meal-pathway-slot-bundle";
 import type { PathwayMealSlotKey } from "@/lib/nutrition/pathway-meal-usda-slots";
 
@@ -233,6 +232,8 @@ export function NutritionMealPlanLeadPanels({
 export type NutritionMealPlanWorkspaceProps = {
   athleteId: string;
   role: string;
+  /** Pasti attivi da Profile Diet (ordine + budget kcal); unica fonte ripartizione calorica. */
+  mealPlanDisplayRows: MealPlanDisplayRow[];
   mealDisplayByKey: Map<MealSlotKey, MealPlanDisplayRow>;
   mealPathwayBySlot: Partial<Record<string, MealPathwaySlotBundle>>;
   pathwayModulation: NutritionPathwayModulationViewModel | null;
@@ -246,6 +247,8 @@ export type NutritionMealPlanWorkspaceProps = {
   canRequestIntelligentPlan: boolean;
   /** True mentre i fetch USDA per i 5 slot non sono completati (il pulsante resta disabilitato). */
   mealPathwayCatalogPending?: boolean;
+  /** Se Diet non è configurato per il giorno della data selezionata. */
+  dietDayNotice?: string | null;
   onGenerateIntelligentMealPlan: () => void;
   onResetIntelligentMealPlan: () => void;
   coachMealRemovalKeys: Set<string>;
@@ -264,6 +267,7 @@ export type NutritionMealPlanWorkspaceProps = {
 export function NutritionMealPlanWorkspace({
   athleteId,
   role,
+  mealPlanDisplayRows,
   mealDisplayByKey,
   mealPathwayBySlot,
   pathwayModulation,
@@ -274,6 +278,7 @@ export function NutritionMealPlanWorkspace({
   intelligentMealError,
   canRequestIntelligentPlan,
   mealPathwayCatalogPending = false,
+  dietDayNotice = null,
   onGenerateIntelligentMealPlan,
   onResetIntelligentMealPlan,
   coachMealRemovalKeys,
@@ -319,6 +324,11 @@ export function NutritionMealPlanWorkspace({
           </div>
           {mealPathwayCatalogPending ? (
             <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per i cinque slot pasto… poi potrai generare il piano.</p>
+          ) : null}
+          {dietDayNotice ? (
+            <p className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="status">
+              {dietDayNotice}
+            </p>
           ) : null}
           {hasApplicativeContext ? (
             <div
@@ -383,26 +393,10 @@ export function NutritionMealPlanWorkspace({
                   </div>
                 ) : null}
                 <div className="empathy-meal-expo-grid">
-                  {NUTRITION_MEAL_GRID.map((spec) => {
-                    if (spec.key === "pre_sleep") {
-                      return (
-                        <EmpathyMealPlanExpositionCard
-                          key="pre_sleep"
-                          slot="pre_sleep"
-                          titleUpper={spec.labelIt.toUpperCase()}
-                          subline="Opzionale · fuori solver 5 slot"
-                          totalKcal={0}
-                          carbsG={0}
-                          proteinG={0}
-                          fatG={0}
-                          items={[]}
-                          placeholder
-                        />
-                      );
-                    }
-                    const sl = intelligentMealPlan.slots.find((s) => s.slot === spec.key);
-                    const meta = intelligentMealPlan.solverBasis.slots.find((x) => x.slot === spec.key);
-                    const slotKey = spec.key as MealSlotKey;
+                  {mealPlanDisplayRows.map((mealRow) => {
+                    const slotKey = mealRow.key as MealSlotKey;
+                    const sl = intelligentMealPlan.slots.find((s) => s.slot === slotKey);
+                    const meta = intelligentMealPlan.solverBasis.slots.find((x) => x.slot === slotKey);
                     const isVis = (ii: number) => !coachMealRemovalKeys.has(`${slotKey}:${ii}`);
                     const fallback = {
                       kcal: meta?.targetKcal ?? 0,
@@ -413,10 +407,10 @@ export function NutritionMealPlanWorkspace({
                     if (!sl) {
                       return (
                         <EmpathyMealPlanExpositionCard
-                          key={spec.key}
+                          key={slotKey}
                           slot={slotKey}
-                          titleUpper={(meta?.labelIt ?? spec.labelIt).toUpperCase()}
-                          subline={meta?.scheduledTimeLocal?.trim()}
+                          titleUpper={(meta?.labelIt ?? mealRow.label).toUpperCase()}
+                          subline={meta?.scheduledTimeLocal?.trim() || mealRow.time}
                           totalKcal={fallback.kcal}
                           carbsG={fallback.carbsG}
                           proteinG={fallback.proteinG}
@@ -425,14 +419,21 @@ export function NutritionMealPlanWorkspace({
                         />
                       );
                     }
-                    const totals = sumVisibleSlotMacros(sl, isVis, fallback);
+                    const itemTotals = sumVisibleSlotMacros(sl, isVis, fallback);
+                    /** Header pasto: target % profilo (solver), non somma USDA delle voci (spesso sbilancia colazione vs pranzo). */
+                    const totals = {
+                      kcal: fallback.kcal > 0 ? fallback.kcal : itemTotals.kcal,
+                      carbsG: fallback.carbsG > 0 ? fallback.carbsG : itemTotals.carbsG,
+                      proteinG: fallback.proteinG > 0 ? fallback.proteinG : itemTotals.proteinG,
+                      fatG: fallback.fatG > 0 ? fallback.fatG : itemTotals.fatG,
+                    };
                     const expoItems = buildExpositionItemsFromPlan(sl.items, isVis);
                     return (
                       <EmpathyMealPlanExpositionCard
-                        key={spec.key}
+                        key={slotKey}
                         slot={slotKey}
-                        titleUpper={(meta?.labelIt ?? spec.labelIt).toUpperCase()}
-                        subline={meta?.scheduledTimeLocal?.trim()}
+                        titleUpper={(meta?.labelIt ?? mealRow.label).toUpperCase()}
+                        subline={meta?.scheduledTimeLocal?.trim() || mealRow.time}
                         totalKcal={totals.kcal}
                         carbsG={totals.carbsG}
                         proteinG={totals.proteinG}
@@ -593,25 +594,7 @@ export function NutritionMealPlanWorkspace({
           {!intelligentMealPlan ? (
             <div className="empathy-meal-plan-expo-shell">
               <div className="empathy-meal-expo-grid">
-                {NUTRITION_MEAL_GRID.map((spec) => {
-                  if (spec.key === "pre_sleep") {
-                    return (
-                      <EmpathyMealPlanExpositionCard
-                        key="pre_sleep-base"
-                        slot="pre_sleep"
-                        titleUpper={spec.labelIt.toUpperCase()}
-                        subline="Opzionale · fuori solver 5 slot"
-                        totalKcal={0}
-                        carbsG={0}
-                        proteinG={0}
-                        fatG={0}
-                        items={[]}
-                        placeholder
-                      />
-                    );
-                  }
-                  const meal = mealDisplayByKey.get(spec.key as MealSlotKey);
-                  if (!meal) return null;
+                {mealPlanDisplayRows.map((meal) => {
                   const slotKey = meal.key as PathwayMealSlotKey;
                   const bundle = mealPathwayBySlot[slotKey];
                   const functionalGroupsRaw =
@@ -635,7 +618,7 @@ export function NutritionMealPlanWorkspace({
                   if (!bundle || bundle.loading) {
                     return (
                       <EmpathyMealPlanExpositionCard
-                        key={spec.key}
+                        key={slotKey}
                         slot={slotKey}
                         titleUpper={meal.label.toUpperCase()}
                         subline={`${meal.time} · caricamento pathway`}
@@ -651,7 +634,7 @@ export function NutritionMealPlanWorkspace({
                   if (functionalGroups.length === 0) {
                     return (
                       <EmpathyMealPlanExpositionCard
-                        key={spec.key}
+                        key={slotKey}
                         slot={slotKey}
                         titleUpper={meal.label.toUpperCase()}
                         subline={meal.time}
@@ -676,35 +659,17 @@ export function NutritionMealPlanWorkspace({
                     bundle.pathwayTargets ?? [],
                   );
                   const expoItems = buildExpositionItemsFromDryLines(dryLines, totals);
-                  const expoSum = expoItems.reduce(
-                    (a, it) => ({
-                      kcal: a.kcal + it.kcal,
-                      carbsG: a.carbsG + it.carbsG,
-                      proteinG: a.proteinG + it.proteinG,
-                      fatG: a.fatG + it.fatG,
-                    }),
-                    { kcal: 0, carbsG: 0, proteinG: 0, fatG: 0 },
-                  );
-                  const slotTotals =
-                    expoItems.length > 0
-                      ? {
-                          kcal: Math.round(expoSum.kcal),
-                          carbsG: Math.round(expoSum.carbsG * 10) / 10,
-                          proteinG: Math.round(expoSum.proteinG * 10) / 10,
-                          fatG: Math.round(expoSum.fatG * 10) / 10,
-                        }
-                      : totals;
 
                   return (
                     <EmpathyMealPlanExpositionCard
-                      key={spec.key}
+                      key={slotKey}
                       slot={slotKey}
                       titleUpper={meal.label.toUpperCase()}
                       subline={meal.portionHint?.trim() || meal.time}
-                      totalKcal={slotTotals.kcal}
-                      carbsG={slotTotals.carbsG}
-                      proteinG={slotTotals.proteinG}
-                      fatG={slotTotals.fatG}
+                      totalKcal={totals.kcal}
+                      carbsG={totals.carbsG}
+                      proteinG={totals.proteinG}
+                      fatG={totals.fatG}
                       items={expoItems}
                     />
                   );

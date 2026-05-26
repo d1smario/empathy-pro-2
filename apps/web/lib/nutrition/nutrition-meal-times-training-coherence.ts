@@ -55,7 +55,7 @@ export function formatMinutesToLocalHHmm(totalMinutes: number): string {
 function parseMealTimesToMinutes(times: FlatMealTimes): Record<keyof FlatMealTimes, number> {
   const out = {} as Record<keyof FlatMealTimes, number>;
   for (const k of SLOT_ORDER) {
-    const m = parseLocalTimeToMinutes(times[k]);
+    const m = parseLocalTimeToMinutes(times[k] ?? "12:00");
     out[k] = m ?? 12 * 60;
   }
   return out;
@@ -234,7 +234,7 @@ export function computeSnackSlotsSuppressedByTrainingWindow(input: {
   const base = mealTimesFromRoutineWeekPlanForDate(input.routineConfig, input.planDate, input.mealTimesFlatFromRoot);
   const out: MealSlotKey[] = [];
   for (const slot of ["snack_am", "snack_pm"] as MealSlotKey[]) {
-    const m = parseLocalTimeToMinutes(base[slot]);
+    const m = parseLocalTimeToMinutes(base[slot] ?? "");
     if (m == null) continue;
     if (m >= winStart && m <= winEnd) out.push(slot);
   }
@@ -260,8 +260,8 @@ export function computePostWorkoutMealFlags(input: {
   });
   const flags: Partial<Record<MealSlotKey, boolean>> = {};
   for (const slot of MEAL_SLOT_ORDER) {
-    const bl = parseLocalTimeToMinutes(base[slot]);
-    const rl = parseLocalTimeToMinutes(resolved[slot]);
+    const bl = parseLocalTimeToMinutes(base[slot] ?? "");
+    const rl = parseLocalTimeToMinutes(resolved[slot] ?? "");
     if (bl == null || rl == null) continue;
     if (rl >= bl + 3) flags[slot] = true;
   }

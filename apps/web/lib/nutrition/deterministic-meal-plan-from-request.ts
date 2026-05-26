@@ -6,7 +6,7 @@ import type {
   IntelligentMealPlanSlotOut,
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
@@ -114,10 +114,7 @@ function pickItemsForSlot(slot: IntelligentMealPlanRequestSlot, dayCtx: Mediterr
 export async function buildDeterministicMealPlanFromRequest(
   req: IntelligentMealPlanRequest,
 ): Promise<IntelligentMealPlanAssembledCore> {
-  const slotByKey = new Map(req.slots.map((s) => [s.slot, s] as const));
-  const orderedSlots = MEAL_SLOT_ORDER.map((k) => slotByKey.get(k)).filter(
-    (s): s is IntelligentMealPlanRequestSlot => Boolean(s),
-  );
+  const orderedSlots = req.slots;
   /** dietType + denyFragments dal request (allergie/intolleranze/esclusioni + dieta) → vincoli MANDATORY sul composer. */
   const dietType = normalizeDietTypeForComposer(req.dietType);
   const denyFragments = buildMealPlanFoodDenyFragments(req);
@@ -162,9 +159,21 @@ export async function buildDeterministicMealPlanFromRequest(
   const PRIMARY_BOOST_SLOTS = new Set<MealSlotKey>(["lunch", "dinner"]);
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
-    const items = pickItemsForSlot(slot, dayCtx);
-    const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
     const isSuppressed = suppressed.includes(slot.slot);
+    let items = pickItemsForSlot(slot, dayCtx);
+    if (!isSuppressed && slot.targetKcal > 0) {
+      items = rescaleSlotKcalToTarget(
+        {
+          slot: slot.slot,
+          targetKcalEcho: slot.targetKcal,
+          items,
+          slotCoherence: "",
+          slotTimingRationale: "",
+        },
+        slot.targetKcal,
+      ).items;
+    }
+    const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
     const timing = isSuppressed
       ? `Slot ${slot.slot} (${slot.scheduledTimeLocal || "—"}) cade nella finestra di allenamento: rifornimento in seduta gestito dal modulo Fueling (no spuntino convenzionale).`
       : (slot.functionalFoodGroups.find((g) => g.timingHalfLifeHint.trim())?.timingHalfLifeHint ??

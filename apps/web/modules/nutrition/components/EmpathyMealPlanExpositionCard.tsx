@@ -41,6 +41,7 @@ function slotHeaderIcon(slot: MealSlotKey | "pre_sleep"): LucideIcon {
     case "snack_am":
       return Apple;
     case "snack_pm":
+    case "snack_evening":
       return Coffee;
     case "pre_sleep":
       return Bed;

@@ -19,6 +19,7 @@ Pro 2 **grafica e linguaggio** (spesso `alwaysApply: false` + globs):
 
 Dominio / integrazioni:
 
+- **`empathy_nutrition_diet_meal_plan_generative.mdc`** — **regola fissa:** Diet `week_plan[weekday]` = pasti + % kcal; USDA solo composizione; vedi `docs/NUTRITION_DIET_MEAL_PLAN_RULES.md`.
 - **`empathy_nutrition_meal_exposition.mdc`**, **`empathy_nutrition_food_diary.mdc`**, **`empathy_training_macro_sport_strip.mdc`**, **`empathy_athlete_memory.mdc`**, **`empathy_ingest_envelope.mdc`**, **`empathy_v1_pro2_repo_separation.mdc`**, ecc.
 
 **Deploy / host:**
