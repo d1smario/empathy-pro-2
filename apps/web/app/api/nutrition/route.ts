@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
+import {
+  effectivePlannedWorkoutNutritionMetrics,
+  parsePro2BuilderSessionFromNotes,
+} from "@/lib/training/builder/pro2-session-notes";
 
 export const runtime = "nodejs";
 
@@ -57,7 +61,7 @@ export async function GET(req: NextRequest) {
         .maybeSingle(),
       db
         .from("planned_workouts")
-        .select("id, duration_minutes, tss_target, kcal_target")
+        .select("id, duration_minutes, tss_target, kcal_target, notes")
         .eq("athlete_id", athleteId)
         .eq("date", targetDate),
     ]);
@@ -95,16 +99,20 @@ export async function GET(req: NextRequest) {
       const profile = memory?.profile;
       const physio = memory?.physiology?.physiologicalProfile;
       const plannedTraining = sessions.map((r) => {
-        const dur = Math.max(0, Number(r.duration_minutes) || 0);
-        const tss = Math.max(0, Number(r.tss_target) || 0);
-        const kcalDb = Number(r.kcal_target);
-        const kcalTarget =
-          Number.isFinite(kcalDb) && kcalDb > 0 ? Math.round(kcalDb) : tss > 0 ? Math.round(tss * 8) : dur > 0 ? Math.round(dur * 7) : 0;
+        const row = r as Record<string, unknown>;
+        const builderSession = parsePro2BuilderSessionFromNotes(typeof row.notes === "string" ? row.notes : null);
+        const m = effectivePlannedWorkoutNutritionMetrics({
+          durationMinutesDb: Number(row.duration_minutes) || 0,
+          tssTargetDb: Number(row.tss_target) || 0,
+          kcalTargetDb: Number(row.kcal_target) || 0,
+          builderSession,
+          athleteFtpWatts: physio?.ftpWatts ?? null,
+        });
         return {
-          durationMinutes: dur,
-          tssTarget: tss > 0 ? tss : undefined,
-          kcalTarget: kcalTarget > 0 ? kcalTarget : undefined,
-          avgPowerW: null,
+          durationMinutes: m.durationMinutes,
+          tssTarget: m.tss > 0 ? m.tss : undefined,
+          kcalTarget: m.kcal > 0 ? m.kcal : undefined,
+          avgPowerW: builderSession?.summary?.avgPowerW ?? null,
         };
       });
 

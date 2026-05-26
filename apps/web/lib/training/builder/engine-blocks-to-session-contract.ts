@@ -4,6 +4,7 @@
  * (non il percorso parallelo solo-`materializePro2BlocksFromEngine` → JSON senza chart).
  */
 import type { AdaptationTarget } from "@/lib/training/engine";
+import { metabolicKcalFromMechanicalKj, mechanicalKjFromIntensitySegments } from "@empathy/domain-physiology";
 import { materializeEngineSessionToSlimBlocks } from "@/lib/training/engine/materialize-engine-session-to-slim-blocks";
 import type {
   Pro2BuilderBlockContract,
@@ -392,7 +393,8 @@ export function summarizeTrainingBlocks(
   blocks: TrainingBlock[],
   opts: { unit: IntensityDisplayUnit; ftpW: number; hrMax: number; lengthMode: BlockLengthMode; speedRefKmh: number },
 ): Pro2SessionSummary {
-  const durationSec = blocks.flatMap((b) => expandBlockSegments(b, opts)).reduce((sum, s) => sum + s.seconds, 0);
+  const flatSegs = blocks.flatMap((b) => expandBlockSegments(b, opts));
+  const durationSec = flatSegs.reduce((sum, s) => sum + s.seconds, 0);
   const tss = Math.round(
     blocks.reduce((sum, b) => {
       const avgIntensity =
@@ -411,24 +413,13 @@ export function summarizeTrainingBlocks(
       return sum + mins * b.loadFactor * (0.45 + avgIntensity * 0.2);
     }, 0),
   );
-  const totalWorkJ = blocks.reduce((sum, b) => {
-    const secs = expandBlockSegments(b, opts).reduce((acc, seg) => acc + seg.seconds, 0);
-    const rel =
-      b.kind === "steady"
-        ? intensityToRelativeLoad(b.intensity)
-        : b.kind === "ramp"
-          ? (intensityToRelativeLoad(b.startIntensity) + intensityToRelativeLoad(b.endIntensity)) / 2
-          : b.kind === "interval2"
-            ? (intensityToRelativeLoad(b.intensity) + intensityToRelativeLoad(b.intensity2)) / 2
-            : b.kind === "pyramid"
-              ? (b.pyramidStartTarget + b.pyramidEndTarget) / 2 / Math.max(1, opts.ftpW)
-              : (intensityToRelativeLoad(b.intensity) + intensityToRelativeLoad(b.intensity2) + intensityToRelativeLoad(b.intensity3)) / 3;
-    const estPower = Math.max(60, Math.round(opts.ftpW * rel));
-    return sum + estPower * secs;
-  }, 0);
-  const kj = Math.round(totalWorkJ / 1000);
+  const kj = mechanicalKjFromIntensitySegments(
+    flatSegs.map((s) => ({ durationSeconds: s.seconds, intensityLabel: s.intensity })),
+    opts.ftpW,
+  );
+  const totalWorkJ = kj * 1000;
   const avgPowerW = durationSec > 0 ? Math.round(totalWorkJ / durationSec) : 0;
-  const kcal = Math.round(Math.max(0, tss) * 9.3);
+  const kcal = metabolicKcalFromMechanicalKj(kj);
   return { durationSec, tss, kcal, kj, avgPowerW };
 }
 

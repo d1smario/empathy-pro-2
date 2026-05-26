@@ -8,6 +8,7 @@ import {
 import type { Pro2SessionMultilevelSource } from "@/lib/training/session-multilevel-analysis-strip";
 import { pro2BuilderContractToExpandedChartSegments } from "@/lib/training/builder/pro2-contract-chart-segments";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
+import { metabolicKcalFromPro2BuilderContract } from "@/lib/training/physiology/session-metabolic-kcal";
 
 /**
  * Estrae il contratto Pro 2 serializzato in `notes` (stesso tag URI-encoded di V1).
@@ -126,21 +127,17 @@ export function effectivePlannedWorkoutNutritionMetrics(input: {
   tssTargetDb?: number | null;
   kcalTargetDb?: number | null;
   builderSession?: Pro2BuilderSessionContract | null;
-  /** Scala TSS→kcal come negli altri piani manuali Pro 2 (~9.3 kcal/TSS a 70 kg). */
-  weightKg?: number | null;
+  /** FTP memoria fisiologica atleta attivo — obbligatoria per kcal corrette su meal plan. */
+  athleteFtpWatts?: number | null;
 }): { durationMinutes: number; tss: number; kcal: number } {
   const fallbackDur = Math.max(0, asFiniteNumber(input.durationMinutesDb) ?? 0);
   const duration = effectiveDurationMinutesFromPro2Contract(input.builderSession ?? null, fallbackDur);
   const fallbackTss = Math.max(0, asFiniteNumber(input.tssTargetDb) ?? 0);
   const tss = effectiveTssDisplayFromPro2Contract(input.builderSession ?? null, fallbackTss);
   const dbKcal = Math.max(0, asFiniteNumber(input.kcalTargetDb) ?? 0);
-  const summaryKcal = asFiniteNumber(input.builderSession?.summary?.kcal);
-  let kcal = dbKcal;
-  if (summaryKcal != null && summaryKcal > 0) {
-    kcal = Math.round(summaryKcal);
-  } else if (kcal <= 0 && tss > 0) {
-    const w = input.weightKg != null && input.weightKg > 30 ? input.weightKg : 70;
-    kcal = Math.round(tss * 9.3 * (w / 70));
-  }
+  const fromMechanical = metabolicKcalFromPro2BuilderContract(input.builderSession ?? null, {
+    athleteFtpWatts: input.athleteFtpWatts,
+  });
+  const kcal = fromMechanical > 0 ? fromMechanical : dbKcal;
   return { durationMinutes: duration, tss, kcal };
 }

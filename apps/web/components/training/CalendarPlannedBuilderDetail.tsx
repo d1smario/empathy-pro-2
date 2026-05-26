@@ -17,6 +17,7 @@ import {
   pro2BuilderContractToChartSegments,
 } from "@/lib/training/builder/pro2-session-notes";
 import type { LifestylePracticeCategory } from "@/lib/training/builder/lifestyle-playbook-catalog";
+import { effectiveMetabolicKcalForPlannedContract } from "@/lib/training/physiology/session-metabolic-kcal";
 import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
 import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -73,11 +74,13 @@ const familyBadgeClass: Record<string, string> = {
 export function CalendarPlannedBuilderDetail({
   workout,
   athleteId,
+  athleteFtpWatts,
   onDeleted,
   onCalendarMutated,
 }: {
   workout: PlannedWorkout;
   athleteId?: string | null;
+  athleteFtpWatts?: number | null;
   onDeleted?: (removedPlannedId: string) => void;
   onCalendarMutated?: () => void;
 }) {
@@ -127,6 +130,11 @@ export function CalendarPlannedBuilderDetail({
     () => effectiveTssDisplayFromPro2Contract(contract, workout.tssTarget),
     [contract, workout.tssTarget],
   );
+  const titleKcal = useMemo(
+    () => effectiveMetabolicKcalForPlannedContract({ contract, kcalTargetDb: workout.kcalTarget, athleteFtpWatts }),
+    [contract, workout.kcalTarget, athleteFtpWatts],
+  );
+  const chartFtpW = athleteFtpWatts ?? contract?.renderProfile?.ftpW;
 
   const sessionHref = `/training/session/${workout.date}`;
   const builderHref = `/training/builder?date=${encodeURIComponent(workout.date)}&replace_planned_id=${encodeURIComponent(workout.id)}`;
@@ -156,6 +164,7 @@ export function CalendarPlannedBuilderDetail({
           </div>
           <h4 className="mt-1.5 text-base font-bold text-white">
             {contract?.sessionName?.trim() || workout.type} · {titleDurationMin}′ · Carico {titleTss}
+            {titleKcal != null && titleKcal > 0 ? ` · kcal ${titleKcal}` : ""}
           </h4>
           {contract?.discipline ? (
             <p className="mt-0.5 text-xs text-gray-500">
@@ -487,7 +496,7 @@ export function CalendarPlannedBuilderDetail({
               {stepRows.length > 0 ? (
                 <StructuredWorkoutStepTable
                   rows={stepRows}
-                  ftpW={contract.renderProfile?.ftpW}
+                  ftpW={chartFtpW}
                   compact
                   title="Workout details"
                 />

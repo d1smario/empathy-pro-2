@@ -2,6 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlannedWorkout } from "@empathy/contracts";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
 import { defaultFoodDiaryEntryTimeHmsForMealSlot } from "@/lib/nutrition/food-diary-entry-time";
+import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import {
+  effectivePlannedWorkoutNutritionMetrics,
+  parsePro2BuilderSessionFromNotes,
+} from "@/lib/training/builder/pro2-session-notes";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { mealTimesFromRoutineWeekPlanForDate, type FlatMealTimes } from "@/lib/nutrition/routine-week-plan-meal-times";
@@ -156,17 +161,23 @@ export async function loadNutritionPlanDayContext(
 
   if (plannedWorkouts.length > 0) {
     const profile = profileRes.data as Record<string, unknown> | null;
+    const memory = await resolveAthleteMemory(athleteId).catch(() => null);
+    const athleteFtpW = memory?.physiology?.physiologicalProfile?.ftpWatts ?? null;
     const plannedTraining = plannedWorkouts.map((p) => {
-      const dur = Math.max(0, Number(p.durationMinutes) || 0);
-      const tss = Math.max(0, Number(p.tssTarget) || 0);
-      const kcalDb = Number(p.kcalTarget);
-      const kcalTarget =
-        Number.isFinite(kcalDb) && kcalDb > 0 ? Math.round(kcalDb) : tss > 0 ? Math.round(tss * 8) : dur > 0 ? Math.round(dur * 7) : 0;
+      const notes = (p as { notes?: string | null }).notes ?? null;
+      const builderSession = parsePro2BuilderSessionFromNotes(notes);
+      const m = effectivePlannedWorkoutNutritionMetrics({
+        durationMinutesDb: Number(p.durationMinutes) || 0,
+        tssTargetDb: Number(p.tssTarget) || 0,
+        kcalTargetDb: Number(p.kcalTarget) || 0,
+        builderSession,
+        athleteFtpWatts: athleteFtpW,
+      });
       return {
-        durationMinutes: dur,
-        tssTarget: tss > 0 ? tss : undefined,
-        kcalTarget: kcalTarget > 0 ? kcalTarget : undefined,
-        avgPowerW: null,
+        durationMinutes: m.durationMinutes,
+        tssTarget: m.tss > 0 ? m.tss : undefined,
+        kcalTarget: m.kcal > 0 ? m.kcal : undefined,
+        avgPowerW: builderSession?.summary?.avgPowerW ?? null,
       };
     });
     const model = computeNutritionDailyEnergyModel({
@@ -177,7 +188,7 @@ export async function loadNutritionPlanDayContext(
       heightCm: num(profile?.height_cm) || null,
       weightKg: num(profile?.weight_kg) || null,
       bodyFatPct: num(profile?.body_fat_pct) || null,
-      ftpWatts: null,
+      ftpWatts: athleteFtpW,
       vo2maxMlMinKg: null,
       lifestyleActivityClass: "moderate",
       plannedTraining,

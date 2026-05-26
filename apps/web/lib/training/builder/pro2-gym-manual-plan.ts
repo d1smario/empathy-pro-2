@@ -1,6 +1,7 @@
 import { inferDomainFromSport } from "@/lib/training/engine/sport-translation";
 import type { AdaptationTarget, GeneratedSession, PrimaryPhysiologySystem, SessionBlock } from "@/lib/training/engine/types";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
+import { metabolicKcalFromMechanicalKj } from "@empathy/domain-physiology";
 import { intensityScore } from "@/lib/training/builder/pro2-intensity";
 import type { PlanChartSegment } from "@/lib/training/builder/manual-plan-block";
 import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
@@ -121,9 +122,10 @@ function summarizeGymRowsForContract(rows: Pro2GymManualRow[]): Pro2BuilderSessi
   const segs = gymManualRowsToChartSegments(rows);
   const durationSec = segs.reduce((s, x) => s + x.durationSeconds, 0);
   const tss = estimateTssFromSegments(segs);
-  const kcal = Math.round(Math.max(0, tss) * 9.3);
   const avgPowerW = durationSec > 0 ? Math.round((150 * durationSec) / durationSec) : 0;
-  return { durationSec, tss, kcal, kj: Math.round((avgPowerW * durationSec) / 1000), avgPowerW };
+  const kj = Math.round((avgPowerW * durationSec) / 1000);
+  const kcal = metabolicKcalFromMechanicalKj(kj);
+  return { durationSec, tss, kcal, kj, avgPowerW };
 }
 
 export function gymManualRowsToGeneratedSession(params: {

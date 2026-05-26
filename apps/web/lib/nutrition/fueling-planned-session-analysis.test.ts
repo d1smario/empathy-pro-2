@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mechanicalKjFromIntensitySegments, metabolicKcalFromMechanicalKj } from "@empathy/domain-physiology";
 import { analyzePlannedSessionsForFueling } from "./fueling-planned-session-analysis";
 import type { Pro2BuilderSessionContract } from "../training/builder/pro2-session-contract";
 
@@ -7,7 +8,13 @@ function baseContract(
   blocks: Pro2BuilderSessionContract["blocks"],
   durationSec: number,
   tss: number,
+  ftpW = 250,
 ): Pro2BuilderSessionContract {
+  const kj = mechanicalKjFromIntensitySegments(
+    [{ durationSeconds: durationSec, intensityLabel: "Z2" }],
+    ftpW,
+  );
+  const kcal = metabolicKcalFromMechanicalKj(kj);
   return {
     version: 1,
     source: "builder",
@@ -17,11 +24,11 @@ function baseContract(
     summary: {
       durationSec,
       tss,
-      kcal: Math.round(tss * 9.3 * (72 / 70)),
-      kj: Math.round(tss * 9.3 * (72 / 70) * 4.184),
-      avgPowerW: 180,
+      kcal,
+      kj,
+      avgPowerW: durationSec > 0 ? Math.round((kj * 1000) / durationSec) : 0,
     },
-    renderProfile: { intensityUnit: "watt", ftpW: 250, hrMax: 190, lengthMode: "time", speedRefKmh: 35 },
+    renderProfile: { intensityUnit: "watt", ftpW, hrMax: 190, lengthMode: "time", speedRefKmh: 35 },
     blocks,
   };
 }

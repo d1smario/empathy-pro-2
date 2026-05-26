@@ -389,7 +389,7 @@ export function analyzePlannedSessionsForFueling(input: {
       tssTargetDb: row.tssTargetDb,
       kcalTargetDb: row.kcalTargetDb,
       builderSession: row.builderSession ?? null,
-      weightKg: wKg,
+      athleteFtpWatts: input.ftpWatts,
     });
 
     const durationMin = Math.max(1, m.durationMinutes);

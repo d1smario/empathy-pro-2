@@ -5,6 +5,7 @@ import {
   effectiveTssDisplayFromPro2Contract,
   parsePro2BuilderSessionFromNotes,
 } from "@/lib/training/builder/pro2-session-notes";
+import { effectiveMetabolicKcalForPlannedContract } from "@/lib/training/physiology/session-metabolic-kcal";
 import type { SportGlyphId } from "@/lib/training/builder/sport-glyph-id";
 import { resolveSportGlyphFromSportString } from "@/lib/training/session-detail-summary";
 
@@ -106,28 +107,26 @@ function chipClassForFamily(family: PlannedWorkoutFamily): string {
   }
 }
 
-/** Kcal display: contratto + colonne DB; per gym corregge summary sottostimato (somma tempi esercizio). */
+/** Kcal display: Σ(P_i×t_i) con FTP atleta attivo → kJ → kcal = kJ/η/4.184. */
 export function effectivePlannedKcalForCalendar(
   contract: Pro2BuilderSessionContract | null,
-  load: number,
+  _load: number,
   kcalTargetDb: number | null | undefined,
+  athleteFtpWatts?: number | null,
 ): number | null {
-  const db = typeof kcalTargetDb === "number" && Number.isFinite(kcalTargetDb) ? Math.max(0, Math.round(kcalTargetDb)) : 0;
-  const summary =
-    contract?.summary?.kcal != null && Number.isFinite(contract.summary.kcal) ? Math.max(0, Math.round(contract.summary.kcal)) : 0;
-  const fromLoad = load > 0 ? Math.round(load * 9.3) : 0;
+  const fromMechanical = effectiveMetabolicKcalForPlannedContract({ contract, kcalTargetDb, athleteFtpWatts });
+  if (fromMechanical != null && fromMechanical > 0) return fromMechanical;
 
   if (contract?.family === "strength") {
+    const db = typeof kcalTargetDb === "number" && Number.isFinite(kcalTargetDb) ? Math.max(0, Math.round(kcalTargetDb)) : 0;
+    const summary =
+      contract?.summary?.kcal != null && Number.isFinite(contract.summary.kcal) ? Math.max(0, Math.round(contract.summary.kcal)) : 0;
     if (db > 0 && (summary <= 0 || db >= summary)) return db;
-    if (fromLoad > 0 && summary > 0 && summary < fromLoad * 0.65) return fromLoad;
     if (summary > 0) return summary;
     if (db > 0) return db;
-    return fromLoad > 0 ? fromLoad : null;
   }
 
-  if (summary > 0) return summary;
-  if (db > 0) return db;
-  return fromLoad > 0 ? fromLoad : null;
+  return null;
 }
 
 function shortTitle(contract: Pro2BuilderSessionContract | null, workout: PlannedWorkout): string {
@@ -161,13 +160,16 @@ function buildDetailLine(
   return `${title} · kcal ${kcalTxt}`;
 }
 
-export function plannedCalendarChipViewModel(workout: PlannedWorkout): PlannedCalendarChipViewModel {
+export function plannedCalendarChipViewModel(
+  workout: PlannedWorkout,
+  opts?: { athleteFtpWatts?: number | null },
+): PlannedCalendarChipViewModel {
   const contract = parsePlannedWorkoutContract(workout);
   const family = inferFamily(contract, workout);
   const glyph = resolvePlannedWorkoutSportGlyph(workout);
   const minutes = effectiveDurationMinutesFromPro2Contract(contract, workout.durationMinutes);
   const load = effectiveTssDisplayFromPro2Contract(contract, workout.tssTarget);
-  const kcal = effectivePlannedKcalForCalendar(contract, load, workout.kcalTarget);
+  const kcal = effectivePlannedKcalForCalendar(contract, load, workout.kcalTarget, opts?.athleteFtpWatts);
   const title = shortTitle(contract, workout);
   return {
     glyph,

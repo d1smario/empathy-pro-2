@@ -1079,7 +1079,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             tssTargetDb: session.tss_target as number | null | undefined,
             kcalTargetDb: session.kcal_target as number | null | undefined,
             builderSession: bs,
-            weightKg: profile?.weight_kg ?? null,
+            athleteFtpWatts: physio?.ftp_watts ?? null,
           });
           return {
             id: String(session.id),
@@ -1091,7 +1091,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         }),
         executed: selectedExecutedSessions,
       }),
-    [selectedPlanSessions, selectedExecutedSessions, profile?.weight_kg],
+    [selectedPlanSessions, selectedExecutedSessions, physio?.ftp_watts],
   );
 
   const nutritionDayModel = useMemo<NutritionDailyEnergyModel | null>(() => {
@@ -1472,7 +1472,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
           tssTargetDb: session.tss_target as number | null | undefined,
           kcalTargetDb: session.kcal_target as number | null | undefined,
           builderSession: builder,
-          weightKg: profile?.weight_kg ?? null,
+          athleteFtpWatts: physio?.ftp_watts ?? null,
         });
         const analysis = byId.get(String(session.id));
         return {

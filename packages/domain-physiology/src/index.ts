@@ -80,3 +80,15 @@ export function isPhysiologyCoreSourcesPresent(state: PhysiologyState): boolean 
   const s = state.sources;
   return s.physiologicalProfile && s.metabolicRun && s.lactateRun;
 }
+
+export {
+  DEFAULT_MECHANICAL_EFFICIENCY,
+  mechanicalJoulesFromSegments,
+  mechanicalKjFromAvgPower,
+  mechanicalKjFromIntensitySegments,
+  mechanicalKjFromSegments,
+  metabolicKcalFromMechanicalKj,
+  metabolicKcalFromMechanicalWork,
+  powerWattsForZoneLabel,
+  zoneRelativeLoadForLabel,
+} from "./session-mechanical-energy";

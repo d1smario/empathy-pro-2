@@ -27,6 +27,7 @@ import {
   plannedCalendarChipViewModel,
   uniquePlannedSportGlyphs,
 } from "@/lib/training/planned-workout-display";
+import { useAthleteFtpWatts } from "@/lib/training/physiology/use-athlete-ftp-watts";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
@@ -184,6 +185,7 @@ function SportGlyph({ type }: { type: string }) {
 export default function TrainingCalendarPageView() {
   const searchParams = useSearchParams();
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
+  const athleteFtpWatts = useAthleteFtpWatts(athleteId);
 
   const [monthCursor, setMonthCursor] = useState(() => {
     const d = new Date();
@@ -939,7 +941,7 @@ export default function TrainingCalendarPageView() {
                           </div>
                         ) : null}
                         {pList.slice(0, 2).map((w) => {
-                          const chip = plannedCalendarChipViewModel(w);
+                          const chip = plannedCalendarChipViewModel(w, { athleteFtpWatts });
                           return (
                             <div key={w.id} className={`tc2-calendar-chip ${chip.chipClass}`}>
                               <div className="flex items-center gap-1.5 font-bold">
@@ -1139,6 +1141,7 @@ export default function TrainingCalendarPageView() {
                       <CalendarPlannedBuilderDetail
                         workout={w}
                         athleteId={athleteId}
+                        athleteFtpWatts={athleteFtpWatts}
                         onDeleted={async (removedId) => {
                           if (removedId) {
                             locallyRemovedPlannedIdsRef.current.add(removedId);

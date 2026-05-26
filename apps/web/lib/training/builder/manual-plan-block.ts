@@ -16,6 +16,7 @@ import {
   zoneRangeLabel,
 } from "@/lib/training/builder/pro2-intensity";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
+import { metabolicKcalFromMechanicalKj, mechanicalKjFromIntensitySegments } from "@empathy/domain-physiology";
 import type {
   Pro2BlockChart,
   Pro2BuilderBlockContract,
@@ -278,29 +279,10 @@ export function summarizePlanBlocks(blocks: ManualPlanBlock[], opts: PlanExpandO
   const durationSec = forTss.reduce((sum, s) => sum + s.durationSeconds, 0);
   const tss = estimateTssFromSegments(forTss);
 
-  const totalWorkJ = blocks.reduce((sum, b) => {
-    const segs = expandPlanBlockSegments(b, opts);
-    const secs = segs.reduce((acc, seg) => acc + seg.durationSeconds, 0);
-    const rel =
-      b.kind === "steady"
-        ? intensityToRelativeLoad(b.intensity)
-        : b.kind === "ramp"
-          ? (intensityToRelativeLoad(b.startIntensity) + intensityToRelativeLoad(b.endIntensity)) / 2
-          : b.kind === "interval2"
-            ? (intensityToRelativeLoad(b.intensity) + intensityToRelativeLoad(b.intensity2)) / 2
-            : b.kind === "pyramid"
-              ? (b.pyramidStartTarget + b.pyramidEndTarget) / 2 / Math.max(1, opts.ftpW)
-              : (intensityToRelativeLoad(b.intensity) +
-                  intensityToRelativeLoad(b.intensity2) +
-                  intensityToRelativeLoad(b.intensity3)) /
-                3;
-    const estPower = Math.max(60, Math.round(opts.ftpW * rel));
-    return sum + estPower * secs;
-  }, 0);
-
-  const kj = Math.round(totalWorkJ / 1000);
+  const kj = mechanicalKjFromIntensitySegments(forTss, opts.ftpW);
+  const totalWorkJ = kj * 1000;
   const avgPowerW = durationSec > 0 ? Math.round(totalWorkJ / durationSec) : 0;
-  const kcal = Math.round(Math.max(0, tss) * 9.3);
+  const kcal = metabolicKcalFromMechanicalKj(kj);
 
   return { durationSec, tss, kcal, kj, avgPowerW };
 }
