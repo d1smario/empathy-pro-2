@@ -30,6 +30,7 @@ import {
   SUPPLEMENT_BRANDS,
   SUPPLEMENT_CATEGORIES,
 } from "@/lib/profile/supplement-category-catalog";
+import { resolveSixMealSnackPercentages } from "@/lib/nutrition/diet-meal-slot-budgets";
 import { Activity, Dna, Flame, GaugeCircle, Heart, Layers, PencilLine, User } from "lucide-react";
 
 type AthleteProfileRow = {
@@ -204,6 +205,9 @@ type DietDayConfig = {
     lunch: number;
     dinner: number;
     snacks: number;
+    snack_am?: number;
+    snack_pm?: number;
+    snack_evening?: number;
   };
   daily_macros: {
     cho_pct: number;
@@ -941,18 +945,42 @@ export default function ProfilePage() {
       const cal = toRecord(dayDiet.caloric_distribution);
       const macros = toRecord(dayDiet.daily_macros);
       const mealMacro = toRecord(dayDiet.meal_macro_custom);
+      const mealCountMode = String(dayDiet.meal_count_mode ?? "4") as DietDayConfig["meal_count_mode"];
+      const breakfast = Number(cal.breakfast ?? 30);
+      const lunch = Number(cal.lunch ?? 35);
+      const dinner = Number(cal.dinner ?? 25);
+      const snacksField = Number(cal.snacks ?? 10);
+      const distSeed = {
+        breakfast,
+        lunch,
+        dinner,
+        snacks: snacksField,
+        ...(typeof cal.snack_am === "number" ? { snack_am: cal.snack_am } : {}),
+        ...(typeof cal.snack_pm === "number" ? { snack_pm: cal.snack_pm } : {}),
+        ...(typeof cal.snack_evening === "number" ? { snack_evening: cal.snack_evening } : {}),
+      };
+      const caloricResolved =
+        mealCountMode === "6"
+          ? (() => {
+              const r = resolveSixMealSnackPercentages(distSeed);
+              return {
+                breakfast,
+                lunch,
+                dinner,
+                snacks: r.snacksTotal,
+                snack_am: r.snack_am,
+                snack_pm: r.snack_pm,
+                snack_evening: r.snack_evening,
+              };
+            })()
+          : { breakfast, lunch, dinner, snacks: snacksField };
       parsedDietWeek[day] = {
         ...defaultDietDayConfig(),
         ...dayDiet,
         day_type: String(dayDiet.day_type ?? "normocaloric-100") as DietDayConfig["day_type"],
-        meal_count_mode: String(dayDiet.meal_count_mode ?? "4") as DietDayConfig["meal_count_mode"],
+        meal_count_mode: mealCountMode,
         day_type_pct: Number(dayDiet.day_type_pct ?? 100),
-        caloric_distribution: {
-          breakfast: Number(cal.breakfast ?? 30),
-          lunch: Number(cal.lunch ?? 35),
-          dinner: Number(cal.dinner ?? 25),
-          snacks: Number(cal.snacks ?? 10),
-        },
+        caloric_distribution: caloricResolved,
         daily_macros: {
           cho_pct: Number(macros.cho_pct ?? 50),
           pro_pct: Number(macros.pro_pct ?? 25),
@@ -2370,7 +2398,25 @@ export default function ProfilePage() {
 
                   <div className="profile-subpanel tone-amber" style={{ marginBottom: "12px" }}>
                     <div className="profile-editor-grid">
-                      <div className="form-group"><label className="form-label">Numero pasti / fasting</label><select className="form-select profile-dark-select" value={dietWeekPlan[activeDietDay].meal_count_mode} onChange={(e) => updateDietDay(activeDietDay, { meal_count_mode: e.target.value as DietDayConfig["meal_count_mode"] })}><option value="1">1 pasto</option><option value="2">2 pasti</option><option value="3">3 pasti</option><option value="4">4 pasti</option><option value="5">5 pasti</option><option value="6">6 pasti</option><option value="fasting">Digiuno</option><option value="semi-8-16">Semi digiuno 8-16</option><option value="semi-6-18">Semi digiuno 6-18</option><option value="semi-4-20">Semi digiuno 4-20</option></select></div>
+                      <div className="form-group"><label className="form-label">Numero pasti / fasting</label><select className="form-select profile-dark-select" value={dietWeekPlan[activeDietDay].meal_count_mode} onChange={(e) => {
+                        const meal_count_mode = e.target.value as DietDayConfig["meal_count_mode"];
+                        if (meal_count_mode === "6") {
+                          const c = dietWeekPlan[activeDietDay].caloric_distribution;
+                          const r = resolveSixMealSnackPercentages(c);
+                          updateDietDay(activeDietDay, {
+                            meal_count_mode,
+                            caloric_distribution: {
+                              ...c,
+                              snack_am: r.snack_am,
+                              snack_pm: r.snack_pm,
+                              snack_evening: r.snack_evening,
+                              snacks: r.snacksTotal,
+                            },
+                          });
+                        } else {
+                          updateDietDay(activeDietDay, { meal_count_mode });
+                        }
+                      }}><option value="1">1 pasto</option><option value="2">2 pasti</option><option value="3">3 pasti</option><option value="4">4 pasti</option><option value="5">5 pasti</option><option value="6">6 pasti</option><option value="fasting">Digiuno</option><option value="semi-8-16">Semi digiuno 8-16</option><option value="semi-6-18">Semi digiuno 6-18</option><option value="semi-4-20">Semi digiuno 4-20</option></select></div>
                       <div className="form-group"><label className="form-label">Tipologia giorno</label><select className="form-select profile-dark-select" value={dietWeekPlan[activeDietDay].day_type} onChange={(e) => updateDietDay(activeDietDay, { day_type: e.target.value as DietDayConfig["day_type"] })}><option value="fasting-0">Digiuno 0% cal</option><option value="severe-15-30">Restrizione severa 15-30%</option><option value="catabolic-50-99">Catabolico 50-99%</option><option value="normocaloric-100">Normocalorica 100%</option><option value="anabolic-101-130">Ipercalorica / anabolico 101-130%</option></select></div>
                       <div className="form-group"><label className="form-label">% calorie rispetto fabbisogno</label><input className="form-input" type="number" min={0} max={130} value={dietWeekPlan[activeDietDay].day_type_pct} onChange={(e) => updateDietDay(activeDietDay, { day_type_pct: Number(e.target.value || 0) })} /></div>
                     </div>
@@ -2382,7 +2428,31 @@ export default function ProfilePage() {
                       <div className="form-group"><label className="form-label">Colazione</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.breakfast} onChange={(e) => updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, breakfast: Number(e.target.value || 0) } })} /></div>
                       <div className="form-group"><label className="form-label">Pranzo</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.lunch} onChange={(e) => updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, lunch: Number(e.target.value || 0) } })} /></div>
                       <div className="form-group"><label className="form-label">Cena</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.dinner} onChange={(e) => updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, dinner: Number(e.target.value || 0) } })} /></div>
-                      <div className="form-group"><label className="form-label">Spuntini</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.snacks} onChange={(e) => updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, snacks: Number(e.target.value || 0) } })} /></div>
+                      {dietWeekPlan[activeDietDay].meal_count_mode === "6" ? (
+                        <>
+                          <div className="form-group"><label className="form-label">Spuntino · mattina</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.snack_am ?? 10} onChange={(e) => {
+                            const snack_am = Number(e.target.value || 0);
+                            const snack_pm = dietWeekPlan[activeDietDay].caloric_distribution.snack_pm ?? 10;
+                            const snack_evening = dietWeekPlan[activeDietDay].caloric_distribution.snack_evening ?? 10;
+                            updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, snack_am, snack_pm, snack_evening, snacks: snack_am + snack_pm + snack_evening } });
+                          }} /></div>
+                          <div className="form-group"><label className="form-label">Spuntino · pomeriggio</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.snack_pm ?? 10} onChange={(e) => {
+                            const snack_pm = Number(e.target.value || 0);
+                            const snack_am = dietWeekPlan[activeDietDay].caloric_distribution.snack_am ?? 10;
+                            const snack_evening = dietWeekPlan[activeDietDay].caloric_distribution.snack_evening ?? 10;
+                            updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, snack_am, snack_pm, snack_evening, snacks: snack_am + snack_pm + snack_evening } });
+                          }} /></div>
+                          <div className="form-group"><label className="form-label">Spuntino · serale</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.snack_evening ?? 10} onChange={(e) => {
+                            const snack_evening = Number(e.target.value || 0);
+                            const snack_am = dietWeekPlan[activeDietDay].caloric_distribution.snack_am ?? 10;
+                            const snack_pm = dietWeekPlan[activeDietDay].caloric_distribution.snack_pm ?? 10;
+                            updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, snack_am, snack_pm, snack_evening, snacks: snack_am + snack_pm + snack_evening } });
+                          }} /></div>
+                          <p className="col-span-full text-[11px] text-slate-400">6 pasti: tre spuntini separati (es. 10+10+10 = 30% totale spuntini). Σ giorno: {Math.round(dietWeekPlan[activeDietDay].caloric_distribution.breakfast + dietWeekPlan[activeDietDay].caloric_distribution.lunch + dietWeekPlan[activeDietDay].caloric_distribution.dinner + dietWeekPlan[activeDietDay].caloric_distribution.snacks)}%</p>
+                        </>
+                      ) : (
+                        <div className="form-group"><label className="form-label">Spuntini</label><input className="form-input" type="number" min={0} max={100} value={dietWeekPlan[activeDietDay].caloric_distribution.snacks} onChange={(e) => updateDietDay(activeDietDay, { caloric_distribution: { ...dietWeekPlan[activeDietDay].caloric_distribution, snacks: Number(e.target.value || 0) } })} /></div>
+                      )}
                     </div>
                   </div>
 

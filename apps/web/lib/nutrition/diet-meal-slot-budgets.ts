@@ -13,8 +13,47 @@ export type CaloricDistribution = {
   breakfast: number;
   lunch: number;
   dinner: number;
+  /** Totale % spuntini (5 pasti: diviso in 2; 6 pasti: vedi `snack_*` o `snacks`/3). */
   snacks: number;
+  /** Solo con 6 pasti: % per spuntino mattina (se assenti, derivati da `snacks`). */
+  snack_am?: number;
+  snack_pm?: number;
+  snack_evening?: number;
 };
+
+/** Per `meal_count_mode = 6`: tre quote spuntino (es. 10+10+10 → `snacks` totale 30). */
+export function resolveSixMealSnackPercentages(dist: CaloricDistribution): {
+  snack_am: number;
+  snack_pm: number;
+  snack_evening: number;
+  snacksTotal: number;
+} {
+  const am = dist.snack_am;
+  const pm = dist.snack_pm;
+  const ev = dist.snack_evening;
+  const hasExplicit =
+    (am != null && Number.isFinite(am)) ||
+    (pm != null && Number.isFinite(pm)) ||
+    (ev != null && Number.isFinite(ev));
+
+  if (hasExplicit) {
+    const snack_am = am ?? 0;
+    const snack_pm = pm ?? 0;
+    const snack_evening = ev ?? 0;
+    const snacksTotal = snack_am + snack_pm + snack_evening;
+    return { snack_am, snack_pm, snack_evening, snacksTotal };
+  }
+
+  const mains = dist.breakfast + dist.lunch + dist.dinner;
+  const s = dist.snacks;
+  /** Profilo con un solo campo «Spuntini»=10 ma intenzione 10%×3 (25+25+20+10+10+10). */
+  if (s > 0 && s * 3 + mains <= 100.5) {
+    return { snack_am: s, snack_pm: s, snack_evening: s, snacksTotal: s * 3 };
+  }
+
+  const third = s / 3;
+  return { snack_am: third, snack_pm: third, snack_evening: third, snacksTotal: s };
+}
 
 export type DietMealSlotBudget = {
   key: MealSlotKey;
@@ -108,14 +147,19 @@ export function dietMealSlotSpecsForMode(mealCountMode: string): SlotSpec[] {
     ];
   }
   if (m === "6") {
-    const third = (d: CaloricDistribution) => d.snacks / 3;
+    const snackPct = (which: "am" | "pm" | "evening") => (d: CaloricDistribution) => {
+      const r = resolveSixMealSnackPercentages(d);
+      if (which === "am") return r.snack_am;
+      if (which === "pm") return r.snack_pm;
+      return r.snack_evening;
+    };
     return [
       { key: "breakfast", label: "Colazione", pct: (d) => d.breakfast },
-      { key: "snack_am", label: "Spuntino · mattina", pct: third },
+      { key: "snack_am", label: "Spuntino · mattina", pct: snackPct("am") },
       { key: "lunch", label: "Pranzo", pct: (d) => d.lunch },
-      { key: "snack_pm", label: "Spuntino · pomeriggio", pct: third },
+      { key: "snack_pm", label: "Spuntino · pomeriggio", pct: snackPct("pm") },
       { key: "dinner", label: "Cena", pct: (d) => d.dinner },
-      { key: "snack_evening", label: "Spuntino · serale", pct: third },
+      { key: "snack_evening", label: "Spuntino · serale", pct: snackPct("evening") },
     ];
   }
   /* 5 pasti (default esplicito) e fallback */

@@ -74,12 +74,20 @@ function readCaloricDistributionFields(
   const lunch = num(cal[lKey] ?? cal.lunch);
   const dinner = num(cal[dKey] ?? cal.dinner);
   const snacks = num(cal[sKey] ?? cal.snacks);
-  if (breakfast == null && lunch == null && dinner == null && snacks == null) return null;
+  const snackAm = num(cal.snack_am ?? cal.snack_am_pct);
+  const snackPm = num(cal.snack_pm ?? cal.snack_pm_pct);
+  const snackEvening = num(cal.snack_evening ?? cal.snack_evening_pct);
+  if (breakfast == null && lunch == null && dinner == null && snacks == null && snackAm == null && snackPm == null && snackEvening == null) {
+    return null;
+  }
   return normalizeCaloricDistribution({
     breakfast: breakfast ?? 0,
     lunch: lunch ?? 0,
     dinner: dinner ?? 0,
     snacks: snacks ?? 0,
+    ...(snackAm != null ? { snack_am: snackAm } : {}),
+    ...(snackPm != null ? { snack_pm: snackPm } : {}),
+    ...(snackEvening != null ? { snack_evening: snackEvening } : {}),
   });
 }
 

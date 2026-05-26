@@ -28,7 +28,11 @@ Ogni atleta ha un **Diet per giorno della settimana** in Profile. Ogni data del 
 
 ## 6 pasti
 
-Con `meal_count_mode = 6`: colazione, spuntino mattina, pranzo, spuntino pomeriggio, cena, **spuntino serale** (`snack_evening`). La quota `snacks` del Diet è divisa in tre parti uguali.
+Con `meal_count_mode = 6`: colazione, spuntino mattina, pranzo, spuntino pomeriggio, cena, **spuntino serale** (`snack_evening`).
+
+- In **Profile → Diet** con 6 pasti: tre campi % (mattina / pomeriggio / serale); `snacks` in DB = **somma** dei tre (es. 10+10+10 = **30%** totale spuntini).
+- Se nel JSON c’è solo `snacks: 10` con colazione+pranzo+cena = 70% (totale 80%), il motore interpreta **10% per ciascuno** dei tre spuntini (caso 25/25/20 + tre spuntini da 10).
+- Se `snacks: 30` con stessi pasti principali, divide **30÷3 = 10%** per slot spuntino.
 
 ## Codice
 
