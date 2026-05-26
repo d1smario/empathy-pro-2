@@ -93,7 +93,7 @@ export async function GET(req: NextRequest) {
       }),
       db
         .from("athlete_profiles")
-        .select("birth_date, sex, height_cm, weight_kg, body_fat_pct, muscle_mass_kg")
+        .select("birth_date, sex, height_cm, weight_kg, body_fat_pct, muscle_mass_kg, nutrition_config, routine_config")
         .eq("id", athleteId)
         .maybeSingle(),
     ]);

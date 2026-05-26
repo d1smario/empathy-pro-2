@@ -29,6 +29,30 @@ function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
+/** JSONB a volte arriva come stringa da API/cache — normalizza prima della lettura Diet. */
+export function parseNutritionConfigRecord(nutritionConfig: unknown): Record<string, unknown> {
+  if (typeof nutritionConfig === "string") {
+    const t = nutritionConfig.trim();
+    if (!t) return {};
+    try {
+      return asRecord(JSON.parse(t) as unknown);
+    } catch {
+      return {};
+    }
+  }
+  return asRecord(nutritionConfig);
+}
+
+export function hasNutritionMealSplitData(nc: Record<string, unknown>): boolean {
+  const weekPlan = asRecord(nc.week_plan);
+  for (const day of Object.values(weekPlan)) {
+    const dayRaw = asRecord(day);
+    if (isUsableCaloricDistribution(readCaloricDistribution(dayRaw))) return true;
+  }
+  const legacy = readFromLegacyRoot(nc);
+  return isUsableCaloricDistribution(legacy.caloricDistribution);
+}
+
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -159,7 +183,7 @@ export function resolveNutritionDietDay(
 ): ResolvedNutritionDietDay {
   const iso = planDate.slice(0, 10);
   const weekDayKey = profileWeekDayKeyFromIsoLocal(iso);
-  const nc = asRecord(nutritionConfig);
+  const nc = parseNutritionConfigRecord(nutritionConfig);
   const weekPlan = asRecord(nc.week_plan);
   const dayRaw = asRecord(weekPlan[weekDayKey]);
 

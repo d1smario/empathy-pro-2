@@ -70,6 +70,15 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
     };
   }
 
+  const rowNutrition =
+    row?.nutrition_config && typeof row.nutrition_config === "object" && !Array.isArray(row.nutrition_config)
+      ? (row.nutrition_config as Record<string, unknown>)
+      : null;
+  const rowRoutine =
+    row?.routine_config && typeof row.routine_config === "object" && !Array.isArray(row.routine_config)
+      ? (row.routine_config as Record<string, unknown>)
+      : null;
+
   return {
     ...fromMemory,
     birth_date: fromMemory.birth_date ?? rowBirth,
@@ -78,5 +87,8 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
     weight_kg: fromMemory.weight_kg ?? wDb,
     body_fat_pct: fromMemory.body_fat_pct ?? bfDb,
     muscle_mass_kg: fromMemory.muscle_mass_kg ?? mmDb,
+    /** DB `athlete_profiles` vince se la memoria atleta non ha ancora `nutrition_config` / `routine_config`. */
+    nutrition_config: fromMemory.nutrition_config ?? rowNutrition,
+    routine_config: fromMemory.routine_config ?? rowRoutine,
   };
 }

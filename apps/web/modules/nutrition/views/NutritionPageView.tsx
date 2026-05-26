@@ -91,8 +91,16 @@ import {
   pathwayNutrientSummaryToMicroLines,
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
 import { buildIntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-meal-plan-request-builder";
-import { activeMealSlotKeysForMode, buildDietMealSlotBudgets } from "@/lib/nutrition/diet-meal-slot-budgets";
-import { resolveNutritionDietDay } from "@/lib/nutrition/resolve-nutrition-diet-day";
+import {
+  activeMealSlotKeysForMode,
+  buildDietMealSlotBudgets,
+  type CaloricDistribution,
+} from "@/lib/nutrition/diet-meal-slot-budgets";
+import {
+  isUsableCaloricDistribution,
+  parseNutritionConfigRecord,
+  resolveNutritionDietDay,
+} from "@/lib/nutrition/resolve-nutrition-diet-day";
 import { mealTimesFromRoutineWeekPlanForDate } from "@/lib/nutrition/routine-week-plan-meal-times";
 import { resolveMealTimesForNutritionPlanDate } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import type { IntelligentMealPlanResponseBody, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
@@ -332,6 +340,14 @@ function mergeNutritionProfileForSolver(mem: AthleteNutritionRow | null, mod: At
   if (!mem && !mod) return null;
   if (!mem) return mod;
   if (!mod) return mem;
+  const memNc = parseNutritionConfigRecord(mem.nutrition_config);
+  const modNc = parseNutritionConfigRecord(mod.nutrition_config);
+  const nutrition_config =
+    Object.keys(memNc).length > 0 && Object.keys(modNc).length > 0
+      ? { ...modNc, ...memNc, week_plan: { ...record(modNc.week_plan), ...record(memNc.week_plan) } }
+      : Object.keys(memNc).length > 0
+        ? memNc
+        : modNc;
   return {
     ...mod,
     ...mem,
@@ -350,7 +366,7 @@ function mergeNutritionProfileForSolver(mem: AthleteNutritionRow | null, mod: At
     muscle_mass_kg: mem.muscle_mass_kg ?? mod.muscle_mass_kg,
     lifestyle_activity_class: mem.lifestyle_activity_class ?? mod.lifestyle_activity_class,
     routine_config: mem.routine_config ?? mod.routine_config,
-    nutrition_config: mem.nutrition_config ?? mod.nutrition_config,
+    nutrition_config,
     supplement_config: mem.supplement_config ?? mod.supplement_config,
   };
 }
@@ -792,6 +808,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [nutritionContextVersion, setNutritionContextVersion] = useState(0);
 
   const [dailyEnergyKcal, setDailyEnergyKcal] = useState(3000);
+  /** Split % pasti (hydrate da Diet / meal_plan — fallback UI se resolver giorno vuoto). */
+  const [caloricSplit, setCaloricSplit] = useState<CaloricDistribution>({
+    breakfast: 25,
+    lunch: 35,
+    dinner: 30,
+    snacks: 10,
+  });
   const [macroSplit, setMacroSplit] = useState({ carbs: 50, protein: 25, fat: 25 });
   const [mealTimes, setMealTimes] = useState({
     breakfast: "07:30",
@@ -808,11 +831,21 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     [profile?.nutrition_config, selectedPlanDate],
   );
 
-  const activeDietMealSlotKeys = useMemo(
-    () => activeMealSlotKeysForMode(resolvedDietDay.mealCountMode),
-    [resolvedDietDay.mealCountMode],
-  );
   const [mealStrategy, setMealStrategy] = useState("3-meals");
+
+  const effectiveMealCountMode = useMemo(() => {
+    const m = String(resolvedDietDay.mealCountMode ?? "").trim();
+    if (m && m !== "fasting") return m;
+    if (mealStrategy === "6-meals") return "6";
+    if (mealStrategy === "5-meals") return "5";
+    if (mealStrategy === "3-meals") return "3";
+    return m || "5";
+  }, [resolvedDietDay.mealCountMode, mealStrategy]);
+
+  const activeDietMealSlotKeys = useMemo(
+    () => activeMealSlotKeysForMode(effectiveMealCountMode),
+    [effectiveMealCountMode],
+  );
 
   const [sessionDurationMin, setSessionDurationMin] = useState(120);
   const [sessionIntensityPctFtp, setSessionIntensityPctFtp] = useState(78);
@@ -1639,6 +1672,24 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const macroRoot = record(nc.macro_split);
 
     const dietForDay = resolveNutritionDietDay(nc, selectedPlanDate);
+    if (dietForDay.caloricDistribution) {
+      setCaloricSplit(dietForDay.caloricDistribution);
+    } else {
+      const splitFromMealPlan = record(mealPlan.caloric_split);
+      const splitRoot = record(nc.caloric_split);
+      const useMealPlanSplit =
+        splitFromMealPlan.breakfast_pct != null ||
+        splitFromMealPlan.lunch_pct != null ||
+        splitFromMealPlan.dinner_pct != null ||
+        splitFromMealPlan.snacks_pct != null;
+      const split = useMealPlanSplit ? splitFromMealPlan : splitRoot;
+      setCaloricSplit({
+        breakfast: n(split.breakfast_pct, 25),
+        lunch: n(split.lunch_pct, 35),
+        dinner: n(split.dinner_pct, 30),
+        snacks: n(split.snacks_pct, 10),
+      });
+    }
     if (dietForDay.dailyMacros) {
       setMacroSplit(dietForDay.dailyMacros);
     } else {
@@ -1814,18 +1865,27 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return { ...base, protein, fat };
   }, [macroSplit, nutritionPerformanceIntegration, resolvedDietDay.dailyMacros]);
 
+  const effectiveCaloricDistribution = useMemo((): CaloricDistribution | null => {
+    if (isUsableCaloricDistribution(resolvedDietDay.caloricDistribution)) {
+      return resolvedDietDay.caloricDistribution;
+    }
+    if (isUsableCaloricDistribution(caloricSplit)) return caloricSplit;
+    return null;
+  }, [resolvedDietDay.caloricDistribution, caloricSplit]);
+
   const mealRows = useMemo(() => {
-    if (!resolvedDietDay.caloricDistribution) return [];
+    if (!effectiveCaloricDistribution) return [];
     return buildDietMealSlotBudgets({
-      mealCountMode: resolvedDietDay.mealCountMode,
-      caloricDistribution: resolvedDietDay.caloricDistribution,
+      mealCountMode: effectiveMealCountMode,
+      caloricDistribution: effectiveCaloricDistribution,
       dailyKcal: resolvedMealDailyEnergyKcal,
       macroSplit: effectiveMacroSplit,
       mealTimes,
       round,
     });
   }, [
-    resolvedDietDay,
+    effectiveCaloricDistribution,
+    effectiveMealCountMode,
     resolvedMealDailyEnergyKcal,
     effectiveMacroSplit,
     mealTimes,
@@ -2862,14 +2922,27 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
     const existingRoutine = record(profile?.routine_config);
     const existingNutrition = record(profile?.nutrition_config);
+    const splitForSave = effectiveCaloricDistribution ?? caloricSplit;
 
     const payloadNutrition = {
       ...existingNutrition,
       /** Diet (% pasti, n° pasti) si modifica solo in Profile → Diet; qui non si riscrive `week_plan`. */
       meal_strategy: mealStrategy,
+      caloric_split: {
+        breakfast_pct: splitForSave.breakfast,
+        lunch_pct: splitForSave.lunch,
+        dinner_pct: splitForSave.dinner,
+        snacks_pct: splitForSave.snacks,
+      },
       meal_plan: {
         daily_kcal: round(resolvedMealDailyEnergyKcal),
         meal_strategy: mealStrategy,
+        caloric_split: {
+          breakfast_pct: splitForSave.breakfast,
+          lunch_pct: splitForSave.lunch,
+          dinner_pct: splitForSave.dinner,
+          snacks_pct: splitForSave.snacks,
+        },
       },
       fueling: {
         session_duration_min: sessionDurationMin,
@@ -3202,7 +3275,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               dietDayNotice={
                 mealRows.length > 0
                   ? null
-                  : `Imposta la distribuzione % e il numero pasti in Profile → Diet per ${resolvedDietDay.weekDayKey}, oppure salva da Nutrizione il meal plan (usa week_plan, caloric_split o meal_plan.caloric_split).`
+                  : `Nessuna ripartizione % leggibile per ${resolvedDietDay.weekDayKey}: Profile → Diet (week_plan) oppure Salva da questa pagina dopo aver impostato il profilo.`
               }
               onGenerateIntelligentMealPlan={handleGenerateIntelligentMealPlan}
               onResetIntelligentMealPlan={() => {
