@@ -1,3 +1,5 @@
+import { PLANNED_SESSION_DURATION_MAX_MIN } from "@/lib/training/builder/session-duration-choices";
+
 /** Allineamento soft ai guardrail V1 — senza dipendere da `planned-operational-guardrail` (porting incrementale). */
 export type PlannedWorkoutInsertPayload = {
   athlete_id: string;
@@ -12,7 +14,7 @@ export type PlannedWorkoutInsertPayload = {
 
 export function clampPlannedWorkoutRow(row: PlannedWorkoutInsertPayload): PlannedWorkoutInsertPayload {
   const type = row.type.trim().slice(0, 120) || "pro2_builder";
-  const duration = Math.max(1, Math.min(360, Math.round(Number(row.duration_minutes) || 0)));
+  const duration = Math.max(1, Math.min(PLANNED_SESSION_DURATION_MAX_MIN, Math.round(Number(row.duration_minutes) || 0)));
   const tss = Math.max(0, Math.min(999, Math.round(Number(row.tss_target) || 0)));
   let kcal: number | null = null;
   if (row.kcal_target != null && Number.isFinite(Number(row.kcal_target))) {

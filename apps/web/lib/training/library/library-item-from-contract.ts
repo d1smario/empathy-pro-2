@@ -1,4 +1,5 @@
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { PLANNED_SESSION_DURATION_MAX_MIN } from "@/lib/training/builder/session-duration-choices";
 import { preparePro2BuilderSessionContractForPersist } from "@/lib/training/builder/pro2-session-interpretation";
 
 const LIBRARY_FAMILIES = new Set(["aerobic", "strength", "technical", "lifestyle"]);
@@ -28,7 +29,7 @@ export function denormalizedFieldsFromContract(contract: Pro2BuilderSessionContr
 } {
   const durationMinutes =
     contract.plannedSessionDurationMinutes ??
-    Math.max(1, Math.min(360, Math.round((contract.summary?.durationSec ?? 3600) / 60)));
+    Math.max(1, Math.min(PLANNED_SESSION_DURATION_MAX_MIN, Math.round((contract.summary?.durationSec ?? 3600) / 60)));
   const tssTarget = Math.max(0, Math.min(999, Math.round(contract.summary?.tss ?? 0)));
   const discipline = String(contract.discipline ?? "").trim().slice(0, 120);
   const sportTags = discipline ? [discipline] : [];

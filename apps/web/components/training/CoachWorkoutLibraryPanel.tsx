@@ -2,9 +2,9 @@
 
 import { BookMarked, ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { CoachLibraryContractPreview } from "@/components/training/CoachLibraryContractPreview";
-import { Pro2Button } from "@/components/ui/empathy";
+import { CoachLibraryContractEditor } from "@/components/training/CoachLibraryContractEditor";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { Pro2Button } from "@/components/ui/empathy";
 import type { CoachWorkoutLibraryItemView } from "@/lib/training/library/coach-workout-library-types";
 import {
   applyCoachLibraryItem,
@@ -13,6 +13,7 @@ import {
   fetchCoachLibraryItems,
   importEmpathyAerobicStarterPack,
   saveCoachLibraryItem,
+  updateCoachLibraryItem,
 } from "@/modules/training/services/training-library-api";
 import { serializePro2BuilderContractToZwo } from "@/lib/training/planned-structured-export";
 import { STARTER_PACK_TEMPLATE_COUNT } from "@/lib/training/library/starter-pack-aerobic";
@@ -55,6 +56,7 @@ export function CoachWorkoutLibraryPanel({
   const [applyScaling, setApplyScaling] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [previewContract, setPreviewContract] = useState<Pro2BuilderSessionContract | null>(null);
+  const [draftContract, setDraftContract] = useState<Pro2BuilderSessionContract | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const hasActiveFilters =
@@ -68,6 +70,7 @@ export function CoachWorkoutLibraryPanel({
     if (!open || items.length === 0) {
       setSelectedItemId(null);
       setPreviewContract(null);
+      setDraftContract(null);
       return;
     }
     if (!selectedItemId || !items.some((i) => i.id === selectedItemId)) {
@@ -78,20 +81,30 @@ export function CoachWorkoutLibraryPanel({
   useEffect(() => {
     if (!selectedItemId) {
       setPreviewContract(null);
+      setDraftContract(null);
       setPreviewLoading(false);
       return;
     }
     let cancelled = false;
     setPreviewLoading(true);
+    setDraftContract(null);
     void fetchCoachLibraryItemContract(selectedItemId).then((r) => {
       if (cancelled) return;
       setPreviewLoading(false);
-      setPreviewContract(r.ok && r.contract ? r.contract : null);
+      const c = r.ok && r.contract ? r.contract : null;
+      setPreviewContract(c);
+      setDraftContract(c ? structuredClone(c) : null);
     });
     return () => {
       cancelled = true;
     };
   }, [selectedItemId]);
+
+  const contractDirty =
+    Boolean(draftContract && previewContract) &&
+    JSON.stringify(draftContract) !== JSON.stringify(previewContract);
+
+  const activeContract = draftContract ?? previewContract;
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -163,6 +176,7 @@ export function CoachWorkoutLibraryPanel({
       athleteId,
       date: targetDate,
       applyScaling,
+      contract: item.id === selectedItemId && draftContract ? draftContract : undefined,
     });
     setBusy(null);
     if (!r.ok) {
@@ -215,6 +229,27 @@ export function CoachWorkoutLibraryPanel({
     }
   }
 
+  async function handleSaveDraft() {
+    if (!selectedItemId || !draftContract) return;
+    setBusy("save-draft");
+    setErr(null);
+    setOkMsg(null);
+    const item = items.find((i) => i.id === selectedItemId);
+    const r = await updateCoachLibraryItem({
+      itemId: selectedItemId,
+      contract: draftContract,
+      title: item?.title,
+    });
+    setBusy(null);
+    if (!r.ok) {
+      setErr(r.error ?? "Salvataggio modifiche fallito");
+      return;
+    }
+    setPreviewContract(structuredClone(draftContract));
+    setOkMsg("Template aggiornato in libreria.");
+    void refresh();
+  }
+
   async function handleCloneSource() {
     if (!athleteId || !sourcePlannedId) return;
     setBusy("clone");
@@ -246,7 +281,7 @@ export function CoachWorkoutLibraryPanel({
       {open ? (
         <div className="space-y-3 border-t border-white/10 px-4 pb-4 pt-3">
           <p className="text-xs text-slate-500">
-            Template riusabili (contratto Builder). Clicca un template per l&apos;anteprima a blocchi; Apply inserisce sul calendario.
+            Template riusabili (contratto Builder). Clicca un template per modificarne intervalli, serie e durata; Apply usa le modifiche (salva il template per tenerle in libreria).
           </p>
           <div className="flex flex-wrap gap-2">
             {contractToSave ? (
@@ -431,13 +466,19 @@ export function CoachWorkoutLibraryPanel({
                               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
                               Carico grafico a blocchi…
                             </div>
-                          ) : previewContract ? (
-                            <CoachLibraryContractPreview
-                              contract={previewContract}
+                          ) : activeContract ? (
+                            <CoachLibraryContractEditor
+                              contract={activeContract}
                               title={item.title}
                               tssFallback={item.tssTarget}
                               durationFallback={item.durationMinutes}
-                              compact
+                              dirty={contractDirty}
+                              saveBusy={busy === "save-draft"}
+                              onChange={setDraftContract}
+                              onSave={() => void handleSaveDraft()}
+                              onReset={() => {
+                                if (previewContract) setDraftContract(structuredClone(previewContract));
+                              }}
                             />
                           ) : (
                             <p className="py-4 text-center text-xs text-amber-200/90">

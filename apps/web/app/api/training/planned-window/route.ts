@@ -9,7 +9,7 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
+import { firstWindowQueryError, PLANNED_WORKOUTS_WINDOW_SELECT, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { twinContextStripFromMemory } from "@/lib/twin/twin-context-strip-from-memory";
@@ -144,6 +144,24 @@ export async function GET(req: NextRequest) {
         if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
           executedRes = { data: forcedExecuted.data as unknown[], error: null };
           executedAdminFallbackUsed = true;
+        }
+      }
+    }
+
+    let plannedAdminFallbackUsed = false;
+    if ((plannedRes.data?.length ?? 0) === 0) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const forcedPlanned = await admin
+          .from("planned_workouts")
+          .select(PLANNED_WORKOUTS_WINDOW_SELECT)
+          .eq("athlete_id", athleteId)
+          .gte("date", from)
+          .lte("date", to)
+          .order("date", { ascending: true });
+        if (!forcedPlanned.error && (forcedPlanned.data?.length ?? 0) > 0) {
+          plannedRes = { data: forcedPlanned.data as unknown[], error: null };
+          plannedAdminFallbackUsed = true;
         }
       }
     }

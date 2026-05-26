@@ -80,11 +80,37 @@ export async function saveCoachLibraryItem(input: {
   return { ok: true, item: json.item };
 }
 
+export async function updateCoachLibraryItem(input: {
+  itemId: string;
+  contract: Pro2BuilderSessionContract;
+  title?: string;
+}): Promise<{ ok: boolean; item?: CoachWorkoutLibraryItemView; error?: string }> {
+  const headers = await buildSupabaseAuthHeaders({ "Content-Type": "application/json" });
+  const res = await fetch(`/api/training/library/items/${encodeURIComponent(input.itemId)}`, {
+    method: "PATCH",
+    headers,
+    credentials: "same-origin",
+    body: JSON.stringify({
+      contract: input.contract,
+      ...(input.title != null ? { title: input.title } : {}),
+    }),
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    item?: CoachWorkoutLibraryItemView;
+    error?: string;
+  };
+  if (!res.ok || json.ok !== true) return { ok: false, error: json.error ?? "library_update_failed" };
+  return { ok: true, item: json.item };
+}
+
 export async function applyCoachLibraryItem(input: {
   itemId: string;
   athleteId: string;
   date: string;
   applyScaling?: boolean;
+  contract?: Pro2BuilderSessionContract;
 }): Promise<{
   ok: boolean;
   plannedWorkoutId?: string | null;
@@ -101,6 +127,7 @@ export async function applyCoachLibraryItem(input: {
       athleteId: input.athleteId,
       date: input.date,
       applyScaling: input.applyScaling === true,
+      ...(input.contract ? { contract: input.contract } : {}),
     }),
     cache: "no-store",
   });

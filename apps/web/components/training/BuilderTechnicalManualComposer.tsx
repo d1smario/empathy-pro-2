@@ -3,6 +3,7 @@
 import { FileText, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
+import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { TechnicalPlaybookSchemaFrame } from "@/components/training/TechnicalPlaybookSchemaFrame";
 import {
   defaultPro2TechnicalManualRow,
@@ -22,8 +23,7 @@ import {
 import { TECHNICAL_ATHLETIC_QUALITY_OPTIONS } from "@/lib/training/engine/technical-module-focus";
 import type { TechnicalModuleFocus } from "@/lib/training/engine/types";
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
-
-const SESSION_DURATION_CHOICES = Array.from({ length: 19 }, (_, i) => 30 + i * 5);
+import { SESSION_DURATION_CHOICES } from "@/lib/training/builder/session-duration-choices";
 const MINUTE_CHIP_PRESETS = [8, 10, 12, 14, 15, 16, 18, 20, 22, 25] as const;
 const PERIOD_CHIP_PRESETS = [
   "3×4′",
@@ -646,7 +646,13 @@ export function BuilderTechnicalManualComposer({
             {manualSaveErr}
           </span>
         ) : null}
-        {manualSaveOkId ? <span className="text-xs text-emerald-300">Salvato.</span> : null}
+        {manualSaveOkId ? (
+          <BuilderCalendarSaveConfirm
+            date={manualPlannedDate}
+            plannedWorkoutId={manualSaveOkId}
+            className="text-xs text-emerald-300"
+          />
+        ) : null}
       </div>
     </section>
   );

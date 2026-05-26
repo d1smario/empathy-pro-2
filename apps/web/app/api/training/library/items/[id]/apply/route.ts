@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCoachLibraryWriteContext } from "@/lib/auth/coach-library-context";
 import { TrainingRouteAuthError, requireTrainingAthleteWriteContext } from "@/lib/auth/training-route-auth";
 import { applyCoachLibraryTemplate } from "@/lib/training/library/apply-library-template";
+import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,6 +26,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       athleteId?: string;
       date?: string;
       applyScaling?: boolean;
+      contract?: Pro2BuilderSessionContract;
     };
     const athleteId = String(body.athleteId ?? "").trim();
     const date = String(body.date ?? "").trim().slice(0, 10);
@@ -42,6 +44,7 @@ export async function POST(req: NextRequest, { params }: RouteParams) {
       athleteId,
       date,
       applyScaling: body.applyScaling === true,
+      contractOverride: body.contract,
     });
 
     return NextResponse.json(

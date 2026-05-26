@@ -408,6 +408,29 @@ export default function TrainingCalendarPageView() {
     })();
   }, [athleteId, loadMonth]);
 
+  /** Dopo salvataggio in Builder (altra tab) o ritorno alla pagina: ricarica finestra planned. */
+  useEffect(() => {
+    if (!athleteId || ctxLoading) return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void loadMonth({ anchorDay: selectedDate });
+    };
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("focus", refresh);
+    return () => {
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [athleteId, ctxLoading, selectedDate, loadMonth]);
+
+  /** Arrivo da Builder con `?date=` o cambio query: ricarica planned (post-salvataggio). */
+  useEffect(() => {
+    if (!athleteId || ctxLoading) return;
+    const q = normalizeIsoDateParam(searchParams.get("date"));
+    if (!q) return;
+    void loadMonth({ anchorDay: q });
+  }, [searchParams, athleteId, ctxLoading, loadMonth]);
+
   const plannedByDate = useMemo(() => {
     const m = new Map<string, PlannedWorkout[]>();
     for (const w of planned) {

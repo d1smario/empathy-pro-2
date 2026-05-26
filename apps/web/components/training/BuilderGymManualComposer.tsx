@@ -3,6 +3,7 @@
 import { FileText, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
+import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { GymExerciseMediaThumb } from "@/components/training/GymExerciseMediaThumb";
 import { PRO2_GYM_EXECUTION_STYLES } from "@/lib/training/builder/gym-execution-styles";
 import {
@@ -25,8 +26,7 @@ import {
   type Pro2GymContractionPreset,
   type Pro2GymLibraryEquipmentFilter,
 } from "@/lib/training/builder/pro2-gym-library-filters";
-
-const SESSION_DURATION_CHOICES = Array.from({ length: 19 }, (_, i) => 30 + i * 5);
+import { SESSION_DURATION_CHOICES } from "@/lib/training/builder/session-duration-choices";
 
 const SET_CHIP_PRESETS = [2, 3, 4, 5, 6] as const;
 const REP_CHIP_PRESETS = ["5", "6", "8", "10", "12", "15", "20", "AMRAP"] as const;
@@ -645,10 +645,7 @@ export function BuilderGymManualComposer({
         </p>
       ) : null}
       {manualSaveOkId ? (
-        <p className="mt-3 text-sm text-emerald-300/90">
-          Salvato con dettaglio builder in notes
-          {manualSaveOkId !== "ok" ? ` (id ${manualSaveOkId.slice(0, 8)}…)` : ""}.
-        </p>
+        <BuilderCalendarSaveConfirm date={manualPlannedDate} plannedWorkoutId={manualSaveOkId} />
       ) : null}
     </section>
   );

@@ -3,6 +3,7 @@
 import { FileText, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { LifestylePracticeMediaThumb } from "@/components/training/LifestylePracticeMediaThumb";
+import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
 import { lifestyleV1FallbackImageForCategory } from "@/lib/training/builder/lifestyle-media";
 import {
@@ -17,8 +18,7 @@ import {
   type LifestylePracticeCategory,
 } from "@/lib/training/builder/lifestyle-playbook-catalog";
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
-
-const SESSION_DURATION_CHOICES = Array.from({ length: 19 }, (_, i) => 30 + i * 5);
+import { SESSION_DURATION_CHOICES } from "@/lib/training/builder/session-duration-choices";
 const ROUND_CHIP_PRESETS = [1, 2, 3, 4, 5, 6] as const;
 const REST_CHIP_PRESETS = [0, 20, 30, 45, 60, 90, 120] as const;
 const RPE_CHIP_PRESETS = [3, 4, 5, 6, 7] as const;
@@ -618,10 +618,7 @@ export function BuilderLifestyleManualComposer({
         </p>
       ) : null}
       {manualSaveOkId ? (
-        <p className="mt-3 text-sm text-emerald-300/90">
-          Salvato con dettaglio builder in notes
-          {manualSaveOkId !== "ok" ? ` (id ${manualSaveOkId.slice(0, 8)}…)` : ""}.
-        </p>
+        <BuilderCalendarSaveConfirm date={manualPlannedDate} plannedWorkoutId={manualSaveOkId} />
       ) : null}
     </section>
   );

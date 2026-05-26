@@ -58,6 +58,10 @@ export type MultisportCpCurveSuggestionPanelProps = {
   /** Dopo aver riempito i campi CP in anteprima (non salva Supabase). */
   onApplyToCpInputs: (wByLabel: Partial<Record<string, number>>) => void;
   onAfterApply?: () => void;
+  /** Persistenza Supabase dopo anteprima (stesso snapshot Metabolic profile). */
+  onSaveMetabolicProfile?: () => void;
+  metabolicProfileSaveDisabled?: boolean;
+  metabolicProfileSaveLabel?: string;
 };
 
 export function MultisportCpCurveSuggestionPanel({
@@ -65,6 +69,9 @@ export function MultisportCpCurveSuggestionPanel({
   bodyMassKg,
   onApplyToCpInputs,
   onAfterApply,
+  onSaveMetabolicProfile,
+  metabolicProfileSaveDisabled = false,
+  metabolicProfileSaveLabel = "Salva profilo metabolico",
 }: MultisportCpCurveSuggestionPanelProps) {
   const [sport, setSport] = useState<MultisportEngineSport>("running");
   const [mode, setMode] = useState<MultisportCpCurveSuggestionMode>("running_race_riegel");
@@ -355,6 +362,16 @@ export function MultisportCpCurveSuggestionPanel({
         <Pro2Button type="button" variant="primary" disabled={!result || loading} onClick={applyPreview}>
           Applica in anteprima alla curva CP
         </Pro2Button>
+        {onSaveMetabolicProfile ? (
+          <Pro2Button
+            type="button"
+            variant="primary"
+            disabled={metabolicProfileSaveDisabled}
+            onClick={onSaveMetabolicProfile}
+          >
+            {metabolicProfileSaveLabel}
+          </Pro2Button>
+        ) : null}
       </div>
 
       {err ? (

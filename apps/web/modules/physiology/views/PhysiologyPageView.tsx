@@ -1481,6 +1481,105 @@ export default function MetabolicLabPage() {
     setSaving(false);
   }
 
+  function saveMetabolicProfileSnapshot() {
+    void saveSnapshot("metabolic_profile", cpInputs, {
+      cp: cpModel.cp,
+      ftp: cpModel.ftp,
+      lt1: cpModel.lt1,
+      lt2: cpModel.lt2,
+      fatmax: cpModel.fatmax,
+      vlamax: cpModel.vlamax,
+      vo2max_ml_min_kg: cpModel.vo2maxMlMinKg,
+      vo2max_l_min: cpModel.vo2maxLMin,
+      vo2max_estimate: cpModel.vo2maxEstimate,
+      vo2max_model_version: "empathy-vo2max-metabolic-v3",
+      sprintReserve: cpModel.sprintReserve,
+      wPrimeJ: cpModel.wPrimeJ,
+      pcrCapacityJ: cpModel.pcrCapacityJ,
+      glycolyticCapacityJ: cpModel.glycolyticCapacityJ,
+      fitR2: cpModel.fitR2,
+      fitConfidence: cpModel.fitConfidence,
+      fitModel: cpModel.fitModel,
+      phenotype: cpModel.phenotype,
+      substrateTable: cpModel.substrateTable,
+      powerComponents: cpModel.powerComponents,
+      cpWorkTimeLinear: cpModel.cpWorkTimeLinear,
+      vo2OnsetTauSecDefault: cpModel.vo2OnsetTauSecDefault,
+      gasExchangeSubstrate: gasExchangeSubstrateProfile,
+      metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
+      metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
+    });
+  }
+
+  function saveLactateAnalysisSnapshot() {
+    void saveSnapshot(
+      "lactate_analysis",
+      {
+        ...lactateInput,
+        ...(lactateGutDerived
+          ? {
+              gut_absorption_pct: String(lactateGutDerived.gut_absorption_pct),
+              microbiota_sequestration_pct: String(lactateGutDerived.microbiota_sequestration_pct),
+              gut_training_pct: String(lactateGutDerived.gut_training_pct),
+            }
+          : {}),
+        sport: lactateSport,
+        vo2_mode: lactateVo2Mode,
+        vo2_estimated_l_min: lactateVo2Estimate.vo2LMin,
+        vo2_used_l_min: lactateVo2Used,
+        vo2_method: lactateVo2Estimate.method,
+        rer_mode: lactateRerMode,
+        rer_used: lactateRerUsed,
+        input_precedence_policy: "measured>manual>preset>default",
+        input_uncertainty_pct: lactateUncertaintyPct,
+        input_sources: lactateSourcesForSnapshot,
+        microbiota_source_mode: microbiotaSourceMode,
+        dysbiosis_preset: dysbiosisPreset,
+        fat_oxidation_adaptation: fatOxAdaptation,
+        source_workout_id: selectedWorkout?.id ?? null,
+        source_workout_date: selectedWorkout?.date ?? null,
+        segment_attachment: lactateSegmentAttachment,
+        health_bio_glucose: healthBioGlucoseMeta,
+        health_bio_core_temp_c: healthBioCoreTempCBaseline,
+      },
+      lactateModel,
+    );
+  }
+
+  function saveMaxOxSnapshot() {
+    void saveSnapshot(
+      "max_oxidate",
+      {
+        ...maxOxInput,
+        sport: maxOxSport,
+        vo2_mode: maxOxVo2Mode,
+        vo2_at_power_l_min: maxOxVo2AtPowerL,
+        vo2_estimated_l_min: maxOxVo2AtPowerL,
+        vo2_used_l_min: maxOxVo2Used,
+        vo2_method:
+          maxOxVo2CapacitySource === "metabolic_engine_vo2max"
+            ? "metabolic_profile_cp_vo2max"
+            : maxOxVo2CapacitySource === "test_manual"
+              ? "test_manual"
+              : maxOxVo2Estimate.method,
+        vo2_capacity_source: maxOxVo2CapacitySource,
+        vo2_reading_at_load_l_min: maxOxVo2AtLoadLMin,
+        cp_power_split_duration_sec: maxOxModel.cpPowerSplitDurationSec,
+        cp_mechanical_aerobic_ceiling_w: maxOxModel.cpMechanicalAerobicCeilingW,
+        cp_power_component_label: maxOxCpPowerSplitRow?.label ?? null,
+        metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
+        profile_vo2max_ml_min_kg: profileVo2maxMlMinKg,
+        profile_vo2max_l_min: profileVo2maxLMin,
+        input_precedence_policy: "measured>manual>preset>default",
+        input_uncertainty_pct: maxOxResolved.uncertaintyPct,
+        input_sources: maxOxResolved.sources,
+        source_workout_id: selectedWorkout?.id ?? null,
+        source_workout_date: selectedWorkout?.date ?? null,
+      },
+      maxOxModel,
+    );
+  }
+
   async function runEvidenceCheck() {
     setEvidenceLoading(true);
     setEvidenceError(null);
@@ -1926,6 +2025,45 @@ export default function MetabolicLabPage() {
         </button>
       </div>
 
+      <div
+        id="physiology-lab-save-bar"
+        className="sticky top-[3.35rem] z-20 mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-white/15 bg-slate-950/95 px-3 py-2.5 shadow-lg shadow-black/40 backdrop-blur-md supports-[backdrop-filter]:bg-slate-950/88"
+        role="region"
+        aria-label="Salvataggio Metabolic Lab"
+      >
+        {section === "profile" ? (
+          <>
+            <Pro2Button
+              type="button"
+              variant="primary"
+              disabled={saving || !cpCurveHasData}
+              onClick={saveMetabolicProfileSnapshot}
+            >
+              {saving ? "Salvataggio…" : "Salva snapshot Metabolic profile"}
+            </Pro2Button>
+            {!cpCurveHasData ? (
+              <span className="text-xs text-amber-200/90">
+                Compila almeno un punto potenza CP (o applica multisport) prima di salvare.
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500">
+                VO₂ da file: usa i pulsanti nella card «VO₂max da laboratorio» sotto.
+              </span>
+            )}
+          </>
+        ) : null}
+        {section === "lactate" ? (
+          <Pro2Button type="button" variant="primary" disabled={saving} onClick={saveLactateAnalysisSnapshot}>
+            {saving ? "Salvataggio…" : "Salva snapshot Lactate Analysis"}
+          </Pro2Button>
+        ) : null}
+        {section === "maxox" ? (
+          <Pro2Button type="button" variant="primary" disabled={saving} onClick={saveMaxOxSnapshot}>
+            {saving ? "Salvataggio…" : "Salva snapshot Max Oxidate"}
+          </Pro2Button>
+        ) : null}
+      </div>
+
       {section === "profile" ? (
         <div className="space-y-8">
           {lastLabSavedAt.metabolic ? (
@@ -1946,35 +2084,7 @@ export default function MetabolicLabPage() {
                 type="button"
                 variant="primary"
                 disabled={saving || !cpCurveHasData}
-                onClick={() =>
-                  saveSnapshot("metabolic_profile", cpInputs, {
-                    cp: cpModel.cp,
-                    ftp: cpModel.ftp,
-                    lt1: cpModel.lt1,
-                    lt2: cpModel.lt2,
-                    fatmax: cpModel.fatmax,
-                    vlamax: cpModel.vlamax,
-                    vo2max_ml_min_kg: cpModel.vo2maxMlMinKg,
-                    vo2max_l_min: cpModel.vo2maxLMin,
-                    vo2max_estimate: cpModel.vo2maxEstimate,
-                    vo2max_model_version: "empathy-vo2max-metabolic-v3",
-                    sprintReserve: cpModel.sprintReserve,
-                    wPrimeJ: cpModel.wPrimeJ,
-                    pcrCapacityJ: cpModel.pcrCapacityJ,
-                    glycolyticCapacityJ: cpModel.glycolyticCapacityJ,
-                    fitR2: cpModel.fitR2,
-                    fitConfidence: cpModel.fitConfidence,
-                    fitModel: cpModel.fitModel,
-                    phenotype: cpModel.phenotype,
-                    substrateTable: cpModel.substrateTable,
-                    powerComponents: cpModel.powerComponents,
-                    cpWorkTimeLinear: cpModel.cpWorkTimeLinear,
-                    vo2OnsetTauSecDefault: cpModel.vo2OnsetTauSecDefault,
-                    gasExchangeSubstrate: gasExchangeSubstrateProfile,
-                    metabolic_signal_schema_version: METABOLIC_SIGNAL_SCHEMA_VERSION,
-                    metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
-                  })
-                }
+                onClick={saveMetabolicProfileSnapshot}
               >
                 {saving ? "Salvataggio…" : "Salva snapshot Metabolic profile"}
               </Pro2Button>
@@ -2558,45 +2668,7 @@ export default function MetabolicLabPage() {
                 ? `Ultimo ricalcolo: ${new Date(lactateLastRecalcAt).toLocaleTimeString("it-IT")} · Auto-update attivo a ogni modifica input.`
                 : "Auto-update attivo a ogni modifica input."}
             </small>
-            <Pro2Button
-              type="button"
-              variant="primary"
-              disabled={saving}
-              onClick={() =>
-                saveSnapshot(
-                  "lactate_analysis",
-                  {
-                    ...lactateInput,
-                    ...(lactateGutDerived
-                      ? {
-                          gut_absorption_pct: String(lactateGutDerived.gut_absorption_pct),
-                          microbiota_sequestration_pct: String(lactateGutDerived.microbiota_sequestration_pct),
-                          gut_training_pct: String(lactateGutDerived.gut_training_pct),
-                        }
-                      : {}),
-                    sport: lactateSport,
-                    vo2_mode: lactateVo2Mode,
-                    vo2_estimated_l_min: lactateVo2Estimate.vo2LMin,
-                    vo2_used_l_min: lactateVo2Used,
-                    vo2_method: lactateVo2Estimate.method,
-                    rer_mode: lactateRerMode,
-                    rer_used: lactateRerUsed,
-                    input_precedence_policy: "measured>manual>preset>default",
-                    input_uncertainty_pct: lactateUncertaintyPct,
-                    input_sources: lactateSourcesForSnapshot,
-                    microbiota_source_mode: microbiotaSourceMode,
-                    dysbiosis_preset: dysbiosisPreset,
-                    fat_oxidation_adaptation: fatOxAdaptation,
-                    source_workout_id: selectedWorkout?.id ?? null,
-                    source_workout_date: selectedWorkout?.date ?? null,
-                    segment_attachment: lactateSegmentAttachment,
-                    health_bio_glucose: healthBioGlucoseMeta,
-                    health_bio_core_temp_c: healthBioCoreTempCBaseline,
-                  },
-                  lactateModel,
-                )
-              }
-            >
+            <Pro2Button type="button" variant="primary" disabled={saving} onClick={saveLactateAnalysisSnapshot}>
               {saving ? "Salvataggio..." : "Salva snapshot Lactate Analysis"}
             </Pro2Button>
           </div>
@@ -2869,44 +2941,7 @@ export default function MetabolicLabPage() {
                 ? `Ultimo ricalcolo: ${new Date(maxOxLastRecalcAt).toLocaleTimeString("it-IT")}`
                 : "Premi ricalcola per forzare il refresh del modello."}
             </small>
-            <Pro2Button
-              type="button"
-              variant="primary"
-              disabled={saving}
-              onClick={() =>
-                saveSnapshot(
-                  "max_oxidate",
-                  {
-                    ...maxOxInput,
-                    sport: maxOxSport,
-                    vo2_mode: maxOxVo2Mode,
-                    vo2_at_power_l_min: maxOxVo2AtPowerL,
-                    vo2_estimated_l_min: maxOxVo2AtPowerL,
-                    vo2_used_l_min: maxOxVo2Used,
-                    vo2_method:
-                      maxOxVo2CapacitySource === "metabolic_engine_vo2max"
-                        ? "metabolic_profile_cp_vo2max"
-                        : maxOxVo2CapacitySource === "test_manual"
-                          ? "test_manual"
-                          : maxOxVo2Estimate.method,
-                    vo2_capacity_source: maxOxVo2CapacitySource,
-                    vo2_reading_at_load_l_min: maxOxVo2AtLoadLMin,
-                    cp_power_split_duration_sec: maxOxModel.cpPowerSplitDurationSec,
-                    cp_mechanical_aerobic_ceiling_w: maxOxModel.cpMechanicalAerobicCeilingW,
-                    cp_power_component_label: maxOxCpPowerSplitRow?.label ?? null,
-                    metabolic_cp_engine_revision: METABOLIC_CP_ENGINE_REVISION,
-                    profile_vo2max_ml_min_kg: profileVo2maxMlMinKg,
-                    profile_vo2max_l_min: profileVo2maxLMin,
-                    input_precedence_policy: "measured>manual>preset>default",
-                    input_uncertainty_pct: maxOxResolved.uncertaintyPct,
-                    input_sources: maxOxResolved.sources,
-                    source_workout_id: selectedWorkout?.id ?? null,
-                    source_workout_date: selectedWorkout?.date ?? null,
-                  },
-                  maxOxModel,
-                )
-              }
-            >
+            <Pro2Button type="button" variant="primary" disabled={saving} onClick={saveMaxOxSnapshot}>
               {saving ? "Salvataggio..." : "Salva snapshot Max Oxidate"}
             </Pro2Button>
           </div>

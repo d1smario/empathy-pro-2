@@ -5,6 +5,50 @@ import type { TrainingPlannerCalendarReplaceInput, TrainingPlannerCalendarReplac
 
 /** Persistenza sul calendario operativo: ogni insert finisce in `planned_workouts` (stessa sorgente letta da `GET /api/training/planned-window`). */
 
+function shiftIsoCalendarDay(isoDay: string, deltaDays: number): string {
+  const key = isoDay.trim().slice(0, 10);
+  const base = new Date(`${key}T12:00:00`);
+  if (Number.isNaN(base.getTime())) return key;
+  base.setDate(base.getDate() + deltaDays);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, "0")}-${String(base.getDate()).padStart(2, "0")}`;
+}
+
+/** Dopo insert: stesso endpoint del Calendario — se la riga non compare, la UI non può mostrarla. */
+export async function verifyPlannedWorkoutReadable(input: {
+  athleteId: string;
+  date: string;
+  plannedWorkoutId: string | null;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const day = input.date.trim().slice(0, 10);
+  const id = input.plannedWorkoutId?.trim();
+  if (!id || id === "ok") {
+    return { ok: false, error: "Salvataggio completato ma senza id riga: impossibile allineare il calendario." };
+  }
+  const headers = await buildSupabaseAuthHeaders();
+  const q = new URLSearchParams({
+    athleteId: input.athleteId.trim(),
+    from: shiftIsoCalendarDay(day, -2),
+    to: shiftIsoCalendarDay(day, 2),
+  });
+  const res = await fetch(`/api/training/planned-window?${q}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+  });
+  const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; planned?: Array<{ id?: string }> };
+  if (!res.ok || json.ok !== true) {
+    return { ok: false, error: json.error ?? "Lettura calendario non riuscita dopo il salvataggio." };
+  }
+  const planned = Array.isArray(json.planned) ? json.planned : [];
+  if (!planned.some((row) => row.id === id)) {
+    return {
+      ok: false,
+      error: `Riga creata (id ${id.slice(0, 8)}…) ma non leggibile dal calendario per il ${day}. Verifica l’atleta attivo e riprova.`,
+    };
+  }
+  return { ok: true };
+}
+
 export type InsertPlannedResponse =
   | { ok: true; athleteId: string; plannedWorkoutId: string | null }
   | { ok: false; error: string };

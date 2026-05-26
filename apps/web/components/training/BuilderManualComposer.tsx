@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { SessionBlockIntensityChart } from "@/components/training/SessionBlockIntensityChart";
+import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { defaultManualPlanBlock, type ManualPlanBlock, type PlanBlockKind } from "@/lib/training/builder/manual-plan-block";
 import type { SportMacroId } from "@/lib/training/builder/sport-macro-palette";
 import {
@@ -28,6 +29,7 @@ import {
   type Pro2IntensityUnit,
 } from "@/lib/training/builder/pro2-intensity";
 import type { ChartSegment } from "@/lib/training/engine/block-chart-segments";
+import { SESSION_DURATION_CHOICES } from "@/lib/training/builder/session-duration-choices";
 
 function rangeShort(z: string, unit: Pro2IntensityUnit, ftpW: number, hrMax: number): string {
   const raw = zoneRangeLabel(z, unit, ftpW, hrMax);
@@ -125,8 +127,6 @@ function manualPresetTechnicalMixed(): ManualPlanBlock[] {
   b.intensity2 = "Z2";
   return [a, b];
 }
-
-const SESSION_DURATION_CHOICES = Array.from({ length: 19 }, (_, i) => 30 + i * 5);
 
 function manualPresetTechnicalGame(): ManualPlanBlock[] {
   const w = defaultManualPlanBlock("steady", "Riscaldamento");
@@ -1182,10 +1182,7 @@ export function BuilderManualComposer({
         </p>
       ) : null}
       {manualSaveOkId ? (
-        <p className="mt-3 text-sm text-emerald-300/90">
-          Salvato con dettaglio builder in notes
-          {manualSaveOkId !== "ok" ? ` (id ${manualSaveOkId.slice(0, 8)}…)` : ""}.
-        </p>
+        <BuilderCalendarSaveConfirm date={manualPlannedDate} plannedWorkoutId={manualSaveOkId} />
       ) : null}
     </section>
   );

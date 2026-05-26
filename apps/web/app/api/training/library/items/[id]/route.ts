@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireCoachLibraryWriteContext } from "@/lib/auth/coach-library-context";
 import { TrainingRouteAuthError } from "@/lib/auth/training-route-auth";
 import { mapLibraryItemRow, type CoachWorkoutLibraryItemRow } from "@/lib/training/library/coach-workout-library-types";
-import { parsePro2BuilderSessionContract } from "@/lib/training/library/library-item-from-contract";
+import {
+  denormalizedFieldsFromContract,
+  parseAndPreparePro2BuilderSessionContract,
+  parsePro2BuilderSessionContract,
+} from "@/lib/training/library/library-item-from-contract";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,6 +63,7 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
       description?: string;
       folderId?: string | null;
       metadata?: Record<string, unknown>;
+      contract?: unknown;
     };
 
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -67,6 +72,19 @@ export async function PATCH(req: NextRequest, { params }: RouteParams) {
     if (body.folderId !== undefined) patch.folder_id = body.folderId?.trim() || null;
     if (body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)) {
       patch.metadata = body.metadata;
+    }
+    if (body.contract !== undefined) {
+      const contract = parseAndPreparePro2BuilderSessionContract(body.contract);
+      if (!contract) {
+        return NextResponse.json({ ok: false as const, error: "invalid_contract" }, { status: 400, headers: NO_STORE });
+      }
+      const fields = denormalizedFieldsFromContract(contract);
+      patch.contract_json = contract;
+      patch.family = fields.family;
+      patch.discipline = fields.discipline;
+      patch.sport_tags = fields.sportTags;
+      patch.duration_minutes = fields.durationMinutes;
+      patch.tss_target = fields.tssTarget;
     }
 
     const { data, error } = await db

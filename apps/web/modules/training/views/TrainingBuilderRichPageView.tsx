@@ -18,9 +18,10 @@ import {
   Sparkles,
   Timer,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CoachWorkoutLibraryPanel } from "@/components/training/CoachWorkoutLibraryPanel";
+import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { BuilderGymManualComposer } from "@/components/training/BuilderGymManualComposer";
 import { BuilderLifestyleManualComposer } from "@/components/training/BuilderLifestyleManualComposer";
 import { BuilderManualComposer } from "@/components/training/BuilderManualComposer";
@@ -82,6 +83,7 @@ import { generateBuilderSession } from "@/modules/training/services/training-eng
 import {
   deletePlannedWorkout,
   insertPlannedWorkoutFromEngineSession,
+  verifyPlannedWorkoutReadable,
 } from "@/modules/training/services/training-planned-api";
 import {
   fetchBuilderDayAdaptation,
@@ -117,15 +119,14 @@ function addCalendarDays(isoDate: string, deltaDays: number): string {
   return localCalendarDateString(base);
 }
 
-/** Finestra fetch KPI: include ancore date picker + margine, così sedute lontane restano visibili. */
-function builderPlannedWindowRange(plannedDateStr: string, manualPlannedDateStr: string): { from: string; to: string } {
+/** Finestra fetch KPI: include data target + margine, così sedute lontane restano visibili. */
+function builderPlannedWindowRange(calendarTargetDate: string): { from: string; to: string } {
   const today = localCalendarDateString();
   let from = addCalendarDays(today, -7);
   let to = addCalendarDays(today, 120);
-  const anchors = [plannedDateStr, manualPlannedDateStr].filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d));
-  for (const a of anchors) {
-    const lo = addCalendarDays(a, -14);
-    const hi = addCalendarDays(a, 14);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(calendarTargetDate)) {
+    const lo = addCalendarDays(calendarTargetDate, -14);
+    const hi = addCalendarDays(calendarTargetDate, 14);
     if (lo < from) from = lo;
     if (hi > to) to = hi;
   }
@@ -384,6 +385,7 @@ type EngineGenerateOverrides = Partial<{
  */
 export default function TrainingBuilderRichPageView() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
@@ -394,9 +396,8 @@ export default function TrainingBuilderRichPageView() {
   const [readSpineCoverage, setReadSpineCoverage] = useState<ReadSpineCoverageSummary | null>(null);
   const [twinContextStrip, setTwinContextStrip] = useState<TrainingTwinContextStripViewModel | null>(null);
   const [plannedProvenanceSummary, setPlannedProvenanceSummary] = useState<Partial<Record<string, number>> | null>(null);
-  /** Deve stare prima del fetch calendario: la finestra include queste date ± margine (non solo oggi±7/28). */
+  /** Unica data calendario (manuale + generato): evita salvataggi su giorni diversi tra sezioni del builder. */
   const [plannedDate, setPlannedDate] = useState(() => localCalendarDateString());
-  const [manualPlannedDate, setManualPlannedDate] = useState(() => localCalendarDateString());
   const [dismissViryaEntryBanner, setDismissViryaEntryBanner] = useState(false);
 
   /** Calendario → builder: `?date=YYYY-MM-DD` + opz. `replace_planned_id` per sostituire la riga pianificata. */
@@ -412,7 +413,6 @@ export default function TrainingBuilderRichPageView() {
   useEffect(() => {
     if (!dateFromQuery || !/^\d{4}-\d{2}-\d{2}$/.test(dateFromQuery)) return;
     setPlannedDate(dateFromQuery);
-    setManualPlannedDate(dateFromQuery);
   }, [dateFromQuery]);
 
   useEffect(() => {
@@ -463,7 +463,7 @@ export default function TrainingBuilderRichPageView() {
       setLoading(true);
       setErr(null);
       try {
-        const { from, to } = builderPlannedWindowRange(plannedDate, manualPlannedDate);
+        const { from, to } = builderPlannedWindowRange(plannedDate);
         const q = new URLSearchParams({
           athleteId,
           from,
@@ -506,7 +506,7 @@ export default function TrainingBuilderRichPageView() {
     return () => {
       c = true;
     };
-  }, [athleteId, ctxLoading, calendarRefresh, plannedDate, manualPlannedDate]);
+  }, [athleteId, ctxLoading, calendarRefresh, plannedDate]);
 
   const stats = useMemo(() => {
     const pTss = sumPlannedTss(planned);
@@ -835,6 +835,32 @@ export default function TrainingBuilderRichPageView() {
     ],
   );
 
+  const finalizeCalendarSave = useCallback(
+    async (input: {
+      date: string;
+      plannedWorkoutId: string | null;
+      setOkId: (id: string | null) => void;
+      setErrMsg: (msg: string | null) => void;
+    }) => {
+      if (!athleteId) return;
+      const day = input.date.trim().slice(0, 10);
+      const verify = await verifyPlannedWorkoutReadable({
+        athleteId,
+        date: day,
+        plannedWorkoutId: input.plannedWorkoutId,
+      });
+      if (!verify.ok) {
+        input.setErrMsg(verify.error);
+        input.setOkId(null);
+        return;
+      }
+      input.setOkId(input.plannedWorkoutId ?? "ok");
+      setCalendarRefresh((n) => n + 1);
+      router.push(`/training/calendar?date=${encodeURIComponent(day)}`);
+    },
+    [athleteId, router],
+  );
+
   const saveToCalendar = useCallback(async () => {
     if (!athleteId || !genResult || !("ok" in genResult) || !genResult.ok) return;
     setSaveBusy(true);
@@ -927,8 +953,12 @@ export default function TrainingBuilderRichPageView() {
       setSaveErr(res.error);
       return;
     }
-    setSaveOkId(res.plannedWorkoutId ?? "ok");
-    setCalendarRefresh((n) => n + 1);
+    await finalizeCalendarSave({
+      date: plannedDate,
+      plannedWorkoutId: res.plannedWorkoutId,
+      setOkId: setSaveOkId,
+      setErrMsg: setSaveErr,
+    });
   }, [
     athleteId,
     genResult,
@@ -947,6 +977,7 @@ export default function TrainingBuilderRichPageView() {
     hrMax,
     lengthMode,
     speedRefKmh,
+    finalizeCalendarSave,
   ]);
 
   const pushSessionToWahooCloud = useCallback(async () => {
@@ -1041,7 +1072,7 @@ export default function TrainingBuilderRichPageView() {
     const jsonLine = serializePro2BuilderSessionContract(contract);
     const res = await insertPlannedWorkoutFromEngineSession({
       athleteId,
-      date: manualPlannedDate,
+      date: plannedDate,
       session: manualSession,
       extraNotesLines: [jsonLine],
     });
@@ -1050,12 +1081,16 @@ export default function TrainingBuilderRichPageView() {
       setManualSaveErr(res.error);
       return;
     }
-    setManualSaveOkId(res.plannedWorkoutId ?? "ok");
-    setCalendarRefresh((n) => n + 1);
+    await finalizeCalendarSave({
+      date: plannedDate,
+      plannedWorkoutId: res.plannedWorkoutId,
+      setOkId: setManualSaveOkId,
+      setErrMsg: setManualSaveErr,
+    });
   }, [
     athleteId,
     manualSession,
-    manualPlannedDate,
+    plannedDate,
     manualPlanBlocks,
     gymManualRows,
     lifestyleManualRows,
@@ -1074,6 +1109,7 @@ export default function TrainingBuilderRichPageView() {
     adaptation,
     phase,
     activeMacroId,
+    finalizeCalendarSave,
   ]);
 
   const libraryContractToSave = useMemo(() => {
@@ -1190,9 +1226,6 @@ export default function TrainingBuilderRichPageView() {
     dayAdaptation,
     sessionMinutes,
   ]);
-
-  const libraryTargetDate =
-    genResult && "ok" in genResult && genResult.ok ? plannedDate : manualPlannedDate;
 
   const upcoming = useMemo(() => {
     const today = localCalendarDateString();
@@ -2165,7 +2198,7 @@ export default function TrainingBuilderRichPageView() {
               )}
               <div className="flex flex-wrap items-end gap-3 border-b border-white/10 pb-4">
                 <label className="flex flex-col gap-1 text-xs text-gray-500">
-                  Data calendario
+                  Data calendario (manuale e generato)
                   <input
                     type="date"
                     className="rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-sm text-white"
@@ -2209,18 +2242,7 @@ export default function TrainingBuilderRichPageView() {
               ) : null}
               {wahooPushOk ? <p className="text-sm text-cyan-200/90">{wahooPushOk}</p> : null}
               {saveOkId ? (
-                <p className="text-sm text-emerald-300/90">
-                  Salvato su planned_workouts per il{" "}
-                  <span className="font-mono text-emerald-200">{plannedDate}</span>
-                  {saveOkId !== "ok" ? ` (id ${saveOkId.slice(0, 8)}…)` : ""}. Apri il calendario su quel giorno:{" "}
-                  <Pro2Link
-                    href={`/training/calendar?date=${encodeURIComponent(plannedDate)}`}
-                    variant="ghost"
-                    className="!inline-flex border border-emerald-500/40 px-2 py-0.5 text-xs"
-                  >
-                    Calendario
-                  </Pro2Link>
-                </p>
+                <BuilderCalendarSaveConfirm date={plannedDate} plannedWorkoutId={saveOkId} />
               ) : null}
               <p className="font-mono text-[0.65rem] text-gray-500">{genResult.source}</p>
               <p className="text-gray-300">
@@ -2257,8 +2279,8 @@ export default function TrainingBuilderRichPageView() {
             manualSessionName={manualSessionName}
             setManualSessionName={setManualSessionName}
             manualChartSegments={manualChartSegments}
-            manualPlannedDate={manualPlannedDate}
-            setManualPlannedDate={setManualPlannedDate}
+            manualPlannedDate={plannedDate}
+            setManualPlannedDate={setPlannedDate}
             manualSessionDurationMinutes={manualSessionDurationMinutes}
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
             paletteSport={sport}
@@ -2286,8 +2308,8 @@ export default function TrainingBuilderRichPageView() {
             manualSessionName={manualSessionName}
             setManualSessionName={setManualSessionName}
             manualChartSegments={manualChartSegments}
-            manualPlannedDate={manualPlannedDate}
-            setManualPlannedDate={setManualPlannedDate}
+            manualPlannedDate={plannedDate}
+            setManualPlannedDate={setPlannedDate}
             manualSessionDurationMinutes={manualSessionDurationMinutes}
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
             manualSaveBusy={manualSaveBusy}
@@ -2306,8 +2328,8 @@ export default function TrainingBuilderRichPageView() {
             manualSessionName={manualSessionName}
             setManualSessionName={setManualSessionName}
             manualChartSegments={manualChartSegments}
-            manualPlannedDate={manualPlannedDate}
-            setManualPlannedDate={setManualPlannedDate}
+            manualPlannedDate={plannedDate}
+            setManualPlannedDate={setPlannedDate}
             manualSessionDurationMinutes={manualSessionDurationMinutes}
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
             paletteSport={sport}
@@ -2341,8 +2363,8 @@ export default function TrainingBuilderRichPageView() {
             manualSessionName={manualSessionName}
             setManualSessionName={setManualSessionName}
             manualChartSegments={manualChartSegments}
-            manualPlannedDate={manualPlannedDate}
-            setManualPlannedDate={setManualPlannedDate}
+            manualPlannedDate={plannedDate}
+            setManualPlannedDate={setPlannedDate}
             manualSaveBusy={manualSaveBusy}
             onSaveManual={() => void saveManualToCalendar()}
             manualSaveErr={manualSaveErr}
@@ -2356,7 +2378,7 @@ export default function TrainingBuilderRichPageView() {
 
         <CoachWorkoutLibraryPanel
           athleteId={athleteId}
-          targetDate={libraryTargetDate}
+          targetDate={plannedDate}
           contractToSave={libraryContractToSave}
           saveTitle={manualSessionName.trim() || undefined}
           onApplied={() => setCalendarRefresh((n) => n + 1)}
