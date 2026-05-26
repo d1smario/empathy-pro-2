@@ -54,6 +54,43 @@ function readCaloricDistribution(raw: Record<string, unknown>): CaloricDistribut
   return normalizeCaloricDistribution(dist);
 }
 
+/** Distribuzione utilizzabile dal solver (somma % > 0). */
+export function isUsableCaloricDistribution(dist: CaloricDistribution | null): boolean {
+  if (!dist) return false;
+  return dist.breakfast + dist.lunch + dist.dinner + dist.snacks > 0;
+}
+
+/**
+ * Allinea la lettura al merge Profile (`startEditProfile`): campi mancanti nel JSON
+ * non devono bloccare il generativo se l’atleta ha già `meal_count_mode` per quel giorno.
+ */
+function profileParityCaloricDistribution(dayRaw: Record<string, unknown>): CaloricDistribution {
+  const cal = asRecord(dayRaw.caloric_distribution);
+  return normalizeCaloricDistribution({
+    breakfast: num(cal.breakfast) ?? 30,
+    lunch: num(cal.lunch) ?? 35,
+    dinner: num(cal.dinner) ?? 25,
+    snacks: num(cal.snacks) ?? 10,
+  });
+}
+
+function resolveCaloricDistributionForDay(
+  dayRaw: Record<string, unknown>,
+  nc: Record<string, unknown>,
+  weekMealMode: string,
+): CaloricDistribution | null {
+  const fromWeek = readCaloricDistribution(dayRaw);
+  if (isUsableCaloricDistribution(fromWeek)) return fromWeek;
+
+  const legacy = readFromLegacyRoot(nc);
+  if (isUsableCaloricDistribution(legacy.caloricDistribution)) return legacy.caloricDistribution;
+
+  if (weekMealMode.length > 0) {
+    return profileParityCaloricDistribution(dayRaw);
+  }
+  return null;
+}
+
 function readDailyMacros(raw: Record<string, unknown>): MacroSplitPct | null {
   const macros = asRecord(raw.daily_macros);
   const carbs = num(macros.cho_pct ?? macros.carbs_pct);
@@ -120,12 +157,15 @@ export function resolveNutritionDietDay(
   const dayTypePctRaw = num(dayRaw.day_type_pct);
   const dayTypePct = dayTypePctRaw != null ? Math.max(0, Math.min(200, dayTypePctRaw)) : 100;
 
-  const weekDist = readCaloricDistribution(dayRaw);
   const weekMacros = readDailyMacros(dayRaw);
   const weekMealMode = String(dayRaw.meal_count_mode ?? "").trim();
+  const weekDist = resolveCaloricDistributionForDay(dayRaw, nc, weekMealMode);
 
   const weekConfigured =
-    Boolean(weekMealMode) || weekDist != null || weekMacros != null || dayTypePctRaw != null;
+    Boolean(weekMealMode) ||
+    readCaloricDistribution(dayRaw) != null ||
+    weekMacros != null ||
+    dayTypePctRaw != null;
 
   if (weekConfigured) {
     const mealCountMode = weekMealMode || "4";
@@ -133,7 +173,7 @@ export function resolveNutritionDietDay(
       planDate: iso,
       weekDayKey,
       source: "week_plan",
-      configured: weekDist != null && mealCountMode.length > 0,
+      configured: isUsableCaloricDistribution(weekDist) && mealCountMode.length > 0,
       mealCountMode,
       caloricDistribution: weekDist,
       dailyMacros: weekMacros,

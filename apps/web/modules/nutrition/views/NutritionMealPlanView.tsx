@@ -323,7 +323,7 @@ export function NutritionMealPlanWorkspace({
             ) : null}
           </div>
           {mealPathwayCatalogPending ? (
-            <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per i cinque slot pasto… poi potrai generare il piano.</p>
+            <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per gli slot pasto del giorno… poi potrai generare il piano.</p>
           ) : null}
           {dietDayNotice ? (
             <p className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="status">

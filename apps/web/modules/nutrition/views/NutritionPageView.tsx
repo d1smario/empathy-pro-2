@@ -1815,7 +1815,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [macroSplit, nutritionPerformanceIntegration, resolvedDietDay.dailyMacros]);
 
   const mealRows = useMemo(() => {
-    if (!resolvedDietDay.configured || !resolvedDietDay.caloricDistribution) return [];
+    if (!resolvedDietDay.caloricDistribution) return [];
     return buildDietMealSlotBudgets({
       mealCountMode: resolvedDietDay.mealCountMode,
       caloricDistribution: resolvedDietDay.caloricDistribution,
