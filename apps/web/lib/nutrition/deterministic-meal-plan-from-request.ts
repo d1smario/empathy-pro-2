@@ -235,7 +235,7 @@ export async function buildDeterministicMealPlanFromRequest(
       : pathwayTransparency;
 
   const dayBits = [
-    `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (cinque slot)`,
+    `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (${orderedSlots.length} slot)`,
     suppressedNote,
     typeof boostSummary === "string" && boostSummary.trim() ? boostSummary : null,
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),

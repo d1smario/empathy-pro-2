@@ -4,7 +4,8 @@ import { buildDeterministicMealPlanFromRequest } from "@/lib/nutrition/determini
 import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
 import { attachSolverBasisToAssembled } from "@/lib/nutrition/meal-plan-solver-basis";
-import type { IntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { reconcileMealPlanSlotsWithDiet } from "@/lib/nutrition/reconcile-meal-plan-slots-with-diet";
+import type { IntelligentMealPlanRequest, IntelligentMealPlanRequestSlot } from "@/lib/nutrition/intelligent-meal-plan-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,7 +35,13 @@ export async function POST(req: NextRequest) {
     if (!athleteId) {
       return NextResponse.json({ error: "Missing athleteId" }, { status: 400 });
     }
-    await requireAthleteReadContext(req, athleteId);
+    const { db } = await requireAthleteReadContext(req, athleteId);
+
+    const { data: profileRow } = await db
+      .from("athlete_profiles")
+      .select("nutrition_config, routine_config, preferred_meal_count")
+      .eq("id", athleteId)
+      .maybeSingle();
 
     const plan = body.plan as unknown;
     if (!isRecord(plan)) {
@@ -47,8 +54,44 @@ export async function POST(req: NextRequest) {
       ...(weekly ? { weeklyStapleCounts: weekly } : {}),
     };
 
+    const clientSlots = Array.isArray(planMerged.slots) ? planMerged.slots : [];
+    const dailyMealsKcalTotal =
+      typeof planMerged.mealPlanSolverMeta?.dailyMealsKcalTotal === "number"
+        ? planMerged.mealPlanSolverMeta.dailyMealsKcalTotal
+        : clientSlots.reduce((s, sl) => s + (Number.isFinite(sl.targetKcal) ? sl.targetKcal : 0), 0);
+
+    const row = (profileRow ?? null) as Record<string, unknown> | null;
+    const reconciled = reconcileMealPlanSlotsWithDiet({
+      planDate: String(planMerged.planDate ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+      nutritionConfig: row?.nutrition_config ?? null,
+      routineConfig: row?.routine_config ?? null,
+      dailyMealsKcalTotal,
+      clientSlots: clientSlots as IntelligentMealPlanRequestSlot[],
+      preferredMealCount:
+        typeof row?.preferred_meal_count === "number"
+          ? row.preferred_meal_count
+          : typeof row?.preferred_meal_count === "string"
+            ? Number(row.preferred_meal_count)
+            : null,
+    });
+
+    const planFromDiet: IntelligentMealPlanRequest = {
+      ...planMerged,
+      slots: reconciled.slots,
+      mealPlanSolverMeta: {
+        ...planMerged.mealPlanSolverMeta,
+        dailyMealsKcalTotal: Math.round(dailyMealsKcalTotal),
+        integrationLeverLines: [
+          ...(planMerged.mealPlanSolverMeta?.integrationLeverLines ?? []),
+          ...(reconciled.rebuiltFromDiet
+            ? [`Diet ${reconciled.mealCountMode} pasti (${reconciled.slots.length} slot) da athlete_profiles — payload client ignorato per conteggio slot.`]
+            : []),
+        ].slice(0, 16),
+      },
+    };
+
     const request = applyMealSlotRulesToIntelligentMealPlanRequest(
-      filterIntelligentMealPlanRequestFoods(planMerged),
+      filterIntelligentMealPlanRequestFoods(planFromDiet),
     );
     if (request.athleteId !== athleteId) {
       return NextResponse.json({ error: "athleteId mismatch" }, { status: 400 });

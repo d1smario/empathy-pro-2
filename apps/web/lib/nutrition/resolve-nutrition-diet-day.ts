@@ -80,6 +80,9 @@ export function distributionImpliesSixMeals(
   }
   const r = resolveSixMealSnackPercentages(dist);
   const mains = dist.breakfast + dist.lunch + dist.dinner;
+  const daySum = mains + dist.snacks;
+  /** Profile 6 pasti con campo «Spuntini» = somma tre quote (es. 30%) senza snack_am/pm/evening separati. */
+  if (dist.snacks >= 20 && mains >= 55 && Math.abs(daySum - 100) < 2) return true;
   if (r.snacksTotal >= 24 && Math.abs(r.snack_am - r.snack_pm) < 2 && Math.abs(r.snack_pm - r.snack_evening) < 2) {
     return true;
   }
@@ -269,7 +272,9 @@ function enrichCaloricDistributionForMealMode(
 export function resolveNutritionDietDay(
   nutritionConfig: unknown,
   planDate: string,
+  options?: { preferredMealCount?: number | null },
 ): ResolvedNutritionDietDay {
+  const preferredMealCount = options?.preferredMealCount != null ? Math.trunc(options.preferredMealCount) : null;
   const iso = planDate.slice(0, 10);
   const weekDayKey = profileWeekDayKeyFromIsoLocal(iso);
   const nc = parseNutritionConfigRecord(nutritionConfig);
@@ -292,7 +297,15 @@ export function resolveNutritionDietDay(
   const weekDist = resolveCaloricDistributionForDay(dayRaw, nc, weekMealMode, weekConfigured);
 
   if (weekConfigured) {
-    const mealCountMode = inferMealCountModeForDay(dayRaw, weekDist, legacy.mealCountMode);
+    let mealCountMode = inferMealCountModeForDay(dayRaw, weekDist, legacy.mealCountMode);
+    if (
+      mealCountMode === "4" &&
+      preferredMealCount === 6 &&
+      weekDist &&
+      distributionImpliesSixMeals(weekDist, dayRaw)
+    ) {
+      mealCountMode = "6";
+    }
     const caloricDistribution = enrichCaloricDistributionForMealMode(weekDist, mealCountMode);
     return {
       planDate: iso,
@@ -308,7 +321,15 @@ export function resolveNutritionDietDay(
   }
 
   if (isUsableCaloricDistribution(legacy.caloricDistribution)) {
-    const mealCountMode = inferMealCountModeForDay({}, legacy.caloricDistribution, legacy.mealCountMode);
+    let mealCountMode = inferMealCountModeForDay({}, legacy.caloricDistribution, legacy.mealCountMode);
+    if (
+      mealCountMode === "4" &&
+      preferredMealCount === 6 &&
+      legacy.caloricDistribution &&
+      distributionImpliesSixMeals(legacy.caloricDistribution, {})
+    ) {
+      mealCountMode = "6";
+    }
     const caloricDistribution = enrichCaloricDistributionForMealMode(legacy.caloricDistribution, mealCountMode);
     return {
       planDate: iso,

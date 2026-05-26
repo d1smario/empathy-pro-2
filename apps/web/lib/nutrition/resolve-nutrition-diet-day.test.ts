@@ -103,6 +103,21 @@ describe("resolveNutritionDietDay", () => {
     expect(r.caloricDistribution?.snack_am).toBeCloseTo(10, 0);
   });
 
+  it("riconosce 6 pasti con snacks totale 30% (tre spuntini salvati in Profile)", () => {
+    const nc = {
+      week_plan: {
+        Tue: {
+          meal_count_mode: "6",
+          day_type_pct: 100,
+          caloric_distribution: { breakfast: 25, lunch: 25, dinner: 20, snacks: 30 },
+        },
+      },
+    };
+    const r = resolveNutritionDietDay(nc, "2026-05-26");
+    expect(r.mealCountMode).toBe("6");
+    expect(r.caloricDistribution?.snack_am).toBeCloseTo(10, 0);
+  });
+
   it("legacy 4-meals + split 25/25/20/10 inferisce 6 pasti", () => {
     const nc = {
       meal_strategy: "4-meals",

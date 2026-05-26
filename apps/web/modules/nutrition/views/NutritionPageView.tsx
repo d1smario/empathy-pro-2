@@ -99,6 +99,7 @@ import {
 } from "@/lib/nutrition/diet-meal-slot-budgets";
 import { computeSnackSlotsSuppressedByTrainingWindow } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import {
+  distributionImpliesSixMeals,
   isUsableCaloricDistribution,
   mergeNutritionConfigRecords,
   parseNutritionConfigRecord,
@@ -152,6 +153,7 @@ type AthleteNutritionRow = {
   routine_config: Record<string, unknown> | null;
   nutrition_config: Record<string, unknown> | null;
   supplement_config: Record<string, unknown> | null;
+  preferred_meal_count: number | null;
 };
 
 type PhysioRow = {
@@ -321,6 +323,7 @@ function mapAthleteMemoryToNutritionProfile(memory: AthleteMemory | null | undef
     routine_config: profile.routineConfig ?? null,
     nutrition_config: profile.nutritionConfig ?? null,
     supplement_config: profile.supplementConfig ?? null,
+    preferred_meal_count: profile.preferredMealCount ?? null,
   };
 }
 
@@ -830,20 +833,38 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   /** Diet del giorno selezionato (Profile → week_plan[weekday]); unica fonte per pasti e % kcal. */
   const resolvedDietDay = useMemo(
-    () => resolveNutritionDietDay(profile?.nutrition_config, selectedPlanDate),
-    [profile?.nutrition_config, selectedPlanDate],
+    () =>
+      resolveNutritionDietDay(profile?.nutrition_config, selectedPlanDate, {
+        preferredMealCount: profile?.preferred_meal_count ?? null,
+      }),
+    [profile?.nutrition_config, profile?.preferred_meal_count, selectedPlanDate],
   );
 
   const [mealStrategy, setMealStrategy] = useState("3-meals");
 
   const effectiveMealCountMode = useMemo(() => {
-    const m = String(resolvedDietDay.mealCountMode ?? "").trim();
+    let m = String(resolvedDietDay.mealCountMode ?? "").trim();
+    const dist = resolvedDietDay.caloricDistribution;
+    if (
+      m === "4" &&
+      dist &&
+      (profile?.preferred_meal_count === 6 || mealStrategy === "6-meals") &&
+      distributionImpliesSixMeals(dist)
+    ) {
+      m = "6";
+    }
     if (m && m !== "fasting") return m;
     if (mealStrategy === "6-meals") return "6";
     if (mealStrategy === "5-meals") return "5";
     if (mealStrategy === "3-meals") return "3";
+    if (profile?.preferred_meal_count === 6 && dist && distributionImpliesSixMeals(dist)) return "6";
     return m || "5";
-  }, [resolvedDietDay.mealCountMode, mealStrategy]);
+  }, [
+    resolvedDietDay.mealCountMode,
+    resolvedDietDay.caloricDistribution,
+    mealStrategy,
+    profile?.preferred_meal_count,
+  ]);
 
   const activeDietMealSlotKeys = useMemo(
     () => activeMealSlotKeysForMode(effectiveMealCountMode),
@@ -1964,13 +1985,51 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   /** Kcal/macro per pasto: solo Diet (mai rollup USDA). USDA = composizione alimenti post-generazione. */
   const mealPlanCardsDisplay = mealPlanCards;
 
+  /**
+   * Righe esposte in Meal plan: dopo la generazione allinea alla base solver (6 slot)
+   * anche se la griglia Diet locale era ancora a 4 pasti.
+   */
+  const mealPlanWorkspaceRows = useMemo(() => {
+    const basis = intelligentMealPlan?.solverBasis?.slots;
+    if (!basis?.length) return mealPlanCards;
+    const byKey = new Map(mealPlanCards.map((r) => [r.key as MealSlotKey, r]));
+    return basis.map((s) => {
+      const existing = byKey.get(s.slot);
+      if (existing) return existing;
+      const icon =
+        s.slot === "breakfast"
+          ? "🌅"
+          : s.slot === "lunch"
+            ? "🥗"
+            : s.slot === "dinner"
+              ? "🌙"
+              : s.slot === "snack_evening"
+                ? "🌙"
+                : s.slot === "snack_am"
+                  ? "☕"
+                  : "🥤";
+      return {
+        key: s.slot,
+        label: s.labelIt,
+        pct: 0,
+        time: s.scheduledTimeLocal,
+        kcal: s.targetKcal,
+        carbs: s.targetCarbsG,
+        protein: s.targetProteinG,
+        fat: s.targetFatG,
+        icon,
+        portionHint: portionHintForMealKcal(s.targetKcal),
+      };
+    });
+  }, [intelligentMealPlan, mealPlanCards]);
+
   const mealDisplayByKey = useMemo(() => {
-    const m = new Map<MealSlotKey, (typeof mealPlanCardsDisplay)[number]>();
-    for (const row of mealPlanCardsDisplay) {
+    const m = new Map<MealSlotKey, (typeof mealPlanWorkspaceRows)[number]>();
+    for (const row of mealPlanWorkspaceRows) {
       m.set(row.key as MealSlotKey, row);
     }
     return m;
-  }, [mealPlanCardsDisplay]);
+  }, [mealPlanWorkspaceRows]);
 
   const trainingDayLinesForMealPlan = useMemo(
     () =>
@@ -3298,7 +3357,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
             <NutritionMealPlanWorkspace
               athleteId={athleteId}
               role={role}
-              mealPlanDisplayRows={mealPlanCards}
+              mealPlanDisplayRows={mealPlanWorkspaceRows}
               mealDisplayByKey={mealDisplayByKey}
               mealPathwayBySlot={mealPathwayBySlot}
               pathwayModulation={pathwayModulation}

@@ -24,6 +24,7 @@ export type NutritionModuleFlatProfile = {
   routine_config: Record<string, unknown> | null;
   nutrition_config: Record<string, unknown> | null;
   supplement_config: Record<string, unknown> | null;
+  preferred_meal_count: number | null;
 };
 
 function coerceDbNumeric(value: unknown): number | null {
@@ -69,6 +70,7 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
       routine_config: null,
       nutrition_config: null,
       supplement_config: null,
+      preferred_meal_count: null,
     };
   }
 
@@ -97,5 +99,7 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
           )
         : (rowNutrition ?? fromMemory.nutrition_config),
     routine_config: rowRoutine ?? fromMemory.routine_config,
+    preferred_meal_count:
+      coerceDbNumeric(row?.preferred_meal_count) ?? fromMemory.preferred_meal_count ?? null,
   };
 }
