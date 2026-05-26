@@ -63,6 +63,8 @@ export type TrainingPlannedWindowOkViewModel = {
   executed: ExecutedWorkout[];
   /** True when executed list was recovered through server admin fallback. */
   executedAdminFallbackUsed?: boolean;
+  /** Righe `executed_workouts` escluse dal filtro Settings → fonte training. */
+  executedHiddenBySourcePreference?: number;
   /** Debug aid: first executed day keys returned by API. */
   executedSampleDates?: string[];
   /** Conteggi per `planned[].provenance` (demo SQL / builder / …). */

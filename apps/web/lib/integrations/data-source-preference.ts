@@ -129,6 +129,12 @@ export function preferredExecutedWorkoutSourcePrefixes(map: DataSourcePreference
   return [`api_sync:${p}:`];
 }
 
+/** Import espliciti da file: sempre visibili in calendario/analytics (non sono sync device). */
+export function isUserFileImportExecutedSource(source: string | null | undefined): boolean {
+  if (typeof source !== "string" || source.length === 0) return false;
+  return source === "file_import" || source.startsWith("file_import:");
+}
+
 /** Vero se la `source` di un executed_workout matcha la preferenza cliente. */
 export function executedWorkoutSourceMatchesPreference(
   map: DataSourcePreferenceMap,
@@ -136,6 +142,7 @@ export function executedWorkoutSourceMatchesPreference(
 ): boolean {
   const prefixes = preferredExecutedWorkoutSourcePrefixes(map);
   if (!prefixes) return true;
+  if (isUserFileImportExecutedSource(source)) return true;
   if (typeof source !== "string" || source.length === 0) return false;
   for (const prefix of prefixes) {
     if (source === prefix) return true;

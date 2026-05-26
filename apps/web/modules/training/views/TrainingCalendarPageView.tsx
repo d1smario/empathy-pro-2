@@ -238,6 +238,7 @@ export default function TrainingCalendarPageView() {
     plannedN: number;
     executedN: number;
     executedFallback?: boolean;
+    executedHiddenByPreference?: number;
     sampleDates?: string[];
     apiError?: string;
     resFrom?: string;
@@ -358,6 +359,7 @@ export default function TrainingCalendarPageView() {
         plannedN: p.length,
         executedN: ex.length,
           executedFallback: json.executedAdminFallbackUsed ?? false,
+          executedHiddenByPreference: json.executedHiddenBySourcePreference ?? 0,
           sampleDates: Array.isArray(json.executedSampleDates) ? json.executedSampleDates : [],
         resFrom: json.from,
         resTo: json.to,
@@ -859,6 +861,9 @@ export default function TrainingCalendarPageView() {
           <span className="text-slate-500">diag calendario · </span>
           athleteId={athleteId} · HTTP {fetchDiag.status} · planned={fetchDiag.plannedN} · executed={fetchDiag.executedN}
           {fetchDiag.executedFallback ? <span className="text-amber-300"> · executedAdminFallbackUsed=true</span> : null}
+          {(fetchDiag.executedHiddenByPreference ?? 0) > 0 ? (
+            <span className="text-amber-300"> · hiddenBySourcePref={fetchDiag.executedHiddenByPreference}</span>
+          ) : null}
           {fetchDiag.resFrom && fetchDiag.resTo ? (
             <>
               {" "}
@@ -873,6 +878,19 @@ export default function TrainingCalendarPageView() {
             </span>
           ) : null}
           {fetchDiag.apiError ? <span className="text-amber-400/90"> · {fetchDiag.apiError}</span> : null}
+        </p>
+      ) : null}
+
+      {dayExecuted.some(
+        (w) =>
+          (w.durationMinutes ?? 0) <= 0 &&
+          typeof w.source === "string" &&
+          w.source.startsWith("file_import"),
+      ) ? (
+        <p className="mb-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="status">
+          Import FIT su questo giorno salvato come EXEC senza durata (import precedente in modalità «Attività»). Elimina la
+          riga o re-importa lo stesso file con modalità <strong className="text-amber-50">Auto</strong> per creare la seduta
+          PLAN con struttura Builder.
         </p>
       ) : null}
 

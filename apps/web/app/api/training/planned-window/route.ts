@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
     let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
     let wellnessByDate: WellnessByDateMap | undefined;
     let executedAdminFallbackUsed = false;
+    let executedHiddenBySourcePreference = 0;
 
     if (includeAthleteContext) {
       const batch = await Promise.all([
@@ -107,12 +108,14 @@ export async function GET(req: NextRequest) {
       ]);
       plannedRes = batch[0].planned;
       executedRes = batch[0].executed;
+      executedHiddenBySourcePreference = batch[0].executedHiddenBySourcePreference ?? 0;
       athleteMemory = batch[1];
       wellnessByDate = batch[2]?.wellnessByDate;
     } else {
       const [windowRes, wellnessRes] = await Promise.all([windowPromise, wellnessPromise]);
       plannedRes = windowRes.planned;
       executedRes = windowRes.executed;
+      executedHiddenBySourcePreference = windowRes.executedHiddenBySourcePreference ?? 0;
       wellnessByDate = wellnessRes?.wellnessByDate;
     }
 
@@ -194,6 +197,7 @@ export async function GET(req: NextRequest) {
         twinContextStrip,
         physiologyState,
         executedAdminFallbackUsed,
+        executedHiddenBySourcePreference,
         ...(includeWellness ? { wellnessByDate: wellnessByDate ?? {} } : {}),
       },
       { headers: NO_STORE },

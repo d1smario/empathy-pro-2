@@ -28,7 +28,11 @@ export async function queryPlannedExecutedWindow(
   from: string,
   to: string,
   dataSourcePreferences?: DataSourcePreferenceMap | null,
-): Promise<{ planned: WindowQueryResult; executed: WindowQueryResult }> {
+): Promise<{
+  planned: WindowQueryResult;
+  executed: WindowQueryResult;
+  executedHiddenBySourcePreference: number;
+}> {
   const prefs =
     dataSourcePreferences === undefined
       ? await loadDataSourcePreferenceMap(db, athleteId)
@@ -60,6 +64,7 @@ export async function queryPlannedExecutedWindow(
   return {
     planned: { data: planned.data as unknown[] | null, error: planned.error },
     executed: { data: filteredExec, error: executed.error },
+    executedHiddenBySourcePreference: Math.max(0, rawExec.length - filteredExec.length),
   };
 }
 

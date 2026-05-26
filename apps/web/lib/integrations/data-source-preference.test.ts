@@ -78,6 +78,8 @@ test("executedWorkoutSourceMatchesPreference filtra coerentemente per provider s
   assert.equal(executedWorkoutSourceMatchesPreference(pref, "api_sync:wahoo:workouts"), false);
   assert.equal(executedWorkoutSourceMatchesPreference(pref, "manual"), false);
   assert.equal(executedWorkoutSourceMatchesPreference(pref, null), false);
+  assert.equal(executedWorkoutSourceMatchesPreference(pref, "file_import"), true);
+  assert.equal(executedWorkoutSourceMatchesPreference(pref, "file_import:fit:other"), true);
 });
 
 test("preferenza manual lascia passare upload manuali e file_import", () => {
