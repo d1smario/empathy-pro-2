@@ -17,7 +17,8 @@ import {
   pro2BuilderContractToChartSegments,
 } from "@/lib/training/builder/pro2-session-notes";
 import type { LifestylePracticeCategory } from "@/lib/training/builder/lifestyle-playbook-catalog";
-import { effectiveMetabolicKcalForPlannedContract } from "@/lib/training/physiology/session-metabolic-kcal";
+import { PlannedSessionKpiStrip } from "@/components/training/PlannedSessionKpiStrip";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
 import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -130,10 +131,19 @@ export function CalendarPlannedBuilderDetail({
     () => effectiveTssDisplayFromPro2Contract(contract, workout.tssTarget),
     [contract, workout.tssTarget],
   );
-  const titleKcal = useMemo(
-    () => effectiveMetabolicKcalForPlannedContract({ contract, kcalTargetDb: workout.kcalTarget, athleteFtpWatts }),
-    [contract, workout.kcalTarget, athleteFtpWatts],
+  const sessionMetrics = useMemo(
+    () =>
+      resolvePlannedSessionMetrics({
+        contract,
+        durationMinutesDb: workout.durationMinutes,
+        tssTargetDb: workout.tssTarget,
+        kcalTargetDb: workout.kcalTarget,
+        kjTargetDb: workout.kjTarget,
+        athleteFtpWatts,
+      }),
+    [contract, workout.durationMinutes, workout.tssTarget, workout.kcalTarget, workout.kjTarget, athleteFtpWatts],
   );
+  const titleKcal = sessionMetrics.kcal > 0 ? sessionMetrics.kcal : null;
   const chartFtpW = athleteFtpWatts ?? contract?.renderProfile?.ftpW;
 
   const sessionHref = `/training/session/${workout.date}`;
@@ -484,6 +494,7 @@ export function CalendarPlannedBuilderDetail({
 
           {hasBlockChart ? (
             <div className="mt-4 space-y-4">
+              <PlannedSessionKpiStrip metrics={sessionMetrics} />
               <SessionBlockIntensityChart
                 segments={segments}
                 title={

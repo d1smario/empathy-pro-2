@@ -3,8 +3,13 @@ import "server-only";
 import { decompressTrainingImportBuffer } from "@/lib/training/import-parser";
 import { csvHeaderLooksLikePlannedProgramExport, jsonTextLooksLikePlannedProgram } from "@/lib/training/planned-import-parser";
 import { scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
+import {
+  normalizeTrainingImportIntent,
+  type TrainingImportIntent,
+} from "@/lib/training/training-import-intent";
 
-export type TrainingImportIntent = "auto" | "executed" | "planned";
+export type { TrainingImportIntent } from "@/lib/training/training-import-intent";
+export { normalizeTrainingImportIntent } from "@/lib/training/training-import-intent";
 
 export type TrainingImportResolvedRoute =
   | { kind: "executed_activity" }
@@ -32,13 +37,6 @@ function fitPayloadLooksLikeWorkoutPlan(payload: Buffer): boolean {
   return false;
 }
 
-export function normalizeTrainingImportIntent(raw: unknown): TrainingImportIntent {
-  const s = String(raw ?? "").trim().toLowerCase();
-  if (s === "planned" || s === "plan") return "planned";
-  if (s === "auto") return "auto";
-  return "executed";
-}
-
 /**
  * Decide se il POST `/api/training/import` deve seguire il ramo eseguito, programma tabellare o seduta strutturata.
  * `buffer` è quello originale upload (gestione `.gz` interna).
@@ -57,6 +55,9 @@ export function resolveTrainingImportRoute(input: {
   const ext = fileExtension(effectiveName);
 
   if (input.intent === "executed") {
+    if (ext === "fit" && fitPayloadLooksLikeWorkoutPlan(payload)) {
+      return { kind: "planned_structured", format: "fit_workout" };
+    }
     return { kind: "executed_activity" };
   }
 

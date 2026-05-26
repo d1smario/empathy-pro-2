@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
-import {
-  effectivePlannedWorkoutNutritionMetrics,
-  parsePro2BuilderSessionFromNotes,
-} from "@/lib/training/builder/pro2-session-notes";
+import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
+import { dedupePlannedTrainingForNutritionEnergy } from "@/lib/nutrition/planned-training-energy-dedupe";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 
 export const runtime = "nodejs";
 
@@ -69,7 +68,9 @@ export async function GET(req: NextRequest) {
     if (planErr) return NextResponse.json({ error: planErr.message }, { status: 500, headers: NO_STORE });
     if (plannedErr) return NextResponse.json({ error: plannedErr.message }, { status: 500, headers: NO_STORE });
 
-    const sessions = plannedRows ?? [];
+    const sessions = dedupePlannedTrainingForNutritionEnergy(
+      (plannedRows ?? []) as Array<{ notes?: string | null }>,
+    ) as NonNullable<typeof plannedRows>;
     const explicit = (planRow as Record<string, unknown> | null) ?? null;
     const explicitKcal = explicit != null ? Number(explicit.kcal_target ?? 0) : 0;
 
@@ -101,11 +102,11 @@ export async function GET(req: NextRequest) {
       const plannedTraining = sessions.map((r) => {
         const row = r as Record<string, unknown>;
         const builderSession = parsePro2BuilderSessionFromNotes(typeof row.notes === "string" ? row.notes : null);
-        const m = effectivePlannedWorkoutNutritionMetrics({
+        const m = resolvePlannedSessionMetrics({
+          contract: builderSession,
           durationMinutesDb: Number(row.duration_minutes) || 0,
           tssTargetDb: Number(row.tss_target) || 0,
           kcalTargetDb: Number(row.kcal_target) || 0,
-          builderSession,
           athleteFtpWatts: physio?.ftpWatts ?? null,
         });
         return {

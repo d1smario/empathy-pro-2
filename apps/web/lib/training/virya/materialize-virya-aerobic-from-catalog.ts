@@ -6,6 +6,7 @@ import { buildStarterContractFromPreset } from "@/lib/training/library/starter-p
 import { scaleLibraryContract } from "@/lib/training/library/scale-library-contract";
 import { viryaDisciplineToCatalogDiscipline } from "@/lib/training/virya/virya-catalog-discipline";
 import { resolveViryaCatalogPreset } from "@/lib/training/virya/virya-catalog-preset-resolver";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 
 function computeViryaSlotLoadScale(
   contract: Pro2BuilderSessionContract,
@@ -30,7 +31,7 @@ export function scaleCatalogContractForViryaSlot(
   const loadScaleRaw = computeViryaSlotLoadScale(contract, targetMinutes, targetTss);
   const scaled = scaleLibraryContract(contract, loadScaleRaw, { clampMin: 0.5, clampMax: 1.55 });
   const durationSec = Math.max(60, targetMinutes * 60);
-  return {
+  const draft: Pro2BuilderSessionContract = {
     ...scaled,
     plannedSessionDurationMinutes: targetMinutes,
     summary: scaled.summary
@@ -39,13 +40,33 @@ export function scaleCatalogContractForViryaSlot(
           durationSec,
           tss: targetTss,
           kcal: targetKcal,
-          kj: Math.round(targetTss * 39),
+          kj: scaled.summary.kj,
           avgPowerW:
             scaled.summary.avgPowerW > 0
               ? Math.max(80, Math.round((targetTss * 1000) / Math.max(durationSec / 3600, 0.25) / 36))
               : scaled.summary.avgPowerW,
         }
       : scaled.summary,
+  };
+  const metrics = resolvePlannedSessionMetrics({
+    contract: draft,
+    durationMinutesDb: targetMinutes,
+    tssTargetDb: targetTss,
+    kcalTargetDb: targetKcal,
+    athleteFtpWatts: draft.renderProfile?.ftpW,
+  });
+  return {
+    ...draft,
+    summary: draft.summary
+      ? {
+          ...draft.summary,
+          durationSec,
+          tss: metrics.tss > 0 ? metrics.tss : targetTss,
+          kcal: metrics.kcal > 0 ? metrics.kcal : targetKcal,
+          kj: metrics.kj > 0 ? metrics.kj : draft.summary.kj,
+          avgPowerW: metrics.avgPowerW ?? draft.summary.avgPowerW,
+        }
+      : draft.summary,
   };
 }
 

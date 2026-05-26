@@ -5,6 +5,7 @@
  */
 import type { AdaptationTarget } from "@/lib/training/engine";
 import { metabolicKcalFromMechanicalKj, mechanicalKjFromIntensitySegments } from "@empathy/domain-physiology";
+import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
 import { materializeEngineSessionToSlimBlocks } from "@/lib/training/engine/materialize-engine-session-to-slim-blocks";
 import type {
   Pro2BuilderBlockContract,
@@ -395,23 +396,8 @@ export function summarizeTrainingBlocks(
 ): Pro2SessionSummary {
   const flatSegs = blocks.flatMap((b) => expandBlockSegments(b, opts));
   const durationSec = flatSegs.reduce((sum, s) => sum + s.seconds, 0);
-  const tss = Math.round(
-    blocks.reduce((sum, b) => {
-      const avgIntensity =
-        b.kind === "steady"
-          ? intensityScore(b.intensity)
-          : b.kind === "ramp"
-            ? (intensityScore(b.startIntensity) + intensityScore(b.endIntensity)) / 2
-            : b.kind === "interval2"
-              ? (intensityScore(b.intensity) + intensityScore(b.intensity2)) / 2
-              : b.kind === "pyramid"
-                ? (intensityScore(zoneForTargetValue(b.pyramidStartTarget, opts.unit, opts.ftpW, opts.hrMax)) +
-                    intensityScore(zoneForTargetValue(b.pyramidEndTarget, opts.unit, opts.ftpW, opts.hrMax))) /
-                  2
-                : (intensityScore(b.intensity) + intensityScore(b.intensity2) + intensityScore(b.intensity3)) / 3;
-      const mins = expandBlockSegments(b, opts).reduce((acc, seg) => acc + seg.seconds, 0) / 60;
-      return sum + mins * b.loadFactor * (0.45 + avgIntensity * 0.2);
-    }, 0),
+  const tss = estimateTssFromSegments(
+    flatSegs.map((s) => ({ durationSeconds: s.seconds, intensityLabel: s.intensity })),
   );
   const kj = mechanicalKjFromIntensitySegments(
     flatSegs.map((s) => ({ durationSeconds: s.seconds, intensityLabel: s.intensity })),

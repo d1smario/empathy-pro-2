@@ -59,6 +59,8 @@ Con env pubblico valorizzati, il middleware **protegge** le route modulo (`/dash
 | D2 | Builder | Genera sessione (UI `/training/builder`) → `POST /api/training/engine/generate` | **200**, payload con struttura sessione / summary (TSS o blocchi secondo contratto) |
 | D3 | Salva su calendario | Da UI “salva / calendario” o `POST /api/training/planned/insert` | **200**; nuova riga visibile in calendario o in `planned-window` per quella data |
 | D4 | VIRYA | UI `/training/vyria` o virya → `GET /api/training/virya-context?athleteId=` | **200**, campi tipo `strategyHints`, `physiology`, `readSpineCoverage` (trace persistence può essere vuota se manca knowledge foundation — non è necessariamente fallimento) |
+| D5 | Import FIT workout (Auto) | Calendar → Import → **Auto** → file `.fit` workout | Chip **PLAN** sul giorno, durata **> 0**, dettaglio con KPI + grafico blocchi |
+| D6 | Builder domina VIRYA | Giorno con VIRYA → salva Builder | Solo seduta Builder in `planned-window`; nutrition giorno non somma VIRYA+Builder |
 
 ---
 

@@ -6,6 +6,22 @@ import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 /** Sotto ~3 MB resta il multipart verso `/api/training/import` (tetto Vercel ~4.5 MB). Sopra: upload diretto a Supabase Storage. */
 const TRAINING_IMPORT_VERCEL_SAFE_MULTIPART_BYTES = 3 * 1024 * 1024;
 
+export type TrainingImportFileResult = {
+  status?: string;
+  imported?: Record<string, unknown> | null;
+  athleteMemory?: unknown;
+  athleteMemoryError?: string;
+  ingestion?: unknown;
+  parsed?: Record<string, unknown> | null;
+  visibilityCheck?: { athlete_id: string; date: string };
+  importJobId?: string | null;
+  structured?: boolean;
+  structuredFormat?: string;
+  firstDate?: string | null;
+  importedCount?: number;
+  structuredCompanion?: { status: string; message?: string; mode?: string; reason?: string };
+};
+
 type TrainingImportSignOk = { bucket: string; path: string; token: string };
 
 async function requestTrainingImportSignUrl(input: { athleteId: string; file: File }): Promise<TrainingImportSignOk> {
@@ -86,10 +102,12 @@ export async function importExecutedWorkoutFile(input: {
   athleteId: string;
   file: File;
   date?: string;
+  /** Giorno calendario per import strutturato in modalità auto/planned. */
+  plannedDate?: string;
   notes?: string;
   device?: string;
   plannedWorkoutId?: string;
-  /** Default `executed` — for import tabellare / strutturato usare `importPlannedProgramFile`. */
+  /** Default `executed` — `auto` rileva FIT workout → PLAN. */
   importIntent?: "executed" | "auto";
 }) {
   const intent = input.importIntent ?? "executed";
@@ -104,6 +122,7 @@ export async function importExecutedWorkoutFile(input: {
       file: input.file,
       sign,
       date: input.date,
+      plannedDate: input.plannedDate ?? input.date,
       notes: input.notes,
       device: input.device,
       plannedWorkoutId: input.plannedWorkoutId,
@@ -112,16 +131,7 @@ export async function importExecutedWorkoutFile(input: {
     if (!response.ok) {
       throw new Error(json.error ?? "Import eseguito non riuscito");
     }
-    return json as {
-      status: "ok";
-      imported?: Record<string, unknown> | null;
-      athleteMemory?: unknown;
-      athleteMemoryError?: string;
-      ingestion?: unknown;
-      parsed?: Record<string, unknown> | null;
-      visibilityCheck?: { athlete_id: string; date: string };
-      importJobId?: string | null;
-    };
+    return json as TrainingImportFileResult;
   }
 
   const form = new FormData();
@@ -129,6 +139,7 @@ export async function importExecutedWorkoutFile(input: {
   form.set("file", input.file);
   form.set("importIntent", intent);
   if (input.date) form.set("date", input.date);
+  if (input.plannedDate ?? input.date) form.set("plannedDate", input.plannedDate ?? input.date ?? "");
   if (input.notes) form.set("notes", input.notes);
   if (input.device) form.set("device", input.device);
   if (input.plannedWorkoutId) form.set("plannedWorkoutId", input.plannedWorkoutId);
@@ -142,16 +153,7 @@ export async function importExecutedWorkoutFile(input: {
   if (!response.ok) {
     throw new Error(json.error ?? "Import eseguito non riuscito");
   }
-  return json as {
-    status: "ok";
-    imported?: Record<string, unknown> | null;
-    athleteMemory?: unknown;
-    athleteMemoryError?: string;
-    ingestion?: unknown;
-    parsed?: Record<string, unknown> | null;
-    visibilityCheck?: { athlete_id: string; date: string };
-    importJobId?: string | null;
-  };
+  return json as TrainingImportFileResult;
 }
 
 export async function importPlannedProgramFile(input: {

@@ -7,6 +7,7 @@ import {
   resolveDailyBuilderLoadAdaptation,
   scalePlannedWorkoutTargets,
 } from "@/lib/training/builder/daily-builder-load-adaptation";
+import { isViryaPlannedWorkout } from "@/lib/training/virya/virya-planned-notes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -65,8 +66,10 @@ export async function GET(req: NextRequest) {
       notes: string | null;
     }>;
 
+    const nonViryaRows = plannedRows.filter((r) => !isViryaPlannedWorkout(r.notes));
     const targetRow =
       (replacePlannedId ? plannedRows.find((r) => r.id === replacePlannedId) : null) ??
+      nonViryaRows[0] ??
       plannedRows[0] ??
       null;
 

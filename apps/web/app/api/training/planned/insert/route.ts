@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import type { PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 import { insertSinglePlannedWorkout } from "@/lib/training/planned/insert-planned-workout";
+import { purgeViryaPlannedWorkoutsOnDay } from "@/lib/training/planned/purge-virya-planned-on-day";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,9 +34,23 @@ export async function POST(req: NextRequest) {
       kj_target: raw.kj_target == null ? null : Number(raw.kj_target),
       notes: raw.notes == null ? null : String(raw.notes),
     };
+
+    const notesText = row.notes ?? "";
+    const isBuilderInsert =
+      notesText.includes("[PRO2_BUILDER") || notesText.includes("BUILDER_SESSION_JSON");
+    let purgedViryaOnDay = 0;
+    const purgeViryaOnDay = (raw as { purge_virya_on_day?: boolean }).purge_virya_on_day;
+    if (isBuilderInsert && purgeViryaOnDay !== false) {
+      const purge = await purgeViryaPlannedWorkoutsOnDay(db, athleteId, row.date);
+      purgedViryaOnDay = purge.purgedCount;
+    }
+
     const { id } = await insertSinglePlannedWorkout(db, row);
 
-    return NextResponse.json({ ok: true as const, athleteId, plannedWorkoutId: id }, { headers: NO_STORE });
+    return NextResponse.json(
+      { ok: true as const, athleteId, plannedWorkoutId: id, purgedViryaOnDay },
+      { headers: NO_STORE },
+    );
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ ok: false as const, error: err.message }, { status: err.status, headers: NO_STORE });

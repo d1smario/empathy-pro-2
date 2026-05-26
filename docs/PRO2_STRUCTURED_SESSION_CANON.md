@@ -50,6 +50,23 @@ generateTrainingSession / VIRYA brief
 
 **UI Calendar / Session:** `expandContractToLadderSteps` in `pro2-structured-interval-ladder.ts` — unica espansione per grafico (`ladderStepsToChartSegments`), tabella (`ladderStepsToStructuredIntervalRows`) e ZWO.
 
+## Builder domina VIRYA (calendario + energia)
+
+- **VIRYA** resta visibile finché esistono righe `[VIRYA:…]` in `planned_workouts`.
+- **Salvataggio Builder** (`POST /api/training/planned/insert` con contratto in `notes`) **elimina** tutte le righe VIRYA del **giorno** prima dell’insert (`purgeViryaPlannedWorkoutsOnDay`).
+- **Nutrizione / meal plan:** `dedupePlannedTrainingForNutritionEnergy` esclude VIRYA se nel giorno c’è già una seduta Builder (fallback se purge non è andato a buon fine).
+- **Metriche unificate:** `resolvePlannedSessionMetrics` — kJ/kcal/TSS/durata per calendario, nutrition API, fueling (FTP atleta da memoria fisiologica).
+
+## Import file (calendario)
+
+| Modalità UI | Esito tipico |
+|-------------|----------------|
+| **Auto** (default) | FIT/ZWO/ERG/MRC workout → **PLAN** + `BUILDER_SESSION_JSON`; FIT/TCX/GPX attività → **EXEC** |
+| **Calendario (PLAN)** | Seduta strutturata o programma tabellare |
+| **Attività (EXEC)** | Traccia registrata; FIT workout-shaped viene comunque instradato a PLAN (no 0 min) |
+
+Vedi `docs/TRAINING_CALENDAR_SYSTEM_MAP.md`.
+
 **Note coach → Zwift:** `block.notes` sul **primo step** di ogni blocco logico → `coachNote` / `textEvents` in export; XML annidato `<textevent timeoffset="0" message="…"/>` dentro `SteadyState` / `Ramp` (helper `zwo-step-text-events.ts`). Nessun messaggio automatico «Riscaldamento/Lavoro».
 
 ## Gap risolti (2026-05)

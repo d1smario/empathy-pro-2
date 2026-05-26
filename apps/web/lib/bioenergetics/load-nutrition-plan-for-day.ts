@@ -3,10 +3,9 @@ import type { PlannedWorkout } from "@empathy/contracts";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
 import { defaultFoodDiaryEntryTimeHmsForMealSlot } from "@/lib/nutrition/food-diary-entry-time";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
-import {
-  effectivePlannedWorkoutNutritionMetrics,
-  parsePro2BuilderSessionFromNotes,
-} from "@/lib/training/builder/pro2-session-notes";
+import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
+import { dedupePlannedTrainingForNutritionEnergy } from "@/lib/nutrition/planned-training-energy-dedupe";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_ORDER } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { mealTimesFromRoutineWeekPlanForDate, type FlatMealTimes } from "@/lib/nutrition/routine-week-plan-meal-times";
@@ -163,14 +162,20 @@ export async function loadNutritionPlanDayContext(
     const profile = profileRes.data as Record<string, unknown> | null;
     const memory = await resolveAthleteMemory(athleteId).catch(() => null);
     const athleteFtpW = memory?.physiology?.physiologicalProfile?.ftpWatts ?? null;
-    const plannedTraining = plannedWorkouts.map((p) => {
+    const dedupedPlanned = dedupePlannedTrainingForNutritionEnergy(
+      plannedWorkouts.map((p) => ({
+        ...p,
+        notes: (p as { notes?: string | null }).notes ?? null,
+      })),
+    );
+    const plannedTraining = dedupedPlanned.map((p) => {
       const notes = (p as { notes?: string | null }).notes ?? null;
       const builderSession = parsePro2BuilderSessionFromNotes(notes);
-      const m = effectivePlannedWorkoutNutritionMetrics({
+      const m = resolvePlannedSessionMetrics({
+        contract: builderSession,
         durationMinutesDb: Number(p.durationMinutes) || 0,
         tssTargetDb: Number(p.tssTarget) || 0,
         kcalTargetDb: Number(p.kcalTarget) || 0,
-        builderSession,
         athleteFtpWatts: athleteFtpW,
       });
       return {

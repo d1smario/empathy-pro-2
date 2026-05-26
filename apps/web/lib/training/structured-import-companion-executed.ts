@@ -9,6 +9,7 @@ import { estimateTssFromWattBlocks } from "@/lib/training/builder/tss-estimate";
 import { normalizeImportedTraceSummary } from "@/lib/training/import-normalizer";
 import { parseTrainingFile } from "@/lib/training/import-parser";
 import type { StructuredIntervalRow } from "@/lib/training/planned-structured-interval-csv";
+import { metabolicKcalFromMechanicalKj } from "@empathy/domain-physiology";
 
 function buildCompanionExternalId(input: { athleteId: string; date: string; fileChecksumSha1: string }): string {
   const digest = createHash("sha1")
@@ -139,7 +140,7 @@ function buildSyntheticExecutedPayload(input: {
       ftpW,
     );
     const kj = Math.round(totalJ / 1000);
-    const kcal = Math.round(Math.max(0, tss) * 9.3);
+    const kcal = metabolicKcalFromMechanicalKj(kj);
     const power = buildSyntheticPowerSeriesFromIntervalLadder(ladder);
     const traceSummary: Record<string, unknown> = {
       source_format: "structured_companion_synthetic",

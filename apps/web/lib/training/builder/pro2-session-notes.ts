@@ -8,7 +8,7 @@ import {
 import type { Pro2SessionMultilevelSource } from "@/lib/training/session-multilevel-analysis-strip";
 import { pro2BuilderContractToExpandedChartSegments } from "@/lib/training/builder/pro2-contract-chart-segments";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
-import { metabolicKcalFromPro2BuilderContract } from "@/lib/training/physiology/session-metabolic-kcal";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 
 /**
  * Estrae il contratto Pro 2 serializzato in `notes` (stesso tag URI-encoded di V1).
@@ -130,14 +130,12 @@ export function effectivePlannedWorkoutNutritionMetrics(input: {
   /** FTP memoria fisiologica atleta attivo — obbligatoria per kcal corrette su meal plan. */
   athleteFtpWatts?: number | null;
 }): { durationMinutes: number; tss: number; kcal: number } {
-  const fallbackDur = Math.max(0, asFiniteNumber(input.durationMinutesDb) ?? 0);
-  const duration = effectiveDurationMinutesFromPro2Contract(input.builderSession ?? null, fallbackDur);
-  const fallbackTss = Math.max(0, asFiniteNumber(input.tssTargetDb) ?? 0);
-  const tss = effectiveTssDisplayFromPro2Contract(input.builderSession ?? null, fallbackTss);
-  const dbKcal = Math.max(0, asFiniteNumber(input.kcalTargetDb) ?? 0);
-  const fromMechanical = metabolicKcalFromPro2BuilderContract(input.builderSession ?? null, {
+  const m = resolvePlannedSessionMetrics({
+    contract: input.builderSession ?? null,
+    durationMinutesDb: input.durationMinutesDb,
+    tssTargetDb: input.tssTargetDb,
+    kcalTargetDb: input.kcalTargetDb,
     athleteFtpWatts: input.athleteFtpWatts,
   });
-  const kcal = fromMechanical > 0 ? fromMechanical : dbKcal;
-  return { durationMinutes: duration, tss, kcal };
+  return { durationMinutes: m.durationMinutes, tss: m.tss, kcal: m.kcal };
 }

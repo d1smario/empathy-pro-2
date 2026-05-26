@@ -19,6 +19,7 @@ import type {
   ViryaSessionRole,
   ViryaSportFamily,
 } from "@/lib/training/virya/virya-builder-session-brief";
+import { mechanicalKjFromAvgPower, metabolicKcalFromMechanicalKj } from "@empathy/domain-physiology";
 
 const WEEKDAY_LABELS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"] as const;
 
@@ -58,8 +59,15 @@ export function formatViryaBriefMetaLine(
     .join(";");
 }
 
-export function kcalFromLoadTarget(load: number): number {
-  return Math.max(0, Math.round(Math.max(0, load) * 9.3));
+/** Proxy energetico da TSS target VIRYA (senza contratto) — stessa catena kJ→kcal del builder. */
+export function kcalFromLoadTarget(load: number, durationMinutes = 60): number {
+  const tss = Math.max(0, load);
+  const sec = Math.max(60, Math.round(durationMinutes) * 60);
+  const hours = sec / 3600;
+  const ifN = hours > 0 ? Math.sqrt(Math.max(0, tss) / (hours * 100)) : 0;
+  const powerW = Math.round(ifN * 250);
+  const kj = mechanicalKjFromAvgPower(powerW, sec);
+  return metabolicKcalFromMechanicalKj(kj);
 }
 
 export function gymDurationMinutesForBrief(

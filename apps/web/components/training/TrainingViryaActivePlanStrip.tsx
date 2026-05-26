@@ -144,6 +144,12 @@ export function TrainingViryaActivePlanStrip({
             </Pro2Link>
           </>
         ) : null}
+        {activeTag && !plans.some((p) => p.tag === activeTag) ? (
+          <p className="mt-2 w-full text-xs text-amber-200/90">
+            Il piano VIRYA preferito non ha più sedute in calendario (es. sostituito da Builder). Scegli un altro piano o
+            ripubblica da VIRYA.
+          </p>
+        ) : null}
       </div>
     </div>
   );

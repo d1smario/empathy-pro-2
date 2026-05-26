@@ -6,6 +6,7 @@ import {
   parsePro2BuilderSessionFromNotes,
 } from "@/lib/training/builder/pro2-session-notes";
 import { effectiveMetabolicKcalForPlannedContract } from "@/lib/training/physiology/session-metabolic-kcal";
+import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
 import type { SportGlyphId } from "@/lib/training/builder/sport-glyph-id";
 import { resolveSportGlyphFromSportString } from "@/lib/training/session-detail-summary";
 
@@ -170,7 +171,22 @@ export function plannedCalendarChipViewModel(
   const minutes = effectiveDurationMinutesFromPro2Contract(contract, workout.durationMinutes);
   const load = effectiveTssDisplayFromPro2Contract(contract, workout.tssTarget);
   const kcal = effectivePlannedKcalForCalendar(contract, load, workout.kcalTarget, opts?.athleteFtpWatts);
+  const metrics = resolvePlannedSessionMetrics({
+    contract,
+    durationMinutesDb: workout.durationMinutes,
+    tssTargetDb: workout.tssTarget,
+    kcalTargetDb: workout.kcalTarget,
+    kjTargetDb: workout.kjTarget,
+    athleteFtpWatts: opts?.athleteFtpWatts,
+  });
   const title = shortTitle(contract, workout);
+  const detailWithKj =
+    metrics.kj > 0
+      ? buildDetailLine(family, contract, title, kcal).replace(
+          `kcal ${kcal != null && kcal > 0 ? String(kcal) : "—"}`,
+          `kJ ${metrics.kj} · kcal ${kcal != null && kcal > 0 ? String(kcal) : metrics.kcal > 0 ? String(metrics.kcal) : "—"}`,
+        )
+      : buildDetailLine(family, contract, title, kcal);
   return {
     glyph,
     sportLabel: sportLabel(glyph, family, workout),
@@ -179,7 +195,7 @@ export function plannedCalendarChipViewModel(
     load,
     kcal,
     title,
-    detailLine: buildDetailLine(family, contract, title, kcal),
+    detailLine: detailWithKj,
     chipClass: chipClassForFamily(family),
   };
 }

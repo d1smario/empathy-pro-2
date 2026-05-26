@@ -27,6 +27,7 @@ import {
   plannedCalendarChipViewModel,
   uniquePlannedSportGlyphs,
 } from "@/lib/training/planned-workout-display";
+import { isViryaPlannedWorkout } from "@/lib/training/virya/virya-planned-notes";
 import { useAthleteFtpWatts } from "@/lib/training/physiology/use-athlete-ftp-watts";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
@@ -223,7 +224,7 @@ export default function TrainingCalendarPageView() {
   const [wellnessByDate, setWellnessByDate] = useState<WellnessByDateMap>({});
   const [showFileImport, setShowFileImport] = useState(false);
   const [fileImportForm, setFileImportForm] = useState({
-    mode: "executed" as "executed" | "planned",
+    mode: "auto" as "auto" | "executed" | "planned",
     date: "",
     device: "auto",
     notes: "",
@@ -500,6 +501,10 @@ export default function TrainingCalendarPageView() {
 
   const dayPlanned = plannedByDate.get(selectedDate) ?? [];
   const dayExecuted = executedByDate.get(selectedDate) ?? [];
+  const builderReplacePlanned = useMemo(
+    () => dayPlanned.find((w) => !isViryaPlannedWorkout(w.notes ?? null)) ?? dayPlanned[0] ?? null,
+    [dayPlanned],
+  );
 
   const calendarLibraryContract = useMemo(() => {
     const first = dayPlanned[0];
@@ -570,38 +575,54 @@ export default function TrainingCalendarPageView() {
           selectedDate ||
           null;
       } else {
-        /** Sempre un giorno canonico: la cella selezionata vince se il campo data è vuoto (evita FIT/TCX su “altro” giorno). */
-        const effectiveExecutedDate = normalizeDateKey(fileImportForm.date) || selectedDate;
+        const effectiveDate = normalizeDateKey(fileImportForm.date) || selectedDate;
+        const importIntent = fileImportForm.mode === "auto" ? "auto" : "executed";
         const json = await importExecutedWorkoutFile({
           athleteId,
           file: fileImportForm.file,
-          date: effectiveExecutedDate,
+          date: effectiveDate,
+          plannedDate: effectiveDate,
           notes: fileImportForm.notes || undefined,
           device: fileImportForm.device !== "auto" ? fileImportForm.device : undefined,
+          importIntent,
         });
-        const fmt =
-          json.parsed && typeof json.parsed.format === "string"
-            ? String(json.parsed.format).toUpperCase()
-            : "FILE";
-        setSuccess(`Workout importato (${fmt}).`);
-        const imp = json.imported as { date?: string } | null | undefined;
-        const impDate =
-          (imp && typeof imp.date === "string" ? imp.date : null) ??
-          (json.parsed && typeof json.parsed.date === "string" ? json.parsed.date : null);
-        if (impDate && /^\d{4}-\d{2}-\d{2}$/.test(impDate.slice(0, 10))) {
-          const key = impDate.slice(0, 10);
-          setSelectedDate(key);
-          const d = new Date(`${key}T12:00:00`);
-          setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+        if (json.structured) {
+          const sf = typeof json.structuredFormat === "string" ? json.structuredFormat.toUpperCase() : "STRUTTURATO";
+          setSuccess(
+            `Seduta in calendario (PLAN · ${sf}) per atleta attivo · giorno ${effectiveDate}. Apri il giorno per grafico a blocchi e export ZWO/FIT.`,
+          );
+          const fd = json.firstDate;
+          if (fd && /^\d{4}-\d{2}-\d{2}$/.test(fd)) {
+            setSelectedDate(fd);
+            const d = new Date(`${fd}T12:00:00`);
+            setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+            refreshAnchor = fd;
+          } else {
+            refreshAnchor = effectiveDate;
+          }
+        } else {
+          const fmt =
+            json.parsed && typeof json.parsed.format === "string"
+              ? String(json.parsed.format).toUpperCase()
+              : "FILE";
+          setSuccess(`Workout eseguito (EXEC · ${fmt}) · giorno ${effectiveDate}.`);
+          const imp = json.imported as { date?: string } | null | undefined;
+          const impDate =
+            (imp && typeof imp.date === "string" ? imp.date : null) ??
+            (json.parsed && typeof json.parsed.date === "string" ? json.parsed.date : null);
+          if (impDate && /^\d{4}-\d{2}-\d{2}$/.test(impDate.slice(0, 10))) {
+            const key = impDate.slice(0, 10);
+            setSelectedDate(key);
+            const d = new Date(`${key}T12:00:00`);
+            setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+          }
+          const fromImpDate =
+            impDate && /^\d{4}-\d{2}-\d{2}$/.test(impDate.slice(0, 10)) ? impDate.slice(0, 10) : null;
+          const fromParsedDate = normalizeDateKey(
+            json.parsed && typeof json.parsed.date === "string" ? json.parsed.date : "",
+          );
+          refreshAnchor = fromImpDate ?? (fromParsedDate || effectiveDate || null);
         }
-        const fromImpDate =
-          impDate && /^\d{4}-\d{2}-\d{2}$/.test(impDate.slice(0, 10))
-            ? impDate.slice(0, 10)
-            : null;
-        const fromParsedDate = normalizeDateKey(
-          json.parsed && typeof json.parsed.date === "string" ? json.parsed.date : "",
-        );
-        refreshAnchor = fromImpDate ?? (fromParsedDate || effectiveExecutedDate || null);
       }
       setFileImportForm((f) => ({ ...f, file: null }));
 
@@ -1030,9 +1051,9 @@ export default function TrainingCalendarPageView() {
                 >
                   {dayPlanned.length > 0 ? "Apri Builder · aggiungi / adatta" : "Genera piano con Builder"}
                 </Pro2Link>
-                {dayPlanned[0] ? (
+                {builderReplacePlanned ? (
                   <Pro2Link
-                    href={`/training/builder?date=${encodeURIComponent(selectedDate)}&replace_planned_id=${encodeURIComponent(dayPlanned[0].id)}`}
+                    href={`/training/builder?date=${encodeURIComponent(selectedDate)}&replace_planned_id=${encodeURIComponent(builderReplacePlanned.id)}`}
                     variant="secondary"
                     className="justify-center border border-orange-400/35 bg-orange-500/10 text-orange-100"
                   >
@@ -1212,7 +1233,7 @@ export default function TrainingCalendarPageView() {
                 <Pro2SectionCard
                   accent="violet"
                   title="Import da file"
-                  subtitle="Eseguito: FIT · TCX · GPX · CSV · JSON — Programmato: CSV/JSON calendario · ZWO · ERG · MRC · FIT workout"
+                  subtitle="Auto: FIT workout → calendario (PLAN); attività → EXEC. Calendario: ZWO/ERG/MRC/CSV. Eseguito: traccia registrata."
                   icon={FileUp}
                 >
                   <form onSubmit={handleFileImportSubmit} className="space-y-4">
@@ -1223,7 +1244,7 @@ export default function TrainingCalendarPageView() {
                       className="mt-1 w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-sm text-white"
                       value={fileImportForm.mode}
                       onChange={(e) => {
-                        const mode = e.target.value as "executed" | "planned";
+                        const mode = e.target.value as "auto" | "executed" | "planned";
                         setFileImportForm((f) => ({
                           ...f,
                           mode,
@@ -1232,8 +1253,9 @@ export default function TrainingCalendarPageView() {
                         }));
                       }}
                     >
-                      <option value="executed">Workout eseguito</option>
-                      <option value="planned">Programmazione coach (planned)</option>
+                      <option value="auto">Auto (consigliato)</option>
+                      <option value="planned">Calendario · export device (PLAN)</option>
+                      <option value="executed">Attività registrata (EXEC)</option>
                     </select>
                   </label>
                   <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
@@ -1266,11 +1288,7 @@ export default function TrainingCalendarPageView() {
                   <input
                     type="file"
                     className="mt-1 w-full rounded-xl border border-dashed border-white/20 bg-black/40 px-3 py-2 text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-violet-500/20 file:px-3 file:py-1"
-                    accept={
-                      fileImportForm.mode === "planned"
-                        ? ".csv,.json,.zwo,.erg,.mrc,.fit,.fit.gz,.gz"
-                        : ".csv,.json,.tcx,.gpx,.fit,.fit.gz,.gz"
-                    }
+                    accept=".csv,.json,.tcx,.gpx,.zwo,.erg,.mrc,.fit,.fit.gz,.gz"
                     onChange={(e) => setFileImportForm((f) => ({ ...f, file: e.target.files?.[0] ?? null }))}
                   />
                 </label>
@@ -1283,9 +1301,11 @@ export default function TrainingCalendarPageView() {
                     onChange={(e) => setFileImportForm((f) => ({ ...f, date: e.target.value }))}
                   />
                   <span className="mt-1 block font-normal normal-case text-slate-500">
-                    {fileImportForm.mode === "executed"
-                      ? "Di default è il giorno selezionato sulla griglia. Cambialo solo se il file va registrato su un altro giorno."
-                      : "Per ZWO / ERG / MRC / FIT workout la seduta strutturata viene creata in questo giorno. Per CSV o JSON a più righe le date nel file restano quelle di riferimento."}
+                    {fileImportForm.mode === "auto"
+                      ? "Auto: FIT/ZWO/ERG/MRC workout → chip PLAN (export Zwift/Rouvy); FIT/TCX/GPX attività → EXEC. Giorno = cella selezionata."
+                      : fileImportForm.mode === "executed"
+                        ? "Solo tracce registrate (Analyzer). Il giorno è quello selezionato in griglia."
+                        : "Programma tabellare o seduta strutturata su questo giorno (PLAN)."}
                   </span>
                 </label>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
