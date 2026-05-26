@@ -42,6 +42,26 @@ describe("resolveNutritionDietDay", () => {
     expect(r.caloricDistribution?.lunch).toBeCloseTo(30, 0);
   });
 
+  it("legge meal_plan.caloric_split se week_plan del giorno è vuoto", () => {
+    const nc = {
+      meal_strategy: "6-meals",
+      meal_plan: {
+        caloric_split: {
+          breakfast_pct: 30,
+          lunch_pct: 30,
+          dinner_pct: 20,
+          snacks_pct: 10,
+        },
+      },
+      week_plan: {},
+    };
+    const r = resolveNutritionDietDay(nc, "2026-05-26");
+    expect(r.source).toBe("legacy_root");
+    expect(r.configured).toBe(true);
+    expect(r.mealCountMode).toBe("6");
+    expect(r.caloricDistribution?.snacks).toBeCloseTo(10, 0);
+  });
+
   it("completa % mancanti in parity Profile se c’è meal_count_mode ma nessuno split", () => {
     const nc = {
       week_plan: {

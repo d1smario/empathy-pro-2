@@ -3196,16 +3196,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               intelligentMealLoading={intelligentMealLoading}
               intelligentMealError={intelligentMealError}
               canRequestIntelligentPlan={
-                resolvedDietDay.configured &&
-                mealRows.length > 0 &&
-                Boolean(intelligentMealPlanRequest) &&
-                mealPathwayUsdaReady
+                mealRows.length > 0 && Boolean(intelligentMealPlanRequest) && mealPathwayUsdaReady
               }
               mealPathwayCatalogPending={Boolean(intelligentMealPlanRequest) && !mealPathwayUsdaReady}
               dietDayNotice={
-                resolvedDietDay.configured
+                mealRows.length > 0
                   ? null
-                  : `Configura Profile → Diet per ${resolvedDietDay.weekDayKey} (distribuzione % e numero pasti). Il generativo usa solo quel profilo, non valori fissi.`
+                  : `Imposta la distribuzione % e il numero pasti in Profile → Diet per ${resolvedDietDay.weekDayKey}, oppure salva da Nutrizione il meal plan (usa week_plan, caloric_split o meal_plan.caloric_split).`
               }
               onGenerateIntelligentMealPlan={handleGenerateIntelligentMealPlan}
               onResetIntelligentMealPlan={() => {

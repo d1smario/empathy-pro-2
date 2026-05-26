@@ -9,15 +9,16 @@ Ogni atleta ha un **Diet per giorno della settimana** in Profile. Ogni data del 
 ## Cosa legge il sistema (per data `D`)
 
 1. `weekday` da `D` (es. 2026-05-26 → `Tue`)
-2. `nutrition_config.week_plan[Tue]`:
+2. `nutrition_config.week_plan[Tue]` (Profile → Diet):
    - numero pasti (`meal_count_mode`)
-   - ripartizione % (`caloric_distribution`)
+   - ripartizione % (`caloric_distribution` o `caloric_split` sul giorno)
    - macro giorno (`daily_macros`)
    - scala energetica (`day_type_pct`)
-3. Routine → orari pasti (`routine_config.week_plan` / `meal_times`)
-4. Solver → budget kcal pasti del giorno (BMR + lifestyle + training × `day_type_pct`)
-5. `buildDietMealSlotBudgets` → kcal/macro **per slot**
-6. Composer → **quali alimenti** (USDA/canonical per composizione)
+3. **Fallback** (stesso atleta, stessa data) se il giorno in `week_plan` non ha %: `nutrition_config.meal_plan.caloric_split` o root `caloric_split` (salvati da Nutrizione in passato), poi `meal_strategy` per il numero pasti.
+4. Routine → orari pasti (`routine_config.week_plan` / `meal_times`)
+5. Solver → budget kcal pasti del giorno (BMR + lifestyle + training × `day_type_pct`)
+6. `buildDietMealSlotBudgets` → kcal/macro **per slot**
+7. Composer → **quali alimenti** (USDA/canonical per composizione)
 
 ## Cosa NON fa il sistema
 

@@ -38,20 +38,34 @@ function num(v: unknown): number | null {
   return null;
 }
 
-function readCaloricDistribution(raw: Record<string, unknown>): CaloricDistribution | null {
-  const cal = asRecord(raw.caloric_distribution);
-  const breakfast = num(cal.breakfast);
-  const lunch = num(cal.lunch);
-  const dinner = num(cal.dinner);
-  const snacks = num(cal.snacks);
+function readCaloricDistributionFields(
+  cal: Record<string, unknown>,
+  pctSuffix: boolean,
+): CaloricDistribution | null {
+  const bKey = pctSuffix ? "breakfast_pct" : "breakfast";
+  const lKey = pctSuffix ? "lunch_pct" : "lunch";
+  const dKey = pctSuffix ? "dinner_pct" : "dinner";
+  const sKey = pctSuffix ? "snacks_pct" : "snacks";
+  const breakfast = num(cal[bKey] ?? cal.breakfast);
+  const lunch = num(cal[lKey] ?? cal.lunch);
+  const dinner = num(cal[dKey] ?? cal.dinner);
+  const snacks = num(cal[sKey] ?? cal.snacks);
   if (breakfast == null && lunch == null && dinner == null && snacks == null) return null;
-  const dist: CaloricDistribution = {
+  return normalizeCaloricDistribution({
     breakfast: breakfast ?? 0,
     lunch: lunch ?? 0,
     dinner: dinner ?? 0,
     snacks: snacks ?? 0,
-  };
-  return normalizeCaloricDistribution(dist);
+  });
+}
+
+/** `caloric_distribution` (Profile Diet) oppure `caloric_split` sullo stesso giorno. */
+function readCaloricDistribution(raw: Record<string, unknown>): CaloricDistribution | null {
+  const fromDiet = readCaloricDistributionFields(asRecord(raw.caloric_distribution), false);
+  if (isUsableCaloricDistribution(fromDiet)) return fromDiet;
+  const fromSplit = readCaloricDistributionFields(asRecord(raw.caloric_split), true);
+  if (isUsableCaloricDistribution(fromSplit)) return fromSplit;
+  return fromDiet ?? fromSplit;
 }
 
 /** Distribuzione utilizzabile dal solver (somma % > 0). */
@@ -78,6 +92,7 @@ function resolveCaloricDistributionForDay(
   dayRaw: Record<string, unknown>,
   nc: Record<string, unknown>,
   weekMealMode: string,
+  weekConfigured: boolean,
 ): CaloricDistribution | null {
   const fromWeek = readCaloricDistribution(dayRaw);
   if (isUsableCaloricDistribution(fromWeek)) return fromWeek;
@@ -85,7 +100,7 @@ function resolveCaloricDistributionForDay(
   const legacy = readFromLegacyRoot(nc);
   if (isUsableCaloricDistribution(legacy.caloricDistribution)) return legacy.caloricDistribution;
 
-  if (weekMealMode.length > 0) {
+  if (weekMealMode.length > 0 || weekConfigured) {
     return profileParityCaloricDistribution(dayRaw);
   }
   return null;
@@ -109,20 +124,14 @@ function readFromLegacyRoot(nc: Record<string, unknown>): {
   caloricDistribution: CaloricDistribution | null;
   dailyMacros: MacroSplitPct | null;
 } {
-  const split = asRecord(nc.caloric_split);
-  const macro = asRecord(nc.macro_split);
+  const mealPlan = asRecord(nc.meal_plan);
   const dist =
-    num(split.breakfast_pct) != null ||
-    num(split.lunch_pct) != null ||
-    num(split.dinner_pct) != null ||
-    num(split.snacks_pct) != null
-      ? normalizeCaloricDistribution({
-          breakfast: num(split.breakfast_pct) ?? 0,
-          lunch: num(split.lunch_pct) ?? 0,
-          dinner: num(split.dinner_pct) ?? 0,
-          snacks: num(split.snacks_pct) ?? 0,
-        })
-      : null;
+    readCaloricDistributionFields(asRecord(mealPlan.caloric_split), true) ??
+    readCaloricDistributionFields(asRecord(nc.caloric_split), true);
+
+  const macroRoot = asRecord(nc.macro_split);
+  const macroMealPlan = asRecord(mealPlan.macro_split);
+  const macro = Object.keys(macroMealPlan).length ? macroMealPlan : macroRoot;
   const dailyMacros =
     num(macro.carbs_pct) != null || num(macro.protein_pct) != null || num(macro.fat_pct) != null
       ? {
@@ -131,7 +140,8 @@ function readFromLegacyRoot(nc: Record<string, unknown>): {
           fat: num(macro.fat_pct) ?? 25,
         }
       : null;
-  const mealStrategy = String(nc.meal_strategy ?? "").trim();
+
+  const mealStrategy = String(mealPlan.meal_strategy ?? nc.meal_strategy ?? "").trim();
   let mealCountMode = "4";
   if (mealStrategy === "6-meals") mealCountMode = "6";
   else if (mealStrategy === "5-meals") mealCountMode = "5";
@@ -141,7 +151,7 @@ function readFromLegacyRoot(nc: Record<string, unknown>): {
 
 /**
  * Risolve Diet per `planDate` (YYYY-MM-DD) dal profilo atleta.
- * Priorità: `week_plan[weekday]` → legacy `caloric_split` root (profili vecchi) → non configurato.
+ * Priorità: `week_plan[weekday]` → `caloric_split` / `meal_plan.caloric_split` (profili Nutrizione) → non configurato.
  */
 export function resolveNutritionDietDay(
   nutritionConfig: unknown,
@@ -159,16 +169,17 @@ export function resolveNutritionDietDay(
 
   const weekMacros = readDailyMacros(dayRaw);
   const weekMealMode = String(dayRaw.meal_count_mode ?? "").trim();
-  const weekDist = resolveCaloricDistributionForDay(dayRaw, nc, weekMealMode);
-
   const weekConfigured =
     Boolean(weekMealMode) ||
     readCaloricDistribution(dayRaw) != null ||
     weekMacros != null ||
     dayTypePctRaw != null;
 
+  const legacy = readFromLegacyRoot(nc);
+  const weekDist = resolveCaloricDistributionForDay(dayRaw, nc, weekMealMode, weekConfigured);
+
   if (weekConfigured) {
-    const mealCountMode = weekMealMode || "4";
+    const mealCountMode = weekMealMode || legacy.mealCountMode || "4";
     return {
       planDate: iso,
       weekDayKey,
@@ -176,14 +187,13 @@ export function resolveNutritionDietDay(
       configured: isUsableCaloricDistribution(weekDist) && mealCountMode.length > 0,
       mealCountMode,
       caloricDistribution: weekDist,
-      dailyMacros: weekMacros,
+      dailyMacros: weekMacros ?? legacy.dailyMacros,
       dayType,
       dayTypePct,
     };
   }
 
-  const legacy = readFromLegacyRoot(nc);
-  if (legacy.caloricDistribution) {
+  if (isUsableCaloricDistribution(legacy.caloricDistribution)) {
     return {
       planDate: iso,
       weekDayKey,
