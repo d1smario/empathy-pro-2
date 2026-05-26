@@ -4,6 +4,8 @@
  * non dipendono solo da `resolveAthleteMemory` + `createServerSupabaseClient` (possibile divergenza RLS/chiave).
  */
 
+import { mergeNutritionConfigRecords, parseNutritionConfigRecord } from "@/lib/nutrition/resolve-nutrition-diet-day";
+
 export type NutritionModuleFlatProfile = {
   id: string;
   birth_date: string | null;
@@ -87,8 +89,13 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
     weight_kg: fromMemory.weight_kg ?? wDb,
     body_fat_pct: fromMemory.body_fat_pct ?? bfDb,
     muscle_mass_kg: fromMemory.muscle_mass_kg ?? mmDb,
-    /** DB `athlete_profiles` vince se la memoria atleta non ha ancora `nutrition_config` / `routine_config`. */
-    nutrition_config: fromMemory.nutrition_config ?? rowNutrition,
-    routine_config: fromMemory.routine_config ?? rowRoutine,
+    nutrition_config:
+      rowNutrition && fromMemory.nutrition_config
+        ? mergeNutritionConfigRecords(
+            parseNutritionConfigRecord(fromMemory.nutrition_config),
+            parseNutritionConfigRecord(rowNutrition),
+          )
+        : (rowNutrition ?? fromMemory.nutrition_config),
+    routine_config: rowRoutine ?? fromMemory.routine_config,
   };
 }

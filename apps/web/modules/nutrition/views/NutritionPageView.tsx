@@ -100,6 +100,7 @@ import {
 import { computeSnackSlotsSuppressedByTrainingWindow } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import {
   isUsableCaloricDistribution,
+  mergeNutritionConfigRecords,
   parseNutritionConfigRecord,
   resolveNutritionDietDay,
 } from "@/lib/nutrition/resolve-nutrition-diet-day";
@@ -346,10 +347,10 @@ function mergeNutritionProfileForSolver(mem: AthleteNutritionRow | null, mod: At
   const modNc = parseNutritionConfigRecord(mod.nutrition_config);
   const nutrition_config =
     Object.keys(memNc).length > 0 && Object.keys(modNc).length > 0
-      ? { ...modNc, ...memNc, week_plan: { ...record(modNc.week_plan), ...record(memNc.week_plan) } }
-      : Object.keys(memNc).length > 0
-        ? memNc
-        : modNc;
+      ? mergeNutritionConfigRecords(memNc, modNc)
+      : Object.keys(modNc).length > 0
+        ? modNc
+        : memNc;
   return {
     ...mod,
     ...mem,

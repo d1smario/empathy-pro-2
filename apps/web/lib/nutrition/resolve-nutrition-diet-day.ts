@@ -43,6 +43,50 @@ export function parseNutritionConfigRecord(nutritionConfig: unknown): Record<str
   return asRecord(nutritionConfig);
 }
 
+/**
+ * Unisce due `nutrition_config`: il secondo argomento (`db`) vince su chiavi in conflitto;
+ * per `week_plan` ogni giorno nel DB sovrascrive la memoria atleta (Profile → Diet è su `athlete_profiles`).
+ */
+export function mergeNutritionConfigRecords(
+  memoryNc: Record<string, unknown>,
+  dbNc: Record<string, unknown>,
+): Record<string, unknown> {
+  const mem = parseNutritionConfigRecord(memoryNc);
+  const db = parseNutritionConfigRecord(dbNc);
+  if (!Object.keys(mem).length) return db;
+  if (!Object.keys(db).length) return mem;
+  return {
+    ...mem,
+    ...db,
+    week_plan: {
+      ...asRecord(mem.week_plan),
+      ...asRecord(db.week_plan),
+    },
+  };
+}
+
+/** Pattern 25/25/20 + snacks=10 (tre spuntini da 10%) o tre campi spuntino espliciti. */
+export function distributionImpliesSixMeals(
+  dist: CaloricDistribution,
+  dayRaw?: Record<string, unknown>,
+): boolean {
+  const cal = asRecord(dayRaw?.caloric_distribution);
+  if (
+    num(cal.snack_am) != null ||
+    num(cal.snack_pm) != null ||
+    num(cal.snack_evening) != null
+  ) {
+    return true;
+  }
+  const r = resolveSixMealSnackPercentages(dist);
+  const mains = dist.breakfast + dist.lunch + dist.dinner;
+  if (r.snacksTotal >= 24 && Math.abs(r.snack_am - r.snack_pm) < 2 && Math.abs(r.snack_pm - r.snack_evening) < 2) {
+    return true;
+  }
+  if (dist.snacks > 0 && dist.snacks * 3 + mains <= 100.5) return true;
+  return false;
+}
+
 export function hasNutritionMealSplitData(nc: Record<string, unknown>): boolean {
   const weekPlan = asRecord(nc.week_plan);
   for (const day of Object.values(weekPlan)) {
@@ -187,27 +231,18 @@ function inferMealCountModeForDay(
   legacyMealCountMode: string,
 ): string {
   const explicit = String(dayRaw.meal_count_mode ?? "").trim();
-  if (explicit && explicit !== "fasting") return explicit;
-
-  if (weekDist) {
-    const cal = asRecord(dayRaw.caloric_distribution);
-    if (
-      num(cal.snack_am) != null ||
-      num(cal.snack_pm) != null ||
-      num(cal.snack_evening) != null
-    ) {
-      return "6";
-    }
-    const r = resolveSixMealSnackPercentages(weekDist);
-    const mains = weekDist.breakfast + weekDist.lunch + weekDist.dinner;
-    if (r.snacksTotal >= 24 && Math.abs(r.snack_am - r.snack_pm) < 2 && Math.abs(r.snack_pm - r.snack_evening) < 2) {
-      return "6";
-    }
-    if (weekDist.snacks > 0 && weekDist.snacks * 3 + mains <= 100.5) return "6";
+  if (explicit && explicit !== "fasting") {
+    if (explicit === "4" && weekDist && distributionImpliesSixMeals(weekDist, dayRaw)) return "6";
+    return explicit;
   }
+
+  if (weekDist && distributionImpliesSixMeals(weekDist, dayRaw)) return "6";
 
   if (legacyMealCountMode === "6" || legacyMealCountMode === "5" || legacyMealCountMode === "3") {
     return legacyMealCountMode;
+  }
+  if (legacyMealCountMode === "4" && weekDist && distributionImpliesSixMeals(weekDist, dayRaw)) {
+    return "6";
   }
   return legacyMealCountMode || "4";
 }
@@ -273,7 +308,7 @@ export function resolveNutritionDietDay(
   }
 
   if (isUsableCaloricDistribution(legacy.caloricDistribution)) {
-    const mealCountMode = legacy.mealCountMode;
+    const mealCountMode = inferMealCountModeForDay({}, legacy.caloricDistribution, legacy.mealCountMode);
     const caloricDistribution = enrichCaloricDistributionForMealMode(legacy.caloricDistribution, mealCountMode);
     return {
       planDate: iso,
