@@ -62,6 +62,21 @@ describe("resolveNutritionDietDay", () => {
     expect(r.caloricDistribution?.snacks).toBeCloseTo(10, 0);
   });
 
+  it("inferisce 6 pasti da 25/25/20 + snacks=10 (tre spuntini da 10%) anche senza meal_count_mode in JSON", () => {
+    const nc = {
+      week_plan: {
+        Tue: {
+          day_type_pct: 100,
+          caloric_distribution: { breakfast: 25, lunch: 25, dinner: 20, snacks: 10 },
+        },
+      },
+    };
+    const r = resolveNutritionDietDay(nc, "2026-05-26");
+    expect(r.mealCountMode).toBe("6");
+    expect(r.caloricDistribution?.snacks).toBe(30);
+    expect(r.caloricDistribution?.snack_am).toBeCloseTo(10, 0);
+  });
+
   it("completa % mancanti in parity Profile se c’è meal_count_mode ma nessuno split", () => {
     const nc = {
       week_plan: {

@@ -7,7 +7,7 @@
  */
 
 import type { CaloricDistribution, MacroSplitPct } from "@/lib/nutrition/diet-meal-slot-budgets";
-import { normalizeCaloricDistribution } from "@/lib/nutrition/diet-meal-slot-budgets";
+import { normalizeCaloricDistribution, resolveSixMealSnackPercentages } from "@/lib/nutrition/diet-meal-slot-budgets";
 import { profileWeekDayKeyFromIsoLocal } from "@/lib/nutrition/routine-week-plan-meal-times";
 
 export type NutritionDietDaySource = "week_plan" | "legacy_root" | "missing";
@@ -181,6 +181,52 @@ function readFromLegacyRoot(nc: Record<string, unknown>): {
   return { mealCountMode, caloricDistribution: dist, dailyMacros };
 }
 
+function inferMealCountModeForDay(
+  dayRaw: Record<string, unknown>,
+  weekDist: CaloricDistribution | null,
+  legacyMealCountMode: string,
+): string {
+  const explicit = String(dayRaw.meal_count_mode ?? "").trim();
+  if (explicit && explicit !== "fasting") return explicit;
+
+  if (weekDist) {
+    const cal = asRecord(dayRaw.caloric_distribution);
+    if (
+      num(cal.snack_am) != null ||
+      num(cal.snack_pm) != null ||
+      num(cal.snack_evening) != null
+    ) {
+      return "6";
+    }
+    const r = resolveSixMealSnackPercentages(weekDist);
+    const mains = weekDist.breakfast + weekDist.lunch + weekDist.dinner;
+    if (r.snacksTotal >= 24 && Math.abs(r.snack_am - r.snack_pm) < 2 && Math.abs(r.snack_pm - r.snack_evening) < 2) {
+      return "6";
+    }
+    if (weekDist.snacks > 0 && weekDist.snacks * 3 + mains <= 100.5) return "6";
+  }
+
+  if (legacyMealCountMode === "6" || legacyMealCountMode === "5" || legacyMealCountMode === "3") {
+    return legacyMealCountMode;
+  }
+  return legacyMealCountMode || "4";
+}
+
+function enrichCaloricDistributionForMealMode(
+  dist: CaloricDistribution | null,
+  mealCountMode: string,
+): CaloricDistribution | null {
+  if (!dist || mealCountMode !== "6") return dist;
+  const r = resolveSixMealSnackPercentages(dist);
+  return {
+    ...dist,
+    snack_am: r.snack_am,
+    snack_pm: r.snack_pm,
+    snack_evening: r.snack_evening,
+    snacks: r.snacksTotal,
+  };
+}
+
 /**
  * Risolve Diet per `planDate` (YYYY-MM-DD) dal profilo atleta.
  * Priorità: `week_plan[weekday]` → `caloric_split` / `meal_plan.caloric_split` (profili Nutrizione) → non configurato.
@@ -211,14 +257,15 @@ export function resolveNutritionDietDay(
   const weekDist = resolveCaloricDistributionForDay(dayRaw, nc, weekMealMode, weekConfigured);
 
   if (weekConfigured) {
-    const mealCountMode = weekMealMode || legacy.mealCountMode || "4";
+    const mealCountMode = inferMealCountModeForDay(dayRaw, weekDist, legacy.mealCountMode);
+    const caloricDistribution = enrichCaloricDistributionForMealMode(weekDist, mealCountMode);
     return {
       planDate: iso,
       weekDayKey,
       source: "week_plan",
-      configured: isUsableCaloricDistribution(weekDist) && mealCountMode.length > 0,
+      configured: isUsableCaloricDistribution(caloricDistribution) && mealCountMode.length > 0,
       mealCountMode,
-      caloricDistribution: weekDist,
+      caloricDistribution,
       dailyMacros: weekMacros ?? legacy.dailyMacros,
       dayType,
       dayTypePct,
@@ -226,13 +273,15 @@ export function resolveNutritionDietDay(
   }
 
   if (isUsableCaloricDistribution(legacy.caloricDistribution)) {
+    const mealCountMode = legacy.mealCountMode;
+    const caloricDistribution = enrichCaloricDistributionForMealMode(legacy.caloricDistribution, mealCountMode);
     return {
       planDate: iso,
       weekDayKey,
       source: "legacy_root",
       configured: true,
-      mealCountMode: legacy.mealCountMode,
-      caloricDistribution: legacy.caloricDistribution,
+      mealCountMode,
+      caloricDistribution,
       dailyMacros: legacy.dailyMacros,
       dayType,
       dayTypePct,

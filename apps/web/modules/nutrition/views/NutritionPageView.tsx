@@ -94,8 +94,10 @@ import { buildIntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-mea
 import {
   activeMealSlotKeysForMode,
   buildDietMealSlotBudgets,
+  resolveSixMealSnackPercentages,
   type CaloricDistribution,
 } from "@/lib/nutrition/diet-meal-slot-budgets";
+import { computeSnackSlotsSuppressedByTrainingWindow } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import {
   isUsableCaloricDistribution,
   parseNutritionConfigRecord,
@@ -1873,23 +1875,59 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return null;
   }, [resolvedDietDay.caloricDistribution, caloricSplit]);
 
+  const distributionForMealRows = useMemo((): CaloricDistribution | null => {
+    if (!effectiveCaloricDistribution) return null;
+    if (effectiveMealCountMode === "6") {
+      const r = resolveSixMealSnackPercentages(effectiveCaloricDistribution);
+      return {
+        ...effectiveCaloricDistribution,
+        snack_am: r.snack_am,
+        snack_pm: r.snack_pm,
+        snack_evening: r.snack_evening,
+        snacks: r.snacksTotal,
+      };
+    }
+    return effectiveCaloricDistribution;
+  }, [effectiveCaloricDistribution, effectiveMealCountMode]);
+
+  const suppressedSnackSlots = useMemo(
+    () =>
+      computeSnackSlotsSuppressedByTrainingWindow({
+        routineConfig: profile?.routine_config ?? null,
+        planDate: selectedPlanDate,
+        mealTimesFlatFromRoot: mealTimes,
+        plannedSessions: selectedPlanSessions,
+      }),
+    [profile?.routine_config, selectedPlanDate, mealTimes, selectedPlanSessions],
+  );
+
   const mealRows = useMemo(() => {
-    if (!effectiveCaloricDistribution) return [];
+    if (!distributionForMealRows) return [];
     return buildDietMealSlotBudgets({
       mealCountMode: effectiveMealCountMode,
-      caloricDistribution: effectiveCaloricDistribution,
+      caloricDistribution: distributionForMealRows,
       dailyKcal: resolvedMealDailyEnergyKcal,
       macroSplit: effectiveMacroSplit,
       mealTimes,
       round,
     });
   }, [
-    effectiveCaloricDistribution,
+    distributionForMealRows,
     effectiveMealCountMode,
     resolvedMealDailyEnergyKcal,
     effectiveMacroSplit,
     mealTimes,
   ]);
+
+  const dietPlanHint = useMemo(() => {
+    if (!distributionForMealRows || mealRows.length === 0) return null;
+    const wd = resolvedDietDay.weekDayKey;
+    if (effectiveMealCountMode === "6") {
+      const r = resolveSixMealSnackPercentages(distributionForMealRows);
+      return `Diet ${wd}: 6 pasti — Colazione ${Math.round(distributionForMealRows.breakfast)}% · Pranzo ${Math.round(distributionForMealRows.lunch)}% · Cena ${Math.round(distributionForMealRows.dinner)}% · Spuntini ${Math.round(r.snack_am)}% + ${Math.round(r.snack_pm)}% + ${Math.round(r.snack_evening)}% (= ${Math.round(r.snacksTotal)}% totale spuntini).`;
+    }
+    return `Diet ${wd}: ${mealRows.length} pasti — Σ slot ${Math.round(mealRows.reduce((s, m) => s + m.pct, 0))}% del budget pasti.`;
+  }, [distributionForMealRows, effectiveMealCountMode, mealRows, resolvedDietDay.weekDayKey]);
 
   const diaryDayMacroTargets = useMemo(
     () => ({
@@ -3274,8 +3312,20 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               mealPathwayCatalogPending={Boolean(intelligentMealPlanRequest) && !mealPathwayUsdaReady}
               dietDayNotice={
                 mealRows.length > 0
-                  ? null
-                  : `Nessuna ripartizione % leggibile per ${resolvedDietDay.weekDayKey}: Profile → Diet (week_plan) oppure Salva da questa pagina dopo aver impostato il profilo.`
+                  ? [
+                      dietPlanHint,
+                      suppressedSnackSlots.length > 0
+                        ? `Spuntini in finestra allenamento (${suppressedSnackSlots.join(", ")}) → carbo in seduta nel modulo Fueling, non come pasto solido extra.`
+                        : null,
+                      mealRows.length < 6 && effectiveMealCountMode === "6"
+                        ? "Attesi 6 pasti: salva Profile → Diet (martedì) con tre % spuntino e rigenera il piano."
+                        : intelligentMealPlan && intelligentMealPlan.slots.length < mealRows.length
+                          ? "Piano generato con meno slot del Diet: usa «Torna al piano base» e rigenera."
+                          : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
+                  : `Nessuna ripartizione % leggibile per ${resolvedDietDay.weekDayKey}: Profile → Diet (week_plan) con 6 pasti e tre % spuntino, poi Salva profilo.`
               }
               onGenerateIntelligentMealPlan={handleGenerateIntelligentMealPlan}
               onResetIntelligentMealPlan={() => {
