@@ -66,6 +66,8 @@ import { macroIdForSport, SPORT_MACRO_SECTORS, type SportMacroId } from "@/lib/t
 import { trainingDomainForPaletteSport } from "@/lib/training/sport-domain-map";
 import { estimateTssFromSegments } from "@/lib/training/builder/tss-estimate";
 import { serializePro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import { hydrateBuilderStateFromLibraryContract } from "@/lib/training/library/hydrate-builder-from-library-contract";
 import { buildPro2ContractFromEngineGeneration } from "@/lib/training/builder/engine-session-contract-for-calendar";
 import { GymExerciseMediaThumb } from "@/components/training/GymExerciseMediaThumb";
 import {
@@ -690,6 +692,28 @@ export default function TrainingBuilderRichPageView() {
   useEffect(() => {
     setManualActiveIndex((i) => Math.min(i, Math.max(0, manualPlanBlocks.length - 1)));
   }, [manualPlanBlocks.length]);
+
+  const loadLibraryContractInBuilder = useCallback((contract: Pro2BuilderSessionContract) => {
+    const state = hydrateBuilderStateFromLibraryContract(contract);
+    setSport(state.sport);
+    setManualSessionName(state.manualSessionName);
+    setManualSessionDurationMinutes(state.manualSessionDurationMinutes);
+    setIntensityUnit(state.intensityUnit);
+    setFtpW(state.ftpW);
+    setHrMax(state.hrMax);
+    setLengthMode(state.lengthMode);
+    setSpeedRefKmh(state.speedRefKmh);
+    setManualPlanBlocks(
+      state.manualPlanBlocks.length > 0 ? state.manualPlanBlocks : [defaultManualPlanBlock("steady", state.manualSessionName)],
+    );
+    setGymManualRows(state.gymManualRows);
+    setTechnicalManualRows(state.technicalManualRows);
+    setLifestyleManualRows(state.lifestyleManualRows);
+    setManualActiveIndex(0);
+    requestAnimationFrame(() => {
+      document.getElementById("builder-manual-editor")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, []);
 
   useEffect(() => {
     if (!athleteId) {
@@ -2284,6 +2308,7 @@ export default function TrainingBuilderRichPageView() {
           ) : null}
         </section>
 
+        <div id="builder-manual-editor">
         {activeMacroId === "strength" ? (
           <BuilderGymManualComposer
             athleteId={athleteId}
@@ -2389,6 +2414,7 @@ export default function TrainingBuilderRichPageView() {
             setManualSessionDurationMinutes={setManualSessionDurationMinutes}
           />
         )}
+        </div>
 
         <CoachWorkoutLibraryPanel
           athleteId={athleteId}
@@ -2396,6 +2422,7 @@ export default function TrainingBuilderRichPageView() {
           contractToSave={libraryContractToSave}
           saveTitle={manualSessionName.trim() || undefined}
           onApplied={() => setCalendarRefresh((n) => n + 1)}
+          onLoadInBuilder={loadLibraryContractInBuilder}
         />
 
         <section

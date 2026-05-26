@@ -69,6 +69,7 @@ export function CoachLibraryContractEditor({
   onChange,
   onSave,
   onReset,
+  onOpenInBuilder,
 }: {
   contract: Pro2BuilderSessionContract;
   title?: string;
@@ -79,6 +80,7 @@ export function CoachLibraryContractEditor({
   onChange: (next: Pro2BuilderSessionContract) => void;
   onSave?: () => void;
   onReset?: () => void;
+  onOpenInBuilder?: () => void;
 }) {
   const durationMin = useMemo(
     () =>
@@ -123,6 +125,11 @@ export function CoachLibraryContractEditor({
           >
             Annulla modifiche
           </button>
+        ) : null}
+        {onOpenInBuilder ? (
+          <Pro2Button type="button" variant="secondary" className="!px-2 !py-1 text-[0.65rem]" onClick={onOpenInBuilder}>
+            Apri nel Builder
+          </Pro2Button>
         ) : null}
         {onSave ? (
           <Pro2Button

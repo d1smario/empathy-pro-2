@@ -156,6 +156,13 @@ body {
     0 0 20px rgba(34, 211, 238, 0.2);
 }
 
+.tc2-calendar-day--drop-target {
+  border-color: rgba(217, 70, 239, 0.75);
+  box-shadow:
+    0 0 0 2px rgba(217, 70, 239, 0.35) inset,
+    0 0 24px rgba(217, 70, 239, 0.25);
+}
+
 .tc2-calendar-day-num {
   font-size: 14px;
   font-weight: 800;
@@ -170,6 +177,19 @@ body {
   line-height: 1.4;
   border: 1px solid transparent;
   color: #fff;
+}
+
+.tc2-calendar-chip--draggable {
+  cursor: grab;
+}
+
+.tc2-calendar-chip--draggable:active {
+  cursor: grabbing;
+}
+
+.tc2-calendar-chip--dragging {
+  opacity: 0.55;
+  outline: 1px dashed rgba(217, 70, 239, 0.65);
 }
 
 .tc2-calendar-chip > div {

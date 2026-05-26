@@ -39,6 +39,7 @@ import {
   deletePlannedWorkoutsOnDate,
   deleteViryaCalendarPlan,
   fetchViryaCalendarPlans,
+  patchPlannedWorkout,
 } from "@/modules/training/services/training-planned-api";
 import {
   activeViryaCalendarTombstones,
@@ -90,6 +91,25 @@ function normalizeIsoDateParam(raw: string | null): string | null {
 }
 
 const WEEKDAYS = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"] as const;
+
+const PLANNED_DRAG_MIME = "application/x-empathy-planned-workout";
+
+type PlannedDragPayload = { id: string; fromDate: string };
+
+function readPlannedDragPayload(dataTransfer: DataTransfer | null): PlannedDragPayload | null {
+  if (!dataTransfer) return null;
+  const raw = dataTransfer.getData(PLANNED_DRAG_MIME);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PlannedDragPayload;
+    if (typeof parsed.id !== "string" || !parsed.id.trim()) return null;
+    const fromDate = normalizeDateKey(parsed.fromDate);
+    if (!fromDate) return null;
+    return { id: parsed.id.trim(), fromDate };
+  } catch {
+    return null;
+  }
+}
 
 function num(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
@@ -261,6 +281,9 @@ export default function TrainingCalendarPageView() {
   const [viryaReappearWarning, setViryaReappearWarning] = useState<string | null>(null);
   const [dayDeleteAllBusy, setDayDeleteAllBusy] = useState(false);
   const [dayDeleteAllConfirm, setDayDeleteAllConfirm] = useState(false);
+  const [dragPlannedId, setDragPlannedId] = useState<string | null>(null);
+  const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
+  const [movePlannedBusyId, setMovePlannedBusyId] = useState<string | null>(null);
 
   useEffect(() => {
     setDayDeleteAllConfirm(false);
@@ -385,6 +408,47 @@ export default function TrainingCalendarPageView() {
   },
   [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
+
+  const movePlannedWorkoutToDate = useCallback(
+    async (workoutId: string, fromDate: string, toDate: string) => {
+      const targetDate = normalizeDateKey(toDate);
+      const sourceDate = normalizeDateKey(fromDate);
+      if (!athleteId || !targetDate || !sourceDate || workoutId.trim() === "") return;
+      if (targetDate === sourceDate) return;
+
+      setMovePlannedBusyId(workoutId);
+      setErr(null);
+      setSuccess(null);
+      const previous = planned;
+      setPlanned((prev) =>
+        prev.map((w) => (w.id === workoutId ? { ...w, date: targetDate } : w)),
+      );
+      setSelectedDate(targetDate);
+      const targetMonth = new Date(`${targetDate}T12:00:00`);
+      if (!Number.isNaN(targetMonth.getTime())) {
+        setMonthCursor(new Date(targetMonth.getFullYear(), targetMonth.getMonth(), 1));
+      }
+
+      try {
+        await patchPlannedWorkout({
+          id: workoutId,
+          athleteId,
+          patch: { date: targetDate },
+        });
+        setSuccess(`Seduta spostata al ${targetDate}.`);
+        await loadMonth({ anchorDay: targetDate });
+      } catch (e) {
+        setPlanned(previous);
+        setErr(e instanceof Error ? e.message : "Spostamento seduta non riuscito");
+        await loadMonth({ anchorDay: sourceDate });
+      } finally {
+        setMovePlannedBusyId(null);
+        setDragPlannedId(null);
+        setDropTargetDate(null);
+      }
+    },
+    [athleteId, loadMonth, planned],
+  );
 
   useEffect(() => {
     void (async () => {
@@ -912,6 +976,10 @@ export default function TrainingCalendarPageView() {
         <Fragment>
           <TrainingViryaActivePlanStrip athleteId={athleteId} selectedDate={selectedDate} />
           <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
+            <p className="border-b border-white/10 px-4 py-3 text-xs leading-relaxed text-slate-400">
+              Trascina una chip <strong className="text-violet-200">PLAN</strong> su un altro giorno per spostare la seduta
+              (stessa struttura Builder, nuova data). I workout eseguiti (EXEC) non si spostano.
+            </p>
             <div className="tc2-calendar-scroll">
               <div className="tc2-calendar-frame">
                 <div className="tc2-calendar-weekdays">
@@ -950,7 +1018,25 @@ export default function TrainingCalendarPageView() {
                             });
                           }, 60);
                         }}
-                        className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""}`}
+                        onDragOver={(e) => {
+                          if (!readPlannedDragPayload(e.dataTransfer)) return;
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          setDropTargetDate(date);
+                        }}
+                        onDragLeave={() => {
+                          setDropTargetDate((prev) => (prev === date ? null : prev));
+                        }}
+                        onDrop={(e) => {
+                          const payload = readPlannedDragPayload(e.dataTransfer);
+                          if (!payload) return;
+                          e.preventDefault();
+                          e.stopPropagation();
+                          void movePlannedWorkoutToDate(payload.id, payload.fromDate, date);
+                        }}
+                        className={`tc2-calendar-day ${active ? "tc2-calendar-day--active" : ""} ${
+                          dropTargetDate === date ? "tc2-calendar-day--drop-target" : ""
+                        }`}
                       >
                         <div className="tc2-calendar-day-num">{day}</div>
                         {pList.length > 0 ? (
@@ -981,8 +1067,34 @@ export default function TrainingCalendarPageView() {
                         ) : null}
                         {pList.slice(0, 2).map((w) => {
                           const chip = plannedCalendarChipViewModel(w, { athleteFtpWatts });
+                          const moving = movePlannedBusyId === w.id;
                           return (
-                            <div key={w.id} className={`tc2-calendar-chip ${chip.chipClass}`}>
+                            <div
+                              key={w.id}
+                              draggable={!moving && Boolean(athleteId)}
+                              onDragStart={(e) => {
+                                if (!athleteId || moving) {
+                                  e.preventDefault();
+                                  return;
+                                }
+                                e.stopPropagation();
+                                const payload: PlannedDragPayload = {
+                                  id: w.id,
+                                  fromDate: normalizeDateKey(w.date) || date,
+                                };
+                                e.dataTransfer.setData(PLANNED_DRAG_MIME, JSON.stringify(payload));
+                                e.dataTransfer.effectAllowed = "move";
+                                setDragPlannedId(w.id);
+                              }}
+                              onDragEnd={() => {
+                                setDragPlannedId(null);
+                                setDropTargetDate(null);
+                              }}
+                              className={`tc2-calendar-chip tc2-calendar-chip--draggable ${chip.chipClass} ${
+                                dragPlannedId === w.id ? "tc2-calendar-chip--dragging" : ""
+                              } ${moving ? "opacity-50" : ""}`}
+                              title="Trascina su un altro giorno del calendario"
+                            >
                               <div className="flex items-center gap-1.5 font-bold">
                                 <span className={`tc2-calendar-chip-icon tc2-calendar-chip-icon--${chip.family}`}>
                                   {chip.glyph ? (
@@ -1177,6 +1289,38 @@ export default function TrainingCalendarPageView() {
                 <ul className="space-y-5">
                   {dayPlanned.map((w) => (
                     <li key={w.id}>
+                      <div
+                        draggable={movePlannedBusyId !== w.id && Boolean(athleteId)}
+                        onDragStart={(e) => {
+                          if (!athleteId || movePlannedBusyId === w.id) {
+                            e.preventDefault();
+                            return;
+                          }
+                          const payload: PlannedDragPayload = {
+                            id: w.id,
+                            fromDate: normalizeDateKey(w.date) || selectedDate,
+                          };
+                          e.dataTransfer.setData(PLANNED_DRAG_MIME, JSON.stringify(payload));
+                          e.dataTransfer.effectAllowed = "move";
+                          setDragPlannedId(w.id);
+                        }}
+                        onDragEnd={() => {
+                          setDragPlannedId(null);
+                          setDropTargetDate(null);
+                        }}
+                        className={`mb-2 flex cursor-grab items-center gap-2 rounded-lg border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs text-violet-100 active:cursor-grabbing ${
+                          dragPlannedId === w.id ? "ring-1 ring-violet-400/60" : ""
+                        }`}
+                        title="Trascina su un giorno del calendario sopra"
+                      >
+                        <span aria-hidden className="text-violet-300/80">
+                          ⋮⋮
+                        </span>
+                        <span>
+                          Trascina su un altro giorno ·{" "}
+                          {plannedCalendarChipViewModel(w, { athleteFtpWatts }).sportLabel}
+                        </span>
+                      </div>
                       <CalendarPlannedBuilderDetail
                         workout={w}
                         athleteId={athleteId}

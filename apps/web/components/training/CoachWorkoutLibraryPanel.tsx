@@ -31,6 +31,8 @@ export type CoachWorkoutLibraryPanelProps = {
   saveTitle?: string;
   sourcePlannedId?: string | null;
   onApplied?: () => void;
+  /** Carica il template (anche bozza modificata) nel composer manuale del Builder. */
+  onLoadInBuilder?: (contract: Pro2BuilderSessionContract) => void;
 };
 
 export function CoachWorkoutLibraryPanel({
@@ -40,6 +42,7 @@ export function CoachWorkoutLibraryPanel({
   saveTitle,
   sourcePlannedId,
   onApplied,
+  onLoadInBuilder,
 }: CoachWorkoutLibraryPanelProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -445,6 +448,21 @@ export function CoachWorkoutLibraryPanel({
                           >
                             {busy === `zwo-${item.id}` ? "…" : "ZWO"}
                           </Pro2Button>
+                          {onLoadInBuilder && activeContract && item.id === selectedItemId ? (
+                            <Pro2Button
+                              type="button"
+                              variant="secondary"
+                              className="!px-2 !py-1 text-[0.65rem]"
+                              disabled={busy != null}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onLoadInBuilder(activeContract);
+                                setOkMsg(`«${item.title}» caricata nel Builder — modifica serie, intervalli e durata.`);
+                              }}
+                            >
+                              Builder
+                            </Pro2Button>
+                          ) : null}
                           <Pro2Button
                             type="button"
                             variant="secondary"
@@ -479,6 +497,14 @@ export function CoachWorkoutLibraryPanel({
                               onReset={() => {
                                 if (previewContract) setDraftContract(structuredClone(previewContract));
                               }}
+                              onOpenInBuilder={
+                                onLoadInBuilder
+                                  ? () => {
+                                      onLoadInBuilder(activeContract);
+                                      setOkMsg(`«${item.title}» caricata nel Builder.`);
+                                    }
+                                  : undefined
+                              }
                             />
                           ) : (
                             <p className="py-4 text-center text-xs text-amber-200/90">
