@@ -1,0 +1,36 @@
+---
+description: Pro 2 — guardrail obbligatorio anti-doppioni su planned_workouts (nutrition-safe)
+alwaysApply: true
+---
+
+# Pro 2 — guardrail `planned_workouts` (obbligatorio)
+
+## Scopo
+
+Evitare doppioni/triple sul calendario operativo che **sommano TSS/kcal due volte** in nutrition e meal plan.
+
+## Regola fissa
+
+**Tutte** le scritture su `planned_workouts` passano da:
+
+- `insertSinglePlannedWorkout()` oppure
+- `insertPlannedWorkoutRows()`
+
+in `apps/web/lib/training/planned/insert-planned-workout.ts`.
+
+**Vietato** `.from("planned_workouts").insert(...)` altrove (route, import, library, Virya batch).
+
+## Comportamento obbligatorio (non opt-out)
+
+1. **Fingerprint uguale** (stesso atleta + giorno + contratto/checksum/type+durata+TSS) → niente seconda riga; ritorna id esistente.
+2. **Seduta builder** (`BUILDER_SESSION_JSON` / `[PRO2_BUILDER`) sul giorno → **sostituisce** altre righe builder dello stesso `type` prima dell'insert (re-save Builder / library / structured import).
+
+Fingerprint: `planned-workout-dedupe-fingerprint.ts`.
+
+## Lettura nutrition
+
+`dedupePlannedTrainingForNutritionEnergy` resta fallback lato read; **non** sostituisce questo guardrail write.
+
+## Pulizia operativa
+
+Script admin: `apps/web/scripts/dedupe-planned-workouts-date.mjs` (`--collapse-builder-type` per tenere l'ultima seduta builder per type/giorno).

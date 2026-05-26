@@ -7,6 +7,7 @@ import { buildPlannedTrainingImportQuality } from "@/lib/reality/training-import
 import { decompressTrainingImportBuffer } from "@/lib/training/import-parser";
 import { serializePro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { clampPlannedWorkoutRow } from "@/lib/training/planned/clamp-planned-row";
+import { insertPlannedWorkoutRows, insertSinglePlannedWorkout } from "@/lib/training/planned/insert-planned-workout";
 import { parsePlannedProgramFile } from "@/lib/training/planned-import-parser";
 import {
   type PlannedStructuredFormat,
@@ -59,9 +60,9 @@ export async function runPlannedProgramFileImport(
     throw new Error("Nessuna seduta valida trovata nel file programmazione.");
   }
 
-  const insertPayloads = parsed.rows.map((r) => {
+  const insertRows = parsed.rows.map((r) => {
     const kcal = r.kcal_target != null ? Math.round(r.kcal_target) : null;
-    const row = clampPlannedWorkoutRow({
+    return clampPlannedWorkoutRow({
       athlete_id: input.athleteId,
       date: r.date,
       type: r.type,
@@ -71,24 +72,13 @@ export async function runPlannedProgramFileImport(
       kj_target: kcal != null ? Math.round(kcal * 4.184) : null,
       notes: [r.notes, input.notes || null].filter(Boolean).join(" | ") || null,
     });
-    const p: Record<string, unknown> = {
-      athlete_id: row.athlete_id,
-      date: row.date,
-      type: row.type,
-      duration_minutes: row.duration_minutes,
-      tss_target: row.tss_target,
-      kcal_target: row.kcal_target,
-      notes: row.notes,
-    };
-    if (row.kj_target != null) p.kj_target = row.kj_target;
-    return p;
   });
 
   const sessionDate = parsed.firstDate ?? parsed.rows[0]?.date ?? null;
   const hasCoachNotes = Boolean(input.notes) || parsed.rows.some((row) => Boolean(row.notes?.trim()));
   const quality = buildPlannedTrainingImportQuality({
     firstDate: sessionDate,
-    rowCount: insertPayloads.length,
+    rowCount: insertRows.length,
     hasCoachNotes,
   });
   const realityEnvelope = buildRealityIngestionEnvelope({
@@ -106,11 +96,11 @@ export async function runPlannedProgramFileImport(
     missingChannels: quality.missingChannels,
     recommendedInputs: quality.recommendedInputs,
     canonicalPreview: {
-      imported_planned_count: insertPayloads.length,
+      imported_planned_count: insertRows.length,
       first_date: sessionDate,
     },
     rawRefs: {
-      row_count: insertPayloads.length,
+      row_count: insertRows.length,
     },
   });
 
@@ -125,7 +115,7 @@ export async function runPlannedProgramFileImport(
       file_name: input.file.name,
       file_size_bytes: input.file.size,
       file_checksum_sha1: input.fileChecksum,
-      imported_planned_count: insertPayloads.length,
+      imported_planned_count: insertRows.length,
       imported_date: sessionDate,
       quality_status: quality.qualityStatus,
       quality_note: quality.qualityNote,
@@ -136,19 +126,23 @@ export async function runPlannedProgramFileImport(
     .single();
   if (!startJob.error) importJobId = startJob.data?.id ?? null;
 
-  const { error } = await db.from("planned_workouts").insert(insertPayloads);
-  if (error) {
+  let importedCount = 0;
+  try {
+    const inserted = await insertPlannedWorkoutRows(db, insertRows);
+    importedCount = inserted.ids.length;
+  } catch (insertErr) {
+    const message = insertErr instanceof Error ? insertErr.message : "planned insert failed";
     if (importJobId) {
       await db
         .from("training_import_jobs")
         .update({
           status: "error",
-          error_message: error.message,
+          error_message: message,
           updated_at: new Date().toISOString(),
         })
         .eq("id", importJobId);
     }
-    throw new Error(error.message);
+    throw new Error(message);
   }
 
   if (importJobId) {
@@ -156,7 +150,7 @@ export async function runPlannedProgramFileImport(
       .from("training_import_jobs")
       .update({
         status: "done",
-        imported_planned_count: insertPayloads.length,
+        imported_planned_count: importedCount,
         imported_date: sessionDate,
         updated_at: new Date().toISOString(),
         payload: realityEnvelope,
@@ -177,7 +171,7 @@ export async function runPlannedProgramFileImport(
     athleteMemory,
     ...(athleteMemoryError ? { athleteMemoryError } : {}),
     ingestion: realityEnvelope,
-    importedCount: insertPayloads.length,
+    importedCount,
     firstDate: parsed.firstDate,
     sourceFormat: parsed.sourceFormat,
     fileName: input.file.name,
@@ -234,17 +228,6 @@ export async function runStructuredPlannedSingleImport(
     notes: mergedNotes,
   });
 
-  const insertPayload: Record<string, unknown> = {
-    athlete_id: row.athlete_id,
-    date: row.date,
-    type: row.type,
-    duration_minutes: row.duration_minutes,
-    tss_target: row.tss_target,
-    kcal_target: row.kcal_target,
-    notes: row.notes,
-  };
-  if (row.kj_target != null) insertPayload.kj_target = row.kj_target;
-
   const sessionDate = row.date;
   const quality = buildPlannedTrainingImportQuality({
     firstDate: sessionDate,
@@ -300,43 +283,24 @@ export async function runStructuredPlannedSingleImport(
     .single();
   if (!startJob.error) importJobId = startJob.data?.id ?? null;
 
-  const dedupePattern = `%${importChecksumTag}%`;
-  const { error: dedupeErr } = await db
-    .from("planned_workouts")
-    .delete()
-    .eq("athlete_id", input.athleteId)
-    .eq("date", row.date)
-    .ilike("notes", dedupePattern);
-  if (dedupeErr) {
+  let plannedWorkoutId: string | null = null;
+  try {
+    const inserted = await insertSinglePlannedWorkout(db, row);
+    plannedWorkoutId = inserted.id;
+  } catch (insertErr) {
+    const message = insertErr instanceof Error ? insertErr.message : "planned insert failed";
     if (importJobId) {
       await db
         .from("training_import_jobs")
         .update({
           status: "error",
-          error_message: dedupeErr.message,
+          error_message: message,
           updated_at: new Date().toISOString(),
         })
         .eq("id", importJobId);
     }
-    throw new Error(dedupeErr.message);
+    throw new Error(message);
   }
-
-  const ins = await db.from("planned_workouts").insert(insertPayload).select("id").single();
-  if (ins.error) {
-    if (importJobId) {
-      await db
-        .from("training_import_jobs")
-        .update({
-          status: "error",
-          error_message: ins.error.message,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", importJobId);
-    }
-    throw new Error(ins.error.message);
-  }
-
-  const plannedWorkoutId = ins.data?.id != null ? String(ins.data.id) : null;
 
   try {
     await purgeGhostFileImportExecutedForDate(db, input.athleteId, row.date);

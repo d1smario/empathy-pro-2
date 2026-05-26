@@ -9,7 +9,10 @@ import {
 } from "@/lib/auth/athlete-read-context";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
-import { insertSinglePlannedWorkout, toPlannedWorkoutInsertRecord } from "@/lib/training/planned/insert-planned-workout";
+import {
+  insertPlannedWorkoutRows,
+  insertSinglePlannedWorkout,
+} from "@/lib/training/planned/insert-planned-workout";
 import {
   extractViryaTagFromPlannedNotes,
   ilikeContainsViryaTag,
@@ -59,10 +62,6 @@ function calendarAuditSuffix(
   return `\n[EMPATHY_CAL|src=${src}|mode=${mode}|tr=${ids.join(",")}]`;
 }
 
-function toInsertRecord(row: PlannedWorkoutInsertPayload): Record<string, unknown> {
-  return toPlannedWorkoutInsertRecord(row);
-}
-
 async function memoryOrNull(athleteId: string) {
   try {
     return await resolveAthleteMemory(athleteId);
@@ -93,12 +92,12 @@ export async function POST(req: NextRequest) {
       }
       const { db } = await requireAthleteWriteContext(req, athleteId);
       const auditSuffix = calendarAuditSuffix(body.generationAudit);
-      const payloads = body.rows.map((row) => {
-        if (!auditSuffix) return toInsertRecord(row);
+      const rowsForInsert = body.rows.map((row) => {
+        if (!auditSuffix) return row;
         const mergedNotes = `${row.notes ?? ""}${auditSuffix}`.trim();
-        return toInsertRecord({ ...row, notes: mergedNotes || null });
+        return { ...row, notes: mergedNotes || null };
       });
-      if (!payloads.length) {
+      if (!rowsForInsert.length) {
         return NextResponse.json({ error: "rows is empty" }, { status: 400, headers: NO_STORE });
       }
       /**
@@ -108,11 +107,8 @@ export async function POST(req: NextRequest) {
        */
       if (body.replaceTag && body.athleteId) {
         const aid = String(body.athleteId);
-        const dateStrs = payloads
-          .map((p) => {
-            const d = (p as { date?: unknown }).date;
-            return typeof d === "string" ? d.trim() : "";
-          })
+        const dateStrs = rowsForInsert
+          .map((p) => (typeof p.date === "string" ? p.date.trim() : ""))
           .filter(Boolean);
         if (dateStrs.length) {
           const minD = dateStrs.reduce((a, b) => (a < b ? a : b));
@@ -130,12 +126,15 @@ export async function POST(req: NextRequest) {
           }
         }
       }
-      const { error: insertErr } = await db.from("planned_workouts").insert(payloads);
-      if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500, headers: NO_STORE });
-      }
+      const { ids, dedupeSkippedCount, replacedSameTypeCount } = await insertPlannedWorkoutRows(db, rowsForInsert);
       return NextResponse.json(
-        { status: "ok" as const, athleteMemory: await memoryOrNull(athleteId) },
+        {
+          status: "ok" as const,
+          insertedCount: ids.length,
+          dedupeSkippedCount,
+          replacedSameTypeCount,
+          athleteMemory: await memoryOrNull(athleteId),
+        },
         { headers: NO_STORE },
       );
     }

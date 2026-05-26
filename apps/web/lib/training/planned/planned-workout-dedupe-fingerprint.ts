@@ -1,0 +1,40 @@
+import { BUILDER_SESSION_JSON_TAG } from "@/lib/training/builder/pro2-session-contract";
+
+export type PlannedWorkoutDedupeInput = {
+  type: string;
+  duration_minutes: number;
+  tss_target: number;
+  kcal_target: number | null;
+  notes: string | null;
+};
+
+/**
+ * Fingerprint stabile per il guardrail canonico su `planned_workouts`:
+ * stesso atleta + giorno + fingerprint ⇒ una sola riga (evita doppio conteggio in nutrition).
+ */
+export function plannedWorkoutDedupeFingerprint(row: PlannedWorkoutDedupeInput): string {
+  const notes = row.notes ?? "";
+
+  const importMatch = notes.match(/\[EMPATHY_IMPORT:checksum=([a-f0-9]+)\]/i);
+  if (importMatch) return `import:${importMatch[1]!.toLowerCase()}`;
+
+  const importSha1Match = notes.match(/import_sha1=([a-f0-9]+)/i);
+  if (importSha1Match) return `import_sha1:${importSha1Match[1]!.toLowerCase()}`;
+
+  const idx = notes.indexOf(BUILDER_SESSION_JSON_TAG);
+  if (idx >= 0) {
+    const payload = notes
+      .slice(idx + BUILDER_SESSION_JSON_TAG.length)
+      .split(/\s*\|\s*/)[0]
+      ?.trim();
+    if (payload) return `builder:${payload}`;
+  }
+
+  const kcal = row.kcal_target ?? 0;
+  return `ops:${row.type.trim()}|${row.duration_minutes}|${row.tss_target}|${kcal}`;
+}
+
+export function isPro2BuilderPlannedNotes(notes: string | null | undefined): boolean {
+  const t = notes ?? "";
+  return t.includes("[PRO2_BUILDER") || t.includes(BUILDER_SESSION_JSON_TAG);
+}

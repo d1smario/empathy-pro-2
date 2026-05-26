@@ -45,10 +45,17 @@ export async function POST(req: NextRequest) {
       purgedViryaOnDay = purge.purgedCount;
     }
 
-    const { id } = await insertSinglePlannedWorkout(db, row);
+    const { id, dedupeSkipped, replacedSameTypeCount } = await insertSinglePlannedWorkout(db, row);
 
     return NextResponse.json(
-      { ok: true as const, athleteId, plannedWorkoutId: id, purgedViryaOnDay },
+      {
+        ok: true as const,
+        athleteId,
+        plannedWorkoutId: id,
+        purgedViryaOnDay,
+        dedupeSkipped: dedupeSkipped === true,
+        replacedSameTypeCount: replacedSameTypeCount ?? 0,
+      },
       { headers: NO_STORE },
     );
   } catch (err) {
