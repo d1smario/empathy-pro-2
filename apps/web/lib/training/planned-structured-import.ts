@@ -566,6 +566,7 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
   fileName: string;
   buffer: Buffer;
   format: PlannedStructuredFormat;
+  renderProfile?: Pro2RenderProfile;
 }): Promise<{
   sessionName: string;
   discipline: string;
@@ -574,7 +575,8 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
   intervalLadder: StructuredIntervalRow[];
   intervalLadderCsv: string;
 }> {
-  const ftpW = DEFAULT_IMPORT_RENDER_PROFILE.ftpW;
+  const profile: Pro2RenderProfile = input.renderProfile ?? DEFAULT_IMPORT_RENDER_PROFILE;
+  const ftpW = profile.ftpW;
   let blocks: ManualPlanBlock[];
   let intervalLadder: StructuredIntervalRow[] = [];
   let sessionName = input.fileName.replace(/\.[^.]+$/, "");
@@ -598,11 +600,11 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
   }
 
   const expandOpts: PlanExpandOpts = {
-    unit: DEFAULT_IMPORT_RENDER_PROFILE.intensityUnit,
-    ftpW: DEFAULT_IMPORT_RENDER_PROFILE.ftpW,
-    hrMax: DEFAULT_IMPORT_RENDER_PROFILE.hrMax,
-    lengthMode: DEFAULT_IMPORT_RENDER_PROFILE.lengthMode,
-    speedRefKmh: DEFAULT_IMPORT_RENDER_PROFILE.speedRefKmh,
+    unit: profile.intensityUnit,
+    ftpW: profile.ftpW,
+    hrMax: profile.hrMax,
+    lengthMode: profile.lengthMode,
+    speedRefKmh: profile.speedRefKmh,
   };
   const segments = manualPlanBlocksToChartSegments(blocks, expandOpts);
   if (!intervalLadder.length) {
@@ -615,7 +617,7 @@ export async function parseStructuredPlannedWorkoutFromBuffer(input: {
 
   const contract = buildPro2BuilderSessionContract({
     blocks,
-    renderProfile: DEFAULT_IMPORT_RENDER_PROFILE,
+    renderProfile: profile,
     discipline: "Cycling",
     sessionName: sessionName.slice(0, 200) || "Import strutturato",
     family: "aerobic",

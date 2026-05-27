@@ -1,5 +1,3 @@
-import "server-only";
-
 /**
  * fit-file-parser in mode `list` sovrascrive `fitObj.workout_step` ad ogni messaggio (vedi `dist/fit-parser.js` default branch).
  * Per import programmato FIT serve l’elenco completo degli step: replichiamo il loop binario usando `readRecord` esportato.

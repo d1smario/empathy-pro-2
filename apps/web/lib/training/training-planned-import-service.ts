@@ -15,6 +15,8 @@ import {
   parseStructuredPlannedWorkoutFromBuffer,
 } from "@/lib/training/planned-structured-import";
 import { purgeGhostFileImportExecutedForDate } from "@/lib/training/purge-ghost-file-import-executed";
+import { resolveImportRenderProfileForAthlete } from "@/lib/training/physiology/resolve-import-render-profile";
+import type { TrainingImportDetectedKind } from "@/lib/training/training-import-routing";
 import {
   type StructuredCompanionResult,
   upsertStructuredCompanionExecuted,
@@ -39,6 +41,8 @@ export type PlannedImportServiceOk = {
   /** Scala intervalli (durata sec + watt) come TrainingPeaks; `intervalLadderCsv` è pronto per Excel. */
   intervalLadder?: StructuredIntervalRow[];
   intervalLadderCsv?: string;
+  detectedKind?: TrainingImportDetectedKind;
+  routeReason?: string;
 };
 
 export async function runPlannedProgramFileImport(
@@ -190,6 +194,7 @@ export async function runStructuredPlannedSingleImport(
     notes: string;
     date: string;
     format: PlannedStructuredFormat;
+    routeReason?: string;
   },
 ): Promise<PlannedImportServiceOk> {
   let importJobId: string | null = null;
@@ -198,10 +203,12 @@ export async function runStructuredPlannedSingleImport(
     mimeType: input.file.type ?? "",
     buffer: input.fileBuffer,
   });
+  const renderProfile = await resolveImportRenderProfileForAthlete(input.athleteId);
   const parsed = await parseStructuredPlannedWorkoutFromBuffer({
     fileName: effectiveName,
     buffer: payload,
     format: input.format,
+    renderProfile,
   });
 
   const jsonLine = serializePro2BuilderSessionContract(parsed.contract);
@@ -360,6 +367,8 @@ export async function runStructuredPlannedSingleImport(
     structuredFormat: input.format,
     intervalLadder: parsed.intervalLadder,
     intervalLadderCsv: parsed.intervalLadderCsv,
+    detectedKind: "program",
+    routeReason: input.routeReason ?? `structured_${input.format}`,
     ...(structuredCompanion ? { structuredCompanion } : {}),
   };
 }

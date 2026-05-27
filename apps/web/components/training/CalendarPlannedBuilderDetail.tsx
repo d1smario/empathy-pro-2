@@ -170,6 +170,11 @@ export function CalendarPlannedBuilderDetail({
             >
               {contract ? familyLabel(family) : "Pianificato"}
             </span>
+            {typeof workout.notes === "string" && workout.notes.includes("[STRUCTURED_PLAN_IMPORT]") ? (
+              <span className="rounded-full border border-sky-400/45 bg-sky-500/15 px-2.5 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-sky-100">
+                Import strutturato
+              </span>
+            ) : null}
             <span className="font-mono text-xs text-gray-500">{workout.type}</span>
           </div>
           <h4 className="mt-1.5 text-base font-bold text-white">

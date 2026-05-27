@@ -749,8 +749,12 @@ export default function TrainingCalendarPageView() {
         });
         if (json.structured) {
           const sf = typeof json.structuredFormat === "string" ? json.structuredFormat.toUpperCase() : "STRUTTURATO";
+          const fallbackNote =
+            json.routeReason === "auto_fallback_empty_executed_fit_workout"
+              ? " Rilevato programma FIT (non attività): salvato come PLAN con blocchi Builder."
+              : "";
           setSuccess(
-            `Seduta in calendario (PLAN · ${sf}) per atleta attivo · giorno ${effectiveDate}. Apri il giorno per grafico a blocchi e export ZWO/FIT.`,
+            `Seduta in calendario (PLAN · ${sf}) per atleta attivo · giorno ${effectiveDate}.${fallbackNote} Apri il giorno per grafico a blocchi e export ZWO/FIT.`,
           );
           const fd = json.firstDate;
           if (fd && /^\d{4}-\d{2}-\d{2}$/.test(fd)) {

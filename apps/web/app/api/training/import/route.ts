@@ -12,6 +12,7 @@ import { parseTrainingFile } from "@/lib/training/import-parser";
 import { persistExecutedWorkoutSeriesFromTrace } from "@/lib/training/import-series-persist";
 import { tryRecordArchetypeTraceFromExecuted } from "@/lib/training/library/try-record-archetype-trace";
 import {
+  fitStructuredFallbackAfterEmptyExecuted,
   normalizeTrainingImportIntent,
   resolveTrainingImportRoute,
 } from "@/lib/training/training-import-routing";
@@ -215,6 +216,7 @@ export async function POST(req: NextRequest) {
         notes,
         date: anchorDate,
         format: route.format,
+        routeReason: route.routeReason,
       });
       return NextResponse.json(structuredBody, { headers: NO_STORE });
     }
@@ -224,6 +226,39 @@ export async function POST(req: NextRequest) {
       mimeType: file.type,
       buffer: fileBuffer,
     });
+
+    const structuredFallback = fitStructuredFallbackAfterEmptyExecuted({
+      fileName: file.name,
+      mimeType: file.type,
+      buffer: fileBuffer,
+      durationMinutes: parsed.durationMinutes,
+      intent: importIntent,
+    });
+
+    if (structuredFallback) {
+      const anchorDate =
+        plannedDate || dateOverride || inferDateFromFileName(file.name) || parsed.date;
+      if (!anchorDate) {
+        return NextResponse.json(
+          {
+            error:
+              "Per sedute strutturate (FIT workout) serve la data: usa il giorno nel calendario o il campo data.",
+          },
+          { status: 400, headers: NO_STORE },
+        );
+      }
+      const structuredBody = await runStructuredPlannedSingleImport(db, {
+        athleteId,
+        file,
+        fileChecksum,
+        fileBuffer,
+        notes,
+        date: anchorDate,
+        format: structuredFallback.format,
+        routeReason: structuredFallback.routeReason,
+      });
+      return NextResponse.json(structuredBody, { headers: NO_STORE });
+    }
 
     const date = dateOverride || parsed.date || inferDateFromFileName(file.name);
     if (!date) {
@@ -486,6 +521,8 @@ export async function POST(req: NextRequest) {
           duration_minutes: parsed.durationMinutes,
           tss: parsed.tss,
         },
+        detectedKind: route.detectedKind,
+        routeReason: route.routeReason,
         visibilityCheck: {
           athlete_id: athleteId,
           date,

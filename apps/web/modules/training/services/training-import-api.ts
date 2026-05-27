@@ -20,6 +20,8 @@ export type TrainingImportFileResult = {
   firstDate?: string | null;
   importedCount?: number;
   structuredCompanion?: { status: string; message?: string; mode?: string; reason?: string };
+  detectedKind?: "program" | "executed";
+  routeReason?: string;
 };
 
 type TrainingImportSignOk = { bucket: string; path: string; token: string };
