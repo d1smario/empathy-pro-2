@@ -9,7 +9,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       kind: "base",
       label: "EMPATHY Silver",
       monthlyPrice: 99,
-      currency: "EUR",
+      currency: "CHF",
       interval: "month",
       trialEligible: true,
       summary: "Accesso core a fisiologia, training, nutrizione e health con memoria atleta canonica.",
@@ -21,7 +21,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       ],
       stripe: {
         productLookupKey: "empathy_silver_monthly",
-        priceLookupKey: "empathy_silver_monthly_eur",
+        priceLookupKey: "empathy_silver_monthly_chf",
       },
     },
     {
@@ -29,7 +29,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       kind: "base",
       label: "EMPATHY Gold",
       monthlyPrice: 149,
-      currency: "EUR",
+      currency: "CHF",
       interval: "month",
       trialEligible: true,
       summary: "Profondità operativa estesa e orchestrazione adattiva tra i moduli.",
@@ -41,7 +41,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       ],
       stripe: {
         productLookupKey: "empathy_gold_monthly",
-        priceLookupKey: "empathy_gold_monthly_eur",
+        priceLookupKey: "empathy_gold_monthly_chf",
       },
     },
   ],
@@ -51,7 +51,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       kind: "coach_addon",
       label: "Elite",
       monthlyPrice: 99,
-      currency: "EUR",
+      currency: "CHF",
       interval: "month",
       trialEligible: false,
       summary: "Strato coach sul piano base con interazione settimanale e messaggistica.",
@@ -62,7 +62,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       ],
       stripe: {
         productLookupKey: "empathy_elite_addon_monthly",
-        priceLookupKey: "empathy_elite_addon_monthly_eur",
+        priceLookupKey: "empathy_elite_addon_monthly_chf",
       },
     },
     {
@@ -70,7 +70,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       kind: "coach_addon",
       label: "Pro",
       monthlyPrice: 199,
-      currency: "EUR",
+      currency: "CHF",
       interval: "month",
       trialEligible: false,
       summary: "Supporto coach giorno per giorno con più call, messaggi e revisione operativa.",
@@ -81,7 +81,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       ],
       stripe: {
         productLookupKey: "empathy_pro_addon_monthly",
-        priceLookupKey: "empathy_pro_addon_monthly_eur",
+        priceLookupKey: "empathy_pro_addon_monthly_chf",
       },
     },
     {
@@ -89,7 +89,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       kind: "coach_addon",
       label: "Olimpic",
       monthlyPrice: 399,
-      currency: "EUR",
+      currency: "CHF",
       interval: "month",
       trialEligible: false,
       summary: "Coach dedicato, monitoraggio stretto e workflow test fisiologici.",
@@ -101,7 +101,7 @@ export const EMPATHY_ACCOUNT_CATALOG: EmpathyAccountCatalog = {
       ],
       stripe: {
         productLookupKey: "empathy_olimpic_addon_monthly",
-        priceLookupKey: "empathy_olimpic_addon_monthly_eur",
+        priceLookupKey: "empathy_olimpic_addon_monthly_chf",
       },
     },
   ],

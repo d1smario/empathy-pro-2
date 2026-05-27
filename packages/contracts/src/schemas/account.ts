@@ -1,4 +1,4 @@
-export type AccountBillingCurrency = "EUR";
+export type AccountBillingCurrency = "CHF";
 export type AccountBillingInterval = "month";
 
 /** Literal allineati a V1 catalog / Stripe price env. */

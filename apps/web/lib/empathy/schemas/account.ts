@@ -1,4 +1,4 @@
-export type AccountBillingCurrency = "EUR";
+export type AccountBillingCurrency = "CHF";
 export type AccountBillingInterval = "month";
 
 export type EmpathyBasePlanId = "silver" | "gold";

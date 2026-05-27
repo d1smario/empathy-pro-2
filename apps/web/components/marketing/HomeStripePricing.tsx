@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import type { HostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
+import { formatPlanPrice } from "@/lib/billing/format-plan-price";
 import type {
   EmpathyBasePlanId,
   EmpathyCoachAddOnId,
@@ -177,7 +178,7 @@ export function HomeStripePricing({
             >
               <span className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-orange-300/90">{plan.label}</span>
               <span className="mt-2 text-3xl font-black text-white sm:text-4xl">
-                {plan.monthlyPrice} €
+                {formatPlanPrice(plan.monthlyPrice, plan.currency)}
                 <span className="text-sm font-semibold text-gray-500 sm:text-base">{t("perMonthSuffix")}</span>
               </span>
               <span className="mt-3 text-sm leading-relaxed text-gray-400">{plan.summary}</span>
@@ -233,7 +234,10 @@ export function HomeStripePricing({
                 )}
               >
                 <span className="font-semibold text-white">{a.label}</span>
-                <span className="mt-1 block text-sm text-gray-400">+{a.monthlyPrice} €{t("perMonthSuffix")}</span>
+                <span className="mt-1 block text-sm text-gray-400">
+                  +{formatPlanPrice(a.monthlyPrice, a.currency)}
+                  {t("perMonthSuffix")}
+                </span>
                 <ul className="mt-3 list-inside list-disc space-y-1 text-xs text-gray-500">
                   {a.features.map((f) => (
                     <li key={f}>{f}</li>
