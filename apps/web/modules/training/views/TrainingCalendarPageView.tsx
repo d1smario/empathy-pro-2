@@ -329,16 +329,22 @@ export default function TrainingCalendarPageView() {
         from = minIsoDay(from, padFrom);
         to = maxIsoDay(to, padTo);
       }
-      const q = new URLSearchParams({ athleteId, from, to });
-      /** Nessun `includeAthleteContext=0`: default API = `resolveAthleteMemory` → read spine + twin strip (come Builder / scheda giorno). */
-      /** Badge cella sonno/HRV: server-side pre-fetch per evitare N+1 lato cella. */
-      q.set("includeWellness", "1");
-      const res = await fetch(`/api/training/planned-window?${q}`, {
-        cache: "no-store",
-        credentials: "same-origin",
-        headers: await buildSupabaseAuthHeaders(),
-      });
-      const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
+      const authHeaders = await buildSupabaseAuthHeaders();
+      const fetchPlannedWindow = async (includeWellness: boolean, includeAthleteContext: boolean) => {
+        const q = new URLSearchParams({ athleteId, from, to });
+        if (includeWellness) q.set("includeWellness", "1");
+        if (!includeAthleteContext) q.set("includeAthleteContext", "0");
+        const res = await fetch(`/api/training/planned-window?${q}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders,
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
+        return { res, json };
+      };
+
+      /** Fase 1 — solo planned/executed: sblocca griglia e Analyzer senza wellness né `resolveAthleteMemory`. */
+      const { res, json } = await fetchPlannedWindow(false, false);
       if (isStale()) return;
 
       if (!res.ok || !json.ok) {
@@ -357,8 +363,9 @@ export default function TrainingCalendarPageView() {
         setErr(("error" in json && json.error) || "Lettura calendario non riuscita.");
         return;
       }
-      const p = json.planned ?? [];
-      const ex = json.executed ?? [];
+      const core = json as TrainingPlannedWindowOkViewModel;
+      const p = core.planned ?? [];
+      const ex = core.executed ?? [];
       const removed = locallyRemovedPlannedIdsRef.current;
       const stillPresent = p.filter((row) => removed.has(row.id));
       if (stillPresent.length > 0) {
@@ -373,20 +380,43 @@ export default function TrainingCalendarPageView() {
       }
       setPlanned(p.filter((row) => !removed.has(row.id)));
       setExecuted(ex);
-      setReadSpineCoverage(json.readSpineCoverage ?? null);
-      setTwinContextStrip(json.twinContextStrip ?? null);
-      setPlannedProvenanceSummary(json.plannedProvenanceSummary ?? null);
-      setWellnessByDate(json.wellnessByDate ?? {});
+      setPlannedProvenanceSummary(core.plannedProvenanceSummary ?? null);
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
         executedN: ex.length,
-          executedFallback: json.executedAdminFallbackUsed ?? false,
-          executedHiddenByPreference: json.executedHiddenBySourcePreference ?? 0,
-          sampleDates: Array.isArray(json.executedSampleDates) ? json.executedSampleDates : [],
-        resFrom: json.from,
-        resTo: json.to,
+        executedFallback: core.executedAdminFallbackUsed ?? false,
+        executedHiddenByPreference: core.executedHiddenBySourcePreference ?? 0,
+        sampleDates: Array.isArray(core.executedSampleDates) ? core.executedSampleDates : [],
+        resFrom: core.from,
+        resTo: core.to,
       });
+
+      /** Fase 2 — wellness celle + read spine / twin strip (non blocca la griglia). */
+      void (async () => {
+        try {
+          const enrich = await fetchPlannedWindow(true, true);
+          if (isStale()) return;
+          if (!enrich.res.ok || !enrich.json.ok) return;
+          const full = enrich.json as TrainingPlannedWindowOkViewModel;
+          setReadSpineCoverage(full.readSpineCoverage ?? null);
+          setTwinContextStrip(full.twinContextStrip ?? null);
+          setWellnessByDate(full.wellnessByDate ?? {});
+          setFetchDiag((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  executedFallback: full.executedAdminFallbackUsed ?? prev.executedFallback,
+                  executedHiddenByPreference:
+                    full.executedHiddenBySourcePreference ?? prev.executedHiddenByPreference,
+                  sampleDates: Array.isArray(full.executedSampleDates) ? full.executedSampleDates : prev.sampleDates,
+                }
+              : prev,
+          );
+        } catch {
+          /* badge sonno/HRV opzionali — griglia già utilizzabile */
+        }
+      })();
     } catch {
       if (isStale()) return;
       setErr("Errore di rete.");
