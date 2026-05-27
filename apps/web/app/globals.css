@@ -170,6 +170,16 @@ body {
   line-height: 1.2;
 }
 
+.tc2-calendar-exec-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.75);
+  flex-shrink: 0;
+}
+
 .tc2-calendar-chip {
   border-radius: 8px;
   padding: 7px 8px;

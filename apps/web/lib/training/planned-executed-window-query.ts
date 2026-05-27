@@ -18,6 +18,17 @@ export const PLANNED_WORKOUTS_WINDOW_SELECT =
 export const EXECUTED_WORKOUTS_WINDOW_SELECT =
   "id, athlete_id, date, started_at, ended_at, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
 
+/** Calendario griglia: stessi metadati senza `trace_summary` (payload JSON molto più leggero). */
+export const EXECUTED_WORKOUTS_WINDOW_SELECT_LITE =
+  "id, athlete_id, date, started_at, ended_at, duration_minutes, tss, planned_workout_id, source, kcal, kj, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
+
+export function executedWorkoutsWindowSelect(includeTraceSummary: boolean): string {
+  return includeTraceSummary ? EXECUTED_WORKOUTS_WINDOW_SELECT : EXECUTED_WORKOUTS_WINDOW_SELECT_LITE;
+}
+
+/** PostgREST default cap = 1000 righe: alza il tetto per finestre calendario ampie. */
+const EXECUTED_WINDOW_ROW_LIMIT = 5000;
+
 type WindowQueryResult = {
   data: unknown[] | null;
   error: { message: string } | null;
@@ -29,6 +40,7 @@ export async function queryPlannedExecutedWindow(
   from: string,
   to: string,
   dataSourcePreferences?: DataSourcePreferenceMap | null,
+  options?: { includeTraceSummary?: boolean },
 ): Promise<{
   planned: WindowQueryResult;
   executed: WindowQueryResult;
@@ -39,6 +51,9 @@ export async function queryPlannedExecutedWindow(
       ? await loadDataSourcePreferenceMap(db, athleteId)
       : (dataSourcePreferences ?? {});
 
+  const includeTraceSummary = options?.includeTraceSummary !== false;
+  const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
+
   const [planned, executed] = await Promise.all([
     db
       .from("planned_workouts")
@@ -46,14 +61,16 @@ export async function queryPlannedExecutedWindow(
       .eq("athlete_id", athleteId)
       .gte("date", from)
       .lte("date", to)
-      .order("date", { ascending: true }),
+      .order("date", { ascending: true })
+      .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1),
     db
       .from("executed_workouts")
-      .select(EXECUTED_WORKOUTS_WINDOW_SELECT)
+      .select(executedSelect)
       .eq("athlete_id", athleteId)
       .gte("date", from)
       .lte("date", to)
-      .order("date", { ascending: true }),
+      .order("date", { ascending: true })
+      .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1),
   ]);
 
   const rawExec = (executed.data ?? []) as unknown[];

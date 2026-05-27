@@ -9,7 +9,7 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { firstWindowQueryError, PLANNED_WORKOUTS_WINDOW_SELECT, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
+import { firstWindowQueryError, executedWorkoutsWindowSelect, PLANNED_WORKOUTS_WINDOW_SELECT, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { twinContextStripFromMemory } from "@/lib/twin/twin-context-strip-from-memory";
@@ -45,6 +45,23 @@ function wantsAthleteContextFromQuery(req: NextRequest): boolean {
 function wantsWellnessFromQuery(req: NextRequest): boolean {
   const raw = (req.nextUrl.searchParams.get("includeWellness") ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
+
+/** Default: trace_summary incluso. Disattiva con `0|false|no|off|skip` (griglia calendario). */
+function wantsTraceSummaryFromQuery(req: NextRequest): boolean {
+  const raw = (req.nextUrl.searchParams.get("includeTraceSummary") ?? "").trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "skip") return false;
+  return true;
+}
+
+function rowId(row: unknown): string {
+  const id = (row as { id?: unknown }).id;
+  return typeof id === "string" ? id : "";
+}
+
+function rowDateKey(row: unknown): string {
+  const date = (row as { date?: unknown }).date;
+  return typeof date === "string" ? date.slice(0, 10) : "";
 }
 
 function addDays(isoDate: string, delta: number): string {
@@ -87,8 +104,11 @@ export async function GET(req: NextRequest) {
     const { db } = await requireAthleteReadContext(req, athleteId);
     const includeAthleteContext = wantsAthleteContextFromQuery(req);
     const includeWellness = wantsWellnessFromQuery(req);
+    const includeTraceSummary = wantsTraceSummaryFromQuery(req);
 
-    const windowPromise = queryPlannedExecutedWindow(db, athleteId, from, to);
+    const windowPromise = queryPlannedExecutedWindow(db, athleteId, from, to, undefined, {
+      includeTraceSummary,
+    });
     const wellnessPromise = includeWellness
       ? buildWellnessWindowSummary({ db, athleteId, from, to }).catch(() => ({ wellnessByDate: {} as WellnessByDateMap, rowCount: 0 }))
       : Promise.resolve(null);
@@ -128,24 +148,40 @@ export async function GET(req: NextRequest) {
     }
 
     /**
-     * Fallback robustezza: se l'eseguito torna vuoto ma l'atleta ha dati,
-     * prova la stessa finestra con service-role (se disponibile) per evitare
-     * mismatch RLS/session tra route e UI calendar.
+     * Fallback robustezza: se l'eseguito torna vuoto o incompleto rispetto al service-role,
+     * unisci le righe mancanti (evita celle calendario vuote con Analyzer ok su altri fetch).
      */
-    if ((executedRes.data?.length ?? 0) === 0) {
-      const admin = createSupabaseAdminClient();
-      if (admin) {
-        const forcedExecuted = await admin
-          .from("executed_workouts")
-          .select(
-            "id, athlete_id, date, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id",
-          )
-          .eq("athlete_id", athleteId)
-          .gte("date", from)
-          .lte("date", to)
-          .order("date", { ascending: true });
-        if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
-          executedRes = { data: forcedExecuted.data as unknown[], error: null };
+    const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
+    const rlsExecutedCount = executedRes.data?.length ?? 0;
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      const forcedExecuted = await admin
+        .from("executed_workouts")
+        .select(executedSelect)
+        .eq("athlete_id", athleteId)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(0, 4999);
+      if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
+        const adminRows = forcedExecuted.data as unknown[];
+        if (rlsExecutedCount === 0) {
+          executedRes = { data: adminRows, error: null };
+          executedAdminFallbackUsed = true;
+        } else if (adminRows.length > rlsExecutedCount) {
+          const byId = new Map<string, unknown>();
+          for (const row of executedRes.data ?? []) {
+            const id = rowId(row);
+            if (id) byId.set(id, row);
+          }
+          for (const row of adminRows) {
+            const id = rowId(row);
+            if (id && !byId.has(id)) byId.set(id, row);
+          }
+          executedRes = {
+            data: Array.from(byId.values()).sort((a, b) => rowDateKey(a).localeCompare(rowDateKey(b))),
+            error: null,
+          };
           executedAdminFallbackUsed = true;
         }
       }

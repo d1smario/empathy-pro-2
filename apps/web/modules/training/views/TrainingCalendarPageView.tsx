@@ -79,9 +79,24 @@ function calendarPlannedFetchBounds(monthStart: Date, monthEnd: Date): {
 } {
   const monthFrom = toDateKey(monthStart);
   const monthTo = toDateKey(monthEnd);
-  const fetchFrom = addDaysToIsoDateKey(monthFrom, -45);
-  const fetchTo = addDaysToIsoDateKey(monthTo, 45);
+  /** Griglia: mese visibile + margine breve (drag / bordi). Evita ±45g con trace_summary enormi. */
+  const fetchFrom = addDaysToIsoDateKey(monthFrom, -7);
+  const fetchTo = addDaysToIsoDateKey(monthTo, 7);
   return { monthFrom, monthTo, fetchFrom, fetchTo };
+}
+
+function mergeExecutedForDay(
+  prev: ExecutedWorkout[],
+  dayKey: string,
+  dayRows: ExecutedWorkout[],
+): ExecutedWorkout[] {
+  const rest = prev.filter((w) => normalizeDateKey(workoutDayKey(w)) !== dayKey);
+  return [...rest, ...dayRows].sort((a, b) => workoutDayKey(a).localeCompare(workoutDayKey(b)));
+}
+
+function mergePlannedForDay(prev: PlannedWorkout[], dayKey: string, dayRows: PlannedWorkout[]): PlannedWorkout[] {
+  const rest = prev.filter((w) => normalizeDateKey(w.date) !== dayKey);
+  return [...rest, ...dayRows].sort((a, b) => normalizeDateKey(a.date).localeCompare(normalizeDateKey(b.date)));
 }
 
 function normalizeIsoDateParam(raw: string | null): string | null {
@@ -275,6 +290,7 @@ export default function TrainingCalendarPageView() {
    * (es. dopo elimina seduta: due fetch in parallelo → la vecchia ripristina la riga).
    */
   const plannedWindowFetchGenRef = useRef(0);
+  const selectedDayFetchGenRef = useRef(0);
   const calendarReadyRef = useRef(false);
   /** Id eliminati in-sessione: filtra fetch stale che ripresentano la riga prima che il DB sia allineato. */
   const locallyRemovedPlannedIdsRef = useRef<Set<string>>(new Set());
@@ -288,6 +304,18 @@ export default function TrainingCalendarPageView() {
   useEffect(() => {
     setDayDeleteAllConfirm(false);
   }, [selectedDate]);
+
+  /** Cambio atleta: non mostrare griglia con dati del profilo precedente finché non arriva il nuovo fetch. */
+  useEffect(() => {
+    calendarReadyRef.current = false;
+    setCalendarReady(false);
+    setExecuted([]);
+    setPlanned([]);
+    setWellnessByDate({});
+    setReadSpineCoverage(null);
+    setTwinContextStrip(null);
+    setFetchDiag(null);
+  }, [athleteId]);
   /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
   const trainingImportInFlightRef = useRef(false);
 
@@ -324,16 +352,21 @@ export default function TrainingCalendarPageView() {
       const anchor = anchorRaw.match(/^\d{4}-\d{2}-\d{2}/)?.[0] ?? "";
       if (anchor) {
         /** Dopo import la `loadMonth` può girare prima che React aggiorni `monthCursor` → finestra mensile troppo stretta; forziamo inclusione del giorno salvato. */
-        const padFrom = addDaysToIsoDateKey(anchor, -60);
-        const padTo = addDaysToIsoDateKey(anchor, 60);
+        const padFrom = addDaysToIsoDateKey(anchor, -14);
+        const padTo = addDaysToIsoDateKey(anchor, 14);
         from = minIsoDay(from, padFrom);
         to = maxIsoDay(to, padTo);
       }
       const authHeaders = await buildSupabaseAuthHeaders();
-      const fetchPlannedWindow = async (includeWellness: boolean, includeAthleteContext: boolean) => {
+      const fetchPlannedWindow = async (
+        includeWellness: boolean,
+        includeAthleteContext: boolean,
+        includeTraceSummary: boolean,
+      ) => {
         const q = new URLSearchParams({ athleteId, from, to });
         if (includeWellness) q.set("includeWellness", "1");
         if (!includeAthleteContext) q.set("includeAthleteContext", "0");
+        if (!includeTraceSummary) q.set("includeTraceSummary", "0");
         const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",
           credentials: "same-origin",
@@ -343,8 +376,8 @@ export default function TrainingCalendarPageView() {
         return { res, json };
       };
 
-      /** Fase 1 — solo planned/executed: sblocca griglia e Analyzer senza wellness né `resolveAthleteMemory`. */
-      const { res, json } = await fetchPlannedWindow(false, false);
+      /** Fase 1 — griglia: metadati eseguito senza trace_summary (payload leggero). */
+      const { res, json } = await fetchPlannedWindow(false, false, false);
       if (isStale()) return;
 
       if (!res.ok || !json.ok) {
@@ -395,7 +428,7 @@ export default function TrainingCalendarPageView() {
       /** Fase 2 — wellness celle + read spine / twin strip (non blocca la griglia). */
       void (async () => {
         try {
-          const enrich = await fetchPlannedWindow(true, true);
+          const enrich = await fetchPlannedWindow(true, true, false);
           if (isStale()) return;
           if (!enrich.res.ok || !enrich.json.ok) return;
           const full = enrich.json as TrainingPlannedWindowOkViewModel;
@@ -438,6 +471,38 @@ export default function TrainingCalendarPageView() {
   },
   [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
+
+  /** Giorno selezionato: fetch mirato con trace pieno → chip griglia + Analyzer allineati subito. */
+  useEffect(() => {
+    if (!athleteId || ctxLoading || !selectedDate) return;
+    const fetchGen = ++selectedDayFetchGenRef.current;
+    const isStale = () => fetchGen !== selectedDayFetchGenRef.current;
+    void (async () => {
+      try {
+        const q = new URLSearchParams({
+          athleteId,
+          from: selectedDate,
+          to: selectedDate,
+          includeAthleteContext: "0",
+        });
+        const res = await fetch(`/api/training/planned-window?${q}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
+        if (isStale()) return;
+        if (!res.ok || !json.ok) return;
+        const day = json as TrainingPlannedWindowOkViewModel;
+        setExecuted((prev) => mergeExecutedForDay(prev, selectedDate, day.executed ?? []));
+        if ((day.planned ?? []).length > 0) {
+          setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
+        }
+      } catch {
+        /* best-effort: la finestra mensile resta fallback */
+      }
+    })();
+  }, [athleteId, ctxLoading, selectedDate]);
 
   const movePlannedWorkoutToDate = useCallback(
     async (workoutId: string, fromDate: string, toDate: string) => {
@@ -1068,7 +1133,16 @@ export default function TrainingCalendarPageView() {
                           dropTargetDate === date ? "tc2-calendar-day--drop-target" : ""
                         }`}
                       >
-                        <div className="tc2-calendar-day-num">{day}</div>
+                        <div className="tc2-calendar-day-num flex items-center justify-between gap-1">
+                          <span>{day}</span>
+                          {hasExecuted ? (
+                            <span
+                              className="tc2-calendar-exec-dot"
+                              title={`${eList.length} eseguit${eList.length === 1 ? "o" : "i"}`}
+                              aria-hidden
+                            />
+                          ) : null}
+                        </div>
                         {pList.length > 0 ? (
                           <div
                             className="tc2-calendar-day-glyphs flex flex-wrap items-center justify-center gap-0.5 py-0.5"
