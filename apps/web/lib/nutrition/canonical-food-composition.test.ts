@@ -88,3 +88,22 @@ test("nutrientsForMealPlanItem: item singolo 'Fiocchi d'avena' 85 g → ~310 kca
   );
   assert.ok(res.nutrients.carbsG >= 50, `CHO attesi >=50 g, trovati ${res.nutrients.carbsG}`);
 });
+
+test("nutrientsForMealPlanItem: 'Latte' 280 ml → ~145 kcal (ml → g per liquidi-latte)", () => {
+  /** Regression: l'utente segnala "il latte non ha marcato le calorie nel piano".
+   *  Causa: parseGramsFromHint accettava solo `g` (e `ml` solo per olio). Per il
+   *  latte, 280 ml non veniva riconosciuto come quantita' edibile → fallback
+   *  scaleCanonicalNutrientsToKcal con approxKcal del composer.
+   *  Fix: per milk_2pct/milk_goat/yogurt_plain, ml * 1.03 g/ml. */
+  const res = nutrientsForMealPlanItem({
+    name: "Latte",
+    portionHint: "280 ml latte vaccino parzialmente scremato",
+    approxKcal: 179,
+  });
+  assert.equal(res.compositionKey, "milk_2pct");
+  assert.ok(
+    res.nutrients.kcal >= 120 && res.nutrients.kcal <= 175,
+    `kcal attesi 120-175 (latte parz. scremato ~52 kcal/100ml × 280ml), trovati ${res.nutrients.kcal}`,
+  );
+  assert.ok(res.nutrients.proteinG >= 7, `PRO attesi >=7 g, trovati ${res.nutrients.proteinG}`);
+});

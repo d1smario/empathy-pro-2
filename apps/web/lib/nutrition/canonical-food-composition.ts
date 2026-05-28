@@ -944,6 +944,10 @@ export function looksLikeMultiIngredientPortionHint(portionHint: string): boolea
   return quantityMatches.length >= 2;
 }
 
+/** Densita' liquidi-latte (latte/yogurt/bevande vegetali): ~1 g/ml. */
+const LIQUID_DAIRY_G_PER_ML = 1.03;
+const LIQUIDS_AS_GRAMS_KEYS = new Set(["milk_2pct", "milk_goat", "yogurt_plain"]);
+
 function resolveServingGramsFromPortionHint(portionHint: string, compositionKey: string): number | undefined {
   const hint = portionHint.trim();
   if (!hint) return undefined;
@@ -953,6 +957,7 @@ function resolveServingGramsFromPortionHint(portionHint: string, compositionKey:
   const ml = parseMlFromPortionHint(hint);
   if (ml == null) return undefined;
   if (compositionKey === "olive_oil") return ml * OLIVE_OIL_G_PER_ML;
+  if (LIQUIDS_AS_GRAMS_KEYS.has(compositionKey)) return ml * LIQUID_DAIRY_G_PER_ML;
   return undefined;
 }
 

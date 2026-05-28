@@ -2233,6 +2233,34 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     }
   }, [athleteId, intelligentMealPlanRequest]);
 
+  /**
+   * Auto-genera il piano allineato al profilo (deterministico, USDA-backed)
+   * appena i prerequisiti sono pronti. Evita la doppia interazione "piano base
+   * placeholder -> click Genera": niente "piano base" con kcal distribuite
+   * uniformemente fra righe (che produceva numeri non realistici tipo
+   * 1 banana = target/n_righe kcal).
+   *
+   * Non riprova in loop se la generazione fallisce: l'utente puo' usare il
+   * bottone "Genera il mio piano pasti" per ritentare.
+   */
+  useEffect(() => {
+    if (!athleteId) return;
+    if (!intelligentMealPlanRequest) return;
+    if (!mealPathwayUsdaReady) return;
+    if (intelligentMealPlan) return;
+    if (intelligentMealLoading) return;
+    if (intelligentMealError) return;
+    void handleGenerateIntelligentMealPlan();
+  }, [
+    athleteId,
+    intelligentMealPlanRequest,
+    mealPathwayUsdaReady,
+    intelligentMealPlan,
+    intelligentMealLoading,
+    intelligentMealError,
+    handleGenerateIntelligentMealPlan,
+  ]);
+
   const mealPlanEnergyLedger = useMemo((): NutritionMealPlanEnergyLedger | null => {
     let assembled: number | null = null;
     if (intelligentMealPlan?.slots?.length) {
@@ -3391,7 +3419,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       mealRows.length < 6 && effectiveMealCountMode === "6"
                         ? "Attesi 6 pasti: salva Profile → Diet (martedì) con tre % spuntino e rigenera il piano."
                         : intelligentMealPlan && intelligentMealPlan.slots.length < mealRows.length
-                          ? "Piano generato con meno slot del Diet: usa «Torna al piano base» e rigenera."
+                          ? "Piano generato con meno slot del Diet: usa «Rigenera piano» per ricalcolare."
                           : null,
                     ]
                       .filter(Boolean)

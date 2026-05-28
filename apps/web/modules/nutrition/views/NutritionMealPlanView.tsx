@@ -17,11 +17,8 @@ import {
   mealPlanDayTotalsToMicroLines,
   type NutritionMicronutrientGridProps,
 } from "@/modules/nutrition/components/NutritionMicronutrientGrid";
-import { buildFunctionalFoodOptionGroupsForSlot } from "@/lib/nutrition/functional-food-option-groups";
-import { buildDryMealPlanLinesForSlot } from "@/lib/nutrition/dry-meal-plan-lines";
-import { filterFunctionalFoodGroupsForMealSlot } from "@/lib/nutrition/meal-slot-food-rules";
 import type { IntelligentMealPlanResponseBody, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { buildExpositionItemsFromDryLines, sumVisibleSlotMacros } from "@/lib/nutrition/meal-exposition-helpers";
+import { sumVisibleSlotMacros } from "@/lib/nutrition/meal-exposition-helpers";
 import {
   buildExpositionItemsFromPlan,
   EmpathyMealPlanExpositionCard,
@@ -315,7 +312,7 @@ export function NutritionMealPlanWorkspace({
             </button>
             {intelligentMealPlan ? (
               <button type="button" className="nutrition-ui-chip" onClick={onResetIntelligentMealPlan}>
-                Torna al piano base
+                Rigenera piano
               </button>
             ) : null}
             {intelligentMealPlan?.layer === "deterministic_meal_assembly_v1" ? (
@@ -593,84 +590,38 @@ export function NutritionMealPlanWorkspace({
           ) : null}
           {!intelligentMealPlan ? (
             <div className="empathy-meal-plan-expo-shell">
+              <p className="mb-3 text-center text-[12px] leading-snug text-slate-400">
+                {intelligentMealLoading
+                  ? "Sto generando il piano pasti allineato al tuo profilo (solver deterministico + USDA)…"
+                  : canRequestIntelligentPlan
+                    ? "Pronto a generare il piano. Auto-generazione in corso…"
+                    : mealPathwayCatalogPending
+                      ? "Caricamento catalogo USDA per il giorno selezionato…"
+                      : "Profile → Diet richiede ripartizione % per pasto. Salva il profilo e ricarica."}
+              </p>
               <div className="empathy-meal-expo-grid">
+                {/* Scheletro card con solo i target del solver. Nessun item farlocco
+                    (in passato il piano base distribuiva kcal_target/n_righe a ciascun
+                    alimento, producendo numeri irrealistici tipo 1 banana = 320 kcal). */}
                 {mealPlanDisplayRows.map((meal) => {
                   const slotKey = meal.key as PathwayMealSlotKey;
                   const bundle = mealPathwayBySlot[slotKey];
-                  const functionalGroupsRaw =
-                    bundle && !bundle.loading
-                      ? buildFunctionalFoodOptionGroupsForSlot({
-                          pathwayTargets: bundle.pathwayTargets ?? [],
-                          usdaFoods: bundle.foods ?? [],
-                          pathwaySupportPathways: pathwayModulation?.pathways ?? null,
-                          minPerGroup: 3,
-                          maxPerGroup: 5,
-                        }).filter((g) => g.options.length > 0)
-                      : [];
-                  const functionalGroups = filterFunctionalFoodGroupsForMealSlot(functionalGroupsRaw, slotKey);
-                  const totals = {
-                    kcal: meal.kcal,
-                    carbsG: meal.carbs,
-                    proteinG: meal.protein,
-                    fatG: meal.fat,
-                  };
-
-                  if (!bundle || bundle.loading) {
-                    return (
-                      <EmpathyMealPlanExpositionCard
-                        key={slotKey}
-                        slot={slotKey}
-                        titleUpper={meal.label.toUpperCase()}
-                        subline={`${meal.time} · caricamento pathway`}
-                        totalKcal={totals.kcal}
-                        carbsG={totals.carbsG}
-                        proteinG={totals.proteinG}
-                        fatG={totals.fatG}
-                        items={[]}
-                      />
-                    );
-                  }
-
-                  if (functionalGroups.length === 0) {
-                    return (
-                      <EmpathyMealPlanExpositionCard
-                        key={slotKey}
-                        slot={slotKey}
-                        titleUpper={meal.label.toUpperCase()}
-                        subline={meal.time}
-                        totalKcal={totals.kcal}
-                        carbsG={totals.carbsG}
-                        proteinG={totals.proteinG}
-                        fatG={totals.fatG}
-                        items={[]}
-                      />
-                    );
-                  }
-
-                  const dryLines = buildDryMealPlanLinesForSlot(
-                    slotKey,
-                    {
-                      kcal: meal.kcal,
-                      carbsG: meal.carbs,
-                      proteinG: meal.protein,
-                      fatG: meal.fat,
-                    },
-                    functionalGroups,
-                    bundle.pathwayTargets ?? [],
-                  );
-                  const expoItems = buildExpositionItemsFromDryLines(dryLines, totals);
-
+                  const subline = !bundle || bundle.loading
+                    ? `${meal.time} · caricamento pathway`
+                    : intelligentMealLoading
+                      ? `${meal.time} · generazione in corso`
+                      : meal.time;
                   return (
                     <EmpathyMealPlanExpositionCard
                       key={slotKey}
                       slot={slotKey}
                       titleUpper={meal.label.toUpperCase()}
-                      subline={meal.portionHint?.trim() || meal.time}
-                      totalKcal={totals.kcal}
-                      carbsG={totals.carbsG}
-                      proteinG={totals.proteinG}
-                      fatG={totals.fatG}
-                      items={expoItems}
+                      subline={subline}
+                      totalKcal={meal.kcal}
+                      carbsG={meal.carbs}
+                      proteinG={meal.protein}
+                      fatG={meal.fat}
+                      items={[]}
                     />
                   );
                 })}

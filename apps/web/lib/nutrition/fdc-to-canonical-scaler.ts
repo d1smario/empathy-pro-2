@@ -205,6 +205,10 @@ export async function buildFdcCanonicalSnapshot(canonicalKeys: string[]): Promis
  * torniamo undefined → il caller usa `scaleCanonicalNutrientsToKcal(canonical, approxKcal)`.
  */
 const OLIVE_OIL_G_PER_ML = 0.92;
+/** Densita' liquidi-latte (latte/yogurt/bevande vegetali): ~1 g/ml. */
+const LIQUID_DAIRY_G_PER_ML = 1.03;
+const LIQUIDS_AS_GRAMS_KEYS = new Set(["milk_2pct", "milk_goat", "yogurt_plain"]);
+
 function parseGramsFromHint(hint: string, compositionKey: string): number | undefined {
   const text = hint.trim();
   if (!text) return undefined;
@@ -217,8 +221,9 @@ function parseGramsFromHint(hint: string, compositionKey: string): number | unde
   const ml = text.match(/(\d+(?:[.,]\d+)?)\s*ml\b/i);
   if (ml) {
     const v = parseFloat(ml[1].replace(",", "."));
-    if (Number.isFinite(v) && v > 0 && compositionKey === "olive_oil") {
-      return v * OLIVE_OIL_G_PER_ML;
+    if (Number.isFinite(v) && v > 0) {
+      if (compositionKey === "olive_oil") return v * OLIVE_OIL_G_PER_ML;
+      if (LIQUIDS_AS_GRAMS_KEYS.has(compositionKey)) return v * LIQUID_DAIRY_G_PER_ML;
     }
   }
   return undefined;
