@@ -265,3 +265,116 @@ test("guardrail alternanza settimanale: lunch+dinner su 7 giorni -> staple disti
     `Solo ${protStaples.length} prot staple distinti su 7 giorni: ${protStaples.join(", ")}. Atteso >= 4.`,
   );
 });
+
+/**
+ * Guardrail "regole composizione CHO" (utente nutrizionista):
+ *
+ * COLAZIONE:
+ *  - CHO target >= 130 g -> 2 fonti CHO distinte (es. cereali + pane tostato).
+ *
+ * PRANZO / CENA:
+ *  - CHO target > 100 g -> pane NON puo' essere il carb principale (deve essere
+ *    pasta/riso/farro/quinoa/patate).
+ *  - CHO target >= 130 g -> 2 fonti CHO: primaria (complessa) + secondaria
+ *    (pane/focaccia/patate).
+ */
+
+function countChoHeavyItems(items: { macroRole?: string }[]): number {
+  return items.filter((i) => i.macroRole === "cho_heavy").length;
+}
+
+function hasBreadAsPrimaryCarb(items: { name?: string; macroRole?: string }[]): boolean {
+  /** "Pane integrale (carb principale ...)" e' il name che composeMainMeal usa
+   *  quando carbKey === "pane" (label esplicito). La 2a fonte usa name diverso
+   *  ("Pane / focaccia (2ª fonte CHO)" o "(accompagnamento)"). */
+  return items.some((i) => /^pane integrale\s*\(carb principale/i.test(i.name ?? ""));
+}
+
+test("guardrail composizione CHO pranzo/cena: cho > 100 g -> pane NON e' carb principale", () => {
+  const failures: string[] = [];
+  /** Range CHO 110-220 g via kcal 1100-2200 (50% CHO ~ 137-275 g). */
+  const lunchKcalSweep = [1100, 1300, 1500, 1800, 2000, 2200];
+  for (const date of DATES) {
+    for (const dietType of DIET_TYPES) {
+      const ctx = createMediterraneanDayContext(date, undefined, undefined, dietType);
+      for (const slot of ["lunch", "dinner"] as MealSlotKey[]) {
+        for (const kcal of lunchKcalSweep) {
+          const macros = macrosForSlot(slot, kcal);
+          if (macros.carbsG <= 100) continue;
+          const composed = composeMediterraneanMeal(slot, macros, ctx);
+          if (hasBreadAsPrimaryCarb(composed.items)) {
+            failures.push(
+              `[${dietType}/${date}/${slot}/${kcal}kcal/cho=${macros.carbsG}g] pane usato come CARB PRINCIPALE (vietato per CHO > 100 g)`,
+            );
+          }
+        }
+      }
+    }
+  }
+  assert.equal(
+    failures.length,
+    0,
+    `Regola violata in ${failures.length} casi:\n${failures.slice(0, 15).join("\n")}`,
+  );
+});
+
+test("guardrail composizione CHO pranzo/cena: cho >= 130 g -> 2 fonti CHO (primaria + secondaria)", () => {
+  const failures: string[] = [];
+  /** Range CHO >= 130 g via kcal alti. */
+  const kcalSweep = [1300, 1500, 1700, 2000];
+  for (const date of DATES.slice(0, 3)) {
+    for (const dietType of DIET_TYPES) {
+      const ctx = createMediterraneanDayContext(date, undefined, undefined, dietType);
+      for (const slot of ["lunch", "dinner"] as MealSlotKey[]) {
+        for (const kcal of kcalSweep) {
+          const macros = macrosForSlot(slot, kcal);
+          if (macros.carbsG < 130) continue;
+          const composed = composeMediterraneanMeal(slot, macros, ctx);
+          const choHeavyCount = countChoHeavyItems(composed.items);
+          if (choHeavyCount < 2) {
+            failures.push(
+              `[${dietType}/${date}/${slot}/${kcal}kcal/cho=${macros.carbsG}g] solo ${choHeavyCount} item cho_heavy (atteso >= 2: primaria + secondaria). Items: ${composed.items.map((i) => i.name).join(" | ")}`,
+            );
+          }
+        }
+      }
+    }
+  }
+  assert.equal(
+    failures.length,
+    0,
+    `Regola violata in ${failures.length} casi:\n${failures.slice(0, 10).join("\n")}`,
+  );
+});
+
+test("guardrail composizione CHO colazione: cho >= 130 g -> 2 fonti CHO solide distinte", () => {
+  const failures: string[] = [];
+  /** Colazione con CHO >= 130 g: kcal >= ~1040 con 50% CHO. */
+  const kcalSweep = [1040, 1280, 1500, 1800];
+  for (const date of DATES) {
+    for (const dietType of DIET_TYPES) {
+      const ctx = createMediterraneanDayContext(date, undefined, undefined, dietType);
+      const macrosArr = kcalSweep.map((k) => ({ k, m: macrosForSlot("breakfast", k) }));
+      for (const { k, m } of macrosArr) {
+        if (m.carbsG < 130) continue;
+        const composed = composeMediterraneanMeal("breakfast", m, ctx);
+        /** Non basta contare item cho_heavy: la frutta lo e' anche lei. Conto SOLO le fonti
+         *  CHO complesse solide (cereali, pane, fette, avena, muesli, granola, quinoa, ...). */
+        const complexCarbRe = /(pane|cereali|cereale|fiocchi|avena|muesli|granola|fette\s+biscottate|farro|orzo)/i;
+        const complexSolidSources = composed.items.filter(
+          (i) => i.macroRole === "cho_heavy" && complexCarbRe.test(`${i.name} ${i.portionHint}`),
+        );
+        if (complexSolidSources.length < 2) {
+          failures.push(
+            `[${dietType}/${date}/breakfast/${k}kcal/cho=${m.carbsG}g] solo ${complexSolidSources.length} fonte CHO solida complessa (atteso >= 2). Items: ${composed.items.map((i) => i.name).join(" | ")}`,
+          );
+        }
+      }
+    }
+  }
+  assert.equal(
+    failures.length,
+    0,
+    `Regola violata in ${failures.length} casi:\n${failures.slice(0, 12).join("\n")}`,
+  );
+});

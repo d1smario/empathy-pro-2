@@ -63,6 +63,38 @@ Il guardrail `apps/web/lib/nutrition/meal-plan-memory-guardrail.test.ts` esercit
 
 Aggiungere un nuovo alimento al composer = aggiungere riga in `CANONICAL_FOOD_TABLE` + rule INFER + (se liquido) `LIQUIDS_AS_GRAMS_KEYS`.
 
+## Composizione CHO per slot (regola nutrizionista)
+
+Il composer applica le seguenti regole sulla quantità e numero di fonti CHO in base al target del pasto:
+
+### Colazione
+
+| CHO target (g) | Fonti CHO solide complesse |
+|---------------:|----------------------------|
+| < 130 | 1 fonte (cereali / avena / muesli / pane / fette biscottate) + frutta |
+| ≥ 130 | **2 fonti distinte** (es. cereali soffiati / muesli / avena / porridge **+** pane tostato / fette biscottate) |
+
+La quota della 1ª fonte si riduce automaticamente (~36–43% del CHO target invece del 55–70% standard) per fare spazio alla 2ª senza sforare le kcal del pasto.
+
+### Pranzo / Cena
+
+| CHO target (g) | Carb principale | Carb secondario (pane / focaccia) |
+|---------------:|-----------------|------------------------------------|
+| ≤ 100 | pasta · riso · farro · orzo · quinoa · patate **OPPURE** pane (cene leggere) | 0 g |
+| 100 – 130 | pasta · riso · farro · orzo · quinoa · patate (**pane vietato come principale**) | 20–35 g (accompagnamento) |
+| 130 – 180 | pasta · riso · farro · orzo · quinoa · patate (**pane vietato come principale**) | **40–80 g (2ª fonte CHO)** |
+| > 180 | pasta · riso · farro · orzo · quinoa · patate (**pane vietato come principale**) | **70–110 g (2ª fonte CHO)** |
+
+### Pool carb principale (lunch/dinner)
+
+5 amidi complessi (pasta · riso · farro/orzo · quinoa · patate) + pane (solo se CHO ≤ 100 g) = pool sufficiente per rispettare `MAX_STAPLE_USES_PER_WEEK = 3` su 14 pasti principali settimanali (5 × 3 = 15 ≥ 14).
+
+### Implementazione
+
+- `apps/web/lib/nutrition/mediterranean-meal-composer.ts` — filtro `carbOrder` esclude `"pane"` quando lunch/dinner ha `m.carbsG > 100`; `paneG` scala su `m.carbsG`; etichetta dell'item pane diventa "Pane / focaccia (2ª fonte CHO)" quando attiva la 2ª fonte.
+- `apps/web/lib/nutrition/breakfast-meal-archetypes.ts` — `appendBreakfastSecondaryCarb()` aggiunge la 2ª fonte CHO solida (pane tostato se la 1ª è cereali/avena/muesli/granola; fiocchi d'avena se la 1ª è pane/fette).
+- `apps/web/lib/nutrition/meal-plan-memory-guardrail.test.ts` — guardrail 6, 7, 8 verificano in test che la regola sia rispettata su tutti i `dietType × date × kcal range`.
+
 ## Codice
 
 Vedi `.cursor/rules/empathy_nutrition_diet_meal_plan_generative.mdc`.

@@ -69,9 +69,28 @@ alwaysApply: false
   3. Se è un **liquido** (latte, bevanda vegetale, yogurt da bere): aggiungi il key a `LIQUIDS_AS_GRAMS_KEYS` (server + client) per il scaling `ml → g`.
   4. (Opzionale) Mappa USDA FDC ID in `canonical-food-fdc-aliases.ts` se vuoi che la cache server-side scali sui valori USDA invece del TS table.
 
+## Regola 7 — Composizione CHO per slot (regola nutrizionista, vincolante)
+
+**Colazione**:
+
+- CHO target del pasto **< 130 g** → 1 fonte CHO complessa principale (cereali, avena, muesli, pane tostato, fette biscottate) + frutta.
+- CHO target **≥ 130 g** → **2 fonti CHO solide complesse distinte** (es. cereali soffiati/muesli/avena/porridge **+ pane tostato/fette biscottate**). La quota della 1ª fonte si riduce per fare spazio alla 2ª.
+
+**Pranzo / Cena**:
+
+- CHO target del pasto **≤ 100 g** → 1 fonte CHO principale; pane può comparire come carb principale (cena leggera) o non comparire affatto.
+- CHO target **> 100 g** → **pane NON può essere il carb principale**. La fonte principale deve essere un amido complesso: **pasta, riso, farro, orzo, quinoa, patate**.
+- CHO target **≥ 130 g** → **2 fonti CHO**: principale complessa (sopra) **+ secondaria** (pane integrale **o** focaccia). La 2ª fonte (`paneFinalG`) scala con il target: 20–35 g (100–130), 40–80 g (130–180), 70–110 g (>180).
+
+**Implementazione**:
+
+- `apps/web/lib/nutrition/mediterranean-meal-composer.ts` → filtro `carbOrder` esclude `"pane"` quando `slot ∈ {lunch, dinner}` e `m.carbsG > 100`; `paneG` scala su `m.carbsG`.
+- `apps/web/lib/nutrition/breakfast-meal-archetypes.ts` → `appendBreakfastSecondaryCarb()` aggiunge la 2ª fonte CHO solida quando `m.carbsG ≥ 130`; ogni archetipo riduce la quota della 1ª fonte (ratio CHO `0.36–0.43` invece di `0.55–0.70`) per equilibrare le kcal.
+- Pool carb principale lunch/dinner: `pasta | riso | patate | farro | quinoa | pane` (5 complessi + pane solo cene leggere). Garantisce ≥ 14 selezioni/settimana sotto `MAX_STAPLE_USES_PER_WEEK=3`.
+
 ## Test minimi obbligatori su modifica
 
 - `resolve-nutrition-diet-day.test.ts`
 - `diet-meal-slot-budgets.test.ts`
-- `meal-plan-memory-guardrail.test.ts` — esercita TUTTI gli slot × dietType × kcal range e fallisce se un item del composer non risolve nella memoria canonica.
+- `meal-plan-memory-guardrail.test.ts` — esercita TUTTI gli slot × dietType × kcal range e fallisce se un item del composer non risolve nella memoria canonica. **Copre anche Regola 7**: lunch/dinner CHO > 100g non usa pane come principale; lunch/dinner CHO ≥ 130g ha ≥ 2 item `cho_heavy`; breakfast CHO ≥ 130g ha ≥ 2 fonti CHO solide complesse.
 - `canonical-food-composition.test.ts` — regression test su rule INFER specifiche e scaling per nome alimento.

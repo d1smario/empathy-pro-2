@@ -326,14 +326,67 @@ function finalizeBreakfastMeal(
   return { lines, items, totalApproxKcal: items.reduce((a, i) => a + i.approxKcal, 0) };
 }
 
+/**
+ * Regola utente nutrizionista: a colazione con CHO totali >= 130 g servono
+ * DUE fonti di carboidrati distinte (es. cereali + pane tostato).
+ *
+ * Questo helper aggiunge la 2a fonte solida a un archetipo che ha gia' la
+ * primaria. La quota della primaria viene ridotta in chiamata, qui si
+ * aggiunge solo il delta della secondaria.
+ *
+ * - secondaryKind = "bread"     -> Pane tostato integrale (2a fonte se la 1a e' cereali/avena/muesli).
+ * - secondaryKind = "cereal"    -> Fiocchi d'avena (2a fonte se la 1a e' pane/fette).
+ */
+function appendBreakfastSecondaryCarb(
+  m: MealMacroTargets,
+  seed: number,
+  secondaryKind: "bread" | "cereal",
+  items: IntelligentMealPlanItemOut[],
+  lines: string[],
+): void {
+  if (m.carbsG < 130) return;
+  /** Quota della 2a fonte: ~25-30% del CHO target, ~35-60 g a seconda della densita'. */
+  const targetChoSecondary = m.carbsG * 0.27;
+  if (secondaryKind === "bread") {
+    const breadG = clamp(targetChoSecondary / D.breadChoPerG + (seed % 3) * 3, 35, 90);
+    const label = `${breadG} g pane integrale tostato (2 fette, 2ª fonte CHO)`;
+    items.push(
+      item(
+        "Pane tostato (2ª fonte CHO)",
+        label,
+        breadG * D.breadKcalPerG,
+        "cho_heavy",
+        "Seconda fonte di carboidrati richiesta dal target del pasto (CHO ≥ 130 g): cereale + pane = 2 fonti complesse.",
+      ),
+    );
+    lines.push(label);
+  } else {
+    const oatG = clamp(targetChoSecondary / D.cerealChoPerG + (seed % 3) * 2, 25, 60);
+    const label = `${oatG} g fiocchi d'avena o cereali soffiati (2ª fonte CHO)`;
+    items.push(
+      item(
+        "Cereali / avena (2ª fonte CHO)",
+        label,
+        oatG * D.cerealKcalPerG,
+        "cho_heavy",
+        "Seconda fonte di carboidrati richiesta dal target del pasto (CHO ≥ 130 g): pane + cereale = 2 fonti complesse.",
+      ),
+    );
+    lines.push(label);
+  }
+}
+
 function composeBreakfastCerealsMilk(m: MealMacroTargets, seed: number, ctx: MediterraneanDayContext): MediterraneanComposedMeal {
   const K = Math.max(220, m.kcal);
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
   const bev = pickBreakfastBeverage(ctx, seed, 0, clamp(K * 0.28 / D.milkKcalPerMl, 140, 280));
-  /** CHO solido = ~60% del target CHO pasto. Niente upper cap: porzione SCALA col target del solver. */
-  const cerealG = Math.max(32, Math.round(C * 0.6 / D.cerealChoPerG));
+  /** Se CHO target >= 130g, riduci la quota della 1a fonte (~36%) per lasciar spazio
+   *  al pane tostato come 2a fonte (~27%). Sotto soglia, ~60% della quota CHO. */
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.36 : 0.6;
+  const cerealG = Math.max(32, Math.round(C * primaryChoRatio / D.cerealChoPerG));
   const fruit = pickBreakfastFruit(seed, C, "default", ctx);
   const cerealLabel = seed % 2 === 0 ? "Cereali / fiocchi (avena, muesli)" : "Cereali soffiati o fiocchi d’avena";
 
@@ -354,6 +407,7 @@ function composeBreakfastCerealsMilk(m: MealMacroTargets, seed: number, ctx: Med
   lines.push(`${cerealG} g cereali / avena / muesli`);
   items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta fresca."));
   lines.push(fruit.line);
+  appendBreakfastSecondaryCarb(m, seed, "bread", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 
@@ -362,8 +416,11 @@ function composeBreakfastPorridge(m: MealMacroTargets, seed: number, ctx: Medite
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  /** Avena = fonte CHO dominante del porridge. ~65% del target CHO, nessun upper cap. */
-  const oatG = Math.max(40, Math.round(C * 0.65 / D.cerealChoPerG));
+  /** Avena = fonte CHO primaria del porridge. ~65% standard, ridotta a ~40% se richiesta
+   *  una 2a fonte (CHO target >= 130g): pane tostato accanto al porridge. */
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.4 : 0.65;
+  const oatG = Math.max(40, Math.round(C * primaryChoRatio / D.cerealChoPerG));
   const bev = pickBreakfastBeverage(ctx, seed, 1, clamp(K * 0.32 / D.milkKcalPerMl, 160, 280));
   const fruit = pickBreakfastFruit(seed + 1, C, "default", ctx);
 
@@ -395,6 +452,7 @@ function composeBreakfastPorridge(m: MealMacroTargets, seed: number, ctx: Medite
   lines.push(bev.bev.hint(bev.ml));
   items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta sul porridge."));
   lines.push(fruit.line);
+  appendBreakfastSecondaryCarb(m, seed, "bread", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 
@@ -403,8 +461,11 @@ function composeBreakfastToastJam(m: MealMacroTargets, seed: number, ctx: Medite
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  /** Pane = CHO dominante toast_jam. ~70% del target (la marmellata copre il resto). Nessun upper cap. */
-  const breadG = Math.max(50, Math.round(C * 0.7 / D.breadChoPerG));
+  /** Pane = CHO primario toast_jam. ~70% standard; con CHO target >= 130g
+   *  scende a ~43% per lasciar spazio alla 2a fonte (fiocchi d'avena/cereali). */
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.43 : 0.7;
+  const breadG = Math.max(50, Math.round(C * primaryChoRatio / D.breadChoPerG));
   const jamG = clamp(12 + (seed % 10), 12, 22);
   const bev = pickBreakfastBeverage(ctx, seed, 2, clamp(K * 0.22 / D.milkKcalPerMl, 120, 200));
 
@@ -416,6 +477,7 @@ function composeBreakfastToastJam(m: MealMacroTargets, seed: number, ctx: Medite
     item(bev.bev.label, bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Bevanda di accompagnamento."),
   );
   lines.push(bev.bev.hint(bev.ml));
+  appendBreakfastSecondaryCarb(m, seed, "cereal", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 
@@ -424,8 +486,11 @@ function composeBreakfastRusks(m: MealMacroTargets, seed: number, ctx: Mediterra
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  /** Fette biscottate = CHO dominante. ~70% del target CHO, nessun upper cap. */
-  const ruskG = Math.max(35, Math.round(C * 0.7 / D.crackerChoPerG));
+  /** Fette biscottate = CHO primario. ~70% standard; con CHO target >= 130g
+   *  scende a ~43% per lasciar spazio alla 2a fonte (fiocchi d'avena/cereali). */
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.43 : 0.7;
+  const ruskG = Math.max(35, Math.round(C * primaryChoRatio / D.crackerChoPerG));
   const jamG = clamp(10 + (seed % 8), 10, 18);
   const bev = pickBreakfastBeverage(ctx, seed, 3, clamp(K * 0.24 / D.milkKcalPerMl, 120, 220));
 
@@ -437,6 +502,7 @@ function composeBreakfastRusks(m: MealMacroTargets, seed: number, ctx: Mediterra
     item(bev.bev.label, bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Latte/bevanda per intingere."),
   );
   lines.push(bev.bev.hint(bev.ml));
+  appendBreakfastSecondaryCarb(m, seed, "cereal", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 
@@ -447,8 +513,11 @@ function composeBreakfastYogurtBowl(m: MealMacroTargets, seed: number, ctx: Medi
   const lines: string[] = [];
   const skipDairy = breakfastDairyBlocked(ctx);
   const yogurtG = clamp(P * 0.55 / D.yogurtProtPerG, 120, 220);
-  /** Granola/muesli/cereali nel bowl = CHO dominante. ~55% del target CHO (frutta copre il resto). Nessun upper cap. */
-  const cerealG = Math.max(20, Math.round(C * 0.55 / D.cerealChoPerG));
+  /** Granola/muesli/cereali nel bowl = CHO primario. ~55% standard; con CHO target >= 130g
+   *  scende a ~32% per fare spazio a una 2a fonte (pane tostato). */
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.32 : 0.55;
+  const cerealG = Math.max(20, Math.round(C * primaryChoRatio / D.cerealChoPerG));
   const fruit = pickBreakfastFruit(seed + 2, C, "default", ctx);
 
   /** Item separati: yogurt (proteico) + granola/muesli (CHO) + frutta. Un alimento per item. */
@@ -474,6 +543,7 @@ function composeBreakfastYogurtBowl(m: MealMacroTargets, seed: number, ctx: Medi
   lines.push(`${cerealG} g muesli o granola`);
   items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta nel bowl."));
   lines.push(fruit.line);
+  appendBreakfastSecondaryCarb(m, seed, "bread", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed + 1);
 }
 
@@ -485,10 +555,12 @@ function composeBreakfastSmoothie(m: MealMacroTargets, seed: number, ctx: Medite
 
   /**
    * Cereale solido a fianco dello smoothie: copre la quota CHO complessa che
-   * frutta + bevanda non possono garantire. ~55% del CHO target del solver,
-   * nessun upper cap: porzioni reali se il target lo richiede.
+   * frutta + bevanda non possono garantire. ~55% standard; con CHO target >= 130g
+   * scende a ~32% per lasciar spazio alla 2a fonte (pane tostato).
    */
-  const oatG = Math.max(40, Math.round(C * 0.55 / D.cerealChoPerG));
+  const wantsSecondary = m.carbsG >= 130;
+  const primaryChoRatio = wantsSecondary ? 0.32 : 0.55;
+  const oatG = Math.max(40, Math.round(C * primaryChoRatio / D.cerealChoPerG));
   items.push(
     item(
       "Fiocchi d'avena",
@@ -529,6 +601,7 @@ function composeBreakfastSmoothie(m: MealMacroTargets, seed: number, ctx: Medite
     items.push(item("Mela", "1 mela media (~150 g)", 72, "cho_heavy", "Mela nel frullato."));
     lines.push("1 mela media");
   }
+  appendBreakfastSecondaryCarb(m, seed, "bread", items, lines);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 

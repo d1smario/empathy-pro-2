@@ -679,6 +679,32 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     eaa_val: 0.62,
     eaa_his: 0.3,
   }),
+  /**
+   * Quinoa cruda (USDA FDC SR Legacy ~368 kcal/100g, profilo AA completo).
+   * Sorgente: USDA FoodData Central — quinoa, uncooked (FDC ID 168874).
+   * Usato come 5° amido complesso nella rotazione settimanale del composer.
+   */
+  quinoa_dry: row({
+    kcalPer100g: 368,
+    proteinG: 14.1,
+    carbsG: 64.2,
+    fatG: 6.1,
+    fiberG: 7.0,
+    mg_mg: 197,
+    zn_mg: 3.1,
+    fe_mg: 4.6,
+    p_mg: 457,
+    k_mg: 563,
+    eaa_leu: 0.84,
+    eaa_lys: 0.77,
+    eaa_met: 0.31,
+    eaa_phe: 0.59,
+    eaa_thr: 0.42,
+    eaa_trp: 0.17,
+    eaa_ile: 0.5,
+    eaa_val: 0.59,
+    eaa_his: 0.41,
+  }),
   chicken_breast: row({
     kcalPer100g: 165,
     proteinG: 31,
@@ -1003,6 +1029,10 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   },
   { test: /riso|rice|basmati|jasmine/i, key: "rice_dry" },
   { test: /patat|potato/i, key: "potato_cooked" },
+  {
+    test: /quinoa/i,
+    key: "quinoa_dry",
+  },
   {
     test: /(farro|orzo|grano).*(cotto|cottura|peso\s*cotto|già\s*cotto|cooked)/i,
     key: "farro_cooked",

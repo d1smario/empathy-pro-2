@@ -203,11 +203,14 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
   return composeBreakfastWithArchetypes(m, seed, ctx);
 }
 
-type CarbKey = "pasta" | "riso" | "patate" | "farro" | "pane";
+type CarbKey = "pasta" | "riso" | "patate" | "farro" | "quinoa" | "pane";
 type ProtKey = "pollo" | "pesce" | "legumi" | "manzo" | "uova" | "tofu" | "tempeh" | "seitan";
 
-/** 5 amidi distinti × MAX_STAPLE_USES_PER_WEEK (3) = 15 selezioni/sett (>= 14 lunch+dinner). */
-const CARB_ORDER: CarbKey[] = ["pasta", "riso", "patate", "farro", "pane"];
+/** 5 amidi complessi (pasta/riso/patate/farro/quinoa) + pane (solo cene leggere cho < 100g).
+ *  Vincolo nutrizionale: a pranzo/cena con cho > 100g il pane NON e' carb principale,
+ *  ma puo' comparire come carb SECONDARIO (paneFinalG) quando cho >= 130g.
+ *  5 staple complessi × MAX_STAPLE_USES_PER_WEEK (3) = 15 selezioni/sett (>= 14 lunch+dinner). */
+const CARB_ORDER: CarbKey[] = ["pasta", "riso", "patate", "farro", "quinoa", "pane"];
 /** Omnivoro: aggiungo tofu/tempeh come variante settimanale (alternanza vegetale anche in dieta carnea). */
 const PROT_ORDER: ProtKey[] = ["pollo", "pesce", "legumi", "manzo", "uova", "tofu", "tempeh"];
 
@@ -226,6 +229,7 @@ const CARB_DENY_KEYWORDS: Record<CarbKey, readonly string[]> = {
   riso: ["riso", "rice"],
   patate: ["patate", "patata", "potato"],
   farro: ["farro", "orzo", "spelt", "barley", "glutine", "gluten"],
+  quinoa: ["quinoa"],
   pane: ["pane", "bread", "glutine", "gluten", "frumento", "wheat"],
 };
 
@@ -301,8 +305,10 @@ function pickCarbKey(
   used: Set<string>,
   weekCounts?: Record<string, number>,
   ctx?: MediterraneanDayContext,
+  /** Override del pool (es. lunch/dinner cho > 100g filtra "pane" da fonte principale). */
+  carbOrderOverride?: CarbKey[],
 ): CarbKey {
-  const order = allowedCarbOrder(ctx);
+  const order = carbOrderOverride ?? allowedCarbOrder(ctx);
   const sameDayOk = order.filter((k) => !used.has(stapleCarb(k)));
   const base = sameDayOk.length ? sameDayOk : order;
   const weekOk = base.filter((k) => weekCountFor(stapleCarb(k), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
@@ -403,6 +409,17 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
         cho: gc * D.farroDryChoPerG,
         prot: gc * D.farroDryProtPerG,
         fat: gc * 0.022,
+      };
+    }
+    case "quinoa": {
+      /** Quinoa (USDA-like ~368 kcal/100g a crudo, alto valore biologico). */
+      const gc = clampStep(g, 50, 120);
+      return {
+        line: `${gc} g quinoa (peso a crudo)`,
+        kcal: gc * 3.68,
+        cho: gc * 0.64,
+        prot: gc * 0.14,
+        fat: gc * 0.06,
       };
     }
     case "pane": {
@@ -537,12 +554,29 @@ function composeMainMeal(
 
   const weekCounts = ctx?.weekStapleCounts;
 
-  const carbOrder = allowedCarbOrder(ctx);
+  /**
+   * REGOLA COMPOSIZIONE (regola utente nutrizionista):
+   * - A pranzo/cena con CHO > 100g il pane NON puo' essere il carboidrato
+   *   principale: serve un amido complesso (pasta/riso/farro/quinoa/patate).
+   *   Il pane puo' comparire come carb SECONDARIO (paneFinalG) quando il
+   *   target supera i 130g di CHO e richiede una seconda fonte.
+   * - "Pane" come carb principale resta ammesso per cene molto leggere
+   *   (CHO < 100g) o snack: dieta mediterranea pratica.
+   */
+  let carbOrder = allowedCarbOrder(ctx);
+  if ((slot === "lunch" || slot === "dinner") && m.carbsG > 100) {
+    carbOrder = carbOrder.filter((k) => k !== "pane");
+    /** Se il filtro svuota la lista (caso limite: dieta gluten-free senza riso/quinoa nel pool),
+     *  ripristina almeno il carb gluten-free piu' frequente (riso o quinoa). */
+    if (carbOrder.length === 0) {
+      carbOrder = ["riso", "quinoa"].filter((k) => allowedCarbOrder(ctx).includes(k as CarbKey)) as CarbKey[];
+    }
+  }
   const protOrder = allowedProtOrder(ctx);
   const fishOrder = allowedFishKinds(ctx);
 
   if (used && (slot === "lunch" || slot === "dinner")) {
-    carbKey = pickCarbKey(seed, offset, used, weekCounts, ctx);
+    carbKey = pickCarbKey(seed, offset, used, weekCounts, ctx, carbOrder);
     const picked = pickProtAndFish(seed, offset, carbKey, used, weekCounts, ctx);
     protKey = picked.protKey;
     fishKind = picked.fishKind;
@@ -604,9 +638,11 @@ function composeMainMeal(
         ? clamp(K * 0.38 / D.riceDryKcalPerG, 45, 120)
         : carbKey === "farro"
           ? clamp(K * 0.38 / D.farroDryKcalPerG, 50, 130)
-          : carbKey === "pane"
-            ? clamp(K * 0.38 / D.breadKcalPerG, 120, 240)
-            : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
+          : carbKey === "quinoa"
+            ? clamp(K * 0.38 / 3.68, 50, 120)
+            : carbKey === "pane"
+              ? clamp(K * 0.38 / D.breadKcalPerG, 120, 240)
+              : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
   let protG: number;
   if (protKey === "uova") {
     protG = 0;
@@ -625,15 +661,26 @@ function composeMainMeal(
 
   let vegG = clamp(160 + (seed % 3) * 25, 150, 250);
   let oilMl = clamp(F * 0.55 / D.oilFatPerMl, 8, 22);
-  /** Pane "a fianco" del piatto: SOLO se il carb principale non e' gia' pane (no pane+pane). */
-  let paneG =
-    carbKey === "pane"
-      ? 0
-      : carbKey === "pasta"
-        ? clamp(22 + (seed % 3) * 8, 20, 50)
-        : carbKey === "patate" || carbKey === "riso"
-          ? clamp(32 + (seed % 2) * 12, 28, 65)
-          : clamp(28 + (seed % 2) * 10, 25, 55);
+  /**
+   * Pane SECONDARIO al piatto (regola utente nutrizionista):
+   * - Se il carb principale e' gia' "pane": 0 (no pane+pane).
+   * - Pasto leggero CHO < 100g: 0 (no pane di contorno superfluo).
+   * - Target intermedio 100-130g: porzione piccola 20-35g (~13-22g CHO).
+   * - Target alto >= 130g: porzione 40-80g (~26-52g CHO) = vera 2a fonte CHO.
+   * - Target molto alto >= 180g: 70-110g (~45-72g CHO).
+   */
+  let paneG: number;
+  if (carbKey === "pane") {
+    paneG = 0;
+  } else if (m.carbsG < 100) {
+    paneG = 0;
+  } else if (m.carbsG < 130) {
+    paneG = clamp(20 + (seed % 3) * 5, 20, 35);
+  } else if (m.carbsG < 180) {
+    paneG = clamp(45 + (seed % 3) * 8, 40, 80);
+  } else {
+    paneG = clamp(75 + (seed % 3) * 12, 70, 110);
+  }
   /** Grana/formaggio: aggiungi solo se onnivoro/pescatariano e non in deny lattosio. Vegan/vegetarian-strict no. */
   const cheeseAllowed =
     ctx?.dietType !== "vegan" &&
@@ -657,6 +704,7 @@ function composeMainMeal(
     if (carbKey === "patate") return { lo: 90, hi: 340 };
     if (carbKey === "riso") return { lo: 38, hi: 125 };
     if (carbKey === "farro") return { lo: 40, hi: 135 };
+    if (carbKey === "quinoa") return { lo: 45, hi: 125 };
     if (carbKey === "pane") return { lo: 120, hi: 240 };
     return { lo: 42, hi: 145 };
   };
@@ -688,7 +736,8 @@ function composeMainMeal(
   const protFinal = protLine(protKey, protG, eggs, fishKind);
   const vegFinalG = clampStep(vegG, 130, 280);
   const oilFinalMl = clamp(oilMl, 8, 22);
-  const paneFinalG = clampStep(paneG, 20, 65);
+  /** Permette la 2a fonte CHO (pane) fino a 110g quando il target richiede vera quantita'. */
+  const paneFinalG = paneG > 0 ? clampStep(paneG, 20, 110) : 0;
   const granaFinalG = granaG > 0 ? clampStep(granaG, 15, 35) : 0;
   const vegK = vegFinalG * D.vegKcalPerG;
   const oilK = oilFinalMl * D.oilKcalPerMl;
@@ -700,14 +749,16 @@ function composeMainMeal(
 
   const carbName =
     carbKey === "pasta"
-      ? "Pasta (unica fonte amido principale)"
+      ? "Pasta (carb principale complesso)"
       : carbKey === "riso"
-        ? "Riso (unica fonte amido principale)"
+        ? "Riso (carb principale complesso)"
         : carbKey === "patate"
-          ? "Patate (unica fonte amido principale)"
-          : carbKey === "pane"
-            ? "Pane integrale (unica fonte amido principale)"
-            : "Farro/orzo (unica fonte amido principale)";
+          ? "Patate (carb principale complesso)"
+          : carbKey === "quinoa"
+            ? "Quinoa (carb principale complesso)"
+            : carbKey === "pane"
+              ? "Pane integrale (carb principale — pasto leggero)"
+              : "Farro/orzo (carb principale complesso)";
 
   items.push(
     item(carbName, carbFinal.line, carbFinal.kcal, "cho_heavy", "Un solo carboidrato complesso da pasto principale (no pasta + riso insieme)."),
@@ -754,9 +805,17 @@ function composeMainMeal(
 
   if (paneFinalG > 0) {
     const isFocaccia = seed % 7 === 0;
-    const label = isFocaccia ? `${paneFinalG} g focaccia (porzione piccola)` : `${paneFinalG} g pane integrale o gallette`;
-    items.push(item("Pane / focaccia", label, paneK, "cho_heavy", "Accompagnamento in piccola quantità; il carboidrato principale resta quello scelto sopra."));
-    lines.push(label);
+    /** Etichetta + grammatura riflettono il ruolo del pane (vera 2a fonte CHO quando target >= 130g). */
+    const isSecondCarbSource = m.carbsG >= 130;
+    const breadName = isFocaccia
+      ? `${paneFinalG} g focaccia${isSecondCarbSource ? "" : " (porzione piccola)"}`
+      : `${paneFinalG} g pane integrale${isSecondCarbSource ? "" : " (porzione piccola)"}`;
+    const role = isSecondCarbSource ? "Pane / focaccia (2ª fonte CHO)" : "Pane / focaccia (accompagnamento)";
+    const note = isSecondCarbSource
+      ? "Seconda fonte di carboidrati richiesta dal target del pasto (CHO ≥ 130 g): il carb principale resta quello complesso scelto sopra."
+      : "Accompagnamento in piccola quantità; il carboidrato principale resta quello scelto sopra.";
+    items.push(item(role, breadName, paneK, "cho_heavy", note));
+    lines.push(breadName);
   }
 
   if (granaFinalG > 0) {
