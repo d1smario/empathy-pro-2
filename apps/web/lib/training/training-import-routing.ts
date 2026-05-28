@@ -29,8 +29,10 @@ function fileExtension(effectiveName: string): string {
 }
 
 function scanFitWorkoutStepsFromBuffer(payload: Buffer): FitWorkoutScanResult {
-  // Lazy: evita dipendenza binaria FIT nei test che coprono solo ZWO/CSV.
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  // Lazy via require(): evita di caricare la dipendenza binaria FIT in test
+  // che coprono solo ZWO/CSV. Niente commenti `eslint-disable` qui: il monorepo
+  // estende `next/core-web-vitals` senza caricare `@typescript-eslint/eslint-plugin`,
+  // quindi citare regole `@typescript-eslint/*` farebbe failare il build (Vercel).
   const mod = require("@/lib/training/fit-workout-step-scan") as typeof import("@/lib/training/fit-workout-step-scan");
   return mod.scanFitWorkoutStepsFromBuffer(payload);
 }
