@@ -207,7 +207,15 @@ export async function buildFdcCanonicalSnapshot(canonicalKeys: string[]): Promis
 const OLIVE_OIL_G_PER_ML = 0.92;
 /** Densita' liquidi-latte (latte/yogurt/bevande vegetali): ~1 g/ml. */
 const LIQUID_DAIRY_G_PER_ML = 1.03;
-const LIQUIDS_AS_GRAMS_KEYS = new Set(["milk_2pct", "milk_goat", "yogurt_plain"]);
+const LIQUIDS_AS_GRAMS_KEYS = new Set([
+  "milk_2pct",
+  "milk_goat",
+  "yogurt_plain",
+  "plant_drink_almond",
+  "plant_drink_rice",
+  "plant_drink_oat",
+  "plant_drink_generic",
+]);
 
 function parseGramsFromHint(hint: string, compositionKey: string): number | undefined {
   const text = hint.trim();

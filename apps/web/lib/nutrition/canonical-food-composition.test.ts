@@ -89,6 +89,46 @@ test("nutrientsForMealPlanItem: item singolo 'Fiocchi d'avena' 85 g → ~310 kca
   assert.ok(res.nutrients.carbsG >= 50, `CHO attesi >=50 g, trovati ${res.nutrients.carbsG}`);
 });
 
+test("nutrientsForMealPlanItem: bevande vegetali specifiche (mandorla/riso/avena) → kcal non-zero coerenti con USDA-like", () => {
+  /** Regression: prima il composer emetteva name="Bevanda vegetale" generico e
+   *  inferCanonicalFoodKey non aveva una rule per matcharlo → fallback unresolved → 0 kcal.
+   *  Ora il composer usa il label specifico ("Bevanda mandorla", "Bevanda riso",
+   *  "Bevanda d'avena") e le rule mappano a plant_drink_almond/rice/oat. */
+  const mandorla = nutrientsForMealPlanItem({
+    name: "Bevanda mandorla",
+    portionHint: "200 ml bevanda di mandorla non zuccherata",
+    approxKcal: 50,
+  });
+  assert.equal(mandorla.compositionKey, "plant_drink_almond");
+  assert.ok(mandorla.nutrients.kcal >= 35 && mandorla.nutrients.kcal <= 65, `mandorla 200ml kcal attese 35-65, trovate ${mandorla.nutrients.kcal}`);
+
+  const riso = nutrientsForMealPlanItem({
+    name: "Bevanda riso",
+    portionHint: "200 ml bevanda di riso non zuccherata",
+    approxKcal: 90,
+  });
+  assert.equal(riso.compositionKey, "plant_drink_rice");
+  assert.ok(riso.nutrients.kcal >= 80 && riso.nutrients.kcal <= 110, `riso 200ml kcal attese 80-110, trovate ${riso.nutrients.kcal}`);
+
+  const avena = nutrientsForMealPlanItem({
+    name: "Bevanda avena",
+    portionHint: "200 ml bevanda d'avena non zuccherata",
+    approxKcal: 90,
+  });
+  assert.equal(avena.compositionKey, "plant_drink_oat");
+  assert.ok(avena.nutrients.kcal >= 80 && avena.nutrients.kcal <= 110, `avena 200ml kcal attese 80-110, trovate ${avena.nutrients.kcal}`);
+});
+
+test("nutrientsForMealPlanItem: 'Bevanda vegetale' generico → fallback plant_drink_generic (non zero kcal)", () => {
+  const generic = nutrientsForMealPlanItem({
+    name: "Bevanda vegetale",
+    portionHint: "200 ml bevanda vegetale non zuccherata",
+    approxKcal: 70,
+  });
+  assert.equal(generic.compositionKey, "plant_drink_generic");
+  assert.ok(generic.nutrients.kcal >= 50 && generic.nutrients.kcal <= 90, `generic 200ml kcal attese 50-90, trovate ${generic.nutrients.kcal}`);
+});
+
 test("nutrientsForMealPlanItem: 'Latte' 280 ml → ~145 kcal (ml → g per liquidi-latte)", () => {
   /** Regression: l'utente segnala "il latte non ha marcato le calorie nel piano".
    *  Causa: parseGramsFromHint accettava solo `g` (e `ml` solo per olio). Per il

@@ -253,6 +253,74 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     eaa_val: 0.75,
     eaa_his: 0.35,
   }),
+  /** Bevanda di mandorla non zuccherata fortificata (USDA-like 12087.0). */
+  plant_drink_almond: row({
+    kcalPer100g: 24,
+    proteinG: 1,
+    carbsG: 0.6,
+    fatG: 2.2,
+    fiberG: 0.4,
+    saturatedFatG: 0.2,
+    monoFatG: 1.4,
+    polyFatG: 0.6,
+    ca_mg: 188,
+    vitD_mcg: 1,
+    vitB12_mcg: 1.2,
+    riboflavinB2_mg: 0.5,
+    k_mg: 67,
+    na_mg: 72,
+    zn_mg: 0.2,
+  }),
+  /** Bevanda di riso non zuccherata (USDA-like 14642.0). */
+  plant_drink_rice: row({
+    kcalPer100g: 47,
+    proteinG: 0.3,
+    carbsG: 9.2,
+    fatG: 1,
+    fiberG: 0.3,
+    saturatedFatG: 0.1,
+    monoFatG: 0.6,
+    polyFatG: 0.3,
+    ca_mg: 118,
+    vitD_mcg: 1,
+    vitB12_mcg: 1.5,
+    riboflavinB2_mg: 0.14,
+    k_mg: 27,
+    na_mg: 39,
+  }),
+  /** Bevanda d'avena non zuccherata (stime educative). */
+  plant_drink_oat: row({
+    kcalPer100g: 45,
+    proteinG: 1,
+    carbsG: 6.7,
+    fatG: 1.5,
+    fiberG: 0.8,
+    saturatedFatG: 0.2,
+    monoFatG: 0.7,
+    polyFatG: 0.4,
+    ca_mg: 120,
+    vitD_mcg: 1.1,
+    vitB12_mcg: 0.4,
+    riboflavinB2_mg: 0.21,
+    k_mg: 145,
+    na_mg: 90,
+  }),
+  /** Bevanda vegetale generica (media tra soia/avena/riso/mandorla). */
+  plant_drink_generic: row({
+    kcalPer100g: 35,
+    proteinG: 1.5,
+    carbsG: 3.5,
+    fatG: 1.8,
+    fiberG: 0.4,
+    saturatedFatG: 0.2,
+    monoFatG: 0.9,
+    polyFatG: 0.4,
+    ca_mg: 120,
+    vitD_mcg: 1,
+    vitB12_mcg: 0.4,
+    k_mg: 100,
+    na_mg: 60,
+  }),
   yogurt_plain: row({
     kcalPer100g: 75,
     proteinG: 4.5,
@@ -799,6 +867,15 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   { test: /avocado/i, key: "avocado" },
   { test: /gallette|cracker/i, key: "crackers_whole" },
   { test: /bresaola|prosciutto|affettato|mortadella|salame/i, key: "deli_lean" },
+  /** Bevande vegetali: matchare PRIMA di "latte\b" generico per non cadere su milk_2pct.
+   *  Le rule sono specifiche per ingrediente (mandorla/riso/avena) cosi' lo scaling USDA
+   *  produce kcal realistiche. Fallback su plant_drink_generic per "bevanda vegetale". */
+  { test: /bevanda\s+(?:di\s+)?mandorla|almond\s+(?:milk|drink|beverage)|latte\s+(?:di\s+)?mandorla/i, key: "plant_drink_almond" },
+  { test: /bevanda\s+(?:di\s+)?riso|rice\s+(?:milk|drink|beverage)|latte\s+(?:di\s+)?riso/i, key: "plant_drink_rice" },
+  { test: /bevanda\s+(?:d['’]?\s*)?avena|oat\s+(?:milk|drink|beverage)|latte\s+(?:d['’]?\s*)?avena|bevanda\s+vegetale.*avena/i, key: "plant_drink_oat" },
+  { test: /bevanda\s+(?:di\s+)?soia|soy\s+(?:milk|drink|beverage)|latte\s+(?:di\s+)?soia/i, key: "plant_drink_generic" },
+  { test: /bevanda\s+(?:di\s+)?cocco|coconut\s+(?:milk|drink|beverage)|latte\s+(?:di\s+)?cocco/i, key: "plant_drink_generic" },
+  { test: /bevanda\s+vegetale|plant\s+(?:based\s+)?(?:milk|drink|beverage)/i, key: "plant_drink_generic" },
   { test: /latte di capra|latte caprina|goat milk|latte\s+di\s+capra/i, key: "milk_goat" },
   { test: /latte\b|milk/i, key: "milk_2pct" },
   { test: /yogurt|yoghurt|kefir/i, key: "yogurt_plain" },
@@ -946,7 +1023,15 @@ export function looksLikeMultiIngredientPortionHint(portionHint: string): boolea
 
 /** Densita' liquidi-latte (latte/yogurt/bevande vegetali): ~1 g/ml. */
 const LIQUID_DAIRY_G_PER_ML = 1.03;
-const LIQUIDS_AS_GRAMS_KEYS = new Set(["milk_2pct", "milk_goat", "yogurt_plain"]);
+const LIQUIDS_AS_GRAMS_KEYS = new Set([
+  "milk_2pct",
+  "milk_goat",
+  "yogurt_plain",
+  "plant_drink_almond",
+  "plant_drink_rice",
+  "plant_drink_oat",
+  "plant_drink_generic",
+]);
 
 function resolveServingGramsFromPortionHint(portionHint: string, compositionKey: string): number | undefined {
   const hint = portionHint.trim();

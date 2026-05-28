@@ -310,7 +310,10 @@ function composeBreakfastCerealsMilk(m: MealMacroTargets, seed: number, ctx: Med
 
   items.push(
     item(
-      bev.bev.animal ? "Latte o bevanda vegetale" : "Bevanda vegetale",
+      /** Usa il label specifico ("Latte vaccino", "Bevanda mandorla", ...): permette al
+       *  lookup canonical di matchare la rule corretta (es. plant_drink_almond invece di
+       *  cadere in unresolved come accadeva con il name generico "Bevanda vegetale"). */
+      bev.bev.label,
       bev.bev.hint(bev.ml).slice(0, 160),
       bev.kcal,
       "protein",
@@ -353,7 +356,7 @@ function composeBreakfastPorridge(m: MealMacroTargets, seed: number, ctx: Medite
   lines.push(`${oatG} g fiocchi d'avena (peso secco)`);
   items.push(
     item(
-      bev.bev.animal ? "Latte" : "Bevanda vegetale",
+      bev.bev.label,
       bev.bev.hint(bev.ml).slice(0, 160),
       bev.kcal,
       "protein",
@@ -381,7 +384,7 @@ function composeBreakfastToastJam(m: MealMacroTargets, seed: number, ctx: Medite
   items.push(item("Marmellata", `${jamG} g marmellata di frutta`, jamG * 2.5, "cho_heavy", "Marmellata leggera."));
   lines.push(`${jamG} g marmellata`);
   items.push(
-    item(bev.bev.animal ? "Latte o bevanda vegetale" : "Bevanda vegetale", bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Bevanda di accompagnamento."),
+    item(bev.bev.label, bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Bevanda di accompagnamento."),
   );
   lines.push(bev.bev.hint(bev.ml));
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
@@ -402,7 +405,7 @@ function composeBreakfastRusks(m: MealMacroTargets, seed: number, ctx: Mediterra
   items.push(item("Marmellata", `${jamG} g marmellata`, jamG * 2.5, "cho_heavy", "Marmellata leggera."));
   lines.push(`${jamG} g marmellata`);
   items.push(
-    item(bev.bev.animal ? "Latte o bevanda vegetale" : "Bevanda vegetale", bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Latte/bevanda per intingere."),
+    item(bev.bev.label, bev.bev.hint(bev.ml).slice(0, 160), bev.kcal, "protein", "Latte/bevanda per intingere."),
   );
   lines.push(bev.bev.hint(bev.ml));
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
@@ -480,7 +483,7 @@ function composeBreakfastSmoothie(m: MealMacroTargets, seed: number, ctx: Medite
 
   items.push(
     item(
-      bev.bev.animal ? "Latte" : "Bevanda vegetale",
+      bev.bev.label,
       bev.bev.hint(bev.ml).slice(0, 160),
       bev.kcal,
       "protein",
