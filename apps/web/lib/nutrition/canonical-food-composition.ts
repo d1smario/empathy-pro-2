@@ -793,7 +793,7 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
 
 const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   { test: /omega|epa|dha|capsula/i, key: "omega_capsule" },
-  { test: /whey|proteina in polvere|protein powder/i, key: "whey_powder" },
+  { test: /\bwhey\b|protein(e|a)?\s+in\s+polvere|protein\s+powder|polvere\s+protein/i, key: "whey_powder" },
   { test: /olio|evo|olive oil/i, key: "olive_oil" },
   { test: /grana|parmigiano|formaggio/i, key: "cheese_hard" },
   { test: /avocado/i, key: "avocado" },
@@ -908,9 +908,27 @@ function parseMlFromPortionHint(hint: string): number | undefined {
   return v;
 }
 
+/**
+ * Hint multi-ingrediente: portionHint che descrive piu' componenti (compose),
+ * tipici dei breakfast archetypes ("X ml latte + Y g frutta + Z g frutti di bosco").
+ *
+ * In questo caso parsare il primo "Xg" e' fuorviante: si finisce per scalare i
+ * nutrienti come se l'intero compose fosse Xg di un singolo ingrediente,
+ * azzerando il contributo degli altri. Per il display preferiamo lo scaling
+ * per kcal (`scaleCanonicalNutrientsToKcal`) che usa l'`approxKcal` reale.
+ */
+export function looksLikeMultiIngredientPortionHint(portionHint: string): boolean {
+  const hint = portionHint.trim();
+  if (!hint) return false;
+  if (hint.includes(" + ")) return true;
+  const quantityMatches = hint.match(/\b\d+(?:[.,]\d+)?\s*(g(?:rammi?)?|ml)\b/gi) ?? [];
+  return quantityMatches.length >= 2;
+}
+
 function resolveServingGramsFromPortionHint(portionHint: string, compositionKey: string): number | undefined {
   const hint = portionHint.trim();
   if (!hint) return undefined;
+  if (looksLikeMultiIngredientPortionHint(hint)) return undefined;
   const g = parseExplicitGramsFromPortionHint(hint);
   if (g != null) return g;
   const ml = parseMlFromPortionHint(hint);

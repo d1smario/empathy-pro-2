@@ -28,6 +28,7 @@ import {
   weightedAvgGlycemicIndex,
   type GiBand,
 } from "@/lib/nutrition/meal-exposition-helpers";
+import { looksLikeMultiIngredientPortionHint } from "@/lib/nutrition/canonical-food-composition";
 import type { IntelligentMealPlanItemOut } from "@/lib/nutrition/intelligent-meal-plan-types";
 
 function slotHeaderIcon(slot: MealSlotKey | "pre_sleep"): LucideIcon {
@@ -87,16 +88,23 @@ export function buildExpositionItemsFromPlan(
     .map(({ it, ii }) => {
       const m = approxMacrosForPlanItem(it);
       const ig = estimatedItemGlycemicIndex(it);
+      // Per i compose multi-ingrediente (es. Smoothie colazione = bev + frutta + frutti di bosco)
+      // il badge "Xg" preso dal primo numero del portionHint e' fuorviante: rappresenta solo
+      // uno degli ingredienti. In quel caso non mostriamo il peso (i nutrienti arrivano gia'
+      // dallo scaling per kcal in `nutrientsForMealPlanItem`).
+      const portionHintTrim = it.portionHint?.trim() ?? "";
+      const isCompose = looksLikeMultiIngredientPortionHint(portionHintTrim);
+      const weightG = isCompose ? undefined : parseGramsFromPortion(`${portionHintTrim} ${it.name}`.trim());
       return {
         sourceIndex: ii,
         name: it.name,
-        portionHint: it.portionHint?.trim() || undefined,
+        portionHint: portionHintTrim || undefined,
         kcal: m.kcal,
         carbsG: m.carbsG,
         proteinG: m.proteinG,
         fatG: m.fatG,
         ig,
-        weightG: parseGramsFromPortion(`${it.portionHint ?? ""} ${it.name}`.trim()),
+        weightG,
       };
     });
 }
