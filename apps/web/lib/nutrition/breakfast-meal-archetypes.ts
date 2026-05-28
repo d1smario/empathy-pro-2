@@ -203,18 +203,47 @@ function pickBreakfastBeverage(ctx: MediterraneanDayContext, seed: number, offse
 
 type BreakfastFruitPick = { line: string; kcal: number; cho: number; prot: number };
 
-function pickBreakfastFruit(seed: number, carbsG: number, variant: "default" | "smoothie" = "default"): BreakfastFruitPick {
-  const useBanana = variant === "smoothie" ? true : seed % 3 !== 0;
-  if (useBanana) {
+function pickBreakfastFruit(
+  seed: number,
+  carbsG: number,
+  variant: "default" | "smoothie" = "default",
+  ctx?: MediterraneanDayContext,
+): BreakfastFruitPick {
+  /** Rispetta foodExclusions del profilo (es. coach esclude "banana", "mirtillo"...).
+   *  Se l'unica opzione di default e' vietata, fallback su mela o pera. */
+  const deny = ctx?.denyFragments;
+  const bananaBanned = denyHit(["banana"], deny);
+  const berryBanned = denyHit(["lampon", "mirtill", "frutti di bosco", "berry", "bosco"], deny);
+  const appleBanned = denyHit(["mela", "apple"], deny);
+  const pearBanned = denyHit(["pera", "pear"], deny);
+
+  /** Smoothie predefinisce banana ma se vietata cade su frutti di bosco; se anche quelli vietati, su mela. */
+  if (variant === "smoothie") {
+    if (!bananaBanned) return { line: "1 banana media", kcal: D.bananaKcal, cho: D.bananaCho, prot: D.bananaProt };
+    if (!berryBanned) {
+      const bg = clamp(carbsG * 0.22 / D.berryChoPerG, 40, 110);
+      return { line: `${bg} g lamponi / mirtilli / frutti di bosco`, kcal: bg * D.berryKcalPerG, cho: bg * D.berryChoPerG, prot: bg * 0.01 };
+    }
+    if (!appleBanned) return { line: "1 mela media (~150 g)", kcal: 80, cho: 21, prot: 0.4 };
+    if (!pearBanned) return { line: "1 pera media (~160 g)", kcal: 90, cho: 24, prot: 0.6 };
+  }
+
+  /** Default: alterna banana/berries con seed, escludendo cio' che e' vietato. */
+  const useBanana = seed % 3 !== 0;
+  if (useBanana && !bananaBanned) {
     return { line: "1 banana media", kcal: D.bananaKcal, cho: D.bananaCho, prot: D.bananaProt };
   }
-  const bg = clamp(carbsG * 0.22 / D.berryChoPerG, 40, 110);
-  return {
-    line: `${bg} g lamponi / mirtilli / frutti di bosco`,
-    kcal: bg * D.berryKcalPerG,
-    cho: bg * D.berryChoPerG,
-    prot: bg * 0.01,
-  };
+  if (!berryBanned) {
+    const bg = clamp(carbsG * 0.22 / D.berryChoPerG, 40, 110);
+    return { line: `${bg} g lamponi / mirtilli / frutti di bosco`, kcal: bg * D.berryKcalPerG, cho: bg * D.berryChoPerG, prot: bg * 0.01 };
+  }
+  if (!bananaBanned) {
+    return { line: "1 banana media", kcal: D.bananaKcal, cho: D.bananaCho, prot: D.bananaProt };
+  }
+  if (!appleBanned) return { line: "1 mela media (~150 g)", kcal: 80, cho: 21, prot: 0.4 };
+  if (!pearBanned) return { line: "1 pera media (~160 g)", kcal: 90, cho: 24, prot: 0.6 };
+  /** Fallback estremo (tutta la frutta dolce vietata): kiwi. */
+  return { line: "2 kiwi (~150 g)", kcal: 92, cho: 22, prot: 1.7 };
 }
 
 function breakfastDairyBlocked(ctx: MediterraneanDayContext): boolean {
@@ -305,7 +334,7 @@ function composeBreakfastCerealsMilk(m: MealMacroTargets, seed: number, ctx: Med
   const bev = pickBreakfastBeverage(ctx, seed, 0, clamp(K * 0.28 / D.milkKcalPerMl, 140, 280));
   /** CHO solido = ~60% del target CHO pasto. Niente upper cap: porzione SCALA col target del solver. */
   const cerealG = Math.max(32, Math.round(C * 0.6 / D.cerealChoPerG));
-  const fruit = pickBreakfastFruit(seed, C);
+  const fruit = pickBreakfastFruit(seed, C, "default", ctx);
   const cerealLabel = seed % 2 === 0 ? "Cereali / fiocchi (avena, muesli)" : "Cereali soffiati o fiocchi d’avena";
 
   items.push(
@@ -336,7 +365,7 @@ function composeBreakfastPorridge(m: MealMacroTargets, seed: number, ctx: Medite
   /** Avena = fonte CHO dominante del porridge. ~65% del target CHO, nessun upper cap. */
   const oatG = Math.max(40, Math.round(C * 0.65 / D.cerealChoPerG));
   const bev = pickBreakfastBeverage(ctx, seed, 1, clamp(K * 0.32 / D.milkKcalPerMl, 160, 280));
-  const fruit = pickBreakfastFruit(seed + 1, C);
+  const fruit = pickBreakfastFruit(seed + 1, C, "default", ctx);
 
   /**
    * Item separati (1 alimento per item): permettono al lookup USDA di scalare
@@ -420,7 +449,7 @@ function composeBreakfastYogurtBowl(m: MealMacroTargets, seed: number, ctx: Medi
   const yogurtG = clamp(P * 0.55 / D.yogurtProtPerG, 120, 220);
   /** Granola/muesli/cereali nel bowl = CHO dominante. ~55% del target CHO (frutta copre il resto). Nessun upper cap. */
   const cerealG = Math.max(20, Math.round(C * 0.55 / D.cerealChoPerG));
-  const fruit = pickBreakfastFruit(seed + 2, C);
+  const fruit = pickBreakfastFruit(seed + 2, C, "default", ctx);
 
   /** Item separati: yogurt (proteico) + granola/muesli (CHO) + frutta. Un alimento per item. */
   items.push(
@@ -478,7 +507,7 @@ function composeBreakfastSmoothie(m: MealMacroTargets, seed: number, ctx: Medite
    * di uno solo dei tre per la prima quantita' trovata nel testo.
    */
   const bev = pickBreakfastBeverage(ctx, seed, 4, clamp(K * 0.22 / D.milkKcalPerMl, 180, 280));
-  const fruit = pickBreakfastFruit(seed, C, "smoothie");
+  const fruit = pickBreakfastFruit(seed, C, "smoothie", ctx);
   const useBerries = seed % 2 === 0;
 
   items.push(

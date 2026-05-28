@@ -253,6 +253,20 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     eaa_val: 0.75,
     eaa_his: 0.35,
   }),
+  /** Marmellata di frutta (~250 kcal/100g, prevalentemente zucchero + frutta).
+   *  USDA FDC 168989 "Jams and preserves" media. */
+  jam_fruit: row({
+    kcalPer100g: 250,
+    proteinG: 0.4,
+    carbsG: 62,
+    fatG: 0.1,
+    fiberG: 1.1,
+    saturatedFatG: 0,
+    ca_mg: 20,
+    k_mg: 77,
+    vitC_mg: 8,
+    na_mg: 32,
+  }),
   /** Tofu compatto preparato con solfato di calcio (USDA FDC 172476, 100 g). */
   tofu_firm: row({
     kcalPer100g: 144,
@@ -959,7 +973,8 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   { test: /seita[nm]|glutine\s+(?:vegetale|cotto|cucinato)|wheat\s+gluten/i, key: "seitan" },
   { test: /grana|parmigiano|formaggio/i, key: "cheese_hard" },
   { test: /avocado/i, key: "avocado" },
-  { test: /gallette|cracker/i, key: "crackers_whole" },
+  { test: /gallette|cracker|fette\s+biscot|fetta\s+biscot|rusk|toast\s+secco/i, key: "crackers_whole" },
+  { test: /marmellat|confettur|jam\b/i, key: "jam_fruit" },
   { test: /bresaola|prosciutto|affettato|mortadella|salame/i, key: "deli_lean" },
   /** Bevande vegetali: matchare PRIMA di "latte\b" generico per non cadere su milk_2pct.
    *  Le rule sono specifiche per ingrediente (mandorla/riso/avena) cosi' lo scaling USDA

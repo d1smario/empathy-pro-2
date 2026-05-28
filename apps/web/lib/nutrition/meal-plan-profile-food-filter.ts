@@ -37,8 +37,16 @@ const DIET_DENY: Record<string, string[]> = {
     "pesce", "tonno", "salmone", "sgombro", "acciug", "merluzz", "gamber", "gambero",
     "calamar", "polpo", "cozze", "ostric",
     "uov", "ovo", "album",
-    "latte", "yogurt", "yoghurt", "formaggio", "burro", "panna", "ricotta", "parmigiano",
-    "mozzarella", "mascarpone", "pecorino", "whey", "cottage", "kefir",
+    /** Latticini animali: NON includere "yogurt"/"yoghurt"/"latte"/"kefir" generici qui:
+     *  il composer vegan emette "Yogurt vegetale", "Bevanda vegetale" che sono OK e
+     *  contengono ancora le sottostringhe "yogurt"/"latte". La logica `breakfastDairyBlocked`
+     *  + `dietType==="vegan"` nel composer redirige gia' allo specifico vegetale. */
+    "formaggio", "burro", "panna", "ricotta", "parmigiano",
+    "mozzarella", "mascarpone", "pecorino", "whey", "cottage",
+    /** "Latte vaccino", "Latte di capra" usano specifico: il dietType="vegan" del composer
+     *  filtra il pool BREAKFAST_BEVERAGES.animal=true a monte. */
+    "latte vaccino", "latte di capra", "latte di pecora", "latte di mucca",
+    "yogurt vaccino", "yogurt greco", "yogurt animale",
     "miele", "honey", "gelatina", "gelatin",
   ],
   vegetarian: [

@@ -108,9 +108,13 @@ function clampStep(n: number, lo: number, hi: number, step = 5): number {
   return Math.max(lo, Math.min(hi, roundToStep(n, step)));
 }
 
-function hashSeed(slot: MealSlotKey, kcal: number): number {
+function hashSeed(slot: MealSlotKey, kcal: number, planDate?: string): number {
   const s = slot.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return Math.abs(Math.round(kcal * 1.73 + s * 41));
+  /** planDate include il giorno della settimana nel seed: senza, lo stesso slot+kcal
+   *  generava lo stesso indice per tutti i 7 giorni e il composer prendeva lo stesso
+   *  carb/protein finche' non raggiungeva il cap MAX_STAPLE_USES_PER_WEEK. */
+  const dateBoost = planDate ? planDateHash(planDate) * 13 : 0;
+  return Math.abs(Math.round(kcal * 1.73 + s * 41 + dateBoost));
 }
 
 /** kcal e macro approssimati (ordine di grandezza educativo, non laboratorio). */
@@ -199,11 +203,13 @@ function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanD
   return composeBreakfastWithArchetypes(m, seed, ctx);
 }
 
-type CarbKey = "pasta" | "riso" | "patate" | "farro";
+type CarbKey = "pasta" | "riso" | "patate" | "farro" | "pane";
 type ProtKey = "pollo" | "pesce" | "legumi" | "manzo" | "uova" | "tofu" | "tempeh" | "seitan";
 
-const CARB_ORDER: CarbKey[] = ["pasta", "riso", "patate", "farro"];
-const PROT_ORDER: ProtKey[] = ["pollo", "pesce", "legumi", "manzo", "uova"];
+/** 5 amidi distinti × MAX_STAPLE_USES_PER_WEEK (3) = 15 selezioni/sett (>= 14 lunch+dinner). */
+const CARB_ORDER: CarbKey[] = ["pasta", "riso", "patate", "farro", "pane"];
+/** Omnivoro: aggiungo tofu/tempeh come variante settimanale (alternanza vegetale anche in dieta carnea). */
+const PROT_ORDER: ProtKey[] = ["pollo", "pesce", "legumi", "manzo", "uova", "tofu", "tempeh"];
 
 /** Ordini proteine per dietType: vegan/vegetarian/pescatarian estendono con plant-based, escludono famiglie animali non consentite. */
 const PROT_ORDER_VEGAN: ProtKey[] = ["legumi", "tofu", "tempeh", "seitan"];
@@ -220,6 +226,7 @@ const CARB_DENY_KEYWORDS: Record<CarbKey, readonly string[]> = {
   riso: ["riso", "rice"],
   patate: ["patate", "patata", "potato"],
   farro: ["farro", "orzo", "spelt", "barley", "glutine", "gluten"],
+  pane: ["pane", "bread", "glutine", "gluten", "frumento", "wheat"],
 };
 
 const PROT_DENY_KEYWORDS: Record<ProtKey, readonly string[]> = {
@@ -300,8 +307,16 @@ function pickCarbKey(
   const base = sameDayOk.length ? sameDayOk : order;
   const weekOk = base.filter((k) => weekCountFor(stapleCarb(k), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
   const pool = weekOk.length ? weekOk : base;
-  const idx = Math.abs(seed + offset * 7) % pool.length;
-  let k = pool[idx]!;
+  /**
+   * Alternanza settimanale: preferisci sempre il tier di staple MENO usati nella
+   * settimana. Senza questo, il composer prendeva lo stesso indice ogni giorno
+   * (idx deterministico su seed) fino al cap MAX_STAPLE_USES_PER_WEEK,
+   * producendo monotonia (es. riso 3gg consecutivi poi farro 3gg).
+   */
+  const minCount = Math.min(...pool.map((k) => weekCountFor(stapleCarb(k), weekCounts)));
+  const leastUsed = pool.filter((k) => weekCountFor(stapleCarb(k), weekCounts) === minCount);
+  const idx = Math.abs(seed + offset * 7) % leastUsed.length;
+  let k = leastUsed[idx]!;
   if (used.has(stapleCarb(k))) {
     const esc = order.find((c) => !used.has(stapleCarb(c)));
     if (esc) k = esc;
@@ -327,8 +342,11 @@ function pickProtAndFish(
   const base = sameDayOk.length ? sameDayOk : order.filter((pk) => protAllowedWithCarb(carbKey, pk));
   const weekOk = base.filter((pk) => weekCountFor(stapleProt(pk), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
   const pool = weekOk.length ? weekOk : base;
-  const idx = Math.abs(seed * 3 + offset * 5) % pool.length;
-  let protKey = pool[idx]!;
+  /** Alternanza settimanale: tier meno usato in settimana, tiebreak su seed (planDate-aware). */
+  const minCount = Math.min(...pool.map((pk) => weekCountFor(stapleProt(pk), weekCounts)));
+  const leastUsed = pool.filter((pk) => weekCountFor(stapleProt(pk), weekCounts) === minCount);
+  const idx = Math.abs(seed * 3 + offset * 5) % leastUsed.length;
+  let protKey = leastUsed[idx]!;
 
   /** Mai ripetere la stessa proteina principale nello stesso giorno: se il pool ha sbagliato, cerca una libera (rispettando dietType+denyFragments). */
   if (used.has(stapleProt(protKey))) {
@@ -385,6 +403,18 @@ function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: n
         cho: gc * D.farroDryChoPerG,
         prot: gc * D.farroDryProtPerG,
         fat: gc * 0.022,
+      };
+    }
+    case "pane": {
+      /** Pane come amido principale (sandwich/bruschetta/pita): porzione ~140-220 g. */
+      const gc = clampStep(g, 120, 240);
+      return {
+        line: `${gc} g pane integrale o pita (porzione principale del pasto)`,
+        kcal: gc * D.breadKcalPerG,
+        cho: gc * D.breadChoPerG,
+        /** Pane integrale ~8.5 g prot/100 g (D non espone breadProtPerG, valore inline). */
+        prot: gc * 0.085,
+        fat: gc * 0.025,
       };
     }
     default:
@@ -574,7 +604,9 @@ function composeMainMeal(
         ? clamp(K * 0.38 / D.riceDryKcalPerG, 45, 120)
         : carbKey === "farro"
           ? clamp(K * 0.38 / D.farroDryKcalPerG, 50, 130)
-          : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
+          : carbKey === "pane"
+            ? clamp(K * 0.38 / D.breadKcalPerG, 120, 240)
+            : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
   let protG: number;
   if (protKey === "uova") {
     protG = 0;
@@ -593,12 +625,15 @@ function composeMainMeal(
 
   let vegG = clamp(160 + (seed % 3) * 25, 150, 250);
   let oilMl = clamp(F * 0.55 / D.oilFatPerMl, 8, 22);
+  /** Pane "a fianco" del piatto: SOLO se il carb principale non e' gia' pane (no pane+pane). */
   let paneG =
-    carbKey === "pasta"
-      ? clamp(22 + (seed % 3) * 8, 20, 50)
-      : carbKey === "patate" || carbKey === "riso"
-        ? clamp(32 + (seed % 2) * 12, 28, 65)
-        : clamp(28 + (seed % 2) * 10, 25, 55);
+    carbKey === "pane"
+      ? 0
+      : carbKey === "pasta"
+        ? clamp(22 + (seed % 3) * 8, 20, 50)
+        : carbKey === "patate" || carbKey === "riso"
+          ? clamp(32 + (seed % 2) * 12, 28, 65)
+          : clamp(28 + (seed % 2) * 10, 25, 55);
   /** Grana/formaggio: aggiungi solo se onnivoro/pescatariano e non in deny lattosio. Vegan/vegetarian-strict no. */
   const cheeseAllowed =
     ctx?.dietType !== "vegan" &&
@@ -622,6 +657,7 @@ function composeMainMeal(
     if (carbKey === "patate") return { lo: 90, hi: 340 };
     if (carbKey === "riso") return { lo: 38, hi: 125 };
     if (carbKey === "farro") return { lo: 40, hi: 135 };
+    if (carbKey === "pane") return { lo: 120, hi: 240 };
     return { lo: 42, hi: 145 };
   };
 
@@ -669,7 +705,9 @@ function composeMainMeal(
         ? "Riso (unica fonte amido principale)"
         : carbKey === "patate"
           ? "Patate (unica fonte amido principale)"
-          : "Farro/orzo (unica fonte amido principale)";
+          : carbKey === "pane"
+            ? "Pane integrale (unica fonte amido principale)"
+            : "Farro/orzo (unica fonte amido principale)";
 
   items.push(
     item(carbName, carbFinal.line, carbFinal.kcal, "cho_heavy", "Un solo carboidrato complesso da pasto principale (no pasta + riso insieme)."),
@@ -891,7 +929,7 @@ export function composeMediterraneanMeal(
   if (ctx?.suppressedSlots && ctx.suppressedSlots.includes(slot)) {
     return composeInRideFuelingPlaceholder(slot, macros);
   }
-  const seed = hashSeed(slot, macros.kcal);
+  const seed = hashSeed(slot, macros.kcal, ctx?.planDate);
   const breakfastCtx = ctx ?? createMediterraneanDayContext("");
   if (slot === "breakfast") return composeBreakfast(macros, seed, breakfastCtx);
   if (slot === "snack_am") return composeSnack(macros, seed, "snack_am", ctx);
