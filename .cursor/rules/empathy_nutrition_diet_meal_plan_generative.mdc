@@ -60,7 +60,18 @@ alwaysApply: false
 - `apps/web/lib/nutrition/deterministic-meal-plan-from-request.ts`
 - `apps/web/app/api/nutrition/intelligent-meal-plan/route.ts`
 
+## Regola 6 — Memoria alimenti (canonical + USDA) è sorgente unica
+
+- Il composer **pesca** gli alimenti da `CANONICAL_FOOD_TABLE` + cache USDA FDC (`nutrition_fdc_foods`) via `inferCanonicalFoodKeyPreferName` → `nutrientsForMealPlanItem*`. **Nessun item può essere emesso con un name che non risolve a un canonical key valido**: `compositionStatus="unresolved"` = bug strutturale (0 kcal silenzioso).
+- Quando aggiungi un nuovo alimento ai pool del composer (`BREAKFAST_BEVERAGES`, `BREAKFAST_FRUITS`, archetipi cena/pranzo/snack, varianti veg/vegan):
+  1. Aggiungi una **row USDA-like** in `CANONICAL_FOOD_TABLE` (`apps/web/lib/nutrition/canonical-food-composition.ts`).
+  2. Aggiungi una **rule INFER** in `INFER_RULES` posizionata PRIMA delle rule generiche che potrebbero catturarla.
+  3. Se è un **liquido** (latte, bevanda vegetale, yogurt da bere): aggiungi il key a `LIQUIDS_AS_GRAMS_KEYS` (server + client) per il scaling `ml → g`.
+  4. (Opzionale) Mappa USDA FDC ID in `canonical-food-fdc-aliases.ts` se vuoi che la cache server-side scali sui valori USDA invece del TS table.
+
 ## Test minimi obbligatori su modifica
 
 - `resolve-nutrition-diet-day.test.ts`
 - `diet-meal-slot-budgets.test.ts`
+- `meal-plan-memory-guardrail.test.ts` — esercita TUTTI gli slot × dietType × kcal range e fallisce se un item del composer non risolve nella memoria canonica.
+- `canonical-food-composition.test.ts` — regression test su rule INFER specifiche e scaling per nome alimento.

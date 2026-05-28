@@ -46,6 +46,23 @@ Con `meal_count_mode = 6`: colazione, spuntino mattina, pranzo, spuntino pomerig
 - Se nel JSON c’è solo `snacks: 10` con colazione+pranzo+cena = 70% (totale 80%), il motore interpreta **10% per ciascuno** dei tre spuntini (caso 25/25/20 + tre spuntini da 10).
 - Se `snacks: 30` con stessi pasti principali, divide **30÷3 = 10%** per slot spuntino.
 
+## Memoria alimenti (canonical + USDA)
+
+Il composer deterministico pesca gli alimenti dalla **memoria**:
+
+- `CANONICAL_FOOD_TABLE` (TS, `apps/web/lib/nutrition/canonical-food-composition.ts`) — riga per ogni canonical food key con macro/micro USDA-like per 100 g.
+- `nutrition_fdc_foods` (Supabase cache, mappata via `canonical-food-fdc-aliases.ts`) — single source of truth lato server quando disponibile.
+
+Ogni item emesso dal composer è descritto da `name + portionHint + approxKcal`:
+
+1. `inferCanonicalFoodKeyPreferName(name, portionHint)` → canonical key (prima sul `name`, poi sul `name + portionHint`).
+2. `nutrientsForMealPlanItem` o `nutrientsForMealPlanItemFromCache` → scala i nutrienti per la quantità (grammi parsati dall'hint, ml × densità per liquidi-latte, o fallback `approxKcal`).
+3. Se il name non risolve nessuna rule INFER → `compositionStatus="unresolved"` → 0 kcal silenzioso = **bug strutturale**.
+
+Il guardrail `apps/web/lib/nutrition/meal-plan-memory-guardrail.test.ts` esercita tutto il composer (slot × dietType × kcal range) e fallisce se anche un solo item non risolve in memoria.
+
+Aggiungere un nuovo alimento al composer = aggiungere riga in `CANONICAL_FOOD_TABLE` + rule INFER + (se liquido) `LIQUIDS_AS_GRAMS_KEYS`.
+
 ## Codice
 
 Vedi `.cursor/rules/empathy_nutrition_diet_meal_plan_generative.mdc`.
