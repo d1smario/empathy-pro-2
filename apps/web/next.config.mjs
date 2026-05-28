@@ -125,7 +125,13 @@ const nextConfig = {
   },
 };
 
-/** PWA: Workbox 7 (@ducanh2912/next-pwa). In dev disabilitato; cache shell/API conservative per auth + RSC. */
+/** PWA: Workbox 7 (@ducanh2912/next-pwa). In dev disabilitato; cache shell/API conservative per auth + RSC.
+ *
+ * `skipWaiting` + `clientsClaim`: il nuovo SW prende il controllo IMMEDIATAMENTE al deploy,
+ * senza aspettare che l'utente chiuda tutte le tab. Risolve il caso "vedo ancora le vecchie
+ * sessioni" dopo un fix lato server: senza queste due flag il SW vecchio resta attivo e
+ * serve la cache obsoleta finche' la PWA non viene completamente chiusa.
+ */
 const withPWA = withPWAInit({
   dest: "public",
   disable:
@@ -139,10 +145,28 @@ const withPWA = withPWAInit({
   reloadOnOnline: true,
   extendDefaultRuntimeCaching: true,
   workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    cleanupOutdatedCaches: true,
     runtimeCaching: [
       {
         urlPattern: ({ url }) => url.pathname.startsWith("/api/"),
         handler: "NetworkOnly",
+      },
+      /** Pagine di calendario/training: NetworkFirst con timeout breve per garantire
+       *  che dopo un import il nuovo HTML/RSC arrivi sempre prima della cache offline. */
+      {
+        urlPattern: ({ url }) =>
+          url.pathname.startsWith("/training") ||
+          url.pathname.startsWith("/nutrition") ||
+          url.pathname.startsWith("/health") ||
+          url.pathname.startsWith("/physiology"),
+        handler: "NetworkFirst",
+        options: {
+          cacheName: "empathy-pages",
+          networkTimeoutSeconds: 4,
+          expiration: { maxEntries: 50, maxAgeSeconds: 60 * 60 * 6 },
+        },
       },
     ],
   },
