@@ -2,7 +2,8 @@ import "server-only";
 
 import {
   CANONICAL_FOOD_TABLE,
-  inferCanonicalFoodKey,
+  inferCanonicalFoodKeyPreferName,
+  looksLikeMultiIngredientPortionHint,
   scaleCanonicalNutrientsToGrams,
   scaleCanonicalNutrientsToKcal,
   type CanonicalFoodNutrients,
@@ -197,11 +198,17 @@ export async function buildFdcCanonicalSnapshot(canonicalKeys: string[]): Promis
 /**
  * Estrae `gramsEdible` esplicito da un portionHint (g o ml con densità nota olio).
  * Replicato da `canonical-food-composition.ts` per non esporre helper privati.
+ *
+ * Multi-ingredient guard: se il portionHint contiene un compose (`" + "` o piu' di
+ * una quantita' g/ml), il primo `\d+ g` rappresenta solo uno degli ingredienti e
+ * scalare i nutrienti del singolo USDA su quel valore e' fuorviante. In quel caso
+ * torniamo undefined → il caller usa `scaleCanonicalNutrientsToKcal(canonical, approxKcal)`.
  */
 const OLIVE_OIL_G_PER_ML = 0.92;
 function parseGramsFromHint(hint: string, compositionKey: string): number | undefined {
   const text = hint.trim();
   if (!text) return undefined;
+  if (looksLikeMultiIngredientPortionHint(text)) return undefined;
   const grams = text.match(/(\d+(?:[.,]\d+)?)\s*g(?:rammi?)?\b/i);
   if (grams) {
     const v = parseFloat(grams[1].replace(",", "."));
@@ -236,8 +243,7 @@ export function nutrientsForMealPlanItemFromCache(
   compositionStatus: "fdc_cache" | "canonical_estimate" | "unresolved";
   nutrients: ScaledMealItemNutrients;
 } {
-  const hay = `${item.name} ${item.portionHint}`;
-  const compositionKey = inferCanonicalFoodKey(hay);
+  const compositionKey = inferCanonicalFoodKeyPreferName(item.name, item.portionHint);
 
   if (compositionKey === "generic_mixed") {
     return {

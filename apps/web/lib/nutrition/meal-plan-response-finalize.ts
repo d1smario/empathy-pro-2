@@ -5,7 +5,7 @@ import type {
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
-  inferCanonicalFoodKey,
+  inferCanonicalFoodKeyPreferName,
   sumScaledNutrients,
   type ScaledMealItemNutrients,
 } from "@/lib/nutrition/canonical-food-composition";
@@ -48,7 +48,7 @@ export async function finalizeIntelligentMealPlanCore(
   const fdcSnapshot =
     snapshot ??
     (await buildFdcCanonicalSnapshot(
-      slotsDeduped.flatMap((s) => s.items.map((it) => inferCanonicalFoodKey(`${it.name} ${it.portionHint}`))),
+      slotsDeduped.flatMap((s) => s.items.map((it) => inferCanonicalFoodKeyPreferName(it.name, it.portionHint))),
     ));
   const slots = slotsDeduped.map((s) => enrichSlot(s, fdcSnapshot));
   const byReq = new Map(req.slots.map((s) => [s.slot, s]));

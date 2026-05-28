@@ -303,7 +303,8 @@ function composeBreakfastCerealsMilk(m: MealMacroTargets, seed: number, ctx: Med
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
   const bev = pickBreakfastBeverage(ctx, seed, 0, clamp(K * 0.28 / D.milkKcalPerMl, 140, 280));
-  const cerealG = clamp(C * 0.38 / D.cerealChoPerG, 32, 78);
+  /** CHO solido = ~60% del target CHO pasto. Niente upper cap: porzione SCALA col target del solver. */
+  const cerealG = Math.max(32, Math.round(C * 0.6 / D.cerealChoPerG));
   const fruit = pickBreakfastFruit(seed, C);
   const cerealLabel = seed % 2 === 0 ? "Cereali / fiocchi (avena, muesli)" : "Cereali soffiati o fiocchi d’avena";
 
@@ -329,20 +330,37 @@ function composeBreakfastPorridge(m: MealMacroTargets, seed: number, ctx: Medite
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  const oatG = clamp(C * 0.42 / D.cerealChoPerG, 40, 85);
+  /** Avena = fonte CHO dominante del porridge. ~65% del target CHO, nessun upper cap. */
+  const oatG = Math.max(40, Math.round(C * 0.65 / D.cerealChoPerG));
   const bev = pickBreakfastBeverage(ctx, seed, 1, clamp(K * 0.32 / D.milkKcalPerMl, 160, 280));
   const fruit = pickBreakfastFruit(seed + 1, C);
 
+  /**
+   * Item separati (1 alimento per item): permettono al lookup USDA di scalare
+   * i nutrienti per la quantita' reale di ogni singolo ingrediente. Niente
+   * piu' compose "X g avena + Y ml latte" in un solo item che confonderebbe
+   * il mapping canonicalKey (es. "latte" matchato prima di "avena").
+   */
   items.push(
     item(
-      "Porridge d’avena",
-      `${oatG} g fiocchi d’avena cotti in ${bev.ml} ml ${bev.bev.animal ? "latte" : "bevanda vegetale"}`,
-      oatG * D.cerealKcalPerG + bev.kcal * 0.85,
+      "Fiocchi d'avena",
+      `${oatG} g fiocchi d'avena (peso secco)`,
+      oatG * D.cerealKcalPerG,
       "cho_heavy",
-      "Porridge: colazione saziante a rilascio graduale.",
+      "Avena secca: base CHO complessa del porridge.",
     ),
   );
-  lines.push(`${oatG} g porridge d’avena (cotti in ${bev.bev.hint(bev.ml)})`);
+  lines.push(`${oatG} g fiocchi d'avena (peso secco)`);
+  items.push(
+    item(
+      bev.bev.animal ? "Latte" : "Bevanda vegetale",
+      bev.bev.hint(bev.ml).slice(0, 160),
+      bev.kcal,
+      "protein",
+      `${bev.bev.label} per la cottura del porridge.`,
+    ),
+  );
+  lines.push(bev.bev.hint(bev.ml));
   items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta sul porridge."));
   lines.push(fruit.line);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
@@ -353,7 +371,8 @@ function composeBreakfastToastJam(m: MealMacroTargets, seed: number, ctx: Medite
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  const breadG = clamp(C * 0.45 / D.breadChoPerG, 50, 95);
+  /** Pane = CHO dominante toast_jam. ~70% del target (la marmellata copre il resto). Nessun upper cap. */
+  const breadG = Math.max(50, Math.round(C * 0.7 / D.breadChoPerG));
   const jamG = clamp(12 + (seed % 10), 12, 22);
   const bev = pickBreakfastBeverage(ctx, seed, 2, clamp(K * 0.22 / D.milkKcalPerMl, 120, 200));
 
@@ -373,7 +392,8 @@ function composeBreakfastRusks(m: MealMacroTargets, seed: number, ctx: Mediterra
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  const ruskG = clamp(C * 0.4 / D.crackerChoPerG, 35, 65);
+  /** Fette biscottate = CHO dominante. ~70% del target CHO, nessun upper cap. */
+  const ruskG = Math.max(35, Math.round(C * 0.7 / D.crackerChoPerG));
   const jamG = clamp(10 + (seed % 8), 10, 18);
   const bev = pickBreakfastBeverage(ctx, seed, 3, clamp(K * 0.24 / D.milkKcalPerMl, 120, 220));
 
@@ -395,22 +415,31 @@ function composeBreakfastYogurtBowl(m: MealMacroTargets, seed: number, ctx: Medi
   const lines: string[] = [];
   const skipDairy = breakfastDairyBlocked(ctx);
   const yogurtG = clamp(P * 0.55 / D.yogurtProtPerG, 120, 220);
-  const cerealG = clamp(C * 0.28 / D.cerealChoPerG, 20, 45);
+  /** Granola/muesli/cereali nel bowl = CHO dominante. ~55% del target CHO (frutta copre il resto). Nessun upper cap. */
+  const cerealG = Math.max(20, Math.round(C * 0.55 / D.cerealChoPerG));
   const fruit = pickBreakfastFruit(seed + 2, C);
-  const ygLabel = skipDairy
-    ? `${yogurtG} g yogurt vegetale (soia/cocco) + ${cerealG} g granola o cereali`
-    : `${yogurtG} g yogurt greco + ${cerealG} g muesli/granella`;
 
+  /** Item separati: yogurt (proteico) + granola/muesli (CHO) + frutta. Un alimento per item. */
   items.push(
     item(
-      skipDairy ? "Yogurt bowl vegetale" : "Yogurt bowl",
-      ygLabel.slice(0, 160),
-      yogurtG * D.yogurtKcalPerG + cerealG * D.cerealKcalPerG,
+      skipDairy ? "Yogurt vegetale" : "Yogurt greco",
+      skipDairy ? `${yogurtG} g yogurt vegetale (soia/cocco) non zuccherato` : `${yogurtG} g yogurt greco`,
+      yogurtG * D.yogurtKcalPerG,
       "protein",
-      "Bowl proteico con topping croccante.",
+      skipDairy ? "Yogurt vegetale: base proteica del bowl." : "Yogurt greco: base proteica del bowl.",
     ),
   );
-  lines.push(ygLabel);
+  lines.push(skipDairy ? `${yogurtG} g yogurt vegetale (soia/cocco) non zuccherato` : `${yogurtG} g yogurt greco`);
+  items.push(
+    item(
+      "Muesli / granola",
+      `${cerealG} g muesli o granola (topping croccante)`,
+      cerealG * D.cerealKcalPerG,
+      "cho_heavy",
+      "Cereali croccanti nel bowl: CHO complessi.",
+    ),
+  );
+  lines.push(`${cerealG} g muesli o granola`);
   items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta nel bowl."));
   lines.push(fruit.line);
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed + 1);
@@ -421,27 +450,58 @@ function composeBreakfastSmoothie(m: MealMacroTargets, seed: number, ctx: Medite
   const C = Math.max(25, m.carbsG);
   const items: IntelligentMealPlanItemOut[] = [];
   const lines: string[] = [];
-  const bev = pickBreakfastBeverage(ctx, seed, 4, clamp(K * 0.35 / D.milkKcalPerMl, 180, 280));
+
+  /**
+   * Cereale solido a fianco dello smoothie: copre la quota CHO complessa che
+   * frutta + bevanda non possono garantire. ~55% del CHO target del solver,
+   * nessun upper cap: porzioni reali se il target lo richiede.
+   */
+  const oatG = Math.max(40, Math.round(C * 0.55 / D.cerealChoPerG));
+  items.push(
+    item(
+      "Fiocchi d'avena",
+      `${oatG} g fiocchi d'avena (peso secco, a parte o nel frullato)`,
+      oatG * D.cerealKcalPerG,
+      "cho_heavy",
+      "CHO complesso solido: copre il fabbisogno carbo che lo smoothie liquido da solo non garantisce.",
+    ),
+  );
+  lines.push(`${oatG} g fiocchi d'avena (peso secco)`);
+
+  /**
+   * Smoothie spezzato in item singoli (bevanda + frutta + extra). Niente piu'
+   * "200 ml latte + 1 mela + 80 g frutti di bosco (frullato)" come singolo item:
+   * il lookup USDA non saprebbe quale alimento usare e scalerebbe i nutrienti
+   * di uno solo dei tre per la prima quantita' trovata nel testo.
+   */
+  const bev = pickBreakfastBeverage(ctx, seed, 4, clamp(K * 0.22 / D.milkKcalPerMl, 180, 280));
   const fruit = pickBreakfastFruit(seed, C, "smoothie");
-  const extraBerry =
-    seed % 2 === 0
-      ? { line: "80 g frutti di bosco", kcal: 80 * D.berryKcalPerG }
-      : { line: "1 mela media", kcal: 72 };
+  const useBerries = seed % 2 === 0;
 
   items.push(
     item(
-      "Smoothie colazione",
-      `${bev.bev.hint(bev.ml).slice(0, 80)} + ${fruit.line} + ${extraBerry.line} (frullato)`,
-      bev.kcal + fruit.kcal + extraBerry.kcal,
-      "cho_heavy",
-      "Smoothie rapido: frutta + latte/bevanda vegetale.",
+      bev.bev.animal ? "Latte" : "Bevanda vegetale",
+      bev.bev.hint(bev.ml).slice(0, 160),
+      bev.kcal,
+      "protein",
+      "Liquido del frullato.",
     ),
   );
-  lines.push(`Smoothie: ${bev.bev.hint(bev.ml)}, ${fruit.line}, ${extraBerry.line}`);
+  lines.push(bev.bev.hint(bev.ml));
+  items.push(item("Frutta", fruit.line, fruit.kcal, "cho_heavy", "Frutta principale del frullato."));
+  lines.push(fruit.line);
+  if (useBerries) {
+    items.push(item("Frutti di bosco", "80 g frutti di bosco (mirtilli/lamponi)", 80 * D.berryKcalPerG, "cho_heavy", "Mix bacche nel frullato."));
+    lines.push("80 g frutti di bosco");
+  } else {
+    items.push(item("Mela", "1 mela media (~150 g)", 72, "cho_heavy", "Mela nel frullato."));
+    lines.push("1 mela media");
+  }
   return finalizeBreakfastMeal(items, lines, m.proteinG, ctx, seed);
 }
 
-function composeBreakfastByArchetype(
+/** Esportata per test deterministici (forza un archetipo). Non usare nel runtime di prodotto. */
+export function composeBreakfastByArchetype(
   archetype: BreakfastArchetype,
   m: MealMacroTargets,
   seed: number,

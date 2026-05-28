@@ -13,6 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   inferCanonicalFoodKey,
+  inferCanonicalFoodKeyPreferName,
   looksLikeMultiIngredientPortionHint,
   nutrientsForMealPlanItem,
 } from "@/lib/nutrition/canonical-food-composition";
@@ -58,4 +59,32 @@ test("nutrientsForMealPlanItem: 'Proteine in polvere' 28 g produce kcal/PRO non-
   assert.equal(res.compositionKey, "whey_powder");
   assert.ok(res.nutrients.kcal > 80, `kcal attesi >80, trovati ${res.nutrients.kcal} (regression: prima 0)`);
   assert.ok(res.nutrients.proteinG >= 18, `PRO attesi >=18 g, trovati ${res.nutrients.proteinG} (regression: prima 0)`);
+});
+
+test("inferCanonicalFoodKeyPreferName: priorita' al nome (porridge d'avena NON deve cadere in milk_2pct)", () => {
+  /** Regression catastrofica: 85 g di "Porridge d'avena cotti in 280 ml latte"
+   *  veniva mappato a milk_2pct perche' la rule `/latte\b/i` matchava prima di
+   *  `/avena/i` nel testo concatenato → display 44 kcal (latte × 85 g) invece
+   *  di ~310 kcal (avena secca × 85 g). */
+  assert.equal(
+    inferCanonicalFoodKeyPreferName("Porridge d'avena", "85 g fiocchi d'avena cotti in 280 ml latte vaccino parzialmente scremato"),
+    "oat_dry",
+  );
+  assert.equal(inferCanonicalFoodKeyPreferName("Fiocchi d'avena", "85 g fiocchi d'avena (peso secco)"), "oat_dry");
+  assert.equal(inferCanonicalFoodKeyPreferName("Yogurt greco", "150 g yogurt greco"), "yogurt_plain");
+  assert.equal(inferCanonicalFoodKeyPreferName("Latte", "250 ml latte vaccino parzialmente scremato"), "milk_2pct");
+});
+
+test("nutrientsForMealPlanItem: item singolo 'Fiocchi d'avena' 85 g → ~310 kcal (regression del 44 kcal)", () => {
+  const res = nutrientsForMealPlanItem({
+    name: "Fiocchi d'avena",
+    portionHint: "85 g fiocchi d'avena (peso secco)",
+    approxKcal: 310,
+  });
+  assert.equal(res.compositionKey, "oat_dry");
+  assert.ok(
+    res.nutrients.kcal >= 280 && res.nutrients.kcal <= 360,
+    `kcal attesi 280-360, trovati ${res.nutrients.kcal} (regression: prima 44 perche' mappato a milk_2pct)`,
+  );
+  assert.ok(res.nutrients.carbsG >= 50, `CHO attesi >=50 g, trovati ${res.nutrients.carbsG}`);
 });

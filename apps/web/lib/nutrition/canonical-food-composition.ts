@@ -838,6 +838,25 @@ export function inferCanonicalFoodKey(label: string): string {
   return "generic_mixed";
 }
 
+/**
+ * Priorita' al NAME dell'item, fallback al testo concatenato.
+ *
+ * Regression motivante: un item con name="Porridge d'avena" e
+ * portionHint="85 g fiocchi d'avena cotti in 280 ml latte vaccino parzialmente
+ * scremato" veniva mappato a "milk_2pct" perche' la rule `/latte\b|milk/i`
+ * matchava prima della rule `/avena|fiocchi/i` nel testo concatenato. Risultato:
+ * 85 g × 50 kcal/100g (latte) = 42 kcal mostrati per il porridge.
+ *
+ * Con priorita' sul nome, "Porridge d'avena" matcha `oat_dry` direttamente.
+ * USDA va usato come fornitore dati per 100 g di un SINGOLO alimento, non come
+ * dizionario di compose multi-ingrediente.
+ */
+export function inferCanonicalFoodKeyPreferName(name: string, portionHint: string = ""): string {
+  const fromName = inferCanonicalFoodKey(name);
+  if (fromName !== "generic_mixed") return fromName;
+  return inferCanonicalFoodKey(`${name} ${portionHint}`);
+}
+
 export function scaleCanonicalNutrientsToKcal(row: CanonicalFoodNutrients, targetKcal: number): ScaledMealItemNutrients {
   const k = Math.max(15, Math.round(targetKcal));
   const dens = row.kcalPer100g / 100;
@@ -993,8 +1012,7 @@ export function nutrientsForMealPlanItem(item: { name: string; portionHint: stri
   compositionStatus: "canonical_estimate" | "unresolved";
   nutrients: ScaledMealItemNutrients;
 } {
-  const hay = `${item.name} ${item.portionHint}`;
-  const compositionKey = inferCanonicalFoodKey(hay);
+  const compositionKey = inferCanonicalFoodKeyPreferName(item.name, item.portionHint);
   const row = CANONICAL_FOOD_TABLE[compositionKey];
   if (!row || compositionKey === "generic_mixed") {
     return { compositionKey: "unresolved", compositionStatus: "unresolved", nutrients: { ...ZERO_SCALED } };
