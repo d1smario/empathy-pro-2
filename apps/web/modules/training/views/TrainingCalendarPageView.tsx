@@ -319,6 +319,11 @@ export default function TrainingCalendarPageView() {
   /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
   const trainingImportInFlightRef = useRef(false);
 
+  /** Tick per forzare rifetch del dettaglio del giorno selezionato anche se `selectedDate`
+   *  non cambia (es. import su stesso giorno gia' selezionato → la cella mostrava ancora
+   *  i dati Fase 1 senza trace_summary aggiornato). */
+  const [selectedDayRefreshTick, setSelectedDayRefreshTick] = useState(0);
+
   const loadMonth = useCallback(
     async (opts?: { anchorDay?: string }) => {
     /** Con `athleteId` già noto non bloccare: altrimenti dopo delete il refresh può saltare e la UI resta su dati vecchi. */
@@ -472,7 +477,9 @@ export default function TrainingCalendarPageView() {
   [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
 
-  /** Giorno selezionato: fetch mirato con trace pieno → chip griglia + Analyzer allineati subito. */
+  /** Giorno selezionato: fetch mirato con trace pieno → chip griglia + Analyzer allineati subito.
+   *  `selectedDayRefreshTick` permette di forzare il rifetch anche quando `selectedDate` non cambia
+   *  (es. import su stesso giorno gia' aperto: la cella resterebbe sui dati Fase 1 leggeri). */
   useEffect(() => {
     if (!athleteId || ctxLoading || !selectedDate) return;
     const fetchGen = ++selectedDayFetchGenRef.current;
@@ -502,7 +509,7 @@ export default function TrainingCalendarPageView() {
         /* best-effort: la finestra mensile resta fallback */
       }
     })();
-  }, [athleteId, ctxLoading, selectedDate]);
+  }, [athleteId, ctxLoading, selectedDate, selectedDayRefreshTick]);
 
   const movePlannedWorkoutToDate = useCallback(
     async (workoutId: string, fromDate: string, toDate: string) => {
@@ -793,6 +800,9 @@ export default function TrainingCalendarPageView() {
 
       const anchorKey = (refreshAnchor ?? "").trim().slice(0, 10);
       await loadMonth(/^\d{4}-\d{2}-\d{2}$/.test(anchorKey) ? { anchorDay: anchorKey } : undefined);
+      /** Forza rifetch del dettaglio giorno con trace pieno anche se selectedDate
+       *  e' uguale a anchorKey: senza tick l'useEffect non parte. */
+      setSelectedDayRefreshTick((t) => t + 1);
     } catch (x) {
       const msg = x instanceof Error ? x.message : "Errore in fase di import.";
       if (
@@ -821,6 +831,7 @@ export default function TrainingCalendarPageView() {
             setMonthCursor(new Date(d.getFullYear(), d.getMonth(), 1));
           }
           await loadMonth(/^\d{4}-\d{2}-\d{2}$/.test(key) ? { anchorDay: key } : undefined);
+          setSelectedDayRefreshTick((t) => t + 1);
           setFileImportForm((f) => ({ ...f, file: null }));
         } catch (fb) {
           setErr(
