@@ -135,6 +135,8 @@ function HubOperationalDocs({
             <span className="font-mono text-gray-500">trainingEnergyScale = clamp(bioScale × opScale, 0.35, 1.02)</span> poi moltiplicatori
             diario (adeguacy), loop (×0.96 regenerate, ×0.985 watch), clamp finale; CHO intra e bias proteico da semaforo, bioenergetica,
             loop e diario. Vedi <span className="text-gray-300">lib/nutrition/performance-integration-scaler.ts</span>.
+            <br />
+            <span className="text-amber-200/80">Nota: trainingEnergyScale è un indicatore recovery/bio — il solver lo usa per timing pasti↔fueling e composizione, non per ridurre il fabbisogno energetico totale del giorno (= BMR + lifestyle + training pianificato).</span>
           </p>
           {nut.rationale.length > 0 ? (
             <ul className="mt-2 list-inside list-disc text-gray-500">
@@ -264,9 +266,10 @@ export function DashboardAthleteHubCard() {
                   tone="cyan"
                 />
                 <HubOpCell
-                  label="Energia training"
+                  label="Recovery/bio (indicatore)"
                   value={`×${hub.operationalSignals.nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)}`}
                   tone="violet"
+                  sub="non riduce il fabbisogno energetico"
                 />
                 <HubOpCell
                   label="CHO fueling"

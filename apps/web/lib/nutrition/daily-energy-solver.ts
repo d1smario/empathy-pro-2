@@ -282,10 +282,17 @@ export function computeNutritionDailyEnergyModel(
   const lifestyleKcal = round(bmr.bmrKcal * lifestylePct);
   const training = deriveTrainingSummary(input.plannedTraining);
   const integration = input.performanceIntegration ?? null;
+  /**
+   * Modalità integrazione (`trainingEnergyScale`, `mealTrainingFraction`, `fuelingChoScale`)
+   * agisce su **distribuzione/composizione** (pasti vs fueling, CHO/h, proteine, idratazione),
+   * NON sul fabbisogno energetico totale: il fabbisogno deve seguire il consumo programmato
+   * `BMR + lifestyle + training pianificato` (e, quando importato, l'eseguito). Vedi
+   * `docs/NUTRITION_DIET_MEAL_PLAN_RULES.md` e `empathy_nutrition_diet_meal_plan_generative.mdc`.
+   */
   const trainingEnergyScale = integration?.trainingEnergyScale ?? 1;
   const mealTrainingFraction = integration?.mealTrainingFraction ?? 0.4;
   const fuelingChoScale = integration?.fuelingChoScale ?? 1;
-  const trainingKcalScaled = round(training.kcal * trainingEnergyScale);
+  const trainingKcal = training.kcal;
   const estimatedAvgPowerW = training.avgPowerW != null
     ? training.avgPowerW
     : input.ftpWatts != null && training.avgIntensityPctFtp != null
@@ -297,9 +304,9 @@ export function computeNutritionDailyEnergyModel(
       ? clamp(input.dietDayMealsScalePct, 0, 200) / 100
       : 1;
 
-  const totalDailyKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcalScaled) * dietScale);
-  const mealsKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcalScaled * mealTrainingFraction) * dietScale);
-  const fuelingKcal = round(trainingKcalScaled * (1 - mealTrainingFraction));
+  const totalDailyKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcal) * dietScale);
+  const mealsKcal = round((bmr.bmrKcal + lifestyleKcal + trainingKcal * mealTrainingFraction) * dietScale);
+  const fuelingKcal = round(trainingKcal * (1 - mealTrainingFraction));
   const recoveryStatus = input.recoveryStatus ?? "unknown";
   const split =
     recoveryStatus === "poor"
@@ -307,9 +314,9 @@ export function computeNutritionDailyEnergyModel(
       : recoveryStatus === "moderate"
         ? { pre: 0.06, intra: 0.44, post: 0.1 }
         : { pre: 0.05, intra: 0.45, post: 0.1 };
-  const preKcal = round(trainingKcalScaled * split.pre);
-  const intraKcal = round(trainingKcalScaled * split.intra);
-  const postKcal = round(trainingKcalScaled * split.post);
+  const preKcal = round(trainingKcal * split.pre);
+  const intraKcal = round(trainingKcal * split.intra);
+  const postKcal = round(trainingKcal * split.post);
   const preChoG = round(preKcal / 4, 1);
   const intraChoG = round(intraKcal / 4, 1);
   const postChoG = round(postKcal / 4, 1);
@@ -342,10 +349,11 @@ export function computeNutritionDailyEnergyModel(
 
   const notes = [...bmr.notes];
   notes.push(
-    "Daily total = BMR + lifestyle load + planned training cost.",
+    "Daily total = BMR + lifestyle load + planned training cost (kcal del consumo programmato; sostituito dall'eseguito quando importato).",
     "Meals cover BMR + lifestyle load + 40% of planned training energy.",
     "Fueling covers the remaining 60% of planned training energy split as 5% pre, 45% intra, 10% post.",
     "Evidence layer constrains intra-workout CHO/h independently from raw calorie math.",
+    "Integrazione performance (recovery/bio): agisce su distribuzione pasti↔fueling, CHO/h, proteine, idratazione — NON riduce il fabbisogno energetico totale.",
   );
   if (recoveryStatus === "moderate") {
     notes.push("Recovery-aware solver active: moderate recovery shifts more energy toward pre/post support and slightly tempers intra CHO aggressiveness.");
@@ -370,7 +378,7 @@ export function computeNutritionDailyEnergyModel(
   }
   if (integration) {
     notes.push(
-      `Integrazione performance: scala energia training ×${trainingEnergyScale}, quota pasti sul training ${Math.round(mealTrainingFraction * 100)}%, CHO/h ×${fuelingChoScale}.`,
+      `Integrazione performance (informativa): indicatore recovery/bio ×${trainingEnergyScale}, quota pasti sul training ${Math.round(mealTrainingFraction * 100)}%, CHO/h ×${fuelingChoScale}. Non viene applicata al fabbisogno totale.`,
     );
     notes.push(...integration.rationale);
   }
@@ -395,7 +403,7 @@ export function computeNutritionDailyEnergyModel(
     },
     training: {
       ...training,
-      kcal: trainingKcalScaled,
+      kcal: trainingKcal,
       estimatedAvgPowerW,
     },
     totals: {

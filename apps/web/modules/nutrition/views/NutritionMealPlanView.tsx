@@ -50,7 +50,7 @@ export type NutritionMealPlanEnergyLedger = {
   dailyKcalSolver: number | null;
   /** Parte del costo training allocata a pre/intra/post (non nei cinque slot pasto). */
   fuelingKcalSolver: number | null;
-  /** kcal training dopo scala integrazione (prima del split pasti/fueling). */
+  /** Costo training pianificato del giorno (allineato al calendario/Builder; sostituito dall'eseguito quando importato). */
   trainingKcalSolver: number | null;
   /** Somma kcal voci USDA del piano generato (esclude voci coach nascoste). */
   assembledUsdaKcalSum: number | null;
@@ -130,7 +130,7 @@ export function NutritionMealPlanDailyTargets({
             ) : null}
             {ledger.trainingKcalSolver != null && ledger.trainingKcalSolver > 0 ? (
               <li>
-                <span className="text-slate-500">Costo training stimato (dopo integrazione):</span>{" "}
+                <span className="text-slate-500">Costo training pianificato (Builder, allineato al calendario):</span>{" "}
                 <span className="text-slate-300">{round(ledger.trainingKcalSolver)} kcal</span>
               </li>
             ) : null}

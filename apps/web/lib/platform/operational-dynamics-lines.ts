@@ -43,7 +43,7 @@ export function buildOperationalDynamicsLines(input: {
 
   if (nut) {
     lines.push(
-      `[Nutrizione↔Training] Energia da seduta ×${nut.trainingEnergyScale.toFixed(2)} · quota pasti sul training ${Math.round(nut.mealTrainingFraction * 100)}% · CHO intra ×${nut.fuelingChoScale.toFixed(2)} · idratazione ×${nut.hydrationFloorMultiplier.toFixed(2)}`,
+      `[Nutrizione↔Training] Recovery/bio (indicatore) ×${nut.trainingEnergyScale.toFixed(2)} · quota pasti sul training ${Math.round(nut.mealTrainingFraction * 100)}% · CHO intra ×${nut.fuelingChoScale.toFixed(2)} · idratazione ×${nut.hydrationFloorMultiplier.toFixed(2)} (fabbisogno totale = BMR+lifestyle+training pianificato, non scalato)`,
     );
   }
 

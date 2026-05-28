@@ -62,7 +62,7 @@ export function buildInfluenceLedgerRowsFromOperationalBundle(
     id: "nutrition_dials",
     source: "Twin + diario + contesto training",
     consumer: "Nutrizione · solver / fueling (dial)",
-    effect: `E_train ×${nut.trainingEnergyScale.toFixed(2)} · CHO ×${nut.fuelingChoScale.toFixed(2)} · proteine +${nut.proteinBiasPctPoints.toFixed(1)} pt · idratazione ×${nut.hydrationFloorMultiplier.toFixed(2)}`,
+    effect: `Recovery/bio (indicatore) ×${nut.trainingEnergyScale.toFixed(2)} · CHO ×${nut.fuelingChoScale.toFixed(2)} · proteine +${nut.proteinBiasPctPoints.toFixed(1)} pt · idratazione ×${nut.hydrationFloorMultiplier.toFixed(2)} (non riduce il fabbisogno energetico)`,
   });
 
   if (bundle.coachValidatedApplicationTraceCount > 0) {

@@ -25,6 +25,18 @@ Ogni atleta ha un **Diet per giorno della settimana** in Profile. Ogni data del 
 - Non usa la somma USDA per ridefinire % colazione/pranzo/cena
 - Non sovrascrive Diet salvando da Nutrizione
 - Non usa default 30/35/25/10 se il giorno Diet è configurato
+- **Non riduce il fabbisogno energetico totale** con l'indicatore recovery/bio `trainingEnergyScale`: il fabbisogno = BMR + lifestyle + training pianificato (e poi eseguito quando importato). L'indicatore recovery/bio modula **solo** distribuzione pasti↔fueling, CHO/h, proteine e idratazione.
+
+## Riferimento numerico (esempio)
+
+Atleta 70 kg, BMR Cunningham ≈ 1900, lifestyle 20% ≈ 380. Seduta pianificata 5h = 4179 kcal metaboliche (calendario/Builder).
+
+- `dailyKcal` = 1900 + 380 + 4179 = **6459 kcal** (fabbisogno reale del giorno)
+- `mealsKcal` (40% training nei pasti) = 1900 + 380 + 4179×0,40 = **3952 kcal**
+- `fuelingKcal` (60% training in pre/intra/post) = 4179×0,60 = **2507 kcal**
+- `mealsKcal + fuelingKcal` = 6459 → coerente col fabbisogno totale.
+
+Se `trainingEnergyScale = 0,57` (atleta in stato protective): **non** entra nelle formule sopra; `mealTrainingFraction` può passare 0,40 → 0,48 (sposta energia dal fueling ai pasti), ma la somma resta 6459.
 
 ## 6 pasti
 

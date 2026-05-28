@@ -1289,7 +1289,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     }
     if (nutritionPerformanceIntegration) {
       cards.push({
-        label: "Energia training",
+        label: "Recovery/bio (indicatore)",
         value: `×${nutritionPerformanceIntegration.trainingEnergyScale.toFixed(2)}`,
       });
       cards.push({
@@ -2061,7 +2061,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const p = nutritionDayModel?.performanceIntegration;
     if (!p) return [];
     return [
-      `Energia sessione ×${p.trainingEnergyScale.toFixed(2)}`,
+      `Recovery/bio (indicatore, non riduce fabbisogno) ×${p.trainingEnergyScale.toFixed(2)}`,
       `Quota pasti/training ${Math.round(p.mealTrainingFraction * 100)}%`,
       `CHO intra ×${p.fuelingChoScale.toFixed(2)}`,
       `Proteine pasti +${p.proteinBiasPctPoints}%`,

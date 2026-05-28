@@ -43,6 +43,15 @@ alwaysApply: false
 - Cambiare pasti/% → **Profile → Diet** (giorno settimana corretto), poi rigenerare meal plan sulla **stessa data**.
 - `handleSaveNutrition` / PATCH profilo da Nutrizione: **non** persistere `caloric_split` né `meal_plan.caloric_split` derivati dalla UI.
 
+## Regola 5 — Fabbisogno energetico totale (non scalare con recovery/bio)
+
+- **Fabbisogno totale del giorno** = `BMR + lifestyle + training pianificato` (kcal del consumo programmato). Quando l'eseguito è importato, sostituisce il pianificato (`Reality > Plan`).
+- `nutrition_performance_integration.trainingEnergyScale` (output di `buildNutritionPerformanceIntegration`) è un **indicatore** recovery/bio (0,35–1,02): il solver lo usa SOLO per:
+  - distribuzione pasti↔fueling (`mealTrainingFraction` 0,40 → 0,48 in protective);
+  - composizione (CHO/h `fuelingChoScale`, bias proteine `proteinBiasPctPoints`, idratazione `hydrationFloorMultiplier`, fluido seduta `sessionFluidMultiplier`).
+- **Vietato** moltiplicare il training_kcal nelle formule del fabbisogno (`totals.dailyKcal`, `totals.mealsKcal`, `totals.fuelingKcal`, `fueling.preKcal/intraKcal/postKcal`) per `trainingEnergyScale`. Le UI che mostrano `×N` su training devono dichiararlo come indicatore, non come riduzione del fabbisogno.
+- Modulazione consentita sul fabbisogno: **solo `dietDayMealsScalePct`** (Profile Diet → `day_type_pct`).
+
 ## File canonici (non duplicare pipeline)
 
 - `apps/web/lib/nutrition/resolve-nutrition-diet-day.ts`
