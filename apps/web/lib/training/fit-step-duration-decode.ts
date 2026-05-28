@@ -175,3 +175,129 @@ export function fitStepDurationSecLegacy(step: Record<string, unknown>, timeScal
   const v = Math.max(1, rawTimeToSec(raw, timeScale));
   return Math.min(v, 48 * 3600);
 }
+
+function clampNum(n: number, lo: number, hi: number): number {
+  return Math.min(Math.max(n, lo), hi);
+}
+
+const WKT_STEP_TARGET_BY_NUM: Record<number, string> = {
+  0: "speed",
+  1: "heart_rate",
+  2: "open",
+  3: "cadence",
+  4: "power",
+  5: "grade",
+  6: "resistance",
+  7: "power_3s",
+  8: "power_10s",
+  9: "power_30s",
+  10: "power_lap",
+  11: "swim_stroke",
+  12: "speed_lap",
+  13: "heart_rate_lap",
+};
+
+export function normalizeFitWktTargetType(step: Record<string, unknown>): string {
+  const t = step.target_type ?? step.targetType;
+  if (typeof t === "string") return t.toLowerCase().trim().replace(/[\s-]+/g, "_");
+  if (typeof t === "number" && Number.isFinite(t) && Number.isInteger(t)) {
+    return WKT_STEP_TARGET_BY_NUM[t] ?? "open";
+  }
+  return "open";
+}
+
+/**
+ * Mappa Garmin/TP `power_zone` index (target_value 1..7) → ratio FTP centrale.
+ * Garmin Connect zone reference: Z1 ≤55%, Z2 56-75%, Z3 76-90%, Z4 91-105%,
+ * Z5 106-120%, Z6 121-150%, Z7 >150%. Centrale di ogni zona.
+ */
+function powerZoneIndexToRatio(zoneIdx: number): { low: number; high: number } | null {
+  const zones: Array<[number, number]> = [
+    [0.4, 0.55], // Z1
+    [0.56, 0.75], // Z2
+    [0.76, 0.9], // Z3
+    [0.91, 1.05], // Z4
+    [1.06, 1.2], // Z5
+    [1.21, 1.5], // Z6
+    [1.51, 1.8], // Z7
+  ];
+  if (!Number.isFinite(zoneIdx)) return null;
+  const idx = Math.round(zoneIdx) - 1;
+  if (idx < 0 || idx >= zones.length) return null;
+  const [lo, hi] = zones[idx]!;
+  return { low: lo, high: hi };
+}
+
+/**
+ * Decoder target di potenza per workout step FIT (Garmin/TrainingPeaks/Wahoo).
+ *
+ * Convention Garmin FIT SDK ufficiale per `custom_target_value_low/high` con `target_type=power`:
+ *  - value 0..999  → **percentuale FTP** (es. 75 = 75% FTP, ratio 0.75)
+ *  - value 1000+   → **watt assoluti**, formula: `watts = value − 1000` (es. 1105 = 105 W)
+ *
+ * Esempi reali da TrainingPeaks (file Timothy 29-05-2026):
+ *   custom_target_value_low=1105, high=1132 (Warm up) → 105–132 W (NON Z7 311–346 W).
+ *   custom_target_value_low=1355, high=1947 (sprint) → 355–947 W.
+ *
+ * Per `target_type=power_zone` con `target_value=N` (1..7): mappiamo al ratio
+ * tipico della zona Garmin Connect.
+ */
+export function fitStepPowerTargetRatios(
+  step: Record<string, unknown>,
+  ftpW: number,
+): { low: number; high: number } {
+  const targetType = normalizeFitWktTargetType(step);
+  const lowRaw = pickStepNumber(step, [
+    "custom_target_value_low",
+    "customTargetValueLow",
+    "custom_target_power_low",
+    "target_value_low",
+    "power_low",
+  ]);
+  const highRaw = pickStepNumber(step, [
+    "custom_target_value_high",
+    "customTargetValueHigh",
+    "custom_target_power_high",
+    "target_value_high",
+    "power_high",
+  ]);
+  const mid = pickStepNumber(step, ["target_value", "targetValue", "power", "intensity"]);
+
+  /** Garmin SDK convention per power: value < 1000 → % FTP, >= 1000 → watt assoluti (value-1000). */
+  const decodePowerRaw = (raw: number): number | null => {
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    if (raw >= 1000 && raw <= 5000) return clampNum((raw - 1000) / Math.max(1, ftpW), 0.2, 4.0);
+    if (raw < 1000 && raw >= 30) return clampNum(raw / 100, 0.2, 2.5);
+    /** Caso speciale legacy "% FTP × 10000": se 2000..15000 e NON in range power-bias plausibile. */
+    if (raw >= 2000 && raw <= 15000 && (raw % 100 !== 0 || raw > 5000))
+      return clampNum(raw / 10000, 0.2, 2.5);
+    /** Fallback: watt assoluti senza bias (es. parser custom). */
+    if (raw > 0 && raw <= 1500) return clampNum(raw / Math.max(1, ftpW), 0.2, 4.0);
+    return null;
+  };
+
+  if (targetType === "power" || targetType === "power_3s" || targetType === "power_10s" || targetType === "power_30s" || targetType === "power_lap") {
+    if (lowRaw != null && highRaw != null) {
+      const lo = decodePowerRaw(lowRaw);
+      const hi = decodePowerRaw(highRaw);
+      if (lo != null && hi != null) return { low: Math.min(lo, hi), high: Math.max(lo, hi) };
+    }
+    if (mid != null) {
+      const m = decodePowerRaw(mid);
+      if (m != null) return { low: m, high: m };
+    }
+  }
+
+  if (targetType === "power_zone") {
+    const zone = mid != null ? powerZoneIndexToRatio(mid) : null;
+    if (zone) return zone;
+  }
+
+  if (targetType === "heart_rate" || targetType === "heart_rate_lap") {
+    /** HR target: ratio neutro ~Z2 (non controlla power). UI usa zone HR separate dove disponibili. */
+    return { low: 0.6, high: 0.7 };
+  }
+
+  /** target_type = open / 255 / cadence / speed / grade / resistance: nessun watt target diretto. */
+  return { low: 0.6, high: 0.7 };
+}

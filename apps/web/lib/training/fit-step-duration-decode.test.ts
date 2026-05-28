@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   detectFitTimeScale,
   fitStepDurationSecForImport,
+  fitStepPowerTargetRatios,
+  normalizeFitWktTargetType,
   type FitTimeScale,
 } from "./fit-step-duration-decode";
 
@@ -159,6 +161,100 @@ test("fitStepDurationSecForImport: power_/hr_ steps -> null (no durata)", () => 
  * 29-05-2026 e verifica che la durata totale sia ~70-80 min (vicino al
  * 1h 18m 15s reale), NON 195h 47m del bug.
  */
+/**
+ * Regression: target di potenza Garmin SDK convention.
+ * File reale Timothy 29-05-2026 (TrainingPeaks export, FTP=270 W):
+ *   custom_target_value_low/high con bias +1000 = watt assoluti.
+ *   1105 → 105 W, 1132 → 132 W, 1355 → 355 W, 1947 → 947 W.
+ *
+ * Bug originale: il vecchio decoder leggeva 1105 come watt diretti
+ * (1105/270 = 4.09 → clamp 1.5) → tutti gli step finivano a Z7 311-346 W.
+ */
+
+test("normalizeFitWktTargetType: stringhe e numeri Garmin SDK", () => {
+  assert.equal(normalizeFitWktTargetType({ target_type: "power" }), "power");
+  assert.equal(normalizeFitWktTargetType({ target_type: 4 }), "power");
+  assert.equal(normalizeFitWktTargetType({ target_type: 1 }), "heart_rate");
+  assert.equal(normalizeFitWktTargetType({ target_type: 255 }), "open");
+  assert.equal(normalizeFitWktTargetType({}), "open");
+});
+
+test("fitStepPowerTargetRatios: Warm up TrainingPeaks (1105-1132) -> 105-132 W con FTP=270", () => {
+  const r = fitStepPowerTargetRatios(
+    {
+      target_type: "power",
+      custom_target_value_low: 1105,
+      custom_target_value_high: 1132,
+      duration_type: "time",
+      duration_value: 900000,
+      wkt_step_name: "Warm up",
+    },
+    270,
+  );
+  /** 105 W / 270 W = 0.389; 132 W / 270 W = 0.489. Z1 easy. NON Z7! */
+  assert.ok(r.low >= 0.35 && r.low <= 0.45, `low: expected ~0.39, got ${r.low}`);
+  assert.ok(r.high >= 0.45 && r.high <= 0.55, `high: expected ~0.49, got ${r.high}`);
+});
+
+test("fitStepPowerTargetRatios: sprint TrainingPeaks (1355-1947) -> 355-947 W", () => {
+  const r = fitStepPowerTargetRatios(
+    {
+      target_type: "power",
+      custom_target_value_low: 1355,
+      custom_target_value_high: 1947,
+    },
+    270,
+  );
+  /** 355 W / 270 = 1.31 (Z6+); 947 W / 270 = 3.5 (sprint massimo). */
+  assert.ok(r.low >= 1.25 && r.low <= 1.4, `low: expected ~1.31, got ${r.low}`);
+  assert.ok(r.high >= 3.0 && r.high <= 4.0, `high: expected ~3.5, got ${r.high}`);
+});
+
+test("fitStepPowerTargetRatios: Easy TrainingPeaks (1132-1158) -> 132-158 W (Z2)", () => {
+  const r = fitStepPowerTargetRatios(
+    {
+      target_type: "power",
+      custom_target_value_low: 1132,
+      custom_target_value_high: 1158,
+    },
+    270,
+  );
+  assert.ok(r.low >= 0.45 && r.low <= 0.55, `low: ${r.low}`);
+  assert.ok(r.high >= 0.55 && r.high <= 0.65, `high: ${r.high}`);
+});
+
+test("fitStepPowerTargetRatios: % FTP diretta (75-85) -> 0.75-0.85 ratio", () => {
+  /** Convention legacy / alcuni export tools: value < 1000 = % FTP. */
+  const r = fitStepPowerTargetRatios(
+    {
+      target_type: "power",
+      custom_target_value_low: 75,
+      custom_target_value_high: 85,
+    },
+    270,
+  );
+  assert.equal(r.low, 0.75);
+  assert.equal(r.high, 0.85);
+});
+
+test("fitStepPowerTargetRatios: power_zone target_value=2 -> Z2 ratios", () => {
+  const r = fitStepPowerTargetRatios(
+    {
+      target_type: "power_zone",
+      target_value: 2,
+    },
+    270,
+  );
+  assert.ok(r.low >= 0.5 && r.low <= 0.6, `Z2 low: ${r.low}`);
+  assert.ok(r.high >= 0.7 && r.high <= 0.8, `Z2 high: ${r.high}`);
+});
+
+test("fitStepPowerTargetRatios: target_type=open / 255 -> ratio neutro", () => {
+  const r = fitStepPowerTargetRatios({ target_type: 255, duration_type: "open" }, 270);
+  assert.ok(r.low > 0 && r.low < 1);
+  assert.ok(r.high > r.low);
+});
+
 test("integrazione: workout Timothy TrainingPeaks (10 step ms) -> totale ~70-80 min, NON 195h", () => {
   const stepsTimothyTp: Array<Record<string, unknown>> = [
     { duration_type: "time", duration_value: 600_000, custom_name: "Warm up" },

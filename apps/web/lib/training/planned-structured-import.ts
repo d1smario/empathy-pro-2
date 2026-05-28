@@ -15,6 +15,7 @@ import {
   detectFitTimeScale,
   fitStepDurationSecForImport,
   fitStepDurationSecLegacy,
+  fitStepPowerTargetRatios,
   normalizeFitWktDurationType,
   type FitTimeScale,
 } from "@/lib/training/fit-step-duration-decode";
@@ -272,12 +273,6 @@ function fitStepRepeatMultiplier(step: Record<string, unknown>): number {
   return Math.min(400, Math.max(2, Math.round(n)));
 }
 
-/** Percentuale FTP ×10000 (es. 7525 → 75,25%) in `custom_target_*` / `target_value`. */
-function maybeScaledPercentFtp(v: number): number | null {
-  if (v >= 2000 && v <= 15000 && Number.isFinite(v)) return clamp(v / 10000, 0.35, 1.55);
-  return null;
-}
-
 function defaultMpsFromFitWorkout(workout: Record<string, unknown> | null | undefined): number {
   const s = workout?.sport;
   const str = typeof s === "string" ? s.toLowerCase() : "";
@@ -294,49 +289,17 @@ function defaultMpsFromFitWorkout(workout: Record<string, unknown> | null | unde
  * senza dipendenza server-only) e ri-esportati piu' in alto in questo file.
  */
 
+/**
+ * Wrapper di compatibilita': delega al decoder canonico
+ * `fitStepPowerTargetRatios` (modulo puro `fit-step-duration-decode`).
+ *
+ * Risolve regression "tutti gli step a Z7 311-346 W" su file TrainingPeaks:
+ * il vecchio decoder leggeva 1105 (= 105 W con bias +1000) come watt assoluti
+ * e finiva sempre clamped a 1.5×FTP (Z7). Il decoder nuovo riconosce la
+ * convention Garmin SDK (value-1000 quando >= 1000 → watt; < 1000 → % FTP).
+ */
 function fitStepFtpRange(step: Record<string, unknown>, ftpW: number): { low: number; high: number } {
-  const targetType = String(step.target_type ?? step.targetType ?? "").toLowerCase();
-  const lowRaw =
-    pickStepNumber(step, ["custom_target_value_low", "customTargetValueLow", "target_value_low", "power_low"]) ??
-    null;
-  const highRaw =
-    pickStepNumber(step, ["custom_target_value_high", "customTargetValueHigh", "target_value_high", "power_high"]) ??
-    null;
-  const mid = pickStepNumber(step, ["target_value", "targetValue", "power", "intensity"]) ?? null;
-
-  if (lowRaw != null && highRaw != null) {
-    const sl = maybeScaledPercentFtp(lowRaw);
-    const sh = maybeScaledPercentFtp(highRaw);
-    if (sl != null && sh != null) {
-      return { low: Math.min(sl, sh), high: Math.max(sl, sh) };
-    }
-  }
-  if (mid != null && lowRaw == null && highRaw == null) {
-    const sm = maybeScaledPercentFtp(mid);
-    if (sm != null) return { low: sm, high: sm };
-  }
-
-  if (targetType === "power" && mid != null && lowRaw == null && highRaw == null) {
-    if (mid >= 40 && mid <= 190 && Number.isInteger(mid)) {
-      const r = clamp(mid / 100, 0.35, 1.5);
-      return { low: r, high: r };
-    }
-  }
-
-  const toRatio = (v: number): number => {
-    if (v > 0 && v <= 3) return v;
-    if (v > 3 && v < 600) return v / Math.max(1, ftpW);
-    if (v >= 600) return clamp(v / Math.max(1, ftpW), 0.4, 1.5);
-    return 0.75;
-  };
-
-  if (mid != null && lowRaw == null && highRaw == null) {
-    const r = toRatio(mid);
-    return { low: r, high: r };
-  }
-  const lo = lowRaw != null ? toRatio(lowRaw) : mid != null ? toRatio(mid) : 0.65;
-  const hi = highRaw != null ? toRatio(highRaw) : mid != null ? toRatio(mid) : lo;
-  return { low: Math.min(lo, hi), high: Math.max(lo, hi) };
+  return fitStepPowerTargetRatios(step, ftpW);
 }
 
 function totalManualPlanBlocksSeconds(blocks: ManualPlanBlock[]): number {
