@@ -315,22 +315,23 @@ export async function runStructuredPlannedSingleImport(
     /** Best-effort: non bloccare PLAN se la pulizia EXEC fantasma fallisce. */
   }
 
-  let structuredCompanion: StructuredCompanionResult | undefined;
-  if (plannedWorkoutId) {
-    structuredCompanion = await upsertStructuredCompanionExecuted(db, {
-      athleteId: input.athleteId,
-      date: input.date,
-      fileName: input.file.name,
-      mimeType: input.file.type ?? "application/octet-stream",
-      fileBuffer: payload,
-      fileChecksumSha1: input.fileChecksum,
-      plannedWorkoutId,
-      contract: parsed.contract,
-      structuredFormat: input.format,
-      intervalLadder: parsed.intervalLadder,
-      intervalLadderCsv: parsed.intervalLadderCsv,
-    });
-  }
+  /**
+   * Regola operativa (utente coach):
+   *
+   * Un import strutturato (ZWO/ERG/MRC/FIT WORKOUT) e' un PROGRAMMA pianificato,
+   * NON un'attivita' eseguita. Non creiamo piu' un `executed_workouts` "companion"
+   * sintetico in fase di import: quel record finiva per popolare il calendario come
+   * se l'allenamento fosse gia' stato eseguito (visibile come "executed" con durata
+   * e TSS sintetici), creando il "doppione" planned + executed segnalato dal coach.
+   *
+   * Quando l'atleta esegue il workout (Garmin/Wahoo), l'attivita' reale (file_type=
+   * activity, NON workout) verra' importata dal flusso `runFileImport` e creera'
+   * il corretto `executed_workouts` con trace_summary reale dal device.
+   *
+   * La funzione `upsertStructuredCompanionExecuted` resta disponibile per altri
+   * flussi (es. backfill / migrazione / test) ma NON viene piu' chiamata qui.
+   */
+  const structuredCompanion: StructuredCompanionResult | undefined = undefined;
 
   if (importJobId) {
     await db

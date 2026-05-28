@@ -11,8 +11,23 @@ import {
 import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
 import { intensityToRelativeLoad, type Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
 import { extractSessionDurationHintSec, scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
+import {
+  detectFitTimeScale,
+  fitStepDurationSecForImport,
+  fitStepDurationSecLegacy,
+  normalizeFitWktDurationType,
+  type FitTimeScale,
+} from "@/lib/training/fit-step-duration-decode";
 import type { StructuredIntervalRow } from "./planned-structured-interval-csv";
 import { formatStructuredIntervalLadderCsv } from "./planned-structured-interval-csv";
+
+export type { FitTimeScale } from "@/lib/training/fit-step-duration-decode";
+export {
+  detectFitTimeScale,
+  fitStepDurationSecForImport,
+  fitStepDurationSecLegacy,
+  normalizeFitWktDurationType,
+} from "@/lib/training/fit-step-duration-decode";
 
 export type { StructuredIntervalRow } from "./planned-structured-interval-csv";
 export { formatStructuredIntervalLadderCsv } from "./planned-structured-interval-csv";
@@ -263,52 +278,6 @@ function maybeScaledPercentFtp(v: number): number | null {
   return null;
 }
 
-/** Allineato a `fit-file-parser` / Garmin `wkt_step_duration` (uint8). */
-const WKT_STEP_DURATION_BY_NUM: Record<number, string> = {
-  0: "time",
-  1: "distance",
-  2: "hr_less_than",
-  3: "hr_greater_than",
-  4: "calories",
-  5: "open",
-  6: "repeat_until_steps_cmplt",
-  7: "repeat_until_time",
-  8: "repeat_until_distance",
-  9: "repeat_until_calories",
-  10: "repeat_until_hr_less_than",
-  11: "repeat_until_hr_greater_than",
-  12: "repeat_until_power_less_than",
-  13: "repeat_until_power_greater_than",
-  14: "power_less_than",
-  15: "power_greater_than",
-  16: "training_peaks_tss",
-  17: "repeat_until_power_last_lap_less_than",
-  18: "repeat_until_max_power_last_lap_less_than",
-  19: "power_3s_less_than",
-  20: "power_10s_less_than",
-  21: "power_30s_less_than",
-  22: "power_3s_greater_than",
-  23: "power_10s_greater_than",
-  24: "power_30s_greater_than",
-  25: "power_lap_less_than",
-  26: "power_lap_greater_than",
-  27: "repeat_until_training_peaks_tss",
-  28: "repetition_time",
-  29: "reps",
-};
-
-function normalizeFitWktDurationType(step: Record<string, unknown>): string {
-  const t = step.duration_type ?? step.durationType;
-  if (typeof t === "string") {
-    const s = t.toLowerCase().trim().replace(/[\s-]+/g, "_");
-    return s || "time";
-  }
-  if (typeof t === "number" && Number.isFinite(t) && Number.isInteger(t)) {
-    return WKT_STEP_DURATION_BY_NUM[t] ?? "time";
-  }
-  return "time";
-}
-
 function defaultMpsFromFitWorkout(workout: Record<string, unknown> | null | undefined): number {
   const s = workout?.sport;
   const str = typeof s === "string" ? s.toLowerCase() : "";
@@ -319,68 +288,11 @@ function defaultMpsFromFitWorkout(workout: Record<string, unknown> | null | unde
 }
 
 /**
- * Secondi per un blocco grafico. `null` = step da non materializzare (contenitori / open senza valore).
- * TrainingPeaks spesso usa `distance` (metri) o `training_peaks_tss`: trattarli come secondi FIT rompe durate e zone.
+ * Helpers di decoding step FIT (detectFitTimeScale, fitStepDurationSecForImport,
+ * fitStepDurationSecLegacy, normalizeFitWktDurationType, FitTimeScale) sono
+ * importati da `@/lib/training/fit-step-duration-decode` (modulo puro testabile
+ * senza dipendenza server-only) e ri-esportati piu' in alto in questo file.
  */
-function fitStepDurationSecForImport(step: Record<string, unknown>, mps: number): number | null {
-  const dtype = normalizeFitWktDurationType(step);
-  const raw = pickStepNumber(step, ["duration_value", "durationValue", "duration_time", "durationTime"]);
-
-  if (dtype === "repeat_until_steps_cmplt") return null;
-
-  if (dtype === "open") {
-    const v = raw ?? 0;
-    if (!Number.isFinite(v) || v <= 0) return null;
-    return Math.min(Math.max(1, Math.round(v)), 24 * 3600);
-  }
-
-  if (dtype === "reps") return null;
-
-  if (dtype === "distance" || dtype === "repeat_until_distance") {
-    const meters = Math.max(0, Math.round(raw ?? 0));
-    if (meters <= 0) return null;
-    return Math.max(45, Math.round(meters / Math.max(0.7, mps)));
-  }
-
-  if (dtype === "training_peaks_tss" || dtype === "repeat_until_training_peaks_tss") {
-    const tss = Math.max(1, Math.round(raw ?? 1));
-    const ifAssumed = 0.72;
-    const hours = tss / (ifAssumed * ifAssumed * 100);
-    return Math.max(300, Math.min(8 * 3600, Math.round(hours * 3600)));
-  }
-
-  if (dtype === "calories" || dtype === "repeat_until_calories") {
-    const kcal = Math.max(1, Math.round(raw ?? 1));
-    return Math.max(120, Math.min(8 * 3600, Math.round((kcal / 650) * 3600)));
-  }
-
-  if (dtype === "time" || dtype === "repeat_until_time" || dtype === "repetition_time") {
-    const v = Math.max(1, Math.round(raw ?? 120));
-    return Math.min(v, 24 * 3600);
-  }
-
-  if (
-    dtype === "hr_less_than" ||
-    dtype === "hr_greater_than" ||
-    dtype.startsWith("power_") ||
-    dtype.startsWith("repeat_until_hr_") ||
-    dtype.startsWith("repeat_until_power_")
-  ) {
-    return null;
-  }
-
-  const v0 = raw ?? 120;
-  const v = Math.max(1, Math.round(v0));
-  return Math.min(v, 24 * 3600);
-}
-
-/** Fallback minimale se tutti gli step risultano «saltati» (file anomali). */
-function fitStepDurationSecLegacy(step: Record<string, unknown>): number {
-  const raw =
-    pickStepNumber(step, ["duration_value", "durationValue", "duration_time", "durationTime", "duration"]) ?? 120;
-  const v = Math.max(1, Math.round(raw));
-  return Math.min(v, 48 * 3600);
-}
 
 function fitStepFtpRange(step: Record<string, unknown>, ftpW: number): { low: number; high: number } {
   const targetType = String(step.target_type ?? step.targetType ?? "").toLowerCase();
@@ -482,6 +394,9 @@ function parseFitWorkoutToManualBlocks(
   const steps = scan.workoutSteps;
   if (!steps.length) throw new Error("FIT: nessun workout step decodificabile.");
   const mps = defaultMpsFromFitWorkout(scan.workout);
+  /** Decisione UNICA per il file: ms vs s. Risolve regression "step da 1440' = 24h"
+   *  dovuta a Garmin FIT SDK scale=1000 sui campi time-based (TrainingPeaks export). */
+  const timeScale = detectFitTimeScale(steps);
   const wn = scan.workout?.wkt_name ?? scan.workout?.wktName;
   const wktName = typeof wn === "string" && wn.trim() ? wn.trim().slice(0, 200) : null;
 
@@ -489,7 +404,7 @@ function parseFitWorkoutToManualBlocks(
     const blocks: ManualPlanBlock[] = [];
     const ladder: StructuredIntervalRow[] = [];
     for (const step of steps) {
-      let durSec = legacy ? fitStepDurationSecLegacy(step) : fitStepDurationSecForImport(step, mps);
+      let durSec = legacy ? fitStepDurationSecLegacy(step, timeScale) : fitStepDurationSecForImport(step, mps, timeScale);
       if (durSec == null) continue;
       durSec *= fitStepRepeatMultiplier(step);
       const { low, high } = fitStepFtpRange(step, ftpW);
