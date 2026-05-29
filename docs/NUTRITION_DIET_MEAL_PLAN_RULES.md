@@ -95,6 +95,15 @@ La quota della 1ª fonte si riduce automaticamente (~36–43% del CHO target inv
 - `apps/web/lib/nutrition/breakfast-meal-archetypes.ts` — `appendBreakfastSecondaryCarb()` aggiunge la 2ª fonte CHO solida (pane tostato se la 1ª è cereali/avena/muesli/granola; fiocchi d'avena se la 1ª è pane/fette).
 - `apps/web/lib/nutrition/meal-plan-memory-guardrail.test.ts` — guardrail 6, 7, 8 verificano in test che la regola sia rispettata su tutti i `dietType × date × kcal range`.
 
+## Giorno gara — protocollo pre-gara (Regola 8)
+
+Identico per **tutti** gli atleti quando c’è una gara in calendario:
+
+- Pranzo **3 h prima** dello start (da routine `training1_start_time` o seduta gara).
+- **Pasta o riso** 3 g CHO/kg + **grana** 15–20 g + **olio** 15 g.
+- Se mancano kcal vs target Diet dello slot → **crostata/torta CHO** (no verdure che gonfiano).
+- Codice: `race-day-pre-race-lunch.ts` + test `race-day-pre-race-lunch.test.ts`.
+
 ## Codice
 
 Vedi `.cursor/rules/empathy_nutrition_diet_meal_plan_generative.mdc`.

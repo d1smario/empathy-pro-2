@@ -3,7 +3,7 @@
  * Nessun LLM genera la struttura del piano; le kcal per voce seguono porzioni e banca composizione canonica.
  */
 
-import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
+import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 
 /** Ordine canonico pasti (5): due spuntini + tre principali. Il 6° pasto (serale) è `snack_evening` quando Diet = 6 pasti. */
 export type MealSlotKey = "breakfast" | "lunch" | "dinner" | "snack_am" | "snack_pm" | "snack_evening";
@@ -136,6 +136,8 @@ export type IntelligentMealPlanRequest = {
    * certi boost (es. redox → Vit C / Se / Zn) solo quando il pathway è incluso nel twin/fisiologia del giorno.
    */
   pathwayModulationActiveLabels?: string | null;
+  /** Giorno gara: pranzo pre-gara da memoria generativa (composer deterministico). */
+  racePreLunch?: RacePreLunchDayContext | null;
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */

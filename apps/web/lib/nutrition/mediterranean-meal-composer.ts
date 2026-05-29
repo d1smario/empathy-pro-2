@@ -7,6 +7,8 @@
  */
 
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
+import { composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { composeBreakfastWithArchetypes } from "@/lib/nutrition/breakfast-meal-archetypes";
 
 /** Allineato a `DryMealSlotMacros` in dry-meal-plan-lines (evita import circolare). */
@@ -39,6 +41,8 @@ export type MediterraneanDayContext = {
    * preservando la simmetria dei 5 slot per UI e rollup.
    */
   suppressedSlots?: MealSlotKey[];
+  /** Giorno gara: protocollo pre-gara canonico (pranzo 3 h prima, pasta/riso 3 g CHO/kg). */
+  racePreLunch?: RacePreLunchDayContext;
 };
 
 /** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
@@ -51,6 +55,7 @@ export function createMediterraneanDayContext(
   dietType?: MediterraneanDietType,
   denyFragments?: string[],
   suppressedSlots?: MealSlotKey[],
+  racePreLunch?: RacePreLunchDayContext,
 ): MediterraneanDayContext {
   const w =
     weekStapleCounts && Object.keys(weekStapleCounts).length
@@ -74,6 +79,7 @@ export function createMediterraneanDayContext(
     dietType,
     denyFragments: deny,
     suppressedSlots: supp,
+    racePreLunch,
   };
 }
 
@@ -994,6 +1000,9 @@ export function composeMediterraneanMeal(
   if (slot === "snack_am") return composeSnack(macros, seed, "snack_am", ctx);
   if (slot === "snack_pm" || slot === "snack_evening") {
     return composeSnack(macros, seed, "snack_pm", ctx);
+  }
+  if (slot === "lunch" && ctx?.racePreLunch) {
+    return composeRacePreLunchMainMeal(slot, macros, seed, ctx.racePreLunch, ctx);
   }
   return composeMainMeal(slot, macros, seed, ctx);
 }

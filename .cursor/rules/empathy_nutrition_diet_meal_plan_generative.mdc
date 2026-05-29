@@ -58,6 +58,7 @@ alwaysApply: false
 - `apps/web/lib/nutrition/diet-meal-slot-budgets.ts`
 - `apps/web/lib/nutrition/daily-energy-solver.ts` (`dietDayMealsScalePct`)
 - `apps/web/lib/nutrition/deterministic-meal-plan-from-request.ts`
+- `apps/web/lib/nutrition/race-day-pre-race-lunch.ts`
 - `apps/web/app/api/nutrition/intelligent-meal-plan/route.ts`
 
 ## Regola 6 — Memoria alimenti (canonical + USDA) è sorgente unica
@@ -88,9 +89,22 @@ alwaysApply: false
 - `apps/web/lib/nutrition/breakfast-meal-archetypes.ts` → `appendBreakfastSecondaryCarb()` aggiunge la 2ª fonte CHO solida quando `m.carbsG ≥ 130`; ogni archetipo riduce la quota della 1ª fonte (ratio CHO `0.36–0.43` invece di `0.55–0.70`) per equilibrare le kcal.
 - Pool carb principale lunch/dinner: `pasta | riso | patate | farro | quinoa | pane` (5 complessi + pane solo cene leggere). Garantisce ≥ 14 selezioni/settimana sotto `MAX_STAPLE_USES_PER_WEEK=3`.
 
+## Regola 8 — Giorno gara: protocollo pre-gara (tutti gli atleti)
+
+Quando il calendario o la routine segnalano una **gara** (`type`/`sessionName`/note con gara, oppure Profile → Routine → `day_mode = race`):
+
+1. **Orario pranzo** = start gara **− 3 h** (es. gara 13:30 → pranzo **10:30**). Vincola anche `resolveMealTimesForNutritionPlanDate`; **non** applicare lo spostamento pranzo post-fine seduta lunga.
+2. **Composizione pranzo** (canonico piattaforma, non per-atleta):
+   - pasta **o** riso: **3 g CHO/kg** peso atleta;
+   - grana: **15–20 g**;
+   - olio EVO: **15 g**;
+   - se il target kcal dello slot Diet **non è coperto** dal nucleo sopra → **crostata o torta** ricca di CHO (no verdure voluminose pre-gara).
+3. **Implementazione:** `apps/web/lib/nutrition/race-day-pre-race-lunch.ts` (`RACE_DAY_PRE_RACE_LUNCH_PROTOCOL`) → `buildRacePreLunchDayContext` → composer `composeRacePreLunchMainMeal`.
+
 ## Test minimi obbligatori su modifica
 
 - `resolve-nutrition-diet-day.test.ts`
 - `diet-meal-slot-budgets.test.ts`
 - `meal-plan-memory-guardrail.test.ts` — esercita TUTTI gli slot × dietType × kcal range e fallisce se un item del composer non risolve nella memoria canonica. **Copre anche Regola 7**: lunch/dinner CHO > 100g non usa pane come principale; lunch/dinner CHO ≥ 130g ha ≥ 2 item `cho_heavy`; breakfast CHO ≥ 130g ha ≥ 2 fonti CHO solide complesse.
+- `race-day-pre-race-lunch.test.ts` — protocollo pre-gara (orario 3 h, composizione pasta/riso + grana + olio).
 - `canonical-food-composition.test.ts` — regression test su rule INFER specifiche e scaling per nome alimento.

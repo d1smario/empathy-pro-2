@@ -267,6 +267,18 @@ export const CANONICAL_FOOD_TABLE: Record<string, CanonicalFoodNutrients> = {
     vitC_mg: 8,
     na_mg: 32,
   }),
+  /** Crostata / torta semplice pre-gara (densità CHO, basso volume fibra vs verdure). */
+  crostata_torta_cho: row({
+    kcalPer100g: 320,
+    proteinG: 5,
+    carbsG: 48,
+    fatG: 12,
+    fiberG: 1.5,
+    saturatedFatG: 4,
+    monoFatG: 4,
+    polyFatG: 1.5,
+    na_mg: 180,
+  }),
   /** Tofu compatto preparato con solfato di calcio (USDA FDC 172476, 100 g). */
   tofu_firm: row({
     kcalPer100g: 144,
@@ -1001,6 +1013,7 @@ const INFER_RULES: Array<{ test: RegExp; key: string }> = [
   { test: /avocado/i, key: "avocado" },
   { test: /gallette|cracker|fette\s+biscot|fetta\s+biscot|rusk|toast\s+secco/i, key: "crackers_whole" },
   { test: /marmellat|confettur|jam\b/i, key: "jam_fruit" },
+  { test: /crostata|torta\s+(di\s+)?(mela|frutta|ricotta|semplice)|torta\s+al\s+cioccolato|dolce\s+da\s+forno/i, key: "crostata_torta_cho" },
   { test: /bresaola|prosciutto|affettato|mortadella|salame/i, key: "deli_lean" },
   /** Bevande vegetali: matchare PRIMA di "latte\b" generico per non cadere su milk_2pct.
    *  Le rule sono specifiche per ingrediente (mandorla/riso/avena) cosi' lo scaling USDA

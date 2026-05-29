@@ -5,6 +5,10 @@
 
 import { MEAL_SLOT_ORDER, type MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
+  buildRacePreLunchDayContext,
+  type PlannedSessionForRaceDetection,
+} from "@/lib/nutrition/race-day-pre-race-lunch";
+import {
   mealTimesFromRoutineWeekPlanForDate,
   profileWeekDayKeyFromIsoLocal,
   type FlatMealTimes,
@@ -147,10 +151,30 @@ export function resolveMealTimesForNutritionPlanDate(input: {
   routineConfig: Record<string, unknown> | null | undefined;
   planDate: string;
   mealTimesFlatFromRoot: FlatMealTimes;
-  plannedSessions: Array<{ duration_minutes?: unknown }>;
+  plannedSessions: PlannedSessionForRaceDetection[];
   postTrainingToLunchMin?: number;
+  weightKg?: number | null;
 }): FlatMealTimes {
   const base = mealTimesFromRoutineWeekPlanForDate(input.routineConfig, input.planDate, input.mealTimesFlatFromRoot);
+
+  const racePreLunch = buildRacePreLunchDayContext({
+    weightKg: input.weightKg,
+    planDate: input.planDate,
+    routineConfig: input.routineConfig,
+    plannedSessions: input.plannedSessions,
+  });
+  if (racePreLunch) {
+    const mins = parseMealTimesToMinutes(base);
+    const lunchMin = parseLocalTimeToMinutes(racePreLunch.lunchTimeLocal) ?? mins.lunch;
+    mins.lunch = lunchMin;
+    for (let i = 1; i < SLOT_ORDER.length; i++) {
+      const k = SLOT_ORDER[i];
+      const prev = SLOT_ORDER[i - 1];
+      mins[k] = Math.max(mins[k], mins[prev] + MIN_MINUTES_BETWEEN_MEALS);
+    }
+    return minutesToFlat(mins);
+  }
+
   const rc = input.routineConfig;
   if (!rc) return base;
   const wd = profileWeekDayKeyFromIsoLocal(input.planDate);
@@ -165,7 +189,10 @@ export function resolveMealTimesForNutritionPlanDate(input: {
 export function buildRoutineDigestForMealPlan(
   routine: Record<string, unknown> | null | undefined,
   planDate: string,
-  options?: { plannedSessions?: Array<{ duration_minutes?: unknown }> },
+  options?: {
+    plannedSessions?: PlannedSessionForRaceDetection[];
+    weightKg?: number | null;
+  },
 ): string | null {
   if (!routine || typeof routine !== "object") return null;
   const wake = typeof routine.wake_time === "string" ? routine.wake_time : null;
@@ -188,11 +215,23 @@ export function buildRoutineDigestForMealPlan(
     planDate,
     mealTimesFlatFromRoot: flat,
     plannedSessions: options?.plannedSessions ?? [],
+    weightKg: options?.weightKg,
+  });
+  const racePreLunch = buildRacePreLunchDayContext({
+    weightKg: options?.weightKg,
+    planDate,
+    routineConfig: routine,
+    plannedSessions: options?.plannedSessions ?? [],
   });
   const wd = profileWeekDayKeyFromIsoLocal(planDate);
   bits.push(
     `orari pasti (${wd}): colazione ${resolved.breakfast}, spuntino ${resolved.snack_am}, pranzo ${resolved.lunch}, merenda ${resolved.snack_pm}, cena ${resolved.dinner}`,
   );
+  if (racePreLunch) {
+    bits.push(
+      `pre-gara: pranzo ${racePreLunch.lunchTimeLocal} (${racePreLunch.rule.hoursBeforeRace} h prima di ${racePreLunch.raceStartLocal})`,
+    );
+  }
 
   return bits.length ? bits.join(" · ") : null;
 }
@@ -211,9 +250,20 @@ export function computeSnackSlotsSuppressedByTrainingWindow(input: {
   routineConfig: Record<string, unknown> | null | undefined;
   planDate: string;
   mealTimesFlatFromRoot: FlatMealTimes;
-  plannedSessions: Array<{ duration_minutes?: unknown }>;
+  plannedSessions: PlannedSessionForRaceDetection[];
   bufferMinutes?: number;
+  weightKg?: number | null;
 }): MealSlotKey[] {
+  if (
+    buildRacePreLunchDayContext({
+      weightKg: input.weightKg,
+      planDate: input.planDate,
+      routineConfig: input.routineConfig,
+      plannedSessions: input.plannedSessions,
+    })
+  ) {
+    return [];
+  }
   const rc = input.routineConfig;
   if (!rc) return [];
   const wd = profileWeekDayKeyFromIsoLocal(input.planDate);
@@ -249,14 +299,26 @@ export function computePostWorkoutMealFlags(input: {
   routineConfig: Record<string, unknown> | null | undefined;
   planDate: string;
   mealTimesFlatFromRoot: FlatMealTimes;
-  plannedSessions: Array<{ duration_minutes?: unknown }>;
+  plannedSessions: PlannedSessionForRaceDetection[];
+  weightKg?: number | null;
 }): Partial<Record<MealSlotKey, boolean>> {
+  if (
+    buildRacePreLunchDayContext({
+      weightKg: input.weightKg,
+      planDate: input.planDate,
+      routineConfig: input.routineConfig,
+      plannedSessions: input.plannedSessions,
+    })
+  ) {
+    return {};
+  }
   const base = mealTimesFromRoutineWeekPlanForDate(input.routineConfig, input.planDate, input.mealTimesFlatFromRoot);
   const resolved = resolveMealTimesForNutritionPlanDate({
     routineConfig: input.routineConfig,
     planDate: input.planDate,
     mealTimesFlatFromRoot: input.mealTimesFlatFromRoot,
     plannedSessions: input.plannedSessions,
+    weightKg: input.weightKg,
   });
   const flags: Partial<Record<MealSlotKey, boolean>> = {};
   for (const slot of MEAL_SLOT_ORDER) {

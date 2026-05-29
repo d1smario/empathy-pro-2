@@ -17,6 +17,11 @@ import {
   computeSnackSlotsSuppressedByTrainingWindow,
 } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import { pathwayCofactorsToNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import {
+  buildRacePreLunchDayContext,
+  racePreLunchContextLine,
+  type PlannedSessionForRaceDetection,
+} from "@/lib/nutrition/race-day-pre-race-lunch";
 
 export type PathwaySlotBundleInput = {
   pathwayTargets?: FunctionalFoodTargetViewModel[];
@@ -50,6 +55,7 @@ export function buildIntelligentMealPlanRequest(input: {
     food_preferences: string[] | null;
     supplements: string[] | null;
     routine_config: Record<string, unknown> | null;
+    weight_kg?: number | null;
   } | null;
   mealRows: Array<{
     key: string;
@@ -67,15 +73,23 @@ export function buildIntelligentMealPlanRequest(input: {
   /** Leve integrazione operativa (solver × training), stesse della UI. */
   integrationLeverLines?: string[];
   /** Sedute pianificate del giorno: digest orari + flag post-seduta per il composer. */
-  plannedSessionsForDay?: Array<{ duration_minutes?: unknown }>;
+  plannedSessionsForDay?: PlannedSessionForRaceDetection[];
 }): IntelligentMealPlanRequest {
   const { mealRows, mealPathwayBySlot } = input;
   const dailyMealsKcalTotal = Math.round(mealRows.reduce((s, r) => s + (Number.isFinite(r.kcal) ? r.kcal : 0), 0));
   const pathwayPathways = input.pathwayModulation?.pathways ?? [];
   const pathwayTimingLines = buildPathwayTimingLinesForMealPlan(input.pathwayModulation);
   const plannedForDay = input.plannedSessionsForDay ?? [];
+  const racePreLunch = buildRacePreLunchDayContext({
+    weightKg: input.profile?.weight_kg,
+    planDate: input.planDate,
+    routineConfig: input.profile?.routine_config ?? null,
+    plannedSessions: plannedForDay,
+  });
+  const raceWeight = { weightKg: input.profile?.weight_kg };
   const routineDigest = buildRoutineDigestForMealPlan(input.profile?.routine_config ?? null, input.planDate, {
     plannedSessions: plannedForDay,
+    ...raceWeight,
   });
   const mealTimesFlat = routineMealTimesFlat(input.profile?.routine_config ?? null);
   const postWorkoutMealBySlot = computePostWorkoutMealFlags({
@@ -83,13 +97,20 @@ export function buildIntelligentMealPlanRequest(input: {
     planDate: input.planDate,
     mealTimesFlatFromRoot: mealTimesFlat,
     plannedSessions: plannedForDay,
+    ...raceWeight,
   });
   const suppressedSlots = computeSnackSlotsSuppressedByTrainingWindow({
     routineConfig: input.profile?.routine_config ?? null,
     planDate: input.planDate,
     mealTimesFlatFromRoot: mealTimesFlat,
     plannedSessions: plannedForDay,
+    ...raceWeight,
   });
+  const mealRowsResolved = racePreLunch
+    ? mealRows.map((row) =>
+        row.key === "lunch" ? { ...row, timeLocal: racePreLunch.lunchTimeLocal } : row,
+      )
+    : mealRows;
 
   /**
    * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai
@@ -118,9 +139,9 @@ export function buildIntelligentMealPlanRequest(input: {
       ? pathwayPathways.map((p) => p.pathwayLabel.trim()).filter(Boolean).join(" · ").slice(0, 320)
       : null;
 
-  const slotOrder = mealRows.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
+  const slotOrder = mealRowsResolved.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
   const slots = slotOrder.map((slot) => {
-    const row = mealRows.find((r) => r.key === slot);
+    const row = mealRowsResolved.find((r) => r.key === slot);
     const bundle = mealPathwayBySlot[slot];
     const targets = bundle?.pathwayTargets ?? [];
     const foods = bundle?.foods ?? [];
@@ -188,8 +209,12 @@ export function buildIntelligentMealPlanRequest(input: {
       pathwayTimingLines,
       trainingDayLines: input.trainingDayLines.slice(0, 12),
       routineDigest,
-      contextLines: input.contextLines.slice(0, 18),
+      contextLines: [
+        ...input.contextLines.slice(0, 18),
+        ...(racePreLunch ? [racePreLunchContextLine(racePreLunch)] : []),
+      ],
       slots,
+      racePreLunch: racePreLunch ?? undefined,
     }),
   );
 }

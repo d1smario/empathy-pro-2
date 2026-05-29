@@ -108,6 +108,7 @@ import {
 } from "@/lib/nutrition/resolve-nutrition-diet-day";
 import { mealTimesFromRoutineWeekPlanForDate } from "@/lib/nutrition/routine-week-plan-meal-times";
 import { resolveMealTimesForNutritionPlanDate } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
+import { mapPlannedSessionsForRaceDetection } from "@/lib/nutrition/race-day-pre-race-lunch";
 import type { IntelligentMealPlanResponseBody, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
   buildNutritionAdaptationSectorBoxes,
@@ -1751,11 +1752,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       snack_pm: String(times.snack_pm ?? times.snacks ?? "16:30"),
     };
     const sessionsThisDay = planned.filter((p) => p.date === selectedPlanDate);
+    const racePlannedSessions = mapPlannedSessionsForRaceDetection(sessionsThisDay);
     const resolvedTimes = resolveMealTimesForNutritionPlanDate({
       routineConfig: rc,
       planDate: selectedPlanDate,
       mealTimesFlatFromRoot: flatMealTimes,
-      plannedSessions: sessionsThisDay,
+      plannedSessions: racePlannedSessions,
+      weightKg: profile?.weight_kg,
     });
     const weekTimes = mealTimesFromRoutineWeekPlanForDate(rc, selectedPlanDate, {
       ...flatMealTimes,
@@ -2120,7 +2123,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const base = buildIntelligentMealPlanRequest({
       athleteId,
       planDate: selectedPlanDate,
-      plannedSessionsForDay: selectedPlanSessions,
+      plannedSessionsForDay: mapPlannedSessionsForRaceDetection(selectedPlanSessions),
       profile: {
         diet_type: profile.diet_type,
         intolerances: profile.intolerances,
@@ -2129,6 +2132,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         food_preferences: profile.food_preferences,
         supplements: profile.supplements,
         routine_config: profile.routine_config,
+        weight_kg: profile.weight_kg,
       },
       mealRows: mealPlanCards.map((m) => ({
         key: m.key,
