@@ -13,6 +13,8 @@ export * from "./nutrition";
 export * from "./internal-load";
 export * from "./biomarkers";
 export * from "./twin";
+export * from "./daily-checkin";
+export * from "./epi";
 export * from "./memory";
 export * from "./reality";
 export * from "./observation-taxonomy";

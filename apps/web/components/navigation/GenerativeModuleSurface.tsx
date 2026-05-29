@@ -34,6 +34,8 @@ function domainAccent(module: ProductModuleId): Pro2SectionAccent {
       return "emerald";
     case "aerodynamics":
       return "cyan";
+    case "vitality":
+      return "fuchsia";
     case "dashboard":
     case "athletes":
     case "settings":

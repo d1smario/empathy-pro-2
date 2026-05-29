@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   Activity,
+  Award,
   Calendar,
   Cpu,
   Heart,
@@ -33,6 +34,7 @@ const ICONS: Record<ProductNavIconKey, LucideIcon> = {
   pulse: Cpu,
   motion: Move,
   wind: Wind,
+  award: Award,
   settings: Settings,
 };
 

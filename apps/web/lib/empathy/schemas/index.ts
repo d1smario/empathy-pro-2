@@ -29,3 +29,32 @@ export {
 export * from "./knowledge";
 export * from "./research";
 export * from "./common";
+
+// Vitality / EPI / Coin — canonical source lives in @empathy/contracts.
+export type {
+  DailyCheckin,
+  DailyCheckinScale,
+  DailyCheckinSymptom,
+  EpiInputs,
+  EpiInputsProvenance,
+  EpiPillarId,
+  EpiPillarScore,
+  EpiDataTier,
+  EpiResult,
+  EmpathyCoinTier,
+  EmpathyCoinLedgerEntry,
+  EmpathyCoinBalance,
+} from "@empathy/contracts";
+export {
+  DAILY_CHECKIN_SYMPTOMS,
+  isDailyCheckinSymptom,
+  EPI_ALGORITHM_VERSION,
+  EPI_PILLAR_IDS,
+  EPI_PILLAR_WEIGHTS,
+  COIN_LEDGER_VERSION,
+  COIN_PER_EFFICIENT_DAY,
+  EPI_EFFICIENT_DAY_MIN_SCORE,
+  COIN_TIERS,
+  coinTierForBalance,
+  coinsToNextTier,
+} from "@empathy/contracts";

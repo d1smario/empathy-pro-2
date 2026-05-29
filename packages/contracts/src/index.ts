@@ -21,6 +21,7 @@ export type ProductModuleId =
   | "health"
   | "biomechanics"
   | "aerodynamics"
+  | "vitality"
   | "athletes"
   | "settings";
 
@@ -35,6 +36,7 @@ export const PRODUCT_MODULE_ROUTE_MAP = {
   health: true,
   biomechanics: true,
   aerodynamics: true,
+  vitality: true,
   athletes: true,
   settings: true,
 } as const satisfies Record<ProductModuleId, unknown>;
