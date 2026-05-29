@@ -30,7 +30,7 @@ export * from "./knowledge";
 export * from "./research";
 export * from "./common";
 
-// Vitality / EPI / Coin — canonical source lives in @empathy/contracts.
+// Longevity & Fitness / EPI / Coin — canonical source lives in @empathy/contracts.
 export type {
   DailyCheckin,
   DailyCheckinScale,

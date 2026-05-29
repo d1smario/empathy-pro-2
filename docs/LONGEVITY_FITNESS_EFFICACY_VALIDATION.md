@@ -1,9 +1,9 @@
-# Vitality / EPI — protocollo di certificazione & validazione dell'efficacia
+# Longevity & Fitness / EPI — protocollo di certificazione & validazione dell'efficacia
 
 > Come l'Empathy Physiological Index (EPI) e gli Empathy Coin sono progettati per essere
 > **certificabili** e per **dimostrare efficacia** (meno assenze lavorative, miglior stato
 > psicofisico, marker metabolici migliori) nel tempo. Complementare al design in
-> `VITALITY_HEALTH_INDEX_AND_COIN.md` (sez. 5). Allineato a `empathy_generative_core.mdc`
+> `LONGEVITY_FITNESS_INDEX_AND_COIN.md` (sez. 5). Allineato a `empathy_generative_core.mdc`
 > (motori deterministici, AI solo interpretazione) e `empathy_schema_whole_picture.mdc`.
 
 ## 1. Principi di certificabilità

@@ -1,4 +1,4 @@
--- Pro 2 — Vitality / EPI: outcomes-ready linkage table (efficacy studies).
+-- Pro 2 — Longevity & Fitness / EPI: outcomes-ready linkage table (efficacy studies).
 -- Append-only record of REAL-WORLD outcomes per athlete/period (work absences, illness episodes,
 -- clinical markers, self-reported state) so EPI longitudinal snapshots + coin ledger can later be
 -- correlated with outcomes (cohorts EPI high vs low) WITHOUT a destructive migration.

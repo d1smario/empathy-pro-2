@@ -1,5 +1,5 @@
 /**
- * Daily subjective check-in — reality ingest for the Vitality module.
+ * Daily subjective check-in — reality ingest for the Longevity & Fitness module.
  * One row per (athlete_id, checkin_date). Subjective scales + illness/symptom flags.
  * Canonical key: `athlete_id` (see empathy_athlete_memory.mdc).
  */

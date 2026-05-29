@@ -18,7 +18,7 @@ import {
   type EpiResult,
 } from "@/lib/empathy/schemas";
 
-type VitalityPayload = {
+type LongevityFitnessPayload = {
   epi: EpiResult;
   checkin: DailyCheckin | null;
   balance: EmpathyCoinBalance;
@@ -119,9 +119,9 @@ function ScaleRow({
   );
 }
 
-export default function VitalityPageView() {
+export default function LongevityFitnessPageView() {
   const { athleteId, signedIn } = useActiveAthlete();
-  const [data, setData] = useState<VitalityPayload | null>(null);
+  const [data, setData] = useState<LongevityFitnessPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -147,8 +147,8 @@ export default function VitalityPageView() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch(`/api/vitality/index?athleteId=${encodeURIComponent(id)}`, { cache: "no-store" });
-        const json = (await res.json()) as VitalityPayload & { error?: string };
+        const res = await fetch(`/api/longevity/index?athleteId=${encodeURIComponent(id)}`, { cache: "no-store" });
+        const json = (await res.json()) as LongevityFitnessPayload & { error?: string };
         if (!res.ok) throw new Error(json.error ?? "Errore caricamento");
         setData(json);
         hydrateFromCheckin(json.checkin);
@@ -174,7 +174,7 @@ export default function VitalityPageView() {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/vitality/checkin", {
+      const res = await fetch("/api/longevity/checkin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ athleteId, ...form, illnessFlags: symptoms, note }),
@@ -198,15 +198,15 @@ export default function VitalityPageView() {
     <Pro2ModulePageShell
       eyebrow="Health-to-Earn · indice fisiologico"
       eyebrowClassName="text-fuchsia-400"
-      title="Vitality"
-      description="Health Index deterministico dai tuoi dati reali + check-in giornaliero. Ogni giorno efficiente vale Empathy Coin verso Bronze, Silver, Gold."
+      title="Longevity & Fitness"
+      description="Longevity & Fitness Index deterministico dai tuoi dati reali + check-in giornaliero. Ogni giorno efficiente vale Empathy Coin verso Bronze, Silver, Gold."
     >
       <Pro2AthleteRequiredGate enabled={signedIn}>
         {error ? (
           <div className="rounded-xl border border-rose-500/35 bg-rose-950/20 px-4 py-3 text-sm text-rose-200">{error}</div>
         ) : null}
 
-        <Pro2SectionCard accent="fuchsia" title="Health Index" subtitle="EPI · motore deterministico (AI solo interpretazione)" icon={HeartPulse}>
+        <Pro2SectionCard accent="fuchsia" title="Longevity & Fitness Index" subtitle="EPI · motore deterministico (AI solo interpretazione)" icon={HeartPulse}>
           {loading && !epi ? (
             <p className="text-sm text-gray-400">Calcolo in corso…</p>
           ) : epi ? (
@@ -299,11 +299,11 @@ export default function VitalityPageView() {
           </div>
 
           <div className="mt-5">
-            <label htmlFor="vitality-note" className="mb-1.5 block text-xs font-medium text-gray-400">
+            <label htmlFor="longevity-note" className="mb-1.5 block text-xs font-medium text-gray-400">
               Nota (opzionale)
             </label>
             <textarea
-              id="vitality-note"
+              id="longevity-note"
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 500))}
               rows={2}

@@ -1,7 +1,7 @@
--- Pro 2 — Vitality module: EPI (Empathy Physiological Index) snapshots.
+-- Pro 2 — Longevity & Fitness module: EPI (Empathy Physiological Index) snapshots.
 -- Versioned projection (NOT a parallel twin). One row per (athlete_id, snapshot_date, algorithm_version).
 -- Stores score + per-pillar breakdown + data tier + illness flag + INPUT PROVENANCE for
--- reproducibility/certification (see docs/VITALITY_HEALTH_INDEX_AND_COIN.md sec.5).
+-- reproducibility/certification (see docs/LONGEVITY_FITNESS_INDEX_AND_COIN.md sec.5).
 -- RLS mirrors 011_systemic_modulation_snapshots.sql.
 
 CREATE TABLE IF NOT EXISTS public.epi_snapshots (

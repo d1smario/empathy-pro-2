@@ -1,6 +1,6 @@
-# Vitality — Health Index (EPI), check-in giornaliero, Empathy Coin
+# Longevity & Fitness — Longevity & Fitness Index (EPI), check-in giornaliero, Empathy Coin
 
-> Modulo prodotto `vitality`. Loop giornaliero in-app: l'atleta registra sensazioni e giorni di
+> Modulo prodotto `longevity`. Loop giornaliero in-app: l'atleta registra sensazioni e giorni di
 > malessere, vede un **Health Index (EPI)** deterministico e guadagna **Empathy Coin** per ogni
 > "giorno efficiente" verso le certificazioni Bronze / Silver / Gold.
 >
@@ -16,7 +16,7 @@
 | Ingest | Check-in soggettivo giornaliero (sensazioni + malessere) come **reality** | `athlete_daily_checkins` |
 | Compute | **EPI deterministico** (0–100) da twin/internal-load/diary + check-in | `apps/web/lib/epi/epi-engine.ts` (puro, testato) |
 | Interpretation | Narrazione/etichette dell'indice (nessun numero) | UI / interpretation layer |
-| Application | Modulo `vitality`, Coin/tier, export terzi (Fase 6, off-app) | `app/(shell)/vitality`, ledger |
+| Application | Modulo `longevity`, Coin/tier, export terzi (Fase 6, off-app) | `app/(shell)/longevity`, ledger |
 
 **L'AI non calcola l'EPI.** Il punteggio è prodotto da una funzione pura e versionata
 (`EPI_ALGORITHM_VERSION`). L'EPI è una **proiezione** (come `systemic_modulation_snapshots`),
@@ -85,7 +85,7 @@ Il sistema deve poter **certificare** nel tempo e dimostrare correlazione con es
    migrazione distruttiva: snapshot longitudinale + ledger + outcome events sono la base statistica
    per validare l'efficacia (coorti EPI alto vs basso). Solo registrazione locale; nessun dato
    identificabile lascia la piattaforma in questa fase. Protocollo completo:
-   `docs/VITALITY_EFFICACY_VALIDATION.md`.
+   `docs/LONGEVITY_FITNESS_EFFICACY_VALIDATION.md`.
 5. **Validazione del motore.** Golden/fixture test (`epi-engine.test.ts`): copertura piena,
    parziale, no-device e illness-day, più invarianti (monotonicità, range 0–100, determinismo a
    parità di input). Regression test obbligatorio se si cambia una formula.

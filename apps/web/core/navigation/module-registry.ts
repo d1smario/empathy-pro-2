@@ -41,7 +41,7 @@ export const PRODUCT_MODULE_NAV: ProductModuleNavItem[] = [
   { module: "bioenergetics", href: "/bioenergetics", label: "BioEnergetic Intelligence", icon: "pulse", area: "main" },
   { module: "biomechanics", href: "/biomechanics", label: "Biomechanics", icon: "motion", area: "main" },
   { module: "aerodynamics", href: "/aerodynamics", label: "Aerodynamics", icon: "wind", area: "main" },
-  { module: "vitality", href: "/vitality", label: "Vitality", icon: "award", area: "main" },
+  { module: "longevity", href: "/longevity", label: "Longevity & Fitness", icon: "award", area: "main" },
   { module: "settings", href: "/settings", label: "Impostazioni", icon: "settings", area: "footer" },
 ];
 

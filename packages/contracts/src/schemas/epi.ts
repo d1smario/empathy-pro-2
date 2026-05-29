@@ -5,7 +5,7 @@
  * signals plus the daily subjective check-in. Feeds the Empathy Coin "efficient day" reward.
  *
  * Canon: the AI never produces these numbers (empathy_generative_core.mdc). Versioned for
- * certification / efficacy studies — see docs/VITALITY_HEALTH_INDEX_AND_COIN.md.
+ * certification / efficacy studies — see docs/LONGEVITY_FITNESS_INDEX_AND_COIN.md.
  */
 
 import type { IsoDate, IsoDateTime } from "./common";
@@ -188,7 +188,7 @@ export type EmpathyCoinBalance = {
 // Single source of truth for *which* algorithm/ledger version produced a stored number, with the
 // exact parameters in force at the time. A formula change MUST add a new entry (and bump the
 // `*_VERSION` constant) instead of mutating an existing one, so historical snapshots stay
-// reproducible and cohorts comparable. See docs/VITALITY_EFFICACY_VALIDATION.md.
+// reproducible and cohorts comparable. See docs/LONGEVITY_FITNESS_EFFICACY_VALIDATION.md.
 
 export type AlgorithmVersionStatus = "active" | "deprecated";
 

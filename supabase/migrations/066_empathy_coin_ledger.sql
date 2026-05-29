@@ -1,8 +1,8 @@
--- Pro 2 — Vitality module: Empathy Coin ledger (append-only).
+-- Pro 2 — Longevity & Fitness module: Empathy Coin ledger (append-only).
 -- Coins earned per "efficient day". Balance + tier (Bronze/Silver/Gold) are DERIVED (sum), never stored.
 -- Idempotent per (athlete_id, earned_for_date, reason) so re-running the award job cannot double-credit.
 -- Append-only: SELECT + INSERT policies only (no UPDATE/DELETE for athletes/coaches).
--- See docs/VITALITY_HEALTH_INDEX_AND_COIN.md.
+-- See docs/LONGEVITY_FITNESS_INDEX_AND_COIN.md.
 
 CREATE TABLE IF NOT EXISTS public.empathy_coin_ledger (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

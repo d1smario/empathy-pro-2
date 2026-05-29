@@ -1,6 +1,6 @@
--- Pro 2 — Vitality module: daily subjective check-in (reality ingest).
+-- Pro 2 — Longevity & Fitness module: daily subjective check-in (reality ingest).
 -- One row per (athlete_id, checkin_date). Subjective 1-5 scales + illness/symptom flags.
--- Canonical key athlete_id; feeds EPI engine + Empathy Coin. See docs/VITALITY_HEALTH_INDEX_AND_COIN.md.
+-- Canonical key athlete_id; feeds EPI engine + Empathy Coin. See docs/LONGEVITY_FITNESS_INDEX_AND_COIN.md.
 -- RLS pattern mirrors 011_systemic_modulation_snapshots.sql (private owner OR linked coach).
 
 CREATE TABLE IF NOT EXISTS public.athlete_daily_checkins (
@@ -25,7 +25,7 @@ CREATE INDEX IF NOT EXISTS idx_athlete_daily_checkins_athlete_date
   ON public.athlete_daily_checkins (athlete_id, checkin_date DESC);
 
 COMMENT ON TABLE public.athlete_daily_checkins IS
-  'Vitality daily subjective check-in (reality ingest): mood/energy/sleep/soreness/stress + illness flags. Feeds EPI engine; not a parallel twin store.';
+  'Longevity & Fitness daily subjective check-in (reality ingest): mood/energy/sleep/soreness/stress + illness flags. Feeds EPI engine; not a parallel twin store.';
 COMMENT ON COLUMN public.athlete_daily_checkins.illness_flags IS
   'Malaise/symptom flags: fever, headache, sore_throat, gi_upset, cold_flu, injury, other. Presence => illness day (efficiency target suspended).';
 

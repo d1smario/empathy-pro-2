@@ -3,7 +3,7 @@
  *
  * No I/O, no Date.now, no AI: same inputs -> same output (certification requirement).
  * Composes 8 pillars (0–100) from canonical twin/internal-load/nutrition signals + the daily
- * subjective check-in, with an illness guard. See docs/VITALITY_HEALTH_INDEX_AND_COIN.md.
+ * subjective check-in, with an illness guard. See docs/LONGEVITY_FITNESS_INDEX_AND_COIN.md.
  *
  * This lives in apps/web/lib (colocated node:test) rather than a new workspace package to avoid
  * install/wiring churn, consistent with other deterministic engines under apps/web/lib.
