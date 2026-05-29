@@ -36,6 +36,10 @@ export type WahooIngestStreamKey = (typeof WAHOO_INGEST_STREAM_KEYS)[number];
 export const GARMIN_INGEST_STREAM_KEYS = ["garmin_activity_summary"] as const;
 export type GarminIngestStreamKey = (typeof GARMIN_INGEST_STREAM_KEYS)[number];
 
+/** Chiavi stream Polar AccessLink (exercises / sleep / nightly-recharge). */
+export const POLAR_INGEST_STREAM_KEYS = ["polar_exercise", "polar_sleep", "polar_recharge"] as const;
+export type PolarIngestStreamKey = (typeof POLAR_INGEST_STREAM_KEYS)[number];
+
 /** Default conservativi: WHOOP workout off (evita doppione se il training arriva da altro device). */
 export const DEFAULT_WHOOP_INGEST_STREAMS: Record<WhoopIngestStreamKey, boolean> = {
   whoop_sleep: true,
@@ -49,6 +53,13 @@ export const DEFAULT_WAHOO_INGEST_STREAMS: Record<WahooIngestStreamKey, boolean>
 
 export const DEFAULT_GARMIN_INGEST_STREAMS: Record<GarminIngestStreamKey, boolean> = {
   garmin_activity_summary: true,
+};
+
+/** Default conservativi Polar: wellness on, exercise off (evita doppione training se primario è altro device). */
+export const DEFAULT_POLAR_INGEST_STREAMS: Record<PolarIngestStreamKey, boolean> = {
+  polar_exercise: false,
+  polar_sleep: true,
+  polar_recharge: true,
 };
 
 export type IngestStreamEntry = { enabled: boolean };
@@ -90,6 +101,7 @@ export function defaultStreamsForProvider(provider: IngestPolicyProvider): Recor
   if (provider === "whoop") return { ...DEFAULT_WHOOP_INGEST_STREAMS };
   if (provider === "wahoo") return { ...DEFAULT_WAHOO_INGEST_STREAMS };
   if (provider === "garmin" || provider === "garmin_connectiq") return { ...DEFAULT_GARMIN_INGEST_STREAMS };
+  if (provider === "polar") return { ...DEFAULT_POLAR_INGEST_STREAMS };
   return {};
 }
 
@@ -97,5 +109,6 @@ export function allowedIngestStreamKeysForProvider(provider: IngestPolicyProvide
   if (provider === "whoop") return WHOOP_INGEST_STREAM_KEYS;
   if (provider === "wahoo") return WAHOO_INGEST_STREAM_KEYS;
   if (provider === "garmin" || provider === "garmin_connectiq") return GARMIN_INGEST_STREAM_KEYS;
+  if (provider === "polar") return POLAR_INGEST_STREAM_KEYS;
   return [];
 }

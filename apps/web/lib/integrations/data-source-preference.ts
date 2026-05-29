@@ -35,6 +35,7 @@ export type DataSourceProvider =
   | "garmin"
   | "wahoo"
   | "strava"
+  | "polar"
   | "manual"
   | "cgm";
 
@@ -43,6 +44,7 @@ const ALLOWED_PROVIDERS: ReadonlySet<DataSourceProvider> = new Set([
   "garmin",
   "wahoo",
   "strava",
+  "polar",
   "manual",
   "cgm",
 ]);

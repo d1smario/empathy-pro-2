@@ -460,6 +460,18 @@ export default function ProfilePage() {
   const [stravaReturn, setStravaReturn] = useState<string | null>(null);
   const [stravaReason, setStravaReason] = useState<string | null>(null);
   const [stravaDetail, setStravaDetail] = useState<string | null>(null);
+  const [polarLink, setPolarLink] = useState<{
+    linked: boolean;
+    polarUserIdMasked?: string;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [polarReturn, setPolarReturn] = useState<string | null>(null);
+  const [polarReason, setPolarReason] = useState<string | null>(null);
+  const [polarDetail, setPolarDetail] = useState<string | null>(null);
+  const [polarPullBusy, setPolarPullBusy] = useState(false);
+  const [polarPullNotice, setPolarPullNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -586,6 +598,7 @@ export default function ProfilePage() {
     const wahoo = q.get("wahoo");
     const whoop = q.get("whoop");
     const strava = q.get("strava");
+    const polar = q.get("polar");
     if (wahoo) {
       setWahooReturn(wahoo);
       if (reason) setWahooReason(reason);
@@ -594,6 +607,10 @@ export default function ProfilePage() {
       setWhoopReturn(whoop);
       if (reason) setWhoopReason(reason);
       if (detail) setWhoopDetail(detail);
+    } else if (polar) {
+      setPolarReturn(polar);
+      if (reason) setPolarReason(reason);
+      if (detail) setPolarDetail(detail);
     } else if (strava) {
       setStravaReturn(strava);
       if (reason) setStravaReason(reason);
@@ -612,12 +629,13 @@ export default function ProfilePage() {
       setWhoopLink(null);
       setWahooLink(null);
       setStravaLink(null);
+      setPolarLink(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const [rG, rWhoop, rWahoo, rStrava] = await Promise.all([
+        const [rG, rWhoop, rWahoo, rStrava, rPolar] = await Promise.all([
           fetch(`/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
             credentials: "include",
           }),
@@ -628,6 +646,9 @@ export default function ProfilePage() {
             credentials: "include",
           }),
           fetch(`/api/integrations/strava/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/polar/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
             credentials: "include",
           }),
         ]);
@@ -656,6 +677,13 @@ export default function ProfilePage() {
         const jStrava = (await rStrava.json()) as {
           linked?: boolean;
           stravaAthleteIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        const jPolar = (await rPolar.json()) as {
+          linked?: boolean;
+          polarUserIdMasked?: string;
           oauthScope?: string | null;
           error?: string;
           hint?: string;
@@ -714,12 +742,26 @@ export default function ProfilePage() {
             oauthScope: jStrava.oauthScope ?? null,
           });
         }
+        if (!rPolar.ok) {
+          setPolarLink({
+            linked: false,
+            linkStatusError: jPolar.error ?? `HTTP ${rPolar.status}`,
+            linkStatusHint: typeof jPolar.hint === "string" ? jPolar.hint : undefined,
+          });
+        } else {
+          setPolarLink({
+            linked: Boolean(jPolar.linked),
+            polarUserIdMasked: jPolar.polarUserIdMasked,
+            oauthScope: jPolar.oauthScope ?? null,
+          });
+        }
       } catch {
         if (!cancelled) {
           setGarminLink({ linked: false });
           setWhoopLink({ linked: false });
           setWahooLink({ linked: false });
           setStravaLink({ linked: false });
+          setPolarLink({ linked: false });
         }
       }
     })();
@@ -820,6 +862,39 @@ export default function ProfilePage() {
       setWhoopPullNotice("Errore di rete.");
     } finally {
       setWhoopPullBusy(false);
+    }
+  }
+
+  async function runPolarPullNow() {
+    if (!activeAthleteId || !polarLink?.linked || polarPullBusy) return;
+    setPolarPullBusy(true);
+    setPolarPullNotice(null);
+    try {
+      const r = await fetch("/api/integrations/polar/pull/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        inserted?: number;
+        skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      if (j.ok) {
+        setPolarPullNotice(
+          `Pull completato: inseriti ${j.inserted ?? 0}, saltati ${j.skipped ?? 0}.` +
+            (Array.isArray(j.errors) && j.errors.length > 0 ? ` Avvisi: ${j.errors.slice(0, 3).join(" · ")}` : ""),
+        );
+      } else {
+        setPolarPullNotice(j.error ?? `Errore HTTP ${r.status}`);
+      }
+    } catch {
+      setPolarPullNotice("Errore di rete.");
+    } finally {
+      setPolarPullBusy(false);
     }
   }
 
@@ -1810,6 +1885,50 @@ export default function ProfilePage() {
                       : "Accesso negato per WHOOP (sessione o atleta). Riprova da account autorizzato."}
                   </p>
                 ) : null}
+                {polarReturn === "ok" ? (
+                  <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
+                    Polar collegato. Puoi usare &quot;Aggiorna dati Polar&quot; qui sotto per scaricare allenamenti, sonno e
+                    Nightly Recharge. Quali stream vengono salvati dipende dalla policy in{" "}
+                    <strong className="text-white/90">Impostazioni</strong> → ingest dispositivi.
+                  </p>
+                ) : null}
+                {polarReturn === "error" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    Collegamento Polar non riuscito
+                    {polarReason ? (
+                      <>
+                        {" "}
+                        (<code className="text-white/70">{polarReason}</code>
+                        {polarDetail ? (
+                          <>
+                            , dettaglio: <code className="text-white/70">{polarDetail}</code>
+                          </>
+                        ) : null}
+                        )
+                      </>
+                    ) : polarDetail ? (
+                      <>
+                        : <code className="text-white/70">{polarDetail}</code>
+                      </>
+                    ) : null}
+                    . Se l&apos;errore è <code className="text-white/70">register_user</code> /{" "}
+                    <code className="text-white/70">consents_missing</code>, accetta i consensi su account.polar.com e riprova.
+                  </p>
+                ) : null}
+                {polarReturn === "server_config" ? (
+                  <p className="text-sm text-rose-400/90" style={{ marginTop: 8 }}>
+                    OAuth Polar non configurato sul server:{" "}
+                    <code className="text-white/80">POLAR_OAUTH2_CLIENT_ID</code>,{" "}
+                    <code className="text-white/80">POLAR_OAUTH2_CLIENT_SECRET</code>.
+                  </p>
+                ) : null}
+                {polarReturn === "denied" || polarReturn === "missing_athlete" ? (
+                  <p className="text-sm text-amber-400/90" style={{ marginTop: 8 }}>
+                    {polarReturn === "missing_athlete"
+                      ? "Atleta non indicato nel flusso OAuth Polar: apri il profilo con atleta attivo e riprova «Collega Polar»."
+                      : "Accesso negato per Polar (sessione o atleta). Riprova da account autorizzato."}
+                  </p>
+                ) : null}
                 {wahooReturn === "ok" ? (
                   <p className="text-sm text-emerald-400/90" style={{ marginTop: 8 }}>
                     Wahoo Cloud collegato. API piani e workout:{" "}
@@ -2147,6 +2266,75 @@ export default function ProfilePage() {
                         <code className="text-white/70">CRON_SECRET</code>
                         {" "}o <code className="text-white/70">WHOOP_PULL_RUN_SECRET</code>). Pull manuale:{" "}
                         <code className="text-white/70">POST …/whoop/pull/run</code> con sessione o stesso Bearer.
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Polar
+                      </h4>
+                      {polarLink?.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato Polar non disponibile: {polarLink.linkStatusError}
+                          {polarLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({polarLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {polarLink?.linked ? (
+                        <p className="muted-copy text-sm">
+                          Account Polar collegato (ID{" "}
+                          <span className="text-white/80">{polarLink.polarUserIdMasked ?? "—"}</span>).
+                        </p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account Polar collegato: autorizza l&apos;app AccessLink per leggere allenamenti, sonno e
+                          Nightly Recharge. Al primo collegamento registriamo l&apos;utente presso il client AccessLink.
+                        </p>
+                      )}
+                      {polarLink?.linked && polarLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{polarLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/polar/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                        >
+                          {polarLink?.linked ? "Ricollega Polar" : "Collega Polar"}
+                        </a>
+                        {polarLink?.linked ? (
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={polarPullBusy}
+                            className="border border-violet-500/35 bg-violet-500/10 text-violet-50 hover:bg-violet-500/20"
+                            onClick={() => void runPolarPullNow()}
+                          >
+                            {polarPullBusy ? "Pull…" : "Aggiorna dati Polar"}
+                          </Pro2Button>
+                        ) : null}
+                      </div>
+                      {polarPullNotice ? (
+                        <p className="muted-copy mt-2 text-xs text-white/80">{polarPullNotice}</p>
+                      ) : null}
+                      <p className="muted-copy mt-2 text-xs">
+                        Aggiornamento automatico: cron Vercel su{" "}
+                        <code className="text-white/70">GET /api/integrations/polar/pull/cron</code> (
+                        <code className="text-white/70">CRON_SECRET</code>
+                        {" "}o <code className="text-white/70">POLAR_PULL_RUN_SECRET</code>). Pull manuale:{" "}
+                        <code className="text-white/70">POST …/polar/pull/run</code> con sessione o stesso Bearer.
                       </p>
                     </div>
 

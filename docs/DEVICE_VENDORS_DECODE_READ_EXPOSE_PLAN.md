@@ -1,4 +1,4 @@
-# Piano: decode → persistenza → lettura → esposizione (Garmin, Wahoo, WHOOP)
+# Piano: decode → persistenza → lettura → esposizione (Garmin, Wahoo, WHOOP, Strava, Polar)
 
 Documento di **sequenza operativa** allineato a `docs/INGEST_DEVICE_AND_LAB_MATRIX.md`, `.cursor/rules/empathy_ingest_envelope.mdc` e alla tassonomia `ObservationDomain` in `@empathy/contracts`.
 
@@ -72,6 +72,33 @@ Prossimi incrementi consigliati: normalizzazione batch verso time-series; refres
 - **Route**: `GET /api/integrations/strava/authorize?athleteId=…`, `GET /api/integrations/strava/callback` (alias opzionale `GET /api/auth/callback/strava` se il redirect URI punta lì), `GET /api/integrations/strava/link-status?athleteId=…`.
 - **Persistenza**: token in `vendor_oauth_links` come WHOOP/Wahoo (`lib/integrations/strava-oauth2-api.ts`).
 - **UI Profilo** → Devices: «Collega Strava» / «Ricollega Strava». Pull attività: `POST /api/integrations/strava/pull/run` (`strava-pull-runner` → `executed_workouts`); estendere UI «Aggiorna Strava» come WHOOP/Wahoo se assente.
+
+## Polar AccessLink (OAuth2 + pull) — implementato
+
+- **DB**: migration `068_vendor_oauth_polar.sql` estende `vendor_oauth_links.vendor` con valore `polar`.
+- **Specificità Polar** ([AccessLink API](https://www.polar.com/accesslink-api/)):
+  - Token endpoint con **Basic auth** `client_id:client_secret`; access token **a lunga durata, nessun refresh** (`oauth_refresh_token` resta null).
+  - Dopo l'OAuth il callback **registra l'utente** (`POST /v3/users`, `member-id` = `athlete_id`); `409` = già registrato (ok), `403` = consensi mancanti.
+  - `/v3/users/**` con Bearer token utente; `/v3/notifications`/webhook userebbero client credentials (non usati nella v1 pull-only).
+- **Route**: `GET /api/integrations/polar/authorize?athleteId=…`, `GET …/polar/callback`, `GET …/polar/link-status?athleteId=…`, `POST …/polar/pull/run`, `GET …/polar/pull/cron?limit=5`.
+- **Pull** (`polar-pull-runner` → `device_sync_exports` + allenamenti in `executed_workouts`, parser `polar_v3_rest`):
+  - `GET /v3/exercises` → dominio `training` (stream `polar_exercise`), materializza `executed_workouts`.
+  - `GET /v3/users/sleep` (ultime 28 notti) → dominio `sleep` (stream `polar_sleep`).
+  - `GET /v3/users/nightly-recharge` → dominio `recovery` (stream `polar_recharge`).
+  - Stream effettivi = **intersezione** con la policy ingest (`polar_exercise` / `polar_sleep` / `polar_recharge`). Default conservativi: sleep+recharge on, exercise off (evita doppione training se il primario è altro device).
+- **UI Profilo** → Devices: «Collega Polar» / «Ricollega Polar», stato `link-status`, pulsante «Aggiorna dati Polar» → `POST …/polar/pull/run` (sessione).
+
+### Variabili d'ambiente (Polar)
+
+| Variabile | Uso |
+|-----------|-----|
+| `POLAR_OAUTH2_CLIENT_ID` / `POLAR_OAUTH2_CLIENT_SECRET` | OAuth2 client (admin.polaraccesslink.com) |
+| `POLAR_OAUTH2_REDIRECT_URI` (opz.) | Se assente Polar usa il redirect di default del client; se impostato deve combaciare con l'admin |
+| `POLAR_OAUTH2_AUTHORIZE_URL` (opz.) | Default `https://flow.polar.com/oauth2/authorization` |
+| `POLAR_OAUTH2_TOKEN_URL` (opz.) | Default `https://polarremote.com/v2/oauth2/token` |
+| `POLAR_OAUTH2_SCOPES` (opz.) | Default `accesslink.read_all` |
+| `POLAR_API_BASE_URL` (opz.) | Default `https://www.polaraccesslink.com` |
+| `POLAR_PULL_RUN_SECRET` (opz.) | Bearer per `POST …/polar/pull/run` e `GET …/polar/pull/cron` |
 
 ## Ingest clips (implementato)
 
