@@ -3,6 +3,7 @@
  * Nessun LLM genera la struttura del piano; le kcal per voce seguono porzioni e banca composizione canonica.
  */
 
+import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
 import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 
 /** Ordine canonico pasti (5): due spuntini + tre principali. Il 6° pasto (serale) è `snack_evening` quando Diet = 6 pasti. */
