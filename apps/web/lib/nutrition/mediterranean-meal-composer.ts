@@ -9,7 +9,8 @@
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
-import { composeBreakfastWithArchetypes } from "@/lib/nutrition/breakfast-meal-archetypes";
+import { CANONICAL_FOOD_TABLE, inferCanonicalFoodKeyPreferName, scaleCanonicalNutrientsToGrams } from "@/lib/nutrition/canonical-food-composition";
+import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 
 /** Allineato a `DryMealSlotMacros` in dry-meal-plan-lines (evita import circolare). */
 export type MealMacroTargets = {
@@ -123,65 +124,6 @@ function hashSeed(slot: MealSlotKey, kcal: number, planDate?: string): number {
   return Math.abs(Math.round(kcal * 1.73 + s * 41 + dateBoost));
 }
 
-/** kcal e macro approssimati (ordine di grandezza educativo, non laboratorio). */
-const D = {
-  milkKcalPerMl: 0.64,
-  milkProtPerMl: 0.032,
-  milkChoPerMl: 0.048,
-  milkFatPerMl: 0.036,
-  cerealKcalPerG: 3.65,
-  cerealChoPerG: 0.73,
-  cerealProtPerG: 0.11,
-  berryKcalPerG: 0.52,
-  berryChoPerG: 0.12,
-  bananaKcal: 95,
-  bananaCho: 24,
-  bananaProt: 1.2,
-  yogurtKcalPerG: 0.72,
-  yogurtProtPerG: 0.085,
-  yogurtChoPerG: 0.045,
-  yogurtFatPerG: 0.038,
-  wheyKcalPerG: 4.0,
-  wheyProtPerG: 0.8,
-  wheyChoPerG: 0.06,
-  pastaDryKcalPerG: 3.71,
-  pastaDryChoPerG: 0.75,
-  pastaDryProtPerG: 0.13,
-  riceDryKcalPerG: 3.65,
-  riceDryChoPerG: 0.8,
-  riceDryProtPerG: 0.071,
-  potatoCookedKcalPerG: 0.9,
-  potatoCookedChoPerG: 0.2,
-  farroDryKcalPerG: 3.38,
-  farroDryChoPerG: 0.7,
-  farroDryProtPerG: 0.14,
-  chickenKcalPerG: 1.65,
-  chickenProtPerG: 0.31,
-  fishKcalPerG: 1.55,
-  fishProtPerG: 0.28,
-  meatKcalPerG: 1.85,
-  meatProtPerG: 0.26,
-  legumeKcalPerG: 1.15,
-  legumeProtPerG: 0.09,
-  legumeChoPerG: 0.15,
-  eggKcalEach: 78,
-  eggProtEach: 6.3,
-  vegKcalPerG: 0.35,
-  vegChoPerG: 0.05,
-  oilKcalPerMl: 9.0,
-  oilFatPerMl: 1.0,
-  breadKcalPerG: 2.7,
-  breadChoPerG: 0.52,
-  focacciaKcalPerG: 3.0,
-  granaKcalPerG: 4.0,
-  granaProtPerG: 0.32,
-  granaFatPerG: 0.28,
-  avocadoKcalPerG: 1.6,
-  avocadoFatPerG: 0.15,
-  crackerKcalPerG: 4.2,
-  crackerChoPerG: 0.68,
-};
-
 export type MediterraneanComposedMeal = {
   lines: string[];
   items: IntelligentMealPlanItemOut[];
@@ -204,9 +146,196 @@ function item(
   };
 }
 
+/**
+ * MATEMATICA PORZIONI (regola utente nutrizionista): niente ricette/grammature fisse.
+ * Dato il target macro dello slot (CHO/PRO/FAT dal solver fabbisogno), si calcolano i
+ * GRAMMI di ciascun alimento SCELTO così che la somma di carboidrati/proteine/grassi
+ * cada entro tolleranza dal target.
+ *
+ * Coerenza header ⇄ voci: le macro vengono lette SEMPRE da `CANONICAL_FOOD_TABLE`
+ * (single source of truth, le stesse usate da `finalizeIntelligentMealPlanCore` quando
+ * il `portionHint` è mono-ingrediente con grammi espliciti). Ogni `name` deve
+ * re-inferire la propria `canonicalKey` (vedi `INFER_RULES`), così i grammi prodotti
+ * qui producono gli stessi macro mostrati nelle voci.
+ */
+type SolveFoodSpec = {
+  /** Chiave in CANONICAL_FOOD_TABLE (macro per 100 g). */
+  canonicalKey: string;
+  /** Nome voce: DEVE re-inferire `canonicalKey`. */
+  name: string;
+  /** Sostantivo per il `portionHint` ("pasta di semola (peso crudo)"). */
+  noun: string;
+  /** Leva del solver per quel macro, oppure contributo a porzione fissa. */
+  role: "cho" | "protein" | "fat" | "fixed";
+  macroRole: IntelligentMealPlanItemOut["macroRole"];
+  minG: number;
+  maxG: number;
+  stepG: number;
+  /** Grammatura per `role: "fixed"` (verdura/frutta/pane secondario/formaggio). */
+  fixedG?: number;
+  bridge: string;
+  /** Formattazione `portionHint` alternativa (es. uova: conta + grammi). */
+  formatPortion?: (g: number) => string;
+};
 
+function canonMacroPerG(key: string): { c: number; p: number; f: number } {
+  const r = CANONICAL_FOOD_TABLE[key];
+  if (!r) return { c: 0, p: 0, f: 0 };
+  return { c: r.carbsG / 100, p: r.proteinG / 100, f: r.fatG / 100 };
+}
+
+/**
+ * Coordinate descent: ogni macro controllata dal suo alimento "leva", tenendo conto
+ * dei contributi incrociati (es. la pasta porta anche proteine, l'olio solo grassi).
+ * Gli alimenti `fixed` (verdura/frutta) contribuiscono ma non vengono mossi.
+ */
+function solvePortionsByMacros(foods: SolveFoodSpec[], target: MealMacroTargets): number[] {
+  const grams = foods.map((f) =>
+    f.role === "fixed" ? clampStep(f.fixedG ?? f.minG, f.minG, f.maxG, f.stepG) : f.minG,
+  );
+  const idxOf = (role: SolveFoodSpec["role"]) => foods.findIndex((f) => f.role === role);
+  const choIdx = idxOf("cho");
+  const proIdx = idxOf("protein");
+  const fatIdx = idxOf("fat");
+  const sumMacro = (m: "c" | "p" | "f"): number =>
+    foods.reduce((a, f, i) => a + grams[i]! * canonMacroPerG(f.canonicalKey)[m], 0);
+  const adjust = (idx: number, m: "c" | "p" | "f", t: number): void => {
+    if (idx < 0) return;
+    const f = foods[idx]!;
+    const perG = canonMacroPerG(f.canonicalKey)[m];
+    if (perG <= 0) return;
+    const others = sumMacro(m) - grams[idx]! * perG;
+    grams[idx] = clampStep((t - others) / perG, f.minG, f.maxG, f.stepG);
+  };
+  for (let it = 0; it < 16; it++) {
+    adjust(proIdx, "p", Math.max(0, target.proteinG));
+    adjust(choIdx, "c", Math.max(0, target.carbsG));
+    adjust(fatIdx, "f", Math.max(0, target.fatG));
+  }
+  return grams;
+}
+
+/** Costruisce voci + righe dal set risolto, leggendo kcal/macro dalla banca canonica (coerenza con finalize). */
+function buildMealFromSolved(foods: SolveFoodSpec[], grams: number[]): MediterraneanComposedMeal {
+  const items: IntelligentMealPlanItemOut[] = [];
+  const lines: string[] = [];
+  let total = 0;
+  foods.forEach((f, i) => {
+    const g = Math.round(grams[i] ?? 0);
+    const minMeaningful = f.role === "fat" ? 4 : 8;
+    if (g < minMeaningful) return;
+    const r = CANONICAL_FOOD_TABLE[f.canonicalKey];
+    if (!r) return;
+    const kcal = Math.max(15, Math.round(scaleCanonicalNutrientsToGrams(r, g).kcal));
+    const portion = (f.formatPortion ? f.formatPortion(g) : `${g} g ${f.noun}`).slice(0, 160);
+    items.push(item(f.name, portion, kcal, f.macroRole, f.bridge));
+    lines.push(portion);
+    total += kcal;
+  });
+  return { items, lines, totalApproxKcal: total };
+}
+
+
+/** Sceglie la leva (cho/protein/fat) che può davvero raggiungere il target macro; rotazione per seed tra le fattibili. */
+function chooseLeverByCapacity(
+  candidates: SolveFoodSpec[],
+  macro: "c" | "p" | "f",
+  target: number,
+  seed: number,
+): SolveFoodSpec {
+  if (candidates.length === 1) return candidates[0]!;
+  const capacity = (c: SolveFoodSpec) => canonMacroPerG(c.canonicalKey)[macro] * c.maxG;
+  const feasible = candidates.filter((c) => capacity(c) >= target * 0.9);
+  /** Nessuna fonte copre il target: prendi quella a capacità massima (no rotazione, evita undershoot). */
+  if (feasible.length === 0) return [...candidates].sort((a, b) => capacity(b) - capacity(a))[0]!;
+  return feasible[Math.abs(seed) % feasible.length]!;
+}
+
+/**
+ * Colazione mediterranea — porzioni calcolate sul target macro (no ricette fisse).
+ * Ammessi: cereali integrali (avena), pane, gallette, frutta, yogurt/latte/uova/whey, marmellata,
+ * grasso (avocado). ESCLUSI per regola: pasta, riso, patate, verdura, legumi, carne, pesce.
+ */
 function composeBreakfast(m: MealMacroTargets, seed: number, ctx: MediterraneanDayContext): MediterraneanComposedMeal {
-  return composeBreakfastWithArchetypes(m, seed, ctx);
+  const deny = ctx.denyFragments;
+  const isVegan = ctx.dietType === "vegan";
+  const denyDairy = isVegan || denyHit(["latte", "lattosio", "latticino", "yogurt", "milk"], deny);
+  const denyEgg = denyHit(["uov", "ovo", "egg", "album"], deny);
+  const denyGluten = denyHit(["glutine", "gluten", "frumento", "wheat"], deny);
+  const postWO = Boolean(ctx.postWorkoutMealBySlot?.["breakfast"]);
+
+  // CHO principale: avena / pane / gallette (mai pasta/riso/patate/verdura/legumi a colazione).
+  const oatAllowed = !denyHit(["avena", "oat", "cereali", "fiocchi"], deny) && !denyGluten;
+  const breadAllowed = !denyHit(["pane", "bread"], deny) && !denyGluten;
+  const choCandidates: SolveFoodSpec[] = [];
+  if (oatAllowed) {
+    choCandidates.push({ canonicalKey: "oat_dry", name: "Fiocchi d'avena", noun: "fiocchi d'avena", role: "cho", macroRole: "cho_heavy", minG: 30, maxG: 200, stepG: 5, bridge: "Carboidrati colazione (cereali integrali): grammi calcolati sul target CHO del pasto." });
+  }
+  if (breadAllowed) {
+    choCandidates.push({ canonicalKey: "bread_white", name: "Pane integrale", noun: "pane integrale", role: "cho", macroRole: "cho_heavy", minG: 30, maxG: 220, stepG: 5, bridge: "Carboidrati colazione (pane integrale): grammi sul target CHO." });
+  }
+  if (!denyHit(["gallette", "cracker", "fette biscot"], deny)) {
+    choCandidates.push({ canonicalKey: "crackers_whole", name: "Gallette integrali", noun: "gallette integrali", role: "cho", macroRole: "cho_heavy", minG: 20, maxG: 120, stepG: 5, bridge: "Carboidrati croccanti colazione: grammi sul target CHO." });
+  }
+  if (choCandidates.length === 0) {
+    choCandidates.push({ canonicalKey: "oat_dry", name: "Fiocchi d'avena", noun: "fiocchi d'avena", role: "cho", macroRole: "cho_heavy", minG: 30, maxG: 200, stepG: 5, bridge: "Carboidrati colazione." });
+  }
+  const choSpec = chooseLeverByCapacity(choCandidates, "c", m.carbsG, seed);
+  // Rotazione settimanale: registra UN solo staple breakfast (carb principale).
+  ctx.usedStaples?.add(`breakfast:${choSpec.canonicalKey}`);
+
+  // Proteina: yogurt/uova/whey (onnivoro/veg), soia/tofu (vegan). Niente latte come leva (CHO-dominante).
+  const proCandidates: SolveFoodSpec[] = [];
+  if (isVegan) {
+    proCandidates.push({ canonicalKey: "plant_drink_generic", name: "Yogurt di soia", noun: "yogurt di soia non zuccherato", role: "protein", macroRole: "protein", minG: 120, maxG: 350, stepG: 10, bridge: "Proteina vegetale colazione." });
+    proCandidates.push({ canonicalKey: "tofu_firm", name: "Tofu", noun: "tofu", role: "protein", macroRole: "protein", minG: 80, maxG: 250, stepG: 10, bridge: "Proteina vegetale colazione (tofu)." });
+  } else {
+    if (!denyDairy) {
+      proCandidates.push({ canonicalKey: "yogurt_plain", name: "Yogurt greco", noun: "yogurt greco", role: "protein", macroRole: "protein", minG: 100, maxG: 350, stepG: 10, bridge: "Proteina colazione (yogurt): grammi sul target proteico." });
+    }
+    if (!denyEgg) {
+      proCandidates.push({ canonicalKey: "egg_whole", name: "Uova", noun: "uova", role: "protein", macroRole: "protein", minG: 50, maxG: 180, stepG: 25, bridge: "Proteina colazione (uova).", formatPortion: (g) => `${Math.max(1, Math.round(g / 50))} uova (≈${g} g)` });
+    }
+    proCandidates.push({ canonicalKey: "whey_powder", name: "Proteine whey in polvere", noun: "proteine whey in polvere", role: "protein", macroRole: "protein", minG: 15, maxG: 60, stepG: 5, bridge: "Proteina colazione (whey) per completare il target proteico." });
+  }
+  const proSpec = chooseLeverByCapacity(proCandidates, "p", m.proteinG, seed + 1);
+
+  const foods: SolveFoodSpec[] = [choSpec, proSpec];
+
+  // Seconda fonte CHO complessa solida quando il target CHO è alto (≥ 130 g): regola colazione.
+  if (m.carbsG >= 130) {
+    const wantOatSecondary = choSpec.canonicalKey !== "oat_dry" && oatAllowed;
+    const secFixed = clampStep(40 + (m.carbsG - 130) * 0.35, 40, 110, 5);
+    if (wantOatSecondary) {
+      foods.push({ canonicalKey: "oat_dry", name: "Fiocchi d'avena (2ª fonte CHO)", noun: "fiocchi d'avena", role: "fixed", macroRole: "cho_heavy", minG: 20, maxG: 120, stepG: 5, fixedG: secFixed, bridge: "Seconda fonte di carboidrati complessi (target CHO ≥ 130 g)." });
+    } else if (breadAllowed) {
+      foods.push({ canonicalKey: "bread_white", name: "Pane integrale (2ª fonte CHO)", noun: "pane integrale tostato", role: "fixed", macroRole: "cho_heavy", minG: 20, maxG: 120, stepG: 5, fixedG: secFixed, bridge: "Seconda fonte di carboidrati complessi (target CHO ≥ 130 g)." });
+    }
+  }
+
+  // Frutta fissa (CHO + fibra/micro).
+  if (!denyHit(["frutta", "frutti"], deny)) {
+    if (postWO && !denyHit(["banana"], deny)) {
+      foods.push({ canonicalKey: "banana", name: "Banana", noun: "banana", role: "fixed", macroRole: "cho_heavy", minG: 80, maxG: 180, stepG: 10, fixedG: 120, bridge: "Frutta a colazione (CHO rapidi post-allenamento)." });
+    } else {
+      foods.push({ canonicalKey: "mixed_fruit", name: "Frutta fresca di stagione", noun: "frutta fresca", role: "fixed", macroRole: "cho_heavy", minG: 80, maxG: 250, stepG: 10, fixedG: 150, bridge: "Frutta a colazione (fibra, vitamine, CHO)." });
+    }
+  }
+
+  // Marmellata (velo, opzionale) quando il target CHO è alto e non negata.
+  if (m.carbsG >= 70 && seed % 3 === 0 && !denyHit(["marmellata", "confettura", "jam"], deny)) {
+    foods.push({ canonicalKey: "jam_fruit", name: "Marmellata senza zuccheri aggiunti", noun: "marmellata", role: "fixed", macroRole: "cho_heavy", minG: 15, maxG: 40, stepG: 5, fixedG: 20, bridge: "Velo di marmellata sul pane (CHO)." });
+  }
+
+  // Grasso aggiunto solo se il target lipidico resta scoperto dalle altre fonti.
+  const grams0 = solvePortionsByMacros(foods, m);
+  const fatSoFar = foods.reduce((a, f, i) => a + grams0[i]! * canonMacroPerG(f.canonicalKey).f, 0);
+  if (m.fatG - fatSoFar > 8 && !denyHit(["avocado"], deny)) {
+    foods.push({ canonicalKey: "avocado", name: "Avocado", noun: "avocado", role: "fat", macroRole: "fat", minG: 20, maxG: 90, stepG: 5, bridge: "Grasso colazione (avocado) per completare il target lipidico." });
+  }
+
+  const grams = solvePortionsByMacros(foods, m);
+  return buildMealFromSolved(foods, grams);
 }
 
 type CarbKey = "pasta" | "riso" | "patate" | "farro" | "quinoa" | "pane";
@@ -375,173 +504,6 @@ function pickProtAndFish(
   return { protKey, fishKind: null };
 }
 
-function carbLine(key: CarbKey, g: number): { line: string; kcal: number; cho: number; prot: number; fat: number } {
-  switch (key) {
-    case "pasta": {
-      const gc = clampStep(g, 45, 140);
-      return {
-        line: `${gc} g pasta secca (peso a crudo), condimento a parte`,
-        kcal: gc * D.pastaDryKcalPerG,
-        cho: gc * D.pastaDryChoPerG,
-        prot: gc * D.pastaDryProtPerG,
-        fat: gc * 0.015,
-      };
-    }
-    case "riso": {
-      const gc = clampStep(g, 40, 120);
-      return {
-        line: `${gc} g riso (peso a crudo)`,
-        kcal: gc * D.riceDryKcalPerG,
-        cho: gc * D.riceDryChoPerG,
-        prot: gc * D.riceDryProtPerG,
-        fat: gc * 0.006,
-      };
-    }
-    case "patate": {
-      const gc = clampStep(g, 80, 320);
-      return {
-        line: `${gc} g patate (cotte al forno/bollite)`,
-        kcal: gc * D.potatoCookedKcalPerG,
-        cho: gc * D.potatoCookedChoPerG,
-        prot: gc * 0.02,
-        fat: gc * 0.01,
-      };
-    }
-    case "farro": {
-      const gc = clampStep(g, 45, 130);
-      return {
-        line: `${gc} g farro o orzo (peso a crudo/secco)`,
-        kcal: gc * D.farroDryKcalPerG,
-        cho: gc * D.farroDryChoPerG,
-        prot: gc * D.farroDryProtPerG,
-        fat: gc * 0.022,
-      };
-    }
-    case "quinoa": {
-      /** Quinoa (USDA-like ~368 kcal/100g a crudo, alto valore biologico). */
-      const gc = clampStep(g, 50, 120);
-      return {
-        line: `${gc} g quinoa (peso a crudo)`,
-        kcal: gc * 3.68,
-        cho: gc * 0.64,
-        prot: gc * 0.14,
-        fat: gc * 0.06,
-      };
-    }
-    case "pane": {
-      /** Pane come amido principale (sandwich/bruschetta/pita): porzione ~140-220 g. */
-      const gc = clampStep(g, 120, 240);
-      return {
-        line: `${gc} g pane integrale o pita (porzione principale del pasto)`,
-        kcal: gc * D.breadKcalPerG,
-        cho: gc * D.breadChoPerG,
-        /** Pane integrale ~8.5 g prot/100 g (D non espone breadProtPerG, valore inline). */
-        prot: gc * 0.085,
-        fat: gc * 0.025,
-      };
-    }
-    default:
-      return carbLine("pasta", g);
-  }
-}
-
-function protLine(
-  key: ProtKey,
-  g: number,
-  eggs: number,
-  fishKind: FishKind | null,
-): { line: string; kcal: number; cho: number; prot: number; fat: number } {
-  switch (key) {
-    case "pollo": {
-      const gc = clampStep(g, 100, 240);
-      return {
-        line: `${gc} g petto di pollo o tacchino`,
-        kcal: gc * D.chickenKcalPerG,
-        cho: gc * 0.01,
-        prot: gc * D.chickenProtPerG,
-        fat: gc * 0.04,
-      };
-    }
-    case "pesce": {
-      const fk = fishKind ?? "merluzzo";
-      const spec = FISH[fk];
-      const gc = clampStep(g, 85, 280);
-      return {
-        line: `${gc} g ${spec.labelIt} (peso netto cotto)`,
-        kcal: gc * spec.kcalPerG,
-        cho: 0,
-        prot: gc * spec.protPerG,
-        fat: gc * spec.fatPerG,
-      };
-    }
-    case "legumi": {
-      const gc = clampStep(g, 120, 220);
-      return {
-        line: `${gc} g legumi cotti (ceci, lenticchie, fagioli)`,
-        kcal: gc * D.legumeKcalPerG,
-        cho: gc * D.legumeChoPerG,
-        prot: gc * D.legumeProtPerG,
-        fat: gc * 0.02,
-      };
-    }
-    case "manzo": {
-      const gc = clampStep(g, 100, 220);
-      return {
-        line: `${gc} g carne magra (manzo/maiale magro)`,
-        kcal: gc * D.meatKcalPerG,
-        cho: 0,
-        prot: gc * D.meatProtPerG,
-        fat: gc * 0.08,
-      };
-    }
-    case "uova": {
-      const n = clamp(eggs, 2, 4);
-      return {
-        line: `${n} uova (frittata / strapazzate)`,
-        kcal: n * D.eggKcalEach,
-        cho: n * 0.6,
-        prot: n * D.eggProtEach,
-        fat: n * 5.3,
-      };
-    }
-    case "tofu": {
-      /** Tofu compatto: ~144 kcal/100 g, ~17 g prot, ~9 g fat (USDA SR Legacy ord. di grandezza). */
-      const gc = clampStep(g, 130, 220);
-      return {
-        line: `${gc} g tofu compatto (saltato in padella o al forno)`,
-        kcal: gc * 1.44,
-        cho: gc * 0.019,
-        prot: gc * 0.17,
-        fat: gc * 0.09,
-      };
-    }
-    case "tempeh": {
-      /** Tempeh: ~190 kcal/100 g, ~19 g prot, ~11 g fat. */
-      const gc = clampStep(g, 110, 180);
-      return {
-        line: `${gc} g tempeh (a fette, saltato o al forno)`,
-        kcal: gc * 1.93,
-        cho: gc * 0.075,
-        prot: gc * 0.20,
-        fat: gc * 0.11,
-      };
-    }
-    case "seitan": {
-      /** Seitan (glutine di frumento): ~120 kcal/100 g, ~25 g prot, pochissimi grassi. */
-      const gc = clampStep(g, 80, 150);
-      return {
-        line: `${gc} g seitan (a fette, saltato)`,
-        kcal: gc * 1.20,
-        cho: gc * 0.04,
-        prot: gc * 0.25,
-        fat: gc * 0.02,
-      };
-    }
-    default:
-      return protLine("pollo", g, eggs, null);
-  }
-}
-
 function composeMainMeal(
   slot: MealSlotKey,
   m: MealMacroTargets,
@@ -632,207 +594,125 @@ function composeMainMeal(
     }
   }
 
-  const eggs = protKey === "uova" ? clamp(Math.round(P / 17), 2, 4) : 3;
-
-  const fishProtDen =
-    protKey === "pesce" && fishKind ? FISH[fishKind].protPerG : protKey === "pesce" ? FISH.merluzzo.protPerG : 0.29;
-
-  let carbG =
-    carbKey === "patate"
-      ? clamp(K * 0.32 / D.potatoCookedKcalPerG, 140, 320)
-      : carbKey === "riso"
-        ? clamp(K * 0.38 / D.riceDryKcalPerG, 45, 120)
-        : carbKey === "farro"
-          ? clamp(K * 0.38 / D.farroDryKcalPerG, 50, 130)
-          : carbKey === "quinoa"
-            ? clamp(K * 0.38 / 3.68, 50, 120)
-            : carbKey === "pane"
-              ? clamp(K * 0.38 / D.breadKcalPerG, 120, 240)
-              : clamp(K * 0.38 / D.pastaDryKcalPerG, 50, 140);
-  let protG: number;
-  if (protKey === "uova") {
-    protG = 0;
-  } else if (protKey === "legumi") {
-    protG = clamp(P * 0.72 / D.legumeProtPerG, 130, 210);
-  } else if (protKey === "tofu") {
-    /** Densità proteica tofu ~0.17 g/g → grammatura attesa 130–220 g per centrare ~50–60 g prot al pasto principale. */
-    protG = clamp(P * 0.72 / 0.17, 130, 220);
-  } else if (protKey === "tempeh") {
-    protG = clamp(P * 0.72 / 0.20, 110, 180);
-  } else if (protKey === "seitan") {
-    protG = clamp(P * 0.72 / 0.25, 80, 150);
-  } else {
-    protG = clamp(P * 0.72 / fishProtDen, 90, 280);
-  }
-
-  let vegG = clamp(160 + (seed % 3) * 25, 150, 250);
-  let oilMl = clamp(F * 0.55 / D.oilFatPerMl, 8, 22);
-  /**
-   * Pane SECONDARIO al piatto (regola utente nutrizionista):
-   * - Se il carb principale e' gia' "pane": 0 (no pane+pane).
-   * - Pasto leggero CHO < 100g: 0 (no pane di contorno superfluo).
-   * - Target intermedio 100-130g: porzione piccola 20-35g (~13-22g CHO).
-   * - Target alto >= 130g: porzione 40-80g (~26-52g CHO) = vera 2a fonte CHO.
-   * - Target molto alto >= 180g: 70-110g (~45-72g CHO).
-   */
-  let paneG: number;
-  if (carbKey === "pane") {
-    paneG = 0;
-  } else if (m.carbsG < 100) {
-    paneG = 0;
-  } else if (m.carbsG < 130) {
-    paneG = clamp(20 + (seed % 3) * 5, 20, 35);
-  } else if (m.carbsG < 180) {
-    paneG = clamp(45 + (seed % 3) * 8, 40, 80);
-  } else {
-    paneG = clamp(75 + (seed % 3) * 12, 70, 110);
-  }
-  /** Grana/formaggio: aggiungi solo se onnivoro/pescatariano e non in deny lattosio. Vegan/vegetarian-strict no. */
-  const cheeseAllowed =
-    ctx?.dietType !== "vegan" &&
-    !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
-  const granaG = cheeseAllowed && seed % 5 === 0 ? clamp(15 + (seed % 3) * 6, 15, 35) : 0;
-
-  const totalKcal = () => {
-    const c = carbLine(carbKey, carbG);
-    const p = protLine(protKey, protG, eggs, fishKind);
-    return (
-      c.kcal +
-      p.kcal +
-      vegG * D.vegKcalPerG +
-      oilMl * D.oilKcalPerMl +
-      paneG * D.breadKcalPerG +
-      granaG * D.granaKcalPerG
-    );
+  // --- Mappa la selezione (famiglia carbo/proteina già scelta sopra) sulla banca canonica ---
+  const carbSpecBy: Record<CarbKey, { key: string; name: string; noun: string; min: number; max: number; step: number }> = {
+    pasta: { key: "pasta_dry", name: "Pasta di semola", noun: "pasta di semola (peso crudo), condimento a parte", min: 50, max: 170, step: 5 },
+    riso: { key: "rice_dry", name: "Riso", noun: "riso (peso crudo)", min: 45, max: 160, step: 5 },
+    patate: { key: "potato_cooked", name: "Patate", noun: "patate lesse o al forno", min: 150, max: 550, step: 10 },
+    farro: { key: "farro_dry", name: "Farro/orzo", noun: "farro o orzo (peso crudo)", min: 45, max: 150, step: 5 },
+    quinoa: { key: "quinoa_dry", name: "Quinoa", noun: "quinoa (peso crudo)", min: 45, max: 140, step: 5 },
+    pane: { key: "bread_white", name: "Pane integrale (carb principale)", noun: "pane integrale o pita", min: 60, max: 220, step: 5 },
+  };
+  const cs = carbSpecBy[carbKey];
+  const carbSpec: SolveFoodSpec = {
+    canonicalKey: cs.key,
+    name: cs.name,
+    noun: cs.noun,
+    role: "cho",
+    macroRole: "cho_heavy",
+    minG: cs.min,
+    maxG: cs.max,
+    stepG: cs.step,
+    bridge: "Un solo carboidrato complesso principale; grammi calcolati sul target CHO del pasto.",
   };
 
-  const carbGClamp = (): { lo: number; hi: number } => {
-    if (carbKey === "patate") return { lo: 90, hi: 340 };
-    if (carbKey === "riso") return { lo: 38, hi: 125 };
-    if (carbKey === "farro") return { lo: 40, hi: 135 };
-    if (carbKey === "quinoa") return { lo: 45, hi: 125 };
-    if (carbKey === "pane") return { lo: 120, hi: 240 };
-    return { lo: 42, hi: 145 };
-  };
-
-  /** Bracket grammatura prot per famiglia (plant prot hanno volumi diversi: tofu/seitan compatti, tempeh denso). */
-  const protGBracket = (): { lo: number; hi: number } => {
-    if (protKey === "legumi") return { lo: 110, hi: 230 };
-    if (protKey === "tofu") return { lo: 110, hi: 240 };
-    if (protKey === "tempeh") return { lo: 90, hi: 200 };
-    if (protKey === "seitan") return { lo: 70, hi: 170 };
-    return { lo: 95, hi: 260 };
-  };
-
-  for (let i = 0; i < 12; i++) {
-    const t = totalKcal();
-    const f = K / Math.max(180, t);
-    if (Math.abs(f - 1) < 0.04) break;
-    const { lo, hi } = carbGClamp();
-    carbG = clamp(carbG * Math.pow(f, 0.55), lo, hi);
-    if (protKey !== "uova") {
-      const pb = protGBracket();
-      protG = clamp(protG * Math.pow(f, 0.45), pb.lo, pb.hi);
-    }
-    vegG = clamp(vegG * Math.pow(f, 0.15), 130, 280);
-    oilMl = clamp(oilMl * Math.pow(f, 0.2), 6, 26);
-  }
-
-  const carbFinal = carbLine(carbKey, carbG);
-  const protFinal = protLine(protKey, protG, eggs, fishKind);
-  const vegFinalG = clampStep(vegG, 130, 280);
-  const oilFinalMl = clamp(oilMl, 8, 22);
-  /** Permette la 2a fonte CHO (pane) fino a 110g quando il target richiede vera quantita'. */
-  const paneFinalG = paneG > 0 ? clampStep(paneG, 20, 110) : 0;
-  const granaFinalG = granaG > 0 ? clampStep(granaG, 15, 35) : 0;
-  const vegK = vegFinalG * D.vegKcalPerG;
-  const oilK = oilFinalMl * D.oilKcalPerMl;
-  const paneK = paneFinalG * D.breadKcalPerG;
-  const granaK = granaFinalG * D.granaKcalPerG;
-
-  const items: IntelligentMealPlanItemOut[] = [];
-  const lines: string[] = [];
-
-  const carbName =
-    carbKey === "pasta"
-      ? "Pasta (carb principale complesso)"
-      : carbKey === "riso"
-        ? "Riso (carb principale complesso)"
-        : carbKey === "patate"
-          ? "Patate (carb principale complesso)"
-          : carbKey === "quinoa"
-            ? "Quinoa (carb principale complesso)"
-            : carbKey === "pane"
-              ? "Pane integrale (carb principale — pasto leggero)"
-              : "Farro/orzo (carb principale complesso)";
-
-  items.push(
-    item(carbName, carbFinal.line, carbFinal.kcal, "cho_heavy", "Un solo carboidrato complesso da pasto principale (no pasta + riso insieme)."),
-  );
-  lines.push(carbFinal.line);
-
-  const protName = (() => {
+  const protSpec: SolveFoodSpec = (() => {
     switch (protKey) {
       case "pollo":
-        return "Proteina: pollo/tacchino";
-      case "pesce":
-        return fishKind ? `Proteina: ${FISH[fishKind].labelIt}` : "Proteina: pesce";
+        return { canonicalKey: "chicken_breast", name: "Proteina: pollo/tacchino", noun: "petto di pollo o tacchino", role: "protein", macroRole: "protein", minG: 80, maxG: 300, stepG: 5, bridge: "Proteina magra; grammi sul target proteico del pasto." };
+      case "pesce": {
+        const fl = fishKind ? FISH[fishKind].labelIt : "pesce";
+        const cap = fl.charAt(0).toUpperCase() + fl.slice(1);
+        return { canonicalKey: "fish_white", name: `Proteina: ${cap}`, noun: `${fl} (peso netto)`, role: "protein", macroRole: "protein", minG: 90, maxG: 320, stepG: 5, bridge: "Proteina dal pesce; grammi sul target proteico." };
+      }
       case "legumi":
-        return "Proteina vegetale: legumi";
+        return { canonicalKey: "legumes_cooked", name: "Proteina vegetale: legumi", noun: "legumi cotti (ceci, lenticchie, fagioli)", role: "protein", macroRole: "protein", minG: 120, maxG: 400, stepG: 10, bridge: "Proteina vegetale; grammi sul target proteico." };
       case "manzo":
-        return "Proteina: carne magra";
+        return { canonicalKey: "beef_lean", name: "Proteina: carne magra", noun: "carne magra (manzo/maiale magro)", role: "protein", macroRole: "protein", minG: 80, maxG: 280, stepG: 5, bridge: "Proteina; grammi sul target proteico." };
       case "uova":
-        return "Proteina: uova";
+        return { canonicalKey: "egg_whole", name: "Proteina: uova", noun: "uova", role: "protein", macroRole: "protein", minG: 100, maxG: 200, stepG: 25, bridge: "Proteina dalle uova; grammi sul target proteico.", formatPortion: (g) => `${Math.max(2, Math.round(g / 50))} uova (≈${g} g, frittata/strapazzate)` };
       case "tofu":
-        return "Proteina vegetale: tofu";
+        return { canonicalKey: "tofu_firm", name: "Proteina vegetale: tofu", noun: "tofu compatto (saltato o al forno)", role: "protein", macroRole: "protein", minG: 100, maxG: 320, stepG: 10, bridge: "Proteina vegetale; grammi sul target proteico." };
       case "tempeh":
-        return "Proteina vegetale: tempeh";
+        return { canonicalKey: "tempeh", name: "Proteina vegetale: tempeh", noun: "tempeh (a fette)", role: "protein", macroRole: "protein", minG: 90, maxG: 250, stepG: 10, bridge: "Proteina vegetale; grammi sul target proteico." };
       case "seitan":
-        return "Proteina vegetale: seitan";
+        return { canonicalKey: "seitan", name: "Proteina vegetale: seitan", noun: "seitan (a fette)", role: "protein", macroRole: "protein", minG: 80, maxG: 250, stepG: 5, bridge: "Proteina vegetale; grammi sul target proteico." };
       default:
-        return "Proteina";
+        return { canonicalKey: "chicken_breast", name: "Proteina: pollo/tacchino", noun: "petto di pollo", role: "protein", macroRole: "protein", minG: 80, maxG: 300, stepG: 5, bridge: "Proteina magra." };
     }
   })();
 
-  items.push(
-    item(protName, protFinal.line, protFinal.kcal, "protein", "Una sola famiglia proteica principale (no pollo + pesce + uova nello stesso pasto)."),
-  );
-  lines.push(protFinal.line);
+  const foods: SolveFoodSpec[] = [carbSpec, protSpec];
 
-  items.push(
-    item("Contorno verdure", `${vegFinalG} g verdure miste (crude o cotte)`, vegK, "veg", "Fibre, minerali, volume; condisci con parte degli grassi del pasto."),
-  );
-  lines.push(`${vegFinalG} g verdure miste a piacere`);
+  // Verdura fissa (fibra/micro/volume).
+  foods.push({
+    canonicalKey: "mixed_veg",
+    name: "Contorno verdure",
+    noun: "verdure miste (crude o cotte)",
+    role: "fixed",
+    macroRole: "veg",
+    minG: 130,
+    maxG: 300,
+    stepG: 10,
+    fixedG: clampStep(160 + (seed % 3) * 25, 150, 250, 10),
+    bridge: "Fibre, minerali, volume; condisci con parte dell'olio del pasto.",
+  });
 
-  items.push(
-    item("Condimento olio EVO", `${oilFinalMl} ml olio d’oliva (a crudo)`, oilK, "fat", "Grassi insaturi; solo pranzo/cena, non in colazione."),
-  );
-  lines.push(`${oilFinalMl} ml olio d’oliva a crudo`);
-
-  if (paneFinalG > 0) {
-    const isFocaccia = seed % 7 === 0;
-    /** Etichetta + grammatura riflettono il ruolo del pane (vera 2a fonte CHO quando target >= 130g). */
-    const isSecondCarbSource = m.carbsG >= 130;
-    const breadName = isFocaccia
-      ? `${paneFinalG} g focaccia${isSecondCarbSource ? "" : " (porzione piccola)"}`
-      : `${paneFinalG} g pane integrale${isSecondCarbSource ? "" : " (porzione piccola)"}`;
-    const role = isSecondCarbSource ? "Pane / focaccia (2ª fonte CHO)" : "Pane / focaccia (accompagnamento)";
-    const note = isSecondCarbSource
-      ? "Seconda fonte di carboidrati richiesta dal target del pasto (CHO ≥ 130 g): il carb principale resta quello complesso scelto sopra."
-      : "Accompagnamento in piccola quantità; il carboidrato principale resta quello scelto sopra.";
-    items.push(item(role, breadName, paneK, "cho_heavy", note));
-    lines.push(breadName);
+  // Pane SECONDARIO (2ª fonte CHO) solo se target CHO alto e carb principale non è pane.
+  if (carbKey !== "pane" && m.carbsG >= 130) {
+    const paneFixed = m.carbsG >= 180 ? clampStep(80 + (seed % 3) * 12, 70, 110, 5) : clampStep(45 + (seed % 3) * 8, 40, 80, 5);
+    foods.push({
+      canonicalKey: "bread_white",
+      name: "Pane integrale (2ª fonte CHO)",
+      noun: "pane integrale",
+      role: "fixed",
+      macroRole: "cho_heavy",
+      minG: 30,
+      maxG: 110,
+      stepG: 5,
+      fixedG: paneFixed,
+      bridge: "Seconda fonte di carboidrati richiesta dal target (CHO ≥ 130 g): il carb principale resta quello complesso.",
+    });
   }
 
-  if (granaFinalG > 0) {
-    items.push(
-      item("Grana / formaggio", `${granaFinalG} g grana o formaggio stagionato`, granaK, "fat", "Sapore e proteine; quota grassi del pasto."),
-    );
-    lines.push(`${granaFinalG} g grana o formaggio stagionato`);
+  // Grana/formaggio: solo se non vegan e non deny lattosio, con rotazione.
+  const cheeseAllowed =
+    ctx?.dietType !== "vegan" &&
+    !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
+  if (cheeseAllowed && seed % 5 === 0) {
+    foods.push({
+      canonicalKey: "cheese_hard",
+      name: "Grana / formaggio stagionato",
+      noun: "grana o formaggio stagionato",
+      role: "fixed",
+      macroRole: "fat",
+      minG: 15,
+      maxG: 40,
+      stepG: 5,
+      fixedG: clampStep(15 + (seed % 3) * 6, 15, 35, 5),
+      bridge: "Sapore + proteine/grassi; quota del pasto.",
+    });
   }
 
+  // Olio EVO: leva grassi (pranzo/cena, a crudo).
+  foods.push({
+    canonicalKey: "olive_oil",
+    name: "Condimento olio EVO",
+    noun: "olio extravergine d'oliva (a crudo)",
+    role: "fat",
+    macroRole: "fat",
+    minG: 5,
+    maxG: 35,
+    stepG: 1,
+    bridge: "Grassi insaturi; grammi sul target lipidico del pasto.",
+  });
+
+  const grams = solvePortionsByMacros(foods, { kcal: K, carbsG: m.carbsG, proteinG: P, fatG: F });
+  const composed = buildMealFromSolved(foods, grams);
+
+  // Omega-3 opzionale (target grassi alto, sporadico): integrazione, non sostituisce alimenti interi.
   if (m.fatG > 22 && seed % 4 === 1) {
-    items.push(
+    composed.items.push(
       item(
         "Omega (integrazione)",
         "Se serve: 1 capsula omega 3 (EPA/DHA) lontano dai pasti o come da protocollo",
@@ -841,28 +721,16 @@ function composeMainMeal(
         "Complemento lipidi essenziali se il pesce è sporadico; non sostituisce olio e alimenti interi.",
       ),
     );
-    lines.push("Opzionale: omega-3 EPA/DHA (integrazione se concordata)");
+    composed.lines.push("Opzionale: omega-3 EPA/DHA (integrazione se concordata)");
+    composed.totalApproxKcal += 15;
   }
-
-  const total = items.reduce((a, i) => a + i.approxKcal, 0);
 
   if (used && (slot === "lunch" || slot === "dinner")) {
     used.add(stapleCarb(carbKey));
     used.add(stapleProt(protKey));
   }
 
-  return { lines, items, totalApproxKcal: total };
-}
-
-/** kcal stimate da grammatura nell’etichetta affettato (educativo, allineato a ordini di grandezza comuni). */
-function kcalFromDeliLine(line: string): number {
-  const m = line.match(/(\d+(?:[.,]\d+)?)\s*g/i);
-  const g = m ? parseFloat(m[1]!.replace(",", ".")) : 50;
-  if (!Number.isFinite(g) || g <= 0) return 85;
-  if (/bresaola/i.test(line)) return Math.round(g * 1.28);
-  if (/cotto/i.test(line)) return Math.round(g * 1.22);
-  if (/crudo/i.test(line)) return Math.round(g * 2.65);
-  return Math.round(g * 1.5);
+  return composed;
 }
 
 function composeSnack(
@@ -888,73 +756,34 @@ function composeSnack(
   const denyDairy = denyHit(["latte", "lattosio", "latticino", "yogurt"], ctx?.denyFragments);
   const skipDairyYogurt = isVegan || denyDairy;
 
-  const items: IntelligentMealPlanItemOut[] = [];
-  const lines: string[] = [];
+  const deny = ctx?.denyFragments;
+  const foods: SolveFoodSpec[] = [];
 
   if (sweet) {
-    const yg = clamp(120 + K * 0.08, 125, 220);
-    const yk = yg * D.yogurtKcalPerG;
+    // CHO leva: cereali/muesli; proteina leva: yogurt (vegetale se vegan/deny lattosio); frutta fissa.
+    foods.push({ canonicalKey: "oat_dry", name: "Cereali / muesli", noun: "cereali o muesli (sul yogurt)", role: "cho", macroRole: "cho_heavy", minG: 15, maxG: 80, stepG: 5, bridge: postSlot ? "Spuntino post-rientro: più cereali sul target CHO (refeed leggero)." : "Carboidrati spuntino; grammi sul target CHO." });
     if (skipDairyYogurt) {
-      const ygLabel = `${clamp(yg, 125, 220)} g yogurt vegetale (soia o cocco) non zuccherato`;
-      items.push(item("Yogurt vegetale", ygLabel, yk, "protein", "Spuntino dolce: yogurt vegetale + frutta + cereali."));
-      lines.push(ygLabel);
+      foods.push({ canonicalKey: "plant_drink_generic", name: "Yogurt vegetale", noun: "yogurt vegetale (soia/cocco) non zuccherato", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt vegetale); grammi sul target proteico." });
     } else {
-      items.push(item("Yogurt", `${clamp(yg, 125, 220)} g yogurt`, yk, "protein", "Spuntino dolce: latticino + frutta."));
-      lines.push(`${clamp(yg, 125, 220)} g yogurt`);
+      foods.push({ canonicalKey: "yogurt_plain", name: "Yogurt", noun: "yogurt", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt); grammi sul target proteico." });
     }
-
-    const fruit = seed % 3 === 0 ? "1 frutto medio" : `${clamp(40 + (seed % 5) * 12, 40, 100)} g frutta fresca o frutti di bosco`;
-    const fk = seed % 3 === 0 ? 80 : 55;
-    items.push(item("Frutta", fruit, fk, "cho_heavy", "CHO e fibre."));
-    lines.push(fruit);
-
-    const cgLo = postSlot ? 18 : 12;
-    const cgHi = postSlot ? 48 : 35;
-    const cg = clamp((postSlot ? 18 : 12) + K * (postSlot ? 0.045 : 0.03), cgLo, cgHi);
-    const ck = cg * D.cerealKcalPerG;
-    items.push(
-      item(
-        "Cereali",
-        `${clamp(cg, cgLo, cgHi)} g cereali / muesli (sul yogurt)`,
-        ck,
-        "cho_heavy",
-        postSlot
-          ? "Spuntino post-rientro orari: più cereali sul target CHO (refeed leggero)."
-          : "Completa lo spuntino senza seconda fonte proteica animale.",
-      ),
-    );
-    lines.push(`${clamp(cg, cgLo, cgHi)} g cereali o muesli`);
+    if (!denyHit(["frutta", "frutti"], deny)) {
+      foods.push({ canonicalKey: "mixed_fruit", name: "Frutta", noun: "frutta fresca o frutti di bosco", role: "fixed", macroRole: "cho_heavy", minG: 60, maxG: 200, stepG: 10, fixedG: postSlot ? 120 : 90, bridge: "CHO e fibre." });
+    }
   } else {
-    const crG = postSlot ? clamp(36 + (seed % 4) * 8, 32, 58) : clamp(28 + (seed % 4) * 6, 24, 48);
-    const crK = crG * D.crackerKcalPerG;
-    items.push(item("Gallette / pane", `${crG} g gallette integrali o pane tostato`, crK, "cho_heavy", "Base croccante; una fonte proteica sotto."));
-    lines.push(`${crG} g gallette o pane tostato`);
-
-    const cold = postSlot
-      ? seed % 2 === 0
-        ? "55 g prosciutto cotto magro"
-        : "50 g bresaola"
-      : seed % 3 === 0
-        ? "60 g prosciutto cotto magro"
-        : seed % 3 === 1
-          ? "50 g bresaola"
-          : "45 g prosciutto crudo";
-    const pk = kcalFromDeliLine(cold);
-    items.push(item("Affettato", cold, pk, "protein", postSlot ? "Proteina magra; variante meno grassa dopo spostamento orari." : "Proteina magra in spuntino salato."));
-    lines.push(cold);
-
-    /** Grasso aggiunto: avocado per tutti, grana solo se cheeseAllowed. */
-    const cheeseAllowed = !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
-    const fatPick =
-      seed % 2 === 0 || !cheeseAllowed
-        ? { line: "15 g avocado", kcal: 15 * D.avocadoKcalPerG, role: "fat" as const }
-        : { line: "20 g grana grattugiato", kcal: 20 * D.granaKcalPerG, role: "fat" as const };
-    items.push(item("Grasso spuntino", fatPick.line, fatPick.kcal, fatPick.role, "Una sola fonte di grasso aggiunto oltre all’affettato."));
-    lines.push(fatPick.line);
+    // CHO leva: gallette/pane; proteina leva: affettato magro; un solo grasso aggiunto.
+    foods.push({ canonicalKey: "crackers_whole", name: "Gallette / pane tostato", noun: "gallette integrali o pane tostato", role: "cho", macroRole: "cho_heavy", minG: 15, maxG: 80, stepG: 5, bridge: "Base croccante; grammi sul target CHO." });
+    foods.push({ canonicalKey: "deli_lean", name: "Affettato magro", noun: "bresaola o prosciutto cotto magro", role: "protein", macroRole: "protein", minG: 30, maxG: 120, stepG: 5, bridge: postSlot ? "Proteina magra (variante meno grassa dopo spostamento orari); grammi sul target proteico." : "Proteina magra spuntino salato; grammi sul target proteico." });
+    const cheeseAllowed = !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], deny);
+    if (seed % 2 === 0 || !cheeseAllowed) {
+      foods.push({ canonicalKey: "avocado", name: "Grasso spuntino (avocado)", noun: "avocado", role: "fat", macroRole: "fat", minG: 15, maxG: 80, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." });
+    } else {
+      foods.push({ canonicalKey: "cheese_hard", name: "Grasso spuntino (grana)", noun: "grana grattugiato", role: "fat", macroRole: "fat", minG: 10, maxG: 40, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." });
+    }
   }
 
-  const s = items.reduce((a, i) => a + i.approxKcal, 0);
-  return { lines, items, totalApproxKcal: s };
+  const grams = solvePortionsByMacros(foods, { kcal: K, carbsG: m.carbsG, proteinG: m.proteinG, fatG: m.fatG });
+  return buildMealFromSolved(foods, grams);
 }
 
 /**
@@ -1005,5 +834,86 @@ export function composeMediterraneanMeal(
     return composeRacePreLunchMainMeal(slot, macros, seed, ctx.racePreLunch, ctx);
   }
   return composeMainMeal(slot, macros, seed, ctx);
+}
+
+type NutrientSwapSpec = {
+  fromKey: string;
+  toKey: string;
+  name: string;
+  noun: string;
+  bridge: string;
+};
+
+const NUTRIENT_CANONICAL_SWAPS: Partial<Record<NutrientTargetId, NutrientSwapSpec>> = {
+  folate_mcg: {
+    fromKey: "mixed_veg",
+    toKey: "legumes_cooked",
+    name: "Legumi cotti (folato)",
+    noun: "legumi cotti (lenticchie/ceci)",
+    bridge: "Folato e ferro vegetali da legumi (pathway cofactor).",
+  },
+  vitC_mg: {
+    fromKey: "mixed_veg",
+    toKey: "mixed_fruit",
+    name: "Frutta fresca (vit C)",
+    noun: "frutta fresca mista",
+    bridge: "Vitamina C e antiossidanti (pathway redox).",
+  },
+  fe_mg: {
+    fromKey: "mixed_veg",
+    toKey: "legumes_cooked",
+    name: "Legumi cotti (ferro)",
+    noun: "legumi cotti",
+    bridge: "Ferro vegetale complementare al target proteico.",
+  },
+  mg_mg: {
+    fromKey: "mixed_veg",
+    toKey: "legumes_cooked",
+    name: "Legumi cotti (magnesio)",
+    noun: "legumi cotti",
+    bridge: "Magnesio da legumi (cofactor chinasi).",
+  },
+};
+
+/**
+ * Post-compose: sostituisce voci swappabili (es. verdure miste → legumi folato-densi) quando
+ * il sistema intelligente ha target micronutrienti attivi. Solo lunch/dinner; rispetta deny/dieta.
+ */
+export function applyNutrientBoostSwaps(
+  meal: MediterraneanComposedMeal,
+  slot: MealSlotKey,
+  targetIds: readonly NutrientTargetId[],
+  ctx?: MediterraneanDayContext,
+): MediterraneanComposedMeal {
+  if (slot !== "lunch" && slot !== "dinner") return meal;
+  if (!targetIds.length || ctx?.suppressedSlots?.includes(slot)) return meal;
+
+  const swapSpec = targetIds.map((id) => NUTRIENT_CANONICAL_SWAPS[id]).find(Boolean);
+  if (!swapSpec) return meal;
+
+  const toRow = CANONICAL_FOOD_TABLE[swapSpec.toKey];
+  if (!toRow) return meal;
+
+  if (ctx?.dietType === "vegan" && swapSpec.toKey === "mixed_fruit") {
+    /* ok */
+  }
+
+  const items = meal.items.map((it) => {
+    const key = inferCanonicalFoodKeyPreferName(it.name, it.portionHint);
+    if (key !== swapSpec.fromKey) return it;
+    const gramsMatch = it.portionHint.match(/(\d+)\s*g/i);
+    const grams = gramsMatch ? Math.max(40, Number(gramsMatch[1])) : 150;
+    const approxKcal = Math.round((toRow.kcalPer100g * grams) / 100);
+    return {
+      ...it,
+      name: swapSpec.name,
+      portionHint: `${grams} g ${swapSpec.noun}`.slice(0, 160),
+      approxKcal: Math.max(15, approxKcal),
+      functionalBridge: `${swapSpec.bridge} ${it.functionalBridge}`.slice(0, 500),
+    };
+  });
+
+  const totalApproxKcal = items.reduce((a, i) => a + i.approxKcal, 0);
+  return { ...meal, items, totalApproxKcal };
 }
 
