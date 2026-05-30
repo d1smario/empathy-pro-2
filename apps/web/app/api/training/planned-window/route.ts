@@ -54,16 +54,6 @@ function wantsTraceSummaryFromQuery(req: NextRequest): boolean {
   return true;
 }
 
-function rowId(row: unknown): string {
-  const id = (row as { id?: unknown }).id;
-  return typeof id === "string" ? id : "";
-}
-
-function rowDateKey(row: unknown): string {
-  const date = (row as { date?: unknown }).date;
-  return typeof date === "string" ? date.slice(0, 10) : "";
-}
-
 function addDays(isoDate: string, delta: number): string {
   const base = new Date(`${isoDate}T12:00:00`);
   if (Number.isNaN(base.getTime())) return isoDate;
@@ -148,40 +138,25 @@ export async function GET(req: NextRequest) {
     }
 
     /**
-     * Fallback robustezza: se l'eseguito torna vuoto o incompleto rispetto al service-role,
-     * unisci le righe mancanti (evita celle calendario vuote con Analyzer ok su altri fetch).
+     * Fallback robustezza eseguito: query admin (service role) **solo quando l'RLS torna vuoto**,
+     * in parità col fallback planned più sotto. Evita una seconda scansione completa di
+     * `executed_workouts` ad ogni load quando l'RLS ha già restituito le righe (perf calendario).
      */
     const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
     const rlsExecutedCount = executedRes.data?.length ?? 0;
-    const admin = createSupabaseAdminClient();
-    if (admin) {
-      const forcedExecuted = await admin
-        .from("executed_workouts")
-        .select(executedSelect)
-        .eq("athlete_id", athleteId)
-        .gte("date", from)
-        .lte("date", to)
-        .order("date", { ascending: true })
-        .range(0, 4999);
-      if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
-        const adminRows = forcedExecuted.data as unknown[];
-        if (rlsExecutedCount === 0) {
-          executedRes = { data: adminRows, error: null };
-          executedAdminFallbackUsed = true;
-        } else if (adminRows.length > rlsExecutedCount) {
-          const byId = new Map<string, unknown>();
-          for (const row of executedRes.data ?? []) {
-            const id = rowId(row);
-            if (id) byId.set(id, row);
-          }
-          for (const row of adminRows) {
-            const id = rowId(row);
-            if (id && !byId.has(id)) byId.set(id, row);
-          }
-          executedRes = {
-            data: Array.from(byId.values()).sort((a, b) => rowDateKey(a).localeCompare(rowDateKey(b))),
-            error: null,
-          };
+    if (rlsExecutedCount === 0) {
+      const admin = createSupabaseAdminClient();
+      if (admin) {
+        const forcedExecuted = await admin
+          .from("executed_workouts")
+          .select(executedSelect)
+          .eq("athlete_id", athleteId)
+          .gte("date", from)
+          .lte("date", to)
+          .order("date", { ascending: true })
+          .range(0, 4999);
+        if (!forcedExecuted.error && (forcedExecuted.data?.length ?? 0) > 0) {
+          executedRes = { data: forcedExecuted.data as unknown[], error: null };
           executedAdminFallbackUsed = true;
         }
       }

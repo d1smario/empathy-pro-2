@@ -430,15 +430,17 @@ export default function TrainingCalendarPageView() {
         resTo: core.to,
       });
 
-      /** Fase 2 — wellness celle + read spine / twin strip (non blocca la griglia). */
+      /**
+       * Fase 2 — wellness celle (finestra leggera, SENZA `resolveAthleteMemory`).
+       * Il contesto atleta pesante (read-spine / twin strip) è caricato una volta per atleta
+       * in un effect dedicato, non ad ogni cambio mese (perf calendario).
+       */
       void (async () => {
         try {
-          const enrich = await fetchPlannedWindow(true, true, false);
+          const enrich = await fetchPlannedWindow(true, false, false);
           if (isStale()) return;
           if (!enrich.res.ok || !enrich.json.ok) return;
           const full = enrich.json as TrainingPlannedWindowOkViewModel;
-          setReadSpineCoverage(full.readSpineCoverage ?? null);
-          setTwinContextStrip(full.twinContextStrip ?? null);
           setWellnessByDate(full.wellnessByDate ?? {});
           setFetchDiag((prev) =>
             prev
@@ -476,6 +478,39 @@ export default function TrainingCalendarPageView() {
   },
   [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
+
+  /**
+   * Contesto atleta (read-spine coverage + twin strip) = `resolveAthleteMemory` (~20 query, pesante).
+   * Caricato UNA volta per atleta su una finestra di 1 giorno (planned/executed minimi), NON ad ogni
+   * cambio mese: toglie il collo di bottiglia che rallentava/bloccava la griglia calendario.
+   */
+  useEffect(() => {
+    if (!athleteId || ctxLoading) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const now = new Date();
+        const dayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const q = new URLSearchParams({ athleteId, from: dayIso, to: dayIso });
+        q.set("includeTraceSummary", "0");
+        const res = await fetch(`/api/training/planned-window?${q}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false };
+        if (cancelled || !res.ok || !json.ok) return;
+        const full = json as TrainingPlannedWindowOkViewModel;
+        setReadSpineCoverage(full.readSpineCoverage ?? null);
+        setTwinContextStrip(full.twinContextStrip ?? null);
+      } catch {
+        /* contesto opzionale: la griglia resta utilizzabile */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, ctxLoading]);
 
   /** Giorno selezionato: fetch mirato con trace pieno → chip griglia + Analyzer allineati subito.
    *  `selectedDayRefreshTick` permette di forzare il rifetch anche quando `selectedDate` non cambia
