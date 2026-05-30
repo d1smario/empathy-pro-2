@@ -2481,7 +2481,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
   const hydrationPlan = useMemo(() => {
     const floorMul = nutritionPerformanceIntegration?.hydrationFloorMultiplier ?? 1;
-    const minDailyMl = Math.max(2200, n(profile?.weight_kg, 70) * 33) * floorMul;
+    const minDailyMl = Math.max(2200, n(profile?.weight_kg, 0) * 33) * floorMul;
     const fluidRate = effectiveFluidMlPerHour > 0 ? effectiveFluidMlPerHour : 650;
     const trainingMl = Math.max(600, Math.round((effectiveSessionDurationMin / 60) * fluidRate));
     return {
