@@ -472,6 +472,25 @@ export default function ProfilePage() {
   const [polarDetail, setPolarDetail] = useState<string | null>(null);
   const [polarPullBusy, setPolarPullBusy] = useState(false);
   const [polarPullNotice, setPolarPullNotice] = useState<string | null>(null);
+  const [suuntoLink, setSuuntoLink] = useState<{
+    linked: boolean;
+    suuntoUserIdMasked?: string;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [suuntoReturn, setSuuntoReturn] = useState<string | null>(null);
+  const [suuntoPullBusy, setSuuntoPullBusy] = useState(false);
+  const [suuntoPullNotice, setSuuntoPullNotice] = useState<string | null>(null);
+  const [karooLink, setKarooLink] = useState<{
+    linked: boolean;
+    oauthScope?: string | null;
+    linkStatusError?: string;
+    linkStatusHint?: string;
+  } | null>(null);
+  const [karooReturn, setKarooReturn] = useState<string | null>(null);
+  const [karooPullBusy, setKarooPullBusy] = useState(false);
+  const [karooPullNotice, setKarooPullNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -611,6 +630,10 @@ export default function ProfilePage() {
       setPolarReturn(polar);
       if (reason) setPolarReason(reason);
       if (detail) setPolarDetail(detail);
+    } else if (q.get("suunto")) {
+      setSuuntoReturn(q.get("suunto"));
+    } else if (q.get("karoo")) {
+      setKarooReturn(q.get("karoo"));
     } else if (strava) {
       setStravaReturn(strava);
       if (reason) setStravaReason(reason);
@@ -630,12 +653,14 @@ export default function ProfilePage() {
       setWahooLink(null);
       setStravaLink(null);
       setPolarLink(null);
+      setSuuntoLink(null);
+      setKarooLink(null);
       return;
     }
     let cancelled = false;
     (async () => {
       try {
-        const [rG, rWhoop, rWahoo, rStrava, rPolar] = await Promise.all([
+        const [rG, rWhoop, rWahoo, rStrava, rPolar, rSuunto, rKaroo] = await Promise.all([
           fetch(`/api/integrations/garmin/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
             credentials: "include",
           }),
@@ -649,6 +674,12 @@ export default function ProfilePage() {
             credentials: "include",
           }),
           fetch(`/api/integrations/polar/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/suunto/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
+            credentials: "include",
+          }),
+          fetch(`/api/integrations/karoo/link-status?athleteId=${encodeURIComponent(activeAthleteId)}`, {
             credentials: "include",
           }),
         ]);
@@ -684,6 +715,19 @@ export default function ProfilePage() {
         const jPolar = (await rPolar.json()) as {
           linked?: boolean;
           polarUserIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        const jSuunto = (await rSuunto.json()) as {
+          linked?: boolean;
+          suuntoUserIdMasked?: string;
+          oauthScope?: string | null;
+          error?: string;
+          hint?: string;
+        };
+        const jKaroo = (await rKaroo.json()) as {
+          linked?: boolean;
           oauthScope?: string | null;
           error?: string;
           hint?: string;
@@ -755,6 +799,31 @@ export default function ProfilePage() {
             oauthScope: jPolar.oauthScope ?? null,
           });
         }
+        if (!rSuunto.ok) {
+          setSuuntoLink({
+            linked: false,
+            linkStatusError: jSuunto.error ?? `HTTP ${rSuunto.status}`,
+            linkStatusHint: typeof jSuunto.hint === "string" ? jSuunto.hint : undefined,
+          });
+        } else {
+          setSuuntoLink({
+            linked: Boolean(jSuunto.linked),
+            suuntoUserIdMasked: jSuunto.suuntoUserIdMasked,
+            oauthScope: jSuunto.oauthScope ?? null,
+          });
+        }
+        if (!rKaroo.ok) {
+          setKarooLink({
+            linked: false,
+            linkStatusError: jKaroo.error ?? `HTTP ${rKaroo.status}`,
+            linkStatusHint: typeof jKaroo.hint === "string" ? jKaroo.hint : undefined,
+          });
+        } else {
+          setKarooLink({
+            linked: Boolean(jKaroo.linked),
+            oauthScope: jKaroo.oauthScope ?? null,
+          });
+        }
       } catch {
         if (!cancelled) {
           setGarminLink({ linked: false });
@@ -762,6 +831,8 @@ export default function ProfilePage() {
           setWahooLink({ linked: false });
           setStravaLink({ linked: false });
           setPolarLink({ linked: false });
+          setSuuntoLink({ linked: false });
+          setKarooLink({ linked: false });
         }
       }
     })();
@@ -895,6 +966,72 @@ export default function ProfilePage() {
       setPolarPullNotice("Errore di rete.");
     } finally {
       setPolarPullBusy(false);
+    }
+  }
+
+  async function runSuuntoPullNow() {
+    if (!activeAthleteId || !suuntoLink?.linked || suuntoPullBusy) return;
+    setSuuntoPullBusy(true);
+    setSuuntoPullNotice(null);
+    try {
+      const r = await fetch("/api/integrations/suunto/pull/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        inserted?: number;
+        skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      if (j.ok) {
+        setSuuntoPullNotice(
+          `Pull completato: inseriti ${j.inserted ?? 0}, saltati ${j.skipped ?? 0}.` +
+            (Array.isArray(j.errors) && j.errors.length > 0 ? ` Avvisi: ${j.errors.slice(0, 3).join(" · ")}` : ""),
+        );
+      } else {
+        setSuuntoPullNotice(j.error ?? `Errore HTTP ${r.status}`);
+      }
+    } catch {
+      setSuuntoPullNotice("Errore di rete.");
+    } finally {
+      setSuuntoPullBusy(false);
+    }
+  }
+
+  async function runKarooPullNow() {
+    if (!activeAthleteId || !karooLink?.linked || karooPullBusy) return;
+    setKarooPullBusy(true);
+    setKarooPullNotice(null);
+    try {
+      const r = await fetch("/api/integrations/karoo/pull/run", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ athleteId: activeAthleteId }),
+      });
+      const j = (await r.json()) as {
+        ok?: boolean;
+        inserted?: number;
+        skipped?: number;
+        errors?: string[];
+        error?: string;
+      };
+      if (j.ok) {
+        setKarooPullNotice(
+          `Pull completato: inseriti ${j.inserted ?? 0}, saltati ${j.skipped ?? 0}.` +
+            (Array.isArray(j.errors) && j.errors.length > 0 ? ` Avvisi: ${j.errors.slice(0, 3).join(" · ")}` : ""),
+        );
+      } else {
+        setKarooPullNotice(j.error ?? `Errore HTTP ${r.status}`);
+      }
+    } catch {
+      setKarooPullNotice("Errore di rete.");
+    } finally {
+      setKarooPullBusy(false);
     }
   }
 
@@ -2335,6 +2472,184 @@ export default function ProfilePage() {
                         <code className="text-white/70">CRON_SECRET</code>
                         {" "}o <code className="text-white/70">POLAR_PULL_RUN_SECRET</code>). Pull manuale:{" "}
                         <code className="text-white/70">POST …/polar/pull/run</code> con sessione o stesso Bearer.
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Suunto
+                      </h4>
+                      {suuntoReturn === "ok" ? (
+                        <p className="text-sm text-emerald-300/90">
+                          Suunto collegato. Usa &quot;Aggiorna dati Suunto&quot; per scaricare gli allenamenti.
+                        </p>
+                      ) : null}
+                      {suuntoReturn === "error" ? (
+                        <p className="text-sm text-amber-400/90">Collegamento Suunto non riuscito. Riprova.</p>
+                      ) : null}
+                      {suuntoReturn === "server_config" ? (
+                        <p className="text-sm text-amber-400/90">
+                          OAuth Suunto non configurato sul server:{" "}
+                          <code className="text-white/80">SUUNTO_OAUTH2_CLIENT_ID</code>,{" "}
+                          <code className="text-white/80">SUUNTO_OAUTH2_REDIRECT_URI</code>.
+                        </p>
+                      ) : null}
+                      {suuntoLink?.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato Suunto non disponibile: {suuntoLink.linkStatusError}
+                          {suuntoLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({suuntoLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {suuntoLink?.linked ? (
+                        <p className="muted-copy text-sm">
+                          Account Suunto collegato (ID{" "}
+                          <span className="text-white/80">{suuntoLink.suuntoUserIdMasked ?? "—"}</span>).
+                        </p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account Suunto collegato: autorizza l&apos;app Suunto Cloud per leggere gli allenamenti
+                          (richiede anche la subscription key API lato server).
+                        </p>
+                      )}
+                      {suuntoLink?.linked && suuntoLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{suuntoLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/suunto/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                        >
+                          {suuntoLink?.linked ? "Ricollega Suunto" : "Collega Suunto"}
+                        </a>
+                        {suuntoLink?.linked ? (
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={suuntoPullBusy}
+                            className="border border-violet-500/35 bg-violet-500/10 text-violet-50 hover:bg-violet-500/20"
+                            onClick={() => void runSuuntoPullNow()}
+                          >
+                            {suuntoPullBusy ? "Pull…" : "Aggiorna dati Suunto"}
+                          </Pro2Button>
+                        ) : null}
+                      </div>
+                      {suuntoPullNotice ? (
+                        <p className="muted-copy mt-2 text-xs text-white/80">{suuntoPullNotice}</p>
+                      ) : null}
+                      <p className="muted-copy mt-2 text-xs">
+                        Cron Vercel:{" "}
+                        <code className="text-white/70">GET /api/integrations/suunto/pull/cron</code> (
+                        <code className="text-white/70">CRON_SECRET</code>
+                        {" "}o <code className="text-white/70">SUUNTO_PULL_RUN_SECRET</code>).
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Karoo (Hammerhead)
+                      </h4>
+                      {karooReturn === "ok" ? (
+                        <p className="text-sm text-emerald-300/90">
+                          Karoo collegato. Usa &quot;Aggiorna dati Karoo&quot; per scaricare le attività.
+                        </p>
+                      ) : null}
+                      {karooReturn === "error" ? (
+                        <p className="text-sm text-amber-400/90">Collegamento Karoo non riuscito. Riprova.</p>
+                      ) : null}
+                      {karooReturn === "server_config" ? (
+                        <p className="text-sm text-amber-400/90">
+                          OAuth Karoo non configurato sul server:{" "}
+                          <code className="text-white/80">KAROO_OAUTH2_CLIENT_ID</code>,{" "}
+                          <code className="text-white/80">KAROO_OAUTH2_REDIRECT_URI</code>.
+                        </p>
+                      ) : null}
+                      {karooLink?.linkStatusError ? (
+                        <p className="text-sm text-amber-400/90">
+                          Stato Karoo non disponibile: {karooLink.linkStatusError}
+                          {karooLink.linkStatusHint ? (
+                            <>
+                              {" "}
+                              <span className="text-white/75">({karooLink.linkStatusHint})</span>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {karooLink?.linked ? (
+                        <p className="muted-copy text-sm">Account Karoo collegato.</p>
+                      ) : (
+                        <p className="muted-copy text-sm">
+                          Nessun account Karoo collegato: autorizza l&apos;app Hammerhead Developer Platform per leggere le
+                          attività del ciclocomputer.
+                        </p>
+                      )}
+                      {karooLink?.linked && karooLink.oauthScope ? (
+                        <p className="mt-2 break-all font-mono text-[11px] text-white/70">
+                          <span className="text-white/50">OAuth scope:</span>{" "}
+                          <code className="text-cyan-100/90">{karooLink.oauthScope}</code>
+                        </p>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <a
+                          href={`/api/integrations/karoo/authorize?athleteId=${encodeURIComponent(activeAthleteId)}`}
+                          target="_self"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-fit items-center justify-center rounded-lg border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-white hover:bg-white/15"
+                        >
+                          {karooLink?.linked ? "Ricollega Karoo" : "Collega Karoo"}
+                        </a>
+                        {karooLink?.linked ? (
+                          <Pro2Button
+                            type="button"
+                            variant="secondary"
+                            disabled={karooPullBusy}
+                            className="border border-violet-500/35 bg-violet-500/10 text-violet-50 hover:bg-violet-500/20"
+                            onClick={() => void runKarooPullNow()}
+                          >
+                            {karooPullBusy ? "Pull…" : "Aggiorna dati Karoo"}
+                          </Pro2Button>
+                        ) : null}
+                      </div>
+                      {karooPullNotice ? (
+                        <p className="muted-copy mt-2 text-xs text-white/80">{karooPullNotice}</p>
+                      ) : null}
+                      <p className="muted-copy mt-2 text-xs">
+                        Cron Vercel:{" "}
+                        <code className="text-white/70">GET /api/integrations/karoo/pull/cron</code> (
+                        <code className="text-white/70">CRON_SECRET</code>
+                        {" "}o <code className="text-white/70">KAROO_PULL_RUN_SECRET</code>).
+                      </p>
+                    </div>
+
+                    <div
+                      className="mt-6 border-t border-white/10 pt-5"
+                      style={{ marginTop: 18, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.1)" }}
+                    >
+                      <h4 className="profile-editor-subtitle" style={{ marginBottom: 8 }}>
+                        <span className="profile-kpi-dot" />
+                        Zepp <span className="text-white/50">· in arrivo</span>
+                      </h4>
+                      <p className="muted-copy text-sm">
+                        Integrazione Zepp in preparazione: in attesa delle credenziali partner. Lo slot e gli env
+                        (<code className="text-white/70">ZEPP_OAUTH2_*</code>) sono già predisposti; il collegamento sarà
+                        attivato quando le API saranno verificate.
                       </p>
                     </div>
 

@@ -3,7 +3,17 @@ import type { RealityProvider } from "./reality";
 /** Provider per cui esistono stream configurabili nel Pro 2 (estendibile). */
 export type IngestPolicyProvider = Extract<
   RealityProvider,
-  "whoop" | "wahoo" | "garmin" | "garmin_connectiq" | "polar" | "strava" | "coros" | "oura" | "cgm"
+  | "whoop"
+  | "wahoo"
+  | "garmin"
+  | "garmin_connectiq"
+  | "polar"
+  | "strava"
+  | "suunto"
+  | "hammerhead"
+  | "coros"
+  | "oura"
+  | "cgm"
 >;
 
 export const INGEST_POLICY_PROVIDERS = [
@@ -13,6 +23,8 @@ export const INGEST_POLICY_PROVIDERS = [
   "garmin_connectiq",
   "polar",
   "strava",
+  "suunto",
+  "hammerhead",
   "coros",
   "oura",
   "cgm",
@@ -40,6 +52,14 @@ export type GarminIngestStreamKey = (typeof GARMIN_INGEST_STREAM_KEYS)[number];
 export const POLAR_INGEST_STREAM_KEYS = ["polar_exercise", "polar_sleep", "polar_recharge"] as const;
 export type PolarIngestStreamKey = (typeof POLAR_INGEST_STREAM_KEYS)[number];
 
+/** Chiavi stream Suunto (workouts via /v2/workouts). */
+export const SUUNTO_INGEST_STREAM_KEYS = ["suunto_workout"] as const;
+export type SuuntoIngestStreamKey = (typeof SUUNTO_INGEST_STREAM_KEYS)[number];
+
+/** Chiavi stream Hammerhead Karoo (activities). */
+export const KAROO_INGEST_STREAM_KEYS = ["karoo_activity"] as const;
+export type KarooIngestStreamKey = (typeof KAROO_INGEST_STREAM_KEYS)[number];
+
 /** Default conservativi: WHOOP workout off (evita doppione se il training arriva da altro device). */
 export const DEFAULT_WHOOP_INGEST_STREAMS: Record<WhoopIngestStreamKey, boolean> = {
   whoop_sleep: true,
@@ -60,6 +80,16 @@ export const DEFAULT_POLAR_INGEST_STREAMS: Record<PolarIngestStreamKey, boolean>
   polar_exercise: false,
   polar_sleep: true,
   polar_recharge: true,
+};
+
+/** Suunto: device sportivo → workout on di default. */
+export const DEFAULT_SUUNTO_INGEST_STREAMS: Record<SuuntoIngestStreamKey, boolean> = {
+  suunto_workout: true,
+};
+
+/** Karoo: ciclocomputer → activity on di default. */
+export const DEFAULT_KAROO_INGEST_STREAMS: Record<KarooIngestStreamKey, boolean> = {
+  karoo_activity: true,
 };
 
 export type IngestStreamEntry = { enabled: boolean };
@@ -102,6 +132,8 @@ export function defaultStreamsForProvider(provider: IngestPolicyProvider): Recor
   if (provider === "wahoo") return { ...DEFAULT_WAHOO_INGEST_STREAMS };
   if (provider === "garmin" || provider === "garmin_connectiq") return { ...DEFAULT_GARMIN_INGEST_STREAMS };
   if (provider === "polar") return { ...DEFAULT_POLAR_INGEST_STREAMS };
+  if (provider === "suunto") return { ...DEFAULT_SUUNTO_INGEST_STREAMS };
+  if (provider === "hammerhead") return { ...DEFAULT_KAROO_INGEST_STREAMS };
   return {};
 }
 
@@ -110,5 +142,7 @@ export function allowedIngestStreamKeysForProvider(provider: IngestPolicyProvide
   if (provider === "wahoo") return WAHOO_INGEST_STREAM_KEYS;
   if (provider === "garmin" || provider === "garmin_connectiq") return GARMIN_INGEST_STREAM_KEYS;
   if (provider === "polar") return POLAR_INGEST_STREAM_KEYS;
+  if (provider === "suunto") return SUUNTO_INGEST_STREAM_KEYS;
+  if (provider === "hammerhead") return KAROO_INGEST_STREAM_KEYS;
   return [];
 }

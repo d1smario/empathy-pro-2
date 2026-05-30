@@ -2,7 +2,7 @@ import "server-only";
 
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
-export type VendorOauthVendor = "whoop" | "wahoo" | "strava" | "polar";
+export type VendorOauthVendor = "whoop" | "wahoo" | "strava" | "polar" | "suunto" | "hammerhead";
 
 export async function upsertVendorOauthLink(input: {
   athleteId: string;
