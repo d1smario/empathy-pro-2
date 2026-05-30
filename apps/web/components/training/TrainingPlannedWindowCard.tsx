@@ -46,7 +46,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
       setLoading(true);
       setErr(null);
       try {
-        const q = new URLSearchParams({ athleteId });
+        const q = new URLSearchParams({ athleteId, includeAthleteContext: "0" });
         const res = await fetch(`/api/training/planned-window?${q.toString()}`, {
           cache: "no-store",
           headers: await buildSupabaseAuthHeaders(),

@@ -8,7 +8,7 @@ import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operati
 import { isMissingKnowledgeFoundationError } from "@/lib/knowledge/knowledge-foundation";
 import { listKnowledgeExpansionTraceSummaries } from "@/lib/knowledge/knowledge-research-trace-store";
 import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/metabolic-efficiency-generative-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
 
     const { db } = await requireAthleteReadContext(req, athleteId);
     const [athleteMemory, trainingWindow, recoverySummary, researchTraceSummaries, profileAnthroRes] = await Promise.all([
-      resolveAthleteMemory(athleteId),
+      resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }),
       queryPlannedExecutedWindow(db, athleteId, from, to),
       resolveLatestRecoverySummary(athleteId),
       listKnowledgeExpansionTraceSummaries(athleteId, {
@@ -288,7 +288,6 @@ export async function GET(req: NextRequest) {
       pathwayModulation,
       functionalFoodRecommendations,
       functionalMealSelector,
-      athleteMemory,
       executed: execRes.data ?? [],
       planned: plannedRaw.map((row) => {
         const builderSession = parsePro2BuilderSessionFromNotes(row.notes ?? null);

@@ -6,7 +6,7 @@ import {
   type PlannedWorkoutDbRow,
 } from "@empathy/domain-training";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { firstWindowQueryError, executedWorkoutsWindowSelect, PLANNED_WORKOUTS_WINDOW_SELECT, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
@@ -105,7 +105,7 @@ export async function GET(req: NextRequest) {
 
     let plannedRes: { data: unknown[] | null; error: { message: string } | null };
     let executedRes: { data: unknown[] | null; error: { message: string } | null };
-    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
     let wellnessByDate: WellnessByDateMap | undefined;
     let executedAdminFallbackUsed = false;
     let executedHiddenBySourcePreference = 0;
@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
     if (includeAthleteContext) {
       const batch = await Promise.all([
         windowPromise,
-        resolveAthleteMemory(athleteId).catch(() => null),
+        resolveAthleteMemorySlice(athleteId, { slice: "training" }).catch(() => null),
         wellnessPromise,
       ]);
       plannedRes = batch[0].planned;

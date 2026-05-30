@@ -1,13 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  applyNutrientBoostSwaps,
   composeMediterraneanMeal,
   createMediterraneanDayContext,
   type MealMacroTargets,
   type MediterraneanDietType,
 } from "./mediterranean-meal-composer";
 import type { MealSlotKey } from "./intelligent-meal-plan-types";
-import { nutrientsForMealPlanItem } from "./canonical-food-composition";
+import { inferCanonicalFoodKeyPreferName, nutrientsForMealPlanItem } from "./canonical-food-composition";
 
 /**
  * Guardrail "memoria-driven" del sistema generativo meal plan.
@@ -377,4 +378,30 @@ test("guardrail composizione CHO colazione: cho >= 130 g -> 2 fonti CHO solide d
     0,
     `Regola violata in ${failures.length} casi:\n${failures.slice(0, 12).join("\n")}`,
   );
+});
+
+test("pathway folato: lunch sostituisce verdure miste con legumi folato-densi", () => {
+  const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
+  const macros = { kcal: 900, carbsG: 110, proteinG: 45, fatG: 28 };
+  const meal = applyNutrientBoostSwaps(
+    composeMediterraneanMeal("lunch", macros, ctx),
+    "lunch",
+    ["folate_mcg"],
+    ctx,
+  );
+  const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
+  assert.ok(keys.includes("legumes_cooked"), `Atteso legumi_cooked, got: ${keys.join(", ")}`);
+});
+
+test("pathway redox vit C: lunch preferisce frutta vit C-densa al posto di verdure miste", () => {
+  const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
+  const macros = { kcal: 850, carbsG: 100, proteinG: 42, fatG: 26 };
+  const meal = applyNutrientBoostSwaps(
+    composeMediterraneanMeal("lunch", macros, ctx),
+    "lunch",
+    ["vitC_mg"],
+    ctx,
+  );
+  const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
+  assert.ok(keys.includes("mixed_fruit"), `Atteso mixed_fruit, got: ${keys.join(", ")}`);
 });

@@ -201,6 +201,69 @@ export async function rankUsdaCacheForTargets(
   return out;
 }
 
+export type RankFoodsForNutrientResult = {
+  foods: UsdaRankedFood[];
+  source: "cache" | "fdc_live" | "mixed" | "empty";
+};
+
+/** Ranker unico cache-first; live FDC solo su miss con apiKey e queries esplicite. */
+export async function rankFoodsForNutrient(input: {
+  nutrientId: NutrientTargetId;
+  topN?: number;
+  apiKey?: string;
+  liveQueries?: string[];
+  fdcNutrientId?: number;
+  minimumPer100g?: number;
+}): Promise<RankFoodsForNutrientResult> {
+  const topN = Math.max(1, Math.min(10, Math.trunc(input.topN ?? 3) || 3));
+  const cached = await rankUsdaCacheForNutrient(input.nutrientId, topN);
+  if (cached.length >= topN) {
+    return { foods: cached, source: "cache" };
+  }
+  const key = input.apiKey?.trim();
+  if (!key || !input.liveQueries?.length || !input.fdcNutrientId) {
+    return { foods: cached, source: cached.length ? "cache" : "empty" };
+  }
+  try {
+    const { fetchUsdaRichFoodsMerged } = await import("@/lib/nutrition/usda-rich-foods-search");
+    const liveRows = await fetchUsdaRichFoodsMerged({
+      apiKey: key,
+      queries: input.liveQueries.slice(0, 6),
+      nutrientFilter: {
+        id: Math.round(input.fdcNutrientId),
+        type: "minimum",
+        value: input.minimumPer100g ?? 0,
+      },
+      dataTypes: ["Foundation", "SR Legacy"],
+      pageSizePerQuery: 18,
+      resultLimit: topN * 2,
+      delayMsBetweenQueries: 120,
+    });
+    const liveRanked: UsdaRankedFood[] = liveRows.slice(0, topN).map((r) => ({
+      fdcId: r.fdcId,
+      description: r.description,
+      amountPer100g: r.targetAmountPer100g ?? 0,
+      amountPer100Kcal:
+        r.energyKcal100 && r.energyKcal100 > 0 && r.targetAmountPer100g != null
+          ? (r.targetAmountPer100g * 100) / r.energyKcal100
+          : r.targetAmountPer100g ?? 0,
+      unit: r.targetUnitName ?? "mg",
+      kcalPer100g: r.energyKcal100 ?? 0,
+    }));
+    const merged = [...cached];
+    for (const row of liveRanked) {
+      if (merged.length >= topN) break;
+      if (!merged.some((m) => m.fdcId === row.fdcId)) merged.push(row);
+    }
+    return {
+      foods: merged.slice(0, topN),
+      source: cached.length && liveRanked.length ? "mixed" : liveRanked.length ? "fdc_live" : cached.length ? "cache" : "empty",
+    };
+  } catch {
+    return { foods: cached, source: cached.length ? "cache" : "empty" };
+  }
+}
+
 /** Per uso da test/debug: invalida la cache di processo. */
 export function _resetUsdaRankerMemoForTests(): void {
   MEMO_CACHED_FOODS = null;

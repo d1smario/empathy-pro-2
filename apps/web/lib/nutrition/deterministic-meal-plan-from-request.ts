@@ -10,7 +10,7 @@ import { rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-t
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
-import { composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
+import { applyNutrientBoostSwaps, composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
@@ -84,14 +84,23 @@ function syncItemsApproxKcalFromCanonical(items: IntelligentMealPlanItemOut[]): 
   });
 }
 
-function pickItemsForSlot(slot: IntelligentMealPlanRequestSlot, dayCtx: MediterraneanDayContext): IntelligentMealPlanItemOut[] {
+function pickItemsForSlot(
+  slot: IntelligentMealPlanRequestSlot,
+  dayCtx: MediterraneanDayContext,
+  boostTargetIds: readonly NutrientTargetId[] = [],
+): IntelligentMealPlanItemOut[] {
   const slotMacros = {
     kcal: slot.targetKcal,
     carbsG: slot.targetCarbsG,
     proteinG: slot.targetProteinG,
     fatG: slot.targetFatG,
   };
-  const composed = composeMediterraneanMeal(slot.slot, slotMacros, dayCtx);
+  const composed = applyNutrientBoostSwaps(
+    composeMediterraneanMeal(slot.slot, slotMacros, dayCtx),
+    slot.slot,
+    boostTargetIds,
+    dayCtx,
+  );
   const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
   const bridgePrefix = groupTitles
     ? `Target funzionali (solver): ${groupTitles.slice(0, 180)}${groupTitles.length > 180 ? "…" : ""}. `
@@ -138,6 +147,7 @@ export async function buildDeterministicMealPlanFromRequest(
    *   note testuali nel piano (`slotCoherence` e `dayInteractionSummary`).
    */
   const validBoostTargets = req.nutrientBoostTargets ? selectValidBoostTargets(req.nutrientBoostTargets) : [];
+  const boostTargetIds = validBoostTargets.map((t) => t.nutrientId);
   const boostRanking: Partial<Record<NutrientTargetId, UsdaRankedFood[]>> = {};
   if (validBoostTargets.length > 0) {
     try {
@@ -162,7 +172,7 @@ export async function buildDeterministicMealPlanFromRequest(
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const isSuppressed = suppressed.includes(slot.slot);
-    let items = pickItemsForSlot(slot, dayCtx);
+    let items = pickItemsForSlot(slot, dayCtx, boostTargetIds);
     if (!isSuppressed && slot.targetKcal > 0) {
       items = rescaleSlotKcalToTarget(
         {

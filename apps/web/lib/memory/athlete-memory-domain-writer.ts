@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { athleteIdByNormalizedEmail } from "@/lib/auth/bootstrap-app-user-profile";
 import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { invalidateAthleteMemoryCache } from "@/lib/memory/athlete-memory-cache";
 
 type ProfileUpsertPatch = {
   domain: "profile";
@@ -115,6 +116,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
               .update(patch.payload)
               .eq("id", canonicalId);
             if (updateError) throw new Error(updateError.message);
+            invalidateAthleteMemoryCache(canonicalId);
             return {
               athleteId: canonicalId,
               status: "updated_existing" as const,
@@ -130,6 +132,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
           .single();
         if (error) throw new Error(error.message);
         const athleteId = data?.id ?? null;
+        if (athleteId) invalidateAthleteMemoryCache(athleteId);
         return {
           athleteId,
           status: "created" as const,
@@ -139,6 +142,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
 
       const { error } = await supabase.from("athlete_profiles").update(patch.payload).eq("id", patch.athleteId);
       if (error) throw new Error(error.message);
+      invalidateAthleteMemoryCache(patch.athleteId);
       return {
         athleteId: patch.athleteId,
         status: "updated" as const,
@@ -155,6 +159,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
         })
         .eq("id", patch.athleteId);
       if (error) throw new Error(error.message);
+      invalidateAthleteMemoryCache(patch.athleteId);
       return {
         athleteId: patch.athleteId,
         status: "ok" as const,
@@ -172,6 +177,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
         source: patch.source ?? null,
       });
       if (error) throw new Error(error.message);
+      invalidateAthleteMemoryCache(patch.athleteId);
       return {
         athleteId: patch.athleteId,
         status: "ok" as const,
@@ -183,6 +189,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       const rows = patch.rows.map((row) => normalizeEvidenceRow(row, patch.athleteId));
       const { error: insertErr } = await supabase.from("knowledge_evidence_hits").insert(rows);
       if (insertErr) throw new Error(insertErr.message);
+      invalidateAthleteMemoryCache(patch.athleteId);
       const athleteMemory = await resolveAthleteMemory(patch.athleteId);
       return {
         athleteId: patch.athleteId,

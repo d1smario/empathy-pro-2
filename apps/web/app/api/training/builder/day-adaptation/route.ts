@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import {
   resolveDailyBuilderLoadAdaptation,
@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
   try {
     const { db } = await requireAthleteReadContext(req, athleteId);
     const [athleteMemory, recoverySummary, plannedRes] = await Promise.all([
-      resolveAthleteMemory(athleteId),
+      resolveAthleteMemorySlice(athleteId, { slice: "training" }),
       resolveLatestRecoverySummary(athleteId).catch(() => null),
       db
         .from("planned_workouts")

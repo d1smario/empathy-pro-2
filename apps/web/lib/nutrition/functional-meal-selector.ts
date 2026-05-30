@@ -25,6 +25,14 @@ type TwinLike = {
 
 const SLOT_ORDER: FunctionalMealSelectorSlotViewModel["slot"][] = ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"];
 
+/** Priorità slot per focus funzionale (pathway → pasto). */
+export function slotPriorityForFocus(focus: FunctionalMealSelectorSlotViewModel["focus"]): FunctionalMealSelectorSlotViewModel["slot"][] {
+  if (focus === "glycogen") return ["lunch", "snack_am", "dinner", "snack_pm", "breakfast"];
+  if (focus === "redox") return ["breakfast", "lunch", "dinner", "snack_pm", "snack_am"];
+  if (focus === "microbiota_gut") return ["dinner", "lunch", "snack_pm", "breakfast", "snack_am"];
+  return ["lunch", "dinner", "breakfast", "snack_pm", "snack_am"];
+}
+
 function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

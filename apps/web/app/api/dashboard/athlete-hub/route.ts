@@ -14,7 +14,7 @@ import { mapAthleteProfileRow } from "@/lib/profile/map-athlete-profile-row";
 import { formatAthleteProfileStrip } from "@/lib/profile/athlete-profile-strip";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 
 export const dynamic = "force-dynamic";
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
         .eq("athlete_id", athleteId)
         .order("sample_date", { ascending: true })
         .limit(400),
-      resolveAthleteMemory(athleteId).catch(() => null),
+      resolveAthleteMemorySlice(athleteId, { slice: "dashboard" }).catch(() => null),
     ]);
 
     const errMsg =

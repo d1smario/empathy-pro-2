@@ -3,7 +3,7 @@ import type { ApprovedApplicationPatch } from "@/lib/dashboard/resolve-operation
 export type { ApprovedApplicationPatch };
 import type { NutritionPerformanceIntegrationDials } from "@/lib/nutrition/performance-integration-scaler";
 export type { NutritionPerformanceIntegrationDials };
-import type { AthleteMemory, PhysiologyState } from "@/lib/empathy/schemas";
+import type { PhysiologyState } from "@/lib/empathy/schemas";
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
 import type { RecoverySummary } from "@/lib/reality/recovery-summary";
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
@@ -273,7 +273,6 @@ export type NutritionModuleViewModel = {
   pathwayModulation?: NutritionPathwayModulationViewModel | null;
   functionalFoodRecommendations?: FunctionalFoodRecommendationsViewModel | null;
   functionalMealSelector?: FunctionalMealSelectorViewModel | null;
-  athleteMemory?: AthleteMemory | null;
   executed: Array<Record<string, unknown>>;
   planned: NutritionPlannedWorkoutRow[];
   researchTraceSummaries?: KnowledgeResearchTraceSummary[];

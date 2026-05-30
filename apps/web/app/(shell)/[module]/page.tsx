@@ -12,6 +12,8 @@ export function generateStaticParams(): { module: string }[] {
     (p) =>
       p.module !== "nutrition" &&
       p.module !== "bioenergetics" &&
+      p.module !== "biomechanics" &&
+      p.module !== "aerodynamics" &&
       p.module !== "profile" &&
       p.module !== "physiology" &&
       p.module !== "health",

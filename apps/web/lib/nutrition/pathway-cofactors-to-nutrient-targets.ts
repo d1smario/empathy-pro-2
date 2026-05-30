@@ -121,3 +121,56 @@ export function pathwayCofactorsToNutrientTargets(strings: readonly string[]): N
   }
   return out;
 }
+
+export type ActiveNutrientTarget = NutrientTarget & {
+  catalogId?: string;
+};
+
+/** Mappa id catalogo funzionale → chiave canonica nutriente (subset con usdaRichSearch). */
+export const CATALOG_TO_NUTRIENT_TARGET: Partial<Record<string, NutrientTargetId>> = {
+  folate_b9: "folate_mcg",
+  vitamin_c_redox: "vitC_mg",
+  magnesium_kinase: "mg_mg",
+  iron_heme: "fe_mg",
+  iron_nonheme: "fe_mg",
+  zinc_immunity: "zn_mg",
+  selenium_redox: "se_mcg",
+  omega3_epa_dha: "omega3G",
+  fiber_gut: "fiberG",
+  potassium_electrolyte: "k_mg",
+  calcium_bone: "ca_mg",
+  vitamin_d_hormone: "vitD_mcg",
+  vitamin_b12_nerve: "vitB12_mcg",
+  thiamine_b1: "thiamineB1_mg",
+  riboflavin_b2: "riboflavinB2_mg",
+  niacin_b3: "niacinB3_mg",
+  vitamin_b6: "vitB6_mg",
+};
+
+export function catalogIdToNutrientTargetId(catalogId: string): NutrientTargetId | null {
+  return CATALOG_TO_NUTRIENT_TARGET[catalogId] ?? null;
+}
+
+/**
+ * Unifica bridge cofactor-regex (A) e catalogo funzionale (B) in un solo elenco deduplicato.
+ */
+export function buildActiveNutrientTargets(input: {
+  cofactorStrings: readonly string[];
+  catalogNutrientIds?: readonly string[];
+}): ActiveNutrientTarget[] {
+  const byId = new Map<NutrientTargetId, ActiveNutrientTarget>();
+  for (const t of pathwayCofactorsToNutrientTargets(input.cofactorStrings)) {
+    byId.set(t.nutrientId, { ...t });
+  }
+  for (const catalogId of input.catalogNutrientIds ?? []) {
+    const nutrientId = catalogIdToNutrientTargetId(catalogId);
+    if (!nutrientId || byId.has(nutrientId)) continue;
+    byId.set(nutrientId, {
+      nutrientId,
+      labelIt: catalogId.replace(/_/g, " "),
+      sourceText: `catalog:${catalogId}`,
+      catalogId,
+    });
+  }
+  return [...byId.values()].slice(0, 10);
+}

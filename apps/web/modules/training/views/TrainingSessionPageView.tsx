@@ -322,7 +322,7 @@ export default function TrainingSessionPageView() {
       setLoading(true);
       setErr(null);
       try {
-        const q = new URLSearchParams({ athleteId, from: date, to: date });
+        const q = new URLSearchParams({ athleteId, from: date, to: date, includeAthleteContext: "0" });
         const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",
           headers: await buildSupabaseAuthHeaders(),

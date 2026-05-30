@@ -1059,6 +1059,18 @@ export default function TrainingCalendarPageView() {
         </p>
       ) : null}
 
+      {(fetchDiag?.executedHiddenByPreference ?? 0) > 0 ? (
+        <p className="mb-4 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100" role="status">
+          {fetchDiag!.executedHiddenByPreference}{" "}
+          {fetchDiag!.executedHiddenByPreference === 1 ? "attività eseguita nascosta" : "attività eseguite nascoste"} dal
+          calendario in base alle preferenze sorgente dati.{" "}
+          <Pro2Link href="/settings" className="text-amber-50 underline underline-offset-2">
+            Apri Impostazioni
+          </Pro2Link>{" "}
+          per includere altri provider (Garmin, Strava, …).
+        </p>
+      ) : null}
+
       {err ? (
         <p className="mb-6 text-sm text-amber-300/90" role="alert">
           {err}

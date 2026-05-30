@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
+import { resolveCanonicalTwinState } from "@/lib/twin/athlete-state-resolver";
 import { applyBuilderOperationalScaling } from "@/lib/training/builder/apply-builder-operational-scaling";
 import {
   coerceTechnicalModuleFocus,
@@ -150,25 +151,15 @@ export async function POST(req: NextRequest) {
 
   const canonPhys = await resolveCanonicalPhysiologyState(athleteId);
   const phys = canonPhys.physiologicalProfile;
-
-  const { data: twinRow } = await db
-    .from("twin_states")
-    .select("readiness, fatigue_acute")
-    .eq("athlete_id", athleteId)
-    .order("as_of", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const readinessDb = twinRow ? num((twinRow as { readiness?: unknown }).readiness) : null;
-  const fatigueDb = twinRow ? num((twinRow as { fatigue_acute?: unknown }).fatigue_acute) : null;
+  const twin = await resolveCanonicalTwinState(athleteId, canonPhys);
 
   const athleteState: AthleteMetabolicState = {
     ftpW: phys.ftpWatts ?? null,
     vo2maxMlKgMin: phys.vo2maxMlMinKg ?? null,
     vLamax: phys.vLamax ?? null,
     lactateThresholdPowerW: phys.lt2Watts ?? null,
-    readinessScore: Math.max(0, Math.min(100, Math.round(readinessDb ?? 68))),
-    fatigueScore: Math.max(0, Math.min(100, Math.round(fatigueDb ?? 35))),
+    readinessScore: Math.max(0, Math.min(100, Math.round(twin.readiness ?? 68))),
+    fatigueScore: Math.max(0, Math.min(100, Math.round(twin.fatigueAcute ?? 35))),
   };
 
   const requestNormalized: SessionGoalRequest = {
@@ -193,7 +184,7 @@ export async function POST(req: NextRequest) {
   let adaptationGuidance = null;
 
   if (body.applyOperationalScaling === true) {
-    const athleteMemory = await resolveAthleteMemory(athleteId);
+    const athleteMemory = await resolveAthleteMemorySlice(athleteId, { slice: "training" });
     const recoverySummary = await resolveLatestRecoverySummary(athleteId).catch(() => null);
     const bundle = await resolveOperationalSignalsBundle({
       athleteId,
@@ -237,7 +228,7 @@ export async function POST(req: NextRequest) {
       blockExercises,
       source: "pro2_builder_engine_deterministic",
       physiologyPresent: Object.values(canonPhys.sources).some(Boolean),
-      twinPresent: Boolean(twinRow),
+      twinPresent: Boolean(twin?.asOf),
       adaptationGuidance,
       operationalContext,
       adaptationLoop,

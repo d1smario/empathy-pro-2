@@ -16,7 +16,7 @@ import {
   computePostWorkoutMealFlags,
   computeSnackSlotsSuppressedByTrainingWindow,
 } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
-import { pathwayCofactorsToNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { buildActiveNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import {
   buildRacePreLunchDayContext,
   racePreLunchContextLine,
@@ -128,7 +128,13 @@ export function buildIntelligentMealPlanRequest(input: {
   for (const pw of pathwayPathways) {
     for (const s of pw.substrates ?? []) cofactorStrings.push(s);
   }
-  const nutrientBoostTargets = pathwayCofactorsToNutrientTargets(cofactorStrings).map((t) => ({
+  const catalogNutrientIds = Object.values(mealPathwayBySlot).flatMap((bundle) =>
+    (bundle?.pathwayTargets ?? []).map((t) => t.nutrientId).filter(Boolean),
+  );
+  const nutrientBoostTargets = buildActiveNutrientTargets({
+    cofactorStrings,
+    catalogNutrientIds,
+  }).map((t) => ({
     nutrientId: t.nutrientId,
     labelIt: t.labelIt,
     sourceText: t.sourceText,

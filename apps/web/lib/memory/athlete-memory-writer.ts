@@ -1,5 +1,7 @@
 import type {
   AthleteEvidenceMemoryItem,
+  AthleteAerodynamicsMemory,
+  AthleteBiomechanicsMemory,
   AthleteHealthMemory,
   AthleteIdentityMemory,
   AthleteKnowledgeMemory,
@@ -22,6 +24,8 @@ export type AthleteMemoryPatch = {
   evidenceItems?: AthleteEvidenceMemoryItem[];
   knowledge?: AthleteKnowledgeMemory;
   training?: AthleteTrainingMemory;
+  biomechanics?: AthleteBiomechanicsMemory;
+  aerodynamics?: AthleteAerodynamicsMemory;
   source: AthleteMemoryPatchSource;
 };
 
@@ -87,6 +91,8 @@ export function applyAthleteMemoryPatch(
       : memory.evidenceMemory,
     knowledge: patch.knowledge ?? memory.knowledge,
     training: patch.training ?? memory.training,
+    biomechanics: patch.biomechanics ?? memory.biomechanics,
+    aerodynamics: patch.aerodynamics ?? memory.aerodynamics,
     audit: {
       computedAt: patch.source.updatedAt,
       sources: [...memory.audit.sources, patch.source],

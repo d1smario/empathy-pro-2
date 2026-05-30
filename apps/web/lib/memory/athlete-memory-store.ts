@@ -36,6 +36,14 @@ export function createEmptyAthleteMemory(athleteId: string): AthleteMemory {
       activeModulations: [],
       recentSessionPackets: [],
     },
+    biomechanics: {
+      latestSnapshot: null,
+      historicalEvolution: [],
+    },
+    aerodynamics: {
+      latestSnapshot: null,
+      historicalEvolution: [],
+    },
     audit: {
       computedAt: new Date(0).toISOString(),
       sources: [],

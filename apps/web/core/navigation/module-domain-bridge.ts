@@ -1,4 +1,6 @@
 import type { ProductModuleId } from "@empathy/contracts";
+import * as Aerodynamics from "@empathy/domain-aerodynamics";
+import * as Biomechanics from "@empathy/domain-biomechanics";
 import * as Bioenergetics from "@empathy/domain-bioenergetics";
 import * as Knowledge from "@empathy/domain-knowledge";
 import * as Nutrition from "@empathy/domain-nutrition";
@@ -21,6 +23,8 @@ const DOMAIN_LINE = [
   Knowledge.DOMAIN,
   Reality.DOMAIN,
   Bioenergetics.DOMAIN,
+  Biomechanics.DOMAIN,
+  Aerodynamics.DOMAIN,
 ] as const;
 
 /** Package `@empathy/domain-*` cablati ai contratti (step 3). */
@@ -82,17 +86,15 @@ export function getModuleDomainPanel(module: ProductModuleId): ModuleDomainPanel
       };
     case "biomechanics":
       return {
-        packageId: "—",
-        title: "Biomechanics",
-        summary:
-          "Modulo prodotto riservato; contratti di movimento/sensoristica saranno aggiunti in @empathy/contracts quando il modello sarà congelato.",
+        packageId: Biomechanics.DOMAIN,
+        title: Biomechanics.DOMAIN_TITLE,
+        summary: Biomechanics.DOMAIN_SUMMARY,
       };
     case "aerodynamics":
       return {
-        packageId: "—",
-        title: "Aerodynamics",
-        summary:
-          "Modulo prodotto riservato; tipi CFD / tunnel e integrazioni saranno versionati nei contratti prima dell’implementazione.",
+        packageId: Aerodynamics.DOMAIN,
+        title: Aerodynamics.DOMAIN_TITLE,
+        summary: Aerodynamics.DOMAIN_SUMMARY,
       };
     case "settings":
       return {

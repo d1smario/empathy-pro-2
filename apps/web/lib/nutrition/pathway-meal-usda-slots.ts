@@ -1,6 +1,7 @@
-import type { FunctionalFoodTargetViewModel } from "@/api/nutrition/contracts";
+import type { FunctionalFoodTargetViewModel, FunctionalMealSelectorSlotViewModel } from "@/api/nutrition/contracts";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_KEYS } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { slotPriorityForFocus } from "@/lib/nutrition/functional-meal-selector";
 
 export type PathwayMealSlotKey = MealSlotKey;
 
@@ -15,6 +16,8 @@ export function assignPathwayTargetsToMealSlots(input: {
   planDate: string;
   athleteId: string;
   maxPerSlot?: number;
+  /** Se presente, assegna target ai pasti in base al focus funzionale invece della rotazione hash. */
+  selectorSlots?: FunctionalMealSelectorSlotViewModel[];
 }): Record<PathwayMealSlotKey, FunctionalFoodTargetViewModel[]> {
   const maxPerSlot = Math.max(1, Math.min(5, Math.trunc(input.maxPerSlot ?? 3) || 3));
   const empty: Record<PathwayMealSlotKey, FunctionalFoodTargetViewModel[]> = {
@@ -26,6 +29,27 @@ export function assignPathwayTargetsToMealSlots(input: {
     snack_evening: [],
   };
   if (!input.targets.length) return empty;
+
+  if (input.selectorSlots?.length) {
+    const withUsdaFirst = [...input.targets].sort((a, b) => {
+      const aw = a.usdaRichSearch ? 0 : 1;
+      const bw = b.usdaRichSearch ? 0 : 1;
+      if (aw !== bw) return aw - bw;
+      return a.nutrientId.localeCompare(b.nutrientId);
+    });
+    for (let i = 0; i < withUsdaFirst.length; i++) {
+      const target = withUsdaFirst[i]!;
+      const selectorSlot = input.selectorSlots[i % input.selectorSlots.length];
+      const priorities = selectorSlot ? slotPriorityForFocus(selectorSlot.focus) : SLOTS;
+      for (const slot of priorities) {
+        if (empty[slot].length < maxPerSlot) {
+          empty[slot].push(target);
+          break;
+        }
+      }
+    }
+    return empty;
+  }
 
   let h = 0;
   for (const c of `${input.planDate}:${input.athleteId}`) {

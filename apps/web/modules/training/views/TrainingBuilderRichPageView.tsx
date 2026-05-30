@@ -475,6 +475,7 @@ export default function TrainingBuilderRichPageView() {
           athleteId,
           from,
           to,
+          includeAthleteContext: "0",
         });
         const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",

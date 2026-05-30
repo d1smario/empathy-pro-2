@@ -27,7 +27,6 @@ import {
   type PathwayMealSlotKey,
 } from "@/lib/nutrition/pathway-meal-usda-slots";
 import { fetchUsdaFoodsForCatalogIds } from "@/modules/nutrition/services/pathway-meal-usda-client";
-import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildFunctionalMealSelectorViewModel } from "@/lib/nutrition/functional-meal-selector";
 import { buildEffectiveDayTrainingContext } from "@/lib/training/day-reality-context";
@@ -793,6 +792,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [metabolicEfficiencyGenerativeModel, setMetabolicEfficiencyGenerativeModel] =
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
+  const [pathwayModulation, setPathwayModulation] = useState<NutritionPathwayModulationViewModel | null>(null);
   const [nutritionApplicationDirective, setNutritionApplicationDirective] = useState<NutritionApplicationDirectiveViewModel | null>(
     null,
   );
@@ -999,6 +999,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
+        setPathwayModulation(null);
         setNutritionApplicationDirective(null);
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
@@ -1011,13 +1012,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       }
       setLoading(true);
       setError(null);
-      // Finestra ampia (locale, mezzogiorno): allineata al calendario/builder — evita nutrition "ferma"
-      // quando la data piano è oltre ~2 settimane o nel passato recente (prima era solo oggi→+14 UTC).
       const today = new Date();
       const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
       const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
-      start.setDate(start.getDate() - 90);
-      end.setDate(end.getDate() + 120);
+      // Finestra operativa ±30 giorni (bonifica performance); estendibile on-demand se serve.
+      start.setDate(start.getDate() - 30);
+      end.setDate(end.getDate() + 30);
       const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
       const endKey = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
       const todayKey = new Date().toISOString().slice(0, 10);
@@ -1042,6 +1042,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setResearchTraceSummaries([]);
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
+        setPathwayModulation(null);
         setNutritionApplicationDirective(null);
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
@@ -1051,14 +1052,14 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         return;
       }
 
-      const memory = moduleData.athleteMemory ?? null;
+      const memory = null;
       const p = mergeNutritionProfileForSolver(
-        mapAthleteMemoryToNutritionProfile(memory),
+        null,
         (moduleData.profile as AthleteNutritionRow | null) ?? null,
       );
-      const ph = mergePhysioForSolver(mapAthleteMemoryToPhysio(memory), (moduleData.physio as PhysioRow | null) ?? null);
-      const physiology = (memory?.physiology as PhysiologyState | null) ?? ((moduleData.physiologyState as PhysiologyState | null) ?? null);
-      const twin = (memory?.twin as TwinStateRow | null) ?? ((moduleData.twinState as TwinStateRow | null) ?? null);
+      const ph = mergePhysioForSolver(null, (moduleData.physio as PhysioRow | null) ?? null);
+      const physiology = (moduleData.physiologyState as PhysiologyState | null) ?? null;
+      const twin = (moduleData.twinState as TwinStateRow | null) ?? null;
       const recovery = (moduleData.recoverySummary as RecoverySummaryRow | null) ?? null;
       const operational = (moduleData.operationalContext as TrainingDayOperationalContext | null) ?? null;
       const loop = (moduleData.adaptationLoop as TrainingAdaptationLoopViewModel | null) ?? null;
@@ -1089,29 +1090,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const availableDates = Array.from(new Set(pl.map((row) => row.date))).sort();
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
       const persisted = readPersistedNutritionPlanDate(athleteId);
-      const finalPlanDate = persisted ?? nextDate;
-      if (
-        finalPlanDate !== pathwayDateGuess &&
-        finalPlanDate >= startKey &&
-        finalPlanDate <= endKey &&
-        !moduleData.error
-      ) {
-        const pathSnap = await fetchNutritionModuleContext({
-          athleteId,
-          from: startKey,
-          to: endKey,
-          pathwayDate: finalPlanDate,
-        });
-        if (!pathSnap.error) {
-          moduleData = {
-            ...moduleData,
-            pathwayModulation: pathSnap.pathwayModulation ?? moduleData.pathwayModulation,
-            functionalFoodRecommendations: pathSnap.functionalFoodRecommendations ?? moduleData.functionalFoodRecommendations,
-            functionalMealSelector: pathSnap.functionalMealSelector ?? moduleData.functionalMealSelector,
-          };
-        }
-      }
+      const finalPlanDate = clampIsoDay(persisted ?? nextDate);
       setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
+      setPathwayModulation(moduleData.pathwayModulation ?? null);
       nutritionModuleWindowRef.current = { from: startKey, to: endKey };
       serverSelectorPathwayDateRef.current = finalPlanDate;
       setSelectedPlanDate(finalPlanDate);
@@ -1224,19 +1205,6 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return { meals, train };
   }, [nutritionDayModel]);
 
-  const pathwayModulation = useMemo((): NutritionPathwayModulationViewModel | null => {
-    if (!athleteId) return null;
-    return buildNutritionPathwayModulationViewModel({
-      date: selectedPlanDate,
-      plannedSessions: selectedPlanSessions.map((p) => ({
-        id: p.id,
-        label: String(p.plannedSessionName ?? p.plannedDiscipline ?? p.type ?? "Sessione"),
-        builderSession: (p.builderSession as Pro2BuilderSessionContract | null) ?? null,
-      })),
-      physiology: physiologyState,
-      twin: twinState,
-    });
-  }, [athleteId, selectedPlanDate, selectedPlanSessions, physiologyState, twinState]);
 
   const nutritionStimulusLine = useMemo(() => {
     if (!selectedPlanSessions.length) return null;
@@ -1355,8 +1323,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         planDate: selectedPlanDate,
         athleteId: athleteId ?? "",
         maxPerSlot: 3,
+        selectorSlots: functionalMealSelector?.slots,
       }),
-    [functionalFoodRecommendations.targets, selectedPlanDate, athleteId],
+    [functionalFoodRecommendations.targets, selectedPlanDate, athleteId, functionalMealSelector?.slots],
   );
 
   useEffect(() => {

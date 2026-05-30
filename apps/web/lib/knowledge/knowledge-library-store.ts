@@ -138,13 +138,15 @@ export async function linkAssertionDocuments(input: {
   if (error) throw new Error(error.message);
 }
 
-export async function listAthleteKnowledgeBindings(athleteId: string): Promise<AthleteKnowledgeBinding[]> {
+export async function listAthleteKnowledgeBindings(athleteId: string, limit = 48): Promise<AthleteKnowledgeBinding[]> {
+  const boundedLimit = Math.max(1, Math.min(48, Math.trunc(limit) || 48));
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("athlete_knowledge_bindings")
     .select("id, athlete_id, domain, status, adaptation_target, session_date, planned_workout_id, triggered_by, context_tags, evidence_level, confidence, valid_from, valid_to")
     .eq("athlete_id", athleteId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
     bindingId: String(row.id),
@@ -166,13 +168,15 @@ export async function listAthleteKnowledgeBindings(athleteId: string): Promise<A
   }));
 }
 
-export async function listKnowledgeModulationSnapshots(athleteId: string): Promise<KnowledgeModulationSnapshot[]> {
+export async function listKnowledgeModulationSnapshots(athleteId: string, limit = 48): Promise<KnowledgeModulationSnapshot[]> {
+  const boundedLimit = Math.max(1, Math.min(48, Math.trunc(limit) || 48));
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("knowledge_modulation_snapshots")
     .select("id, athlete_id, domain, adaptation_target, session_date, planned_workout_id, constraint_level, hard_constraints, soft_constraints, adaptive_flags, recommended_supports, blocked_supports, reasoning_summary, confidence, evidence_level, evidence_refs, created_at")
     .eq("athlete_id", athleteId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
     snapshotId: String(row.id),
@@ -196,13 +200,15 @@ export async function listKnowledgeModulationSnapshots(athleteId: string): Promi
   }));
 }
 
-export async function listSessionKnowledgePackets(athleteId: string): Promise<SessionKnowledgePacket[]> {
+export async function listSessionKnowledgePackets(athleteId: string, limit = 48): Promise<SessionKnowledgePacket[]> {
+  const boundedLimit = Math.max(1, Math.min(48, Math.trunc(limit) || 48));
   const supabase = createServerSupabaseClient();
   const { data, error } = await supabase
     .from("session_knowledge_packets")
     .select("id, athlete_id, planned_workout_id, session_date, adaptation_target, physiological_intent, primary_mechanisms, nutrition_supports, inhibitors_and_risks, evidence_level, confidence")
     .eq("athlete_id", athleteId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(boundedLimit);
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => ({
     packetId: String(row.id),

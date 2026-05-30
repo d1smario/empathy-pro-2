@@ -29,6 +29,34 @@ export {
 export * from "./knowledge";
 export * from "./research";
 export * from "./common";
+export type {
+  AerodynamicsCameraMode,
+  AerodynamicsCaptureJobStatus,
+  AerodynamicsCaptureJobV1,
+  AerodynamicsCaptureSource,
+  AerodynamicsCdAEstimate,
+  AerodynamicsEquipmentSnapshot,
+  AerodynamicsGeometryProfile,
+  AerodynamicsOptimizationResult,
+  AerodynamicsPositionSnapshot,
+  AerodynamicsScores,
+  AerodynamicsTestSessionV1,
+  AerodynamicsTwinSnapshotV1,
+  BiomechanicsCameraPlane,
+  BiomechanicsCaptureJobStatus,
+  BiomechanicsCaptureJobV1,
+  BiomechanicsCaptureSource,
+  BiomechanicsDiscipline,
+  BiomechanicsEfficiencyScores,
+  BiomechanicsJointAngleSample,
+  BiomechanicsLandmark3D,
+  BiomechanicsMovementPatternSummary,
+  BiomechanicsRiskScores,
+  BiomechanicsScaleCalibration,
+  BiomechanicsSegmentLengths,
+  BiomechanicsSessionImportV1,
+  BiomechanicsTwinSnapshotV1,
+} from "@empathy/contracts";
 
 // Longevity & Fitness / EPI / Coin — canonical source lives in @empathy/contracts.
 export type {

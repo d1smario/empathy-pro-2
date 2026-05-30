@@ -1,5 +1,7 @@
 import type { AthleteKnowledgeMemory } from "./knowledge";
+import type { AerodynamicsTwinSnapshotV1 } from "./aerodynamics";
 import type { AthleteProfile } from "./athlete";
+import type { BiomechanicsTwinSnapshotV1 } from "./biomechanics";
 import type { IsoDateTime } from "./common";
 import type { NutritionConstraints } from "./nutrition";
 import type { PhysiologyState } from "./physiology";
@@ -104,6 +106,16 @@ export type AthleteTrainingMemory = {
   preferredTags: string[];
 };
 
+export type AthleteBiomechanicsMemory = {
+  latestSnapshot?: BiomechanicsTwinSnapshotV1 | null;
+  historicalEvolution?: Array<Pick<BiomechanicsTwinSnapshotV1, "computedAt" | "efficiencyScores" | "riskScores" | "confidence01">>;
+};
+
+export type AthleteAerodynamicsMemory = {
+  latestSnapshot?: AerodynamicsTwinSnapshotV1 | null;
+  historicalEvolution?: Array<Pick<AerodynamicsTwinSnapshotV1, "computedAt" | "currentCdaM2" | "optimizedCdaM2" | "scores" | "confidence01">>;
+};
+
 export type AthleteMemory = {
   athleteId: string;
   identity: AthleteIdentityMemory;
@@ -118,6 +130,8 @@ export type AthleteMemory = {
   };
   knowledge?: AthleteKnowledgeMemory;
   training?: AthleteTrainingMemory;
+  biomechanics?: AthleteBiomechanicsMemory;
+  aerodynamics?: AthleteAerodynamicsMemory;
   audit: {
     computedAt: IsoDateTime;
     sources: AthleteMemoryPatchSource[];

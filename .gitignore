@@ -23,6 +23,7 @@ Thumbs.db
 .idea/
 *.log
 *.tsbuildinfo
+node_modules/@empathy/
 
 # OneDrive / local sync artifacts
 .next.nosync/

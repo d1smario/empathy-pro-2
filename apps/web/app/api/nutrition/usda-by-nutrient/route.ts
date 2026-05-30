@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getFunctionalNutrientCatalogEntry } from "@/lib/nutrition/functional-food-recommendations";
+import { catalogIdToNutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { rankFoodsForNutrient } from "@/lib/nutrition/usda-nutrient-density-ranker";
 import { fetchUsdaRichFoodsMerged } from "@/lib/nutrition/usda-rich-foods-search";
 import type { UsdaRichFoodItemViewModel } from "@/api/nutrition/contracts";
 
@@ -57,6 +59,40 @@ export async function GET(req: NextRequest) {
     }
     if (queries.length < 1) {
       return NextResponse.json({ error: "Serve almeno una query testuale (o catalogId con queries).", foods: [] }, { status: 400 });
+    }
+
+    const nutrientId = catalogId ? catalogIdToNutrientTargetId(catalogId) : null;
+    if (nutrientId) {
+      const ranked = await rankFoodsForNutrient({
+        nutrientId,
+        topN: 28,
+        apiKey: key,
+        liveQueries: queries,
+        fdcNutrientId: Math.round(fdcNutrientId),
+        minimumPer100g,
+      });
+      if (ranked.foods.length > 0) {
+        const foods: UsdaRichFoodItemViewModel[] = ranked.foods.map((r) => ({
+          fdcId: r.fdcId,
+          description: r.description,
+          dataType: ranked.source === "cache" ? "cache" : "fdc_live",
+          targetNutrientId: Math.round(fdcNutrientId),
+          targetAmountPer100g: r.amountPer100g,
+          targetUnitName: r.unit,
+          energyKcal100: r.kcalPer100g,
+          proteinG100: null,
+          carbsG100: null,
+          fatG100: null,
+        }));
+        return NextResponse.json({
+          foods,
+          source: ranked.source,
+          layer: "deterministic_nutrient_density",
+          nutrientFilter: { fdcNutrientId: Math.round(fdcNutrientId), minimumPer100g },
+          queriesUsed: queries,
+          cacheFirst: true,
+        });
+      }
     }
 
     const rows = await fetchUsdaRichFoodsMerged({

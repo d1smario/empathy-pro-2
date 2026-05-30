@@ -15,7 +15,7 @@ import {
   deriveKnowledgeModulationSnapshots,
   mergeKnowledgeModulations,
 } from "@/lib/knowledge/knowledge-modulation-resolver";
-import { resolveAthleteKnowledgeMemory } from "@/lib/knowledge/knowledge-memory-resolver";
+import { resolveAthleteKnowledgeMemory, createEmptyAthleteKnowledgeMemory } from "@/lib/knowledge/knowledge-memory-resolver";
 import {
   mapDeviceSyncExportToIngestionRecord,
   mapTrainingImportJobToIngestionRecord,
@@ -29,6 +29,26 @@ import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 import { preferredTagsFromTraces, type AthleteWorkoutArchetypeTraceView } from "@/lib/training/library/athlete-workout-archetype-traces";
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
+import {
+  getCachedAthleteMemory,
+  setCachedAthleteMemory,
+} from "@/lib/memory/athlete-memory-cache";
+import {
+  getMemorySliceQueryFlags,
+  type MemorySlice,
+  type ResolveAthleteMemorySliceOptions,
+} from "@/lib/memory/athlete-memory-slice-types";
+
+export type { MemorySlice, ResolveAthleteMemorySliceOptions, MemorySliceQueryFlags } from "@/lib/memory/athlete-memory-slice-types";
+export { getMemorySliceQueryFlags } from "@/lib/memory/athlete-memory-slice-types";
+
+function emptyListQuery<T = unknown[]>(data: T = [] as T) {
+  return Promise.resolve({ data, error: null as null });
+}
+
+function emptyMaybeSingleQuery() {
+  return Promise.resolve({ data: null, error: null as null });
+}
 
 function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim() !== "") : [];
@@ -243,10 +263,39 @@ function toEvidenceItems(rows: Array<Record<string, unknown>>): AthleteEvidenceM
   });
 }
 
+export async function resolveAthleteMemorySlice(
+  athleteId: string,
+  options: ResolveAthleteMemorySliceOptions = {},
+): Promise<AthleteMemory> {
+  const slice = options.slice ?? "full";
+  if (!options.skipCache) {
+    const cached = getCachedAthleteMemory(athleteId, slice);
+    if (cached) return cached;
+  }
+  const memory = await resolveAthleteMemoryInternal(athleteId, slice);
+  setCachedAthleteMemory(athleteId, slice, memory);
+  return memory;
+}
+
 export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMemory> {
+  return resolveAthleteMemorySlice(athleteId, { slice: "full" });
+}
+
+async function resolveAthleteMemoryInternal(athleteId: string, slice: MemorySlice): Promise<AthleteMemory> {
+  const flags = getMemorySliceQueryFlags(slice);
   const supabase = createServerSupabaseClient();
   const diaryWindowEnd = new Date().toISOString().slice(0, 10);
   const diaryWindowStart = addDaysUtcIso(diaryWindowEnd, -44);
+  const evidenceLimit = slice === "full" ? 80 : slice === "dashboard" ? 24 : 0;
+  const diaryLimit = slice === "full" || slice === "nutrition" ? 500 : slice === "bioenergetics" ? 60 : 0;
+  const panelLimit = slice === "full" ? 40 : flags.healthPanels ? 12 : 0;
+  const knowledgeLimit = slice === "full" ? 48 : slice === "dashboard" ? 24 : flags.knowledge ? 16 : 0;
+  const importJobSelect = flags.includeIngestPayload
+    ? "id, mode, source_format, source_vendor, parser_engine, parser_version, status, file_name, imported_workout_id, imported_planned_count, imported_date, quality_status, quality_note, channel_coverage, error_message, payload, created_at, updated_at"
+    : "id, mode, source_format, source_vendor, parser_engine, parser_version, status, file_name, imported_workout_id, imported_planned_count, imported_date, quality_status, quality_note, channel_coverage, error_message, created_at, updated_at";
+  const deviceExportSelect = flags.includeIngestPayload
+    ? "id, athlete_id, provider, payload, status, external_ref, created_at, updated_at"
+    : "id, athlete_id, provider, status, external_ref, created_at, updated_at";
   const [
     profileRes,
     appUserRes,
@@ -284,116 +333,148 @@ export async function resolveAthleteMemory(athleteId: string): Promise<AthleteMe
       .select("provider, external_id, last_sync_at, enabled, created_at")
       .eq("athlete_id", athleteId)
       .order("created_at", { ascending: false }),
-    supabase
-      .from("training_import_jobs")
-      .select(
-        "id, mode, source_format, source_vendor, parser_engine, parser_version, status, file_name, imported_workout_id, imported_planned_count, imported_date, quality_status, quality_note, channel_coverage, error_message, payload, created_at, updated_at",
-      )
-      .eq("athlete_id", athleteId)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("device_sync_exports")
-      .select("id, athlete_id, provider, payload, status, external_ref, created_at, updated_at")
-      .eq("athlete_id", athleteId)
-      .order("created_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("biomarker_panels")
-      .select("id, athlete_id, type, sample_date, values, flags, source, created_at")
-      .eq("athlete_id", athleteId)
-      .order("sample_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(40),
-    supabase
-      .from("knowledge_evidence_hits")
-      .select("id, athlete_id, source, query, external_id, title, summary, url, relevance_score, payload, created_at")
-      .eq("athlete_id", athleteId)
-      .order("created_at", { ascending: false })
-      .limit(80),
-    supabase
-      .from("athlete_coach_application_traces")
-      .select("id, athlete_id, manual_action_id, action_type, payload_snapshot, created_by_user_id, created_at")
-      .eq("athlete_id", athleteId)
-      .order("created_at", { ascending: false })
-      .limit(24),
-    supabase
-      .from("systemic_modulation_snapshots")
-      .select("id, athlete_id, captured_at, algorithm_version, source, axes, payload, created_at")
-      .eq("athlete_id", athleteId)
-      .order("captured_at", { ascending: false })
-      .limit(12),
-    supabase
-      .from("lab_observations")
-      .select("id, marker_key, value_num, value_text, unit, raw_label, observed_at, confidence, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("microbiota_observations")
-      .select("id, taxon_key, taxon_rank, domain_kind, abundance_pct, value_num, unit, observed_at, confidence, metadata, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("epigenetic_observations")
-      .select("id, gene_symbol, variant_label, methylation_flag, direction, value_num, confidence, observed_at, metadata, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("hormone_observations")
-      .select("id, axis, marker_key, value_num, unit, observed_at, confidence, metadata, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("athlete_system_nodes")
-      .select("id, node_key, area, label, state, observed_at, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(120),
-    supabase
-      .from("athlete_system_edges")
-      .select("id, from_node_key, to_node_key, effect_sign, confidence, evidence_refs, rule_key, rule_version, time_window, metadata, observed_at, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(180),
-    supabase
-      .from("bioenergetics_responses")
-      .select("id, response_key, category, title, description, trigger_refs, mitigation_refs, severity, confidence, observed_at, created_at")
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false, nullsFirst: false })
-      .order("created_at", { ascending: false })
-      .limit(80),
+    flags.realityIngest
+      ? supabase
+          .from("training_import_jobs")
+          .select(importJobSelect)
+          .eq("athlete_id", athleteId)
+          .order("created_at", { ascending: false })
+          .limit(12)
+      : emptyListQuery(),
+    flags.realityIngest
+      ? supabase
+          .from("device_sync_exports")
+          .select(deviceExportSelect)
+          .eq("athlete_id", athleteId)
+          .order("created_at", { ascending: false })
+          .limit(12)
+      : emptyListQuery(),
+    panelLimit > 0
+      ? supabase
+          .from("biomarker_panels")
+          .select("id, athlete_id, type, sample_date, values, flags, source, created_at")
+          .eq("athlete_id", athleteId)
+          .order("sample_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(panelLimit)
+      : emptyListQuery(),
+    evidenceLimit > 0
+      ? supabase
+          .from("knowledge_evidence_hits")
+          .select("id, athlete_id, source, query, external_id, title, summary, url, relevance_score, payload, created_at")
+          .eq("athlete_id", athleteId)
+          .order("created_at", { ascending: false })
+          .limit(evidenceLimit)
+      : emptyListQuery(),
+    flags.coachAppTraces
+      ? supabase
+          .from("athlete_coach_application_traces")
+          .select("id, athlete_id, manual_action_id, action_type, payload_snapshot, created_by_user_id, created_at")
+          .eq("athlete_id", athleteId)
+          .order("created_at", { ascending: false })
+          .limit(24)
+      : emptyListQuery(),
+    flags.systemicModulation
+      ? supabase
+          .from("systemic_modulation_snapshots")
+          .select("id, athlete_id, captured_at, algorithm_version, source, axes, payload, created_at")
+          .eq("athlete_id", athleteId)
+          .order("captured_at", { ascending: false })
+          .limit(12)
+      : emptyListQuery(),
+    flags.healthObservations
+      ? supabase
+          .from("lab_observations")
+          .select("id, marker_key, value_num, value_text, unit, raw_label, observed_at, confidence, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(120)
+      : emptyListQuery(),
+    flags.healthObservations
+      ? supabase
+          .from("microbiota_observations")
+          .select("id, taxon_key, taxon_rank, domain_kind, abundance_pct, value_num, unit, observed_at, confidence, metadata, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(120)
+      : emptyListQuery(),
+    flags.healthObservations
+      ? supabase
+          .from("epigenetic_observations")
+          .select("id, gene_symbol, variant_label, methylation_flag, direction, value_num, confidence, observed_at, metadata, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(120)
+      : emptyListQuery(),
+    flags.healthObservations
+      ? supabase
+          .from("hormone_observations")
+          .select("id, axis, marker_key, value_num, unit, observed_at, confidence, metadata, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(120)
+      : emptyListQuery(),
+    flags.healthSystemGraph
+      ? supabase
+          .from("athlete_system_nodes")
+          .select("id, node_key, area, label, state, observed_at, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(120)
+      : emptyListQuery(),
+    flags.healthSystemGraph
+      ? supabase
+          .from("athlete_system_edges")
+          .select("id, from_node_key, to_node_key, effect_sign, confidence, evidence_refs, rule_key, rule_version, time_window, metadata, observed_at, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(180)
+      : emptyListQuery(),
+    flags.bioenergeticsResponses
+      ? supabase
+          .from("bioenergetics_responses")
+          .select("id, response_key, category, title, description, trigger_refs, mitigation_refs, severity, confidence, observed_at, created_at")
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false, nullsFirst: false })
+          .order("created_at", { ascending: false })
+          .limit(80)
+      : emptyListQuery(),
     resolveCanonicalPhysiologyState(athleteId),
-    resolveAthleteKnowledgeMemory(athleteId),
-    supabase
-      .from("food_diary_entries")
-      .select(
-        "id, athlete_id, entry_date, entry_time, meal_slot, food_label, quantity_g, kcal, carbs_g, protein_g, fat_g, sodium_mg, provenance, reference_source_tag, notes, supplements, created_at",
-      )
-      .eq("athlete_id", athleteId)
-      .gte("entry_date", diaryWindowStart)
-      .lte("entry_date", diaryWindowEnd)
-      .order("entry_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(500),
-    supabase.from("nutrition_constraints").select("*").eq("athlete_id", athleteId).maybeSingle(),
-    supabase
-      .from("athlete_workout_archetype_traces")
-      .select(
-        "id, athlete_id, library_item_id, planned_workout_id, executed_workout_id, archetype_key, planned_tss, executed_tss, adherence_pct, response_signal, source, observed_at, metadata",
-      )
-      .eq("athlete_id", athleteId)
-      .order("observed_at", { ascending: false })
-      .limit(24),
+    knowledgeLimit > 0
+      ? resolveAthleteKnowledgeMemory(athleteId, { limit: knowledgeLimit })
+      : Promise.resolve(createEmptyAthleteKnowledgeMemory()),
+    diaryLimit > 0
+      ? supabase
+          .from("food_diary_entries")
+          .select(
+            "id, athlete_id, entry_date, entry_time, meal_slot, food_label, quantity_g, kcal, carbs_g, protein_g, fat_g, sodium_mg, provenance, reference_source_tag, notes, supplements, created_at",
+          )
+          .eq("athlete_id", athleteId)
+          .gte("entry_date", diaryWindowStart)
+          .lte("entry_date", diaryWindowEnd)
+          .order("entry_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(diaryLimit)
+      : emptyListQuery(),
+    flags.nutritionConstraints
+      ? supabase.from("nutrition_constraints").select("*").eq("athlete_id", athleteId).maybeSingle()
+      : emptyMaybeSingleQuery(),
+    flags.trainingArchetypeTraces
+      ? supabase
+          .from("athlete_workout_archetype_traces")
+          .select(
+            "id, athlete_id, library_item_id, planned_workout_id, executed_workout_id, archetype_key, planned_tss, executed_tss, adherence_pct, response_signal, source, observed_at, metadata",
+          )
+          .eq("athlete_id", athleteId)
+          .order("observed_at", { ascending: false })
+          .limit(24)
+      : emptyListQuery(),
   ]);
 
   if (profileRes.error) throw new Error(profileRes.error.message);

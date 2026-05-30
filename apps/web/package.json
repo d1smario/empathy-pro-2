@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0",
+    "@empathy/domain-aerodynamics": "0.1.0",
+    "@empathy/domain-biomechanics": "0.1.0",
     "@empathy/domain-bioenergetics": "0.1.0",
     "@empathy/domain-knowledge": "0.1.0",
     "@empathy/domain-nutrition": "0.1.0",

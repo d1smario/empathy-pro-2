@@ -5,7 +5,7 @@ import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operation
 import type { ReasoningCardVm, ReasoningSourceRef, ReasoningTone } from "@/lib/dashboard/reasoning-dashboard-contract";
 import type { AthleteEvidenceMemoryItem, AthleteMemory } from "@/lib/empathy/schemas";
 import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { isMissingRelationError } from "@/lib/supabase/missing-relation-error";
 
 export const dynamic = "force-dynamic";
@@ -540,7 +540,7 @@ export async function GET(req: NextRequest) {
         .order("observed_at", { ascending: false, nullsFirst: false })
         .order("created_at", { ascending: false })
         .limit(20),
-      resolveAthleteMemory(athleteId).catch(() => null),
+      resolveAthleteMemorySlice(athleteId, { slice: "dashboard" }).catch(() => null),
     ]);
 
     const operationalSignals = athleteMemory

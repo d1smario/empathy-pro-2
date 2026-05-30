@@ -14,12 +14,16 @@ export function createEmptyAthleteKnowledgeMemory(): AthleteKnowledgeMemory {
   };
 }
 
-export async function resolveAthleteKnowledgeMemory(athleteId: string): Promise<AthleteKnowledgeMemory> {
+export async function resolveAthleteKnowledgeMemory(
+  athleteId: string,
+  options?: { limit?: number },
+): Promise<AthleteKnowledgeMemory> {
+  const boundedLimit = Math.max(1, Math.min(48, Math.trunc(options?.limit ?? 48) || 48));
   try {
     const [bindings, activeModulations, recentSessionPackets] = await Promise.all([
-      listAthleteKnowledgeBindings(athleteId),
-      listKnowledgeModulationSnapshots(athleteId),
-      listSessionKnowledgePackets(athleteId),
+      listAthleteKnowledgeBindings(athleteId, boundedLimit),
+      listKnowledgeModulationSnapshots(athleteId, boundedLimit),
+      listSessionKnowledgePackets(athleteId, boundedLimit),
     ]);
 
     return {
