@@ -1,6 +1,6 @@
 /** Opt-in demo mode: no external sidecar; golden fixtures only. Set LAB_INLINE_MOCK=1 on Vercel/local. */
 export function isLabInlineMockEnabled(): boolean {
-  const raw = process.env.LAB_INLINE_MOCK?.trim().toLowerCase();
+  const raw = process.env.LAB_INLINE_MOCK?.trim().replace(/\r?\n/g, "").toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes";
 }
 

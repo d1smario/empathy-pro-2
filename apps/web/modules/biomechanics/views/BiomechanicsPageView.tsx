@@ -39,7 +39,8 @@ const CAMERA_OPTIONS: Array<{ value: BiomechanicsCameraPlane; label: string }> =
   { value: "multi_view", label: "Multi-view" },
 ];
 
-function statusLabel(job: BiomechanicsCaptureJobV1): string {
+function statusLabel(job: BiomechanicsCaptureJobV1, awaitingReview: boolean): string {
+  if (awaitingReview) return "Review CV";
   switch (job.status) {
     case "pending":
       return "In coda";
@@ -61,7 +62,15 @@ function formatDateTime(value: string | undefined): string {
   return d.toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" });
 }
 
-function LatestJobCard({ job }: { job: BiomechanicsCaptureJobV1 | null }) {
+function LatestJobCard({
+  job,
+  awaitingReview,
+  stagingRunId,
+}: {
+  job: BiomechanicsCaptureJobV1 | null;
+  awaitingReview: boolean;
+  stagingRunId: string | null;
+}) {
   if (!job) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
@@ -70,17 +79,22 @@ function LatestJobCard({ job }: { job: BiomechanicsCaptureJobV1 | null }) {
       </div>
     );
   }
-  const Icon = job.status === "failed" ? AlertTriangle : job.status === "completed" ? CheckCircle2 : Clock3;
+  const Icon = job.status === "failed" ? AlertTriangle : awaitingReview || job.status === "completed" ? CheckCircle2 : Clock3;
   return (
     <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-emerald-200" />
         <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-emerald-200">Ultimo job</p>
       </div>
-      <p className="mt-2 text-lg font-semibold text-white">{statusLabel(job)}</p>
+      <p className="mt-2 text-lg font-semibold text-white">{statusLabel(job, awaitingReview)}</p>
       <p className="mt-1 text-xs text-gray-400">
         {job.discipline} · {job.cameraPlane} · {formatDateTime(job.createdAt)}
       </p>
+      {awaitingReview && stagingRunId ? (
+        <Link href={`/biomechanics/staging/${stagingRunId}`} className="mt-3 inline-block text-xs font-semibold text-emerald-200 underline">
+          Apri validazione CV →
+        </Link>
+      ) : null}
       {job.errorMessage ? <p className="mt-2 text-xs text-rose-200">{job.errorMessage}</p> : null}
     </div>
   );
@@ -130,8 +144,11 @@ export default function BiomechanicsPageView() {
   const [importingOpenCap, setImportingOpenCap] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [reviewStagingRunId, setReviewStagingRunId] = useState<string | null>(null);
 
   const latestJob = captureJobs[0] ?? null;
+  const latestJobStaging = pendingStaging.find((row) => row.jobId === latestJob?.id) ?? pendingStaging[0] ?? null;
+  const latestJobAwaitingReview = Boolean(latestJob && latestJobStaging);
   const source: BiomechanicsCaptureSource = file?.type.startsWith("image/") ? "image" : "smartphone_video";
 
   const refresh = useCallback(async () => {
@@ -163,8 +180,8 @@ export default function BiomechanicsPageView() {
 
   const latestEfficiency = sessions[0]?.efficiencyScores ?? null;
 
-  async function onProcessJob(jobId: string) {
-    if (!athleteId || processingJobId) return;
+  async function onProcessJob(jobId: string): Promise<string | null> {
+    if (!athleteId || processingJobId) return null;
     setProcessingJobId(jobId);
     setError(null);
     setMessage(null);
@@ -172,14 +189,12 @@ export default function BiomechanicsPageView() {
       const out = await processBiomechanicsCaptureJob({ athleteId, jobId });
       if (!out.ok) {
         setError(out.message || out.error || "Elaborazione fallita.");
-        return;
+        return null;
       }
-      if (out.stagingRunId) {
-        setMessage(`Proposta CV pronta — apri review per confermare.`);
-      }
-      await refresh();
+      return out.stagingRunId ?? null;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Elaborazione fallita.");
+      return null;
     } finally {
       setProcessingJobId(null);
     }
@@ -198,9 +213,14 @@ export default function BiomechanicsPageView() {
         cameraPlane,
         source,
       });
-      setMessage(`Capture job creato: ${out.job.id.slice(0, 8)}...`);
+      setMessage("Upload completato — elaborazione CV...");
       setFile(null);
+      const stagingRunId = await onProcessJob(out.job.id);
       await refresh();
+      if (stagingRunId) {
+        setReviewStagingRunId(stagingRunId);
+        setMessage("Proposta CV pronta — conferma in review per alimentare il twin.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload Biomechanics fallito.");
     } finally {
@@ -263,7 +283,11 @@ export default function BiomechanicsPageView() {
             subtitle="Upload firmato su Storage privato, poi job canonico in biomech_capture_jobs."
           >
             <div className="grid gap-3 sm:grid-cols-3">
-              <LatestJobCard job={latestJob} />
+              <LatestJobCard
+                job={latestJob}
+                awaitingReview={latestJobAwaitingReview}
+                stagingRunId={latestJobStaging?.id ?? null}
+              />
               <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] p-4">
                 <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-cyan-200">Archivio capture</p>
                 <p className="mt-2 text-lg font-semibold text-white">{captureCountLabel}</p>
@@ -285,11 +309,17 @@ export default function BiomechanicsPageView() {
                 </Link>
               </div>
             ) : null}
-            {latestJob?.status === "pending" ? (
+            {latestJob?.status === "pending" && !latestJobAwaitingReview ? (
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <Pro2Button
                   variant="secondary"
-                  onClick={() => onProcessJob(latestJob.id)}
+                  onClick={() => void onProcessJob(latestJob.id).then(async (stagingRunId) => {
+                    await refresh();
+                    if (stagingRunId) {
+                      setReviewStagingRunId(stagingRunId);
+                      setMessage("Proposta CV pronta — conferma in review per alimentare il twin.");
+                    }
+                  })}
                   disabled={processingJobId != null}
                   className="justify-center"
                 >
@@ -347,12 +377,24 @@ export default function BiomechanicsPageView() {
               </label>
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Pro2Button onClick={onUpload} disabled={!file || uploading || !athleteId} className="justify-center">
-                {uploading ? "Caricamento..." : "Crea capture job"}
+              <Pro2Button onClick={onUpload} disabled={!file || uploading || processingJobId != null || !athleteId} className="justify-center">
+                {uploading || processingJobId ? "Upload ed elaborazione..." : "Carica ed elabora"}
               </Pro2Button>
               {file ? <p className="text-xs text-gray-400">{file.name} · {(file.size / 1_000_000).toFixed(1)} MB</p> : null}
             </div>
-            {message ? <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">{message}</p> : null}
+            {message ? (
+              <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+                {message}
+                {(reviewStagingRunId ?? latestJobStaging?.id) ? (
+                  <>
+                    {" "}
+                    <Link href={`/biomechanics/staging/${reviewStagingRunId ?? latestJobStaging?.id}`} className="font-semibold underline">
+                      Apri review →
+                    </Link>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
             {error ? <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</p> : null}
           </Pro2SectionCard>
         </section>
