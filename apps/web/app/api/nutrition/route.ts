@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (sessions.length > 0) {
-      const memory = await resolveAthleteMemory(athleteId).catch(() => null);
+      const memory = await resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }).catch(() => null);
       const profile = memory?.profile;
       const physio = memory?.physiology?.physiologicalProfile;
       const plannedTraining = sessions.map((r) => {

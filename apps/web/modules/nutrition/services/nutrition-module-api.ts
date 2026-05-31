@@ -11,6 +11,8 @@ export async function fetchNutritionModuleContext(input: {
   to: string;
   /** Se impostata e compresa in from…to, la risposta include pathwayModulation + functionalFoodRecommendations (allineati al builder client). */
   pathwayDate?: string;
+  /** Research traces, metabolic model, cross-domain roadmap (default off per latenza). */
+  includeHeavy?: boolean;
 }): Promise<NutritionModuleContext> {
   const params = new URLSearchParams({
     athleteId: input.athleteId,
@@ -19,6 +21,7 @@ export async function fetchNutritionModuleContext(input: {
   });
   const pd = input.pathwayDate?.trim();
   if (pd) params.set("pathwayDate", pd);
+  if (input.includeHeavy) params.set("includeHeavy", "1");
   let response: Response;
   try {
     response = await fetchWithTimeout(`/api/nutrition/module?${params.toString()}`, {

@@ -5,7 +5,7 @@ import {
   twinObservedAdaptationForGuidance,
 } from "@/lib/twin/twin-adaptation-fallbacks";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import { computeDailyLoadSeries, type ExecutedWorkoutLoadRow } from "@/lib/training/analytics/load-series";
@@ -305,7 +305,7 @@ export async function GET(req: NextRequest) {
         .gte("sample_date", from)
         .lte("sample_date", to)
         .order("sample_date", { ascending: true }),
-      resolveAthleteMemory(athleteId),
+      resolveAthleteMemorySlice(athleteId, { slice: "training" }),
     ]);
 
     const error = executedError?.message ?? plannedError?.message ?? deviceExportsError?.message ?? biomarkerError?.message ?? null;

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { buildRealityIngestionEnvelope } from "@/lib/reality/build-ingestion-envelope";
 import { buildExecutedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
@@ -497,12 +497,12 @@ export async function POST(req: NextRequest) {
         .eq("id", importJobId);
     }
 
-    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
     let athleteMemoryError: string | null = null;
     try {
-      athleteMemory = await resolveAthleteMemory(athleteId);
+      athleteMemory = await resolveAthleteMemorySlice(athleteId, { slice: "training" });
     } catch (memErr) {
-      athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemory failed";
+      athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemorySlice failed";
     }
 
     return NextResponse.json(

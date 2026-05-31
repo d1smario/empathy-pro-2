@@ -19,10 +19,16 @@ import {
   mergeNutritionModuleProfileWithAthleteProfileRow,
   type NutritionModuleFlatProfile,
 } from "@/lib/nutrition/nutrition-module-profile-merge";
+import { buildNutritionModuleDailyEnergyModel } from "@/lib/nutrition/nutrition-module-daily-energy";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function wantsHeavyModuleSections(req: NextRequest): boolean {
+  const raw = (req.nextUrl.searchParams.get("includeHeavy") ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
+}
 
 // Full nutrition module context endpoint.
 // This route aggregates physiology, twin, memory, execution, and planning inputs.
@@ -80,25 +86,31 @@ export async function GET(req: NextRequest) {
     }
 
     const { db } = await requireAthleteReadContext(req, athleteId);
-    const [athleteMemory, trainingWindow, recoverySummary, researchTraceSummaries, profileAnthroRes] = await Promise.all([
-      resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }),
-      queryPlannedExecutedWindow(db, athleteId, from, to),
-      resolveLatestRecoverySummary(athleteId),
-      listKnowledgeExpansionTraceSummaries(athleteId, {
-        limit: 4,
-        modules: ["nutrition", "training", "health"],
-      }).catch((error) => {
-        if (isMissingKnowledgeFoundationError(error)) return [];
-        throw error;
-      }),
-      db
-        .from("athlete_profiles")
-        .select(
-          "birth_date, sex, height_cm, weight_kg, body_fat_pct, muscle_mass_kg, nutrition_config, routine_config, preferred_meal_count",
-        )
-        .eq("id", athleteId)
-        .maybeSingle(),
-    ]);
+    const includeHeavy = wantsHeavyModuleSections(req);
+    const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
+
+    const [athleteMemory, trainingWindow, recoverySummary, profileAnthroRes, researchTraceSummaries] =
+      await Promise.all([
+        resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }),
+        queryPlannedExecutedWindow(db, athleteId, from, to),
+        resolveLatestRecoverySummary(athleteId),
+        db
+          .from("athlete_profiles")
+          .select(
+            "birth_date, sex, height_cm, weight_kg, body_fat_pct, muscle_mass_kg, nutrition_config, routine_config, preferred_meal_count",
+          )
+          .eq("id", athleteId)
+          .maybeSingle(),
+        includeHeavy
+          ? listKnowledgeExpansionTraceSummaries(athleteId, {
+              limit: 4,
+              modules: ["nutrition", "training", "health"],
+            }).catch((error) => {
+              if (isMissingKnowledgeFoundationError(error)) return [];
+              throw error;
+            })
+          : Promise.resolve([]),
+      ]);
     const plannedRes = trainingWindow.planned;
     const execRes = trainingWindow.executed;
     const error = firstWindowQueryError(plannedRes, execRes);
@@ -168,17 +180,20 @@ export async function GET(req: NextRequest) {
       lines: coachNutritionEvidence,
     });
 
-    const metabolicEfficiencyGenerativeModel = buildMetabolicEfficiencyGenerativeModel({
-      adaptationGuidance,
-      bioenergeticModulation,
-      adaptationLoop,
-      researchTraceSummaries,
-    });
-
-    const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
     let pathwayModulation = null;
     let functionalFoodRecommendations = null;
     let functionalMealSelector = null;
+    let dailyEnergyModel = null;
+
+    const metabolicEfficiencyGenerativeModel = includeHeavy
+      ? buildMetabolicEfficiencyGenerativeModel({
+          adaptationGuidance,
+          bioenergeticModulation,
+          adaptationLoop,
+          researchTraceSummaries,
+        })
+      : null;
+
     if (pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to) {
       const rowsForDay = plannedRaw.filter((row) => row.date.slice(0, 10) === pathwayDateParam);
       pathwayModulation = buildNutritionPathwayModulationViewModel({
@@ -210,6 +225,16 @@ export async function GET(req: NextRequest) {
         recoverySummary,
         twin: twinState,
       });
+      dailyEnergyModel = buildNutritionModuleDailyEnergyModel({
+        athleteId,
+        planDate: pathwayDateParam,
+        profile,
+        physiologyFtp: physiologyState?.physiologicalProfile.ftpWatts ?? null,
+        physiologyVo2: physiologyState?.physiologicalProfile.vo2maxMlMinKg ?? null,
+        plannedRowsForDay: rowsForDay,
+        recoverySummary,
+        nutritionPerformanceIntegration,
+      });
     }
 
     const roadmapAnchorDate =
@@ -227,37 +252,41 @@ export async function GET(req: NextRequest) {
             })
         : [];
 
-    const crossDomainInterpretationRoadmap = buildCrossDomainInterpretationRoadmapV1({
-      athleteId,
-      anchorDate: roadmapAnchorDate,
-      pathwayModulation,
-      plannedSessions: roadmapPlannedSessions,
-      twin: twinState
-        ? {
-            glycogenStatus: twinState.glycogenStatus ?? null,
-            readiness: twinState.readiness ?? null,
-            redoxStressIndex: twinState.redoxStressIndex ?? null,
-            inflammationRisk: twinState.inflammationRisk ?? null,
-          }
-        : null,
-      physiology: physiologyState
-        ? {
-            performanceProfile: physiologyState.performanceProfile
-              ? { redoxStressIndex: physiologyState.performanceProfile.redoxStressIndex ?? null }
-              : null,
-            lactateProfile: physiologyState.lactateProfile
-              ? {
-                  gutStressScore: physiologyState.lactateProfile.gutStressScore ?? null,
-                  bloodDeliveryPctOfIngested:
-                    physiologyState.lactateProfile.bloodDeliveryPctOfIngested ?? null,
-                }
-              : null,
-          }
-        : null,
-      recoverySummary: recoverySummary ? { status: recoverySummary.status, guidance: recoverySummary.guidance } : null,
-      researchTraceSummaries,
-      hasNutritionPerformanceIntegration: nutritionPerformanceIntegration != null,
-    });
+    const crossDomainInterpretationRoadmap = includeHeavy
+      ? buildCrossDomainInterpretationRoadmapV1({
+          athleteId,
+          anchorDate: roadmapAnchorDate,
+          pathwayModulation,
+          plannedSessions: roadmapPlannedSessions,
+          twin: twinState
+            ? {
+                glycogenStatus: twinState.glycogenStatus ?? null,
+                readiness: twinState.readiness ?? null,
+                redoxStressIndex: twinState.redoxStressIndex ?? null,
+                inflammationRisk: twinState.inflammationRisk ?? null,
+              }
+            : null,
+          physiology: physiologyState
+            ? {
+                performanceProfile: physiologyState.performanceProfile
+                  ? { redoxStressIndex: physiologyState.performanceProfile.redoxStressIndex ?? null }
+                  : null,
+                lactateProfile: physiologyState.lactateProfile
+                  ? {
+                      gutStressScore: physiologyState.lactateProfile.gutStressScore ?? null,
+                      bloodDeliveryPctOfIngested:
+                        physiologyState.lactateProfile.bloodDeliveryPctOfIngested ?? null,
+                    }
+                  : null,
+              }
+            : null,
+          recoverySummary: recoverySummary
+            ? { status: recoverySummary.status, guidance: recoverySummary.guidance }
+            : null,
+          researchTraceSummaries,
+          hasNutritionPerformanceIntegration: nutritionPerformanceIntegration != null,
+        })
+      : null;
 
     const res = NextResponse.json({
       athleteId,
@@ -288,6 +317,7 @@ export async function GET(req: NextRequest) {
       pathwayModulation,
       functionalFoodRecommendations,
       functionalMealSelector,
+      dailyEnergyModel,
       executed: execRes.data ?? [],
       planned: plannedRaw.map((row) => {
         const builderSession = parsePro2BuilderSessionFromNotes(row.notes ?? null);

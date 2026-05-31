@@ -167,8 +167,8 @@ export async function buildDeterministicMealPlanFromRequest(
     if (line) boostLines.push(line);
   }
 
-  /** Slot principali in cui appendere la nota dei boost (lunch + dinner: dove i micro densi servono). */
-  const PRIMARY_BOOST_SLOTS = new Set<MealSlotKey>(["lunch", "dinner"]);
+  /** Slot in cui applicare swap pathway (main + spuntini con target timing). */
+  const PRIMARY_BOOST_SLOTS = new Set<MealSlotKey>(["lunch", "dinner", "snack_am", "snack_pm"]);
 
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const isSuppressed = suppressed.includes(slot.slot);

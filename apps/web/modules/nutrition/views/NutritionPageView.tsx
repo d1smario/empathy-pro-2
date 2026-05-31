@@ -799,6 +799,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [nutritionApprovedPatches, setNutritionApprovedPatches] = useState<ApprovedApplicationPatch[]>([]);
   const [nutritionPerformanceIntegration, setNutritionPerformanceIntegration] =
     useState<NutritionPerformanceIntegrationDials | null>(null);
+  /** Solver energia canonico da GET /api/nutrition/module (pathwayDate). */
+  const [serverDailyEnergyModel, setServerDailyEnergyModel] = useState<NutritionDailyEnergyModel | null>(null);
+  const serverDailyEnergyDateRef = useRef<string | null>(null);
   const [executed, setExecuted] = useState<ExecutedRow[]>([]);
   const [planned, setPlanned] = useState<PlannedRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -949,7 +952,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const w = nutritionModuleWindowRef.current;
     if (!w) return;
     if (selectedPlanDate < w.from || selectedPlanDate > w.to) return;
-    if (serverSelectorPathwayDateRef.current === selectedPlanDate) return;
+    if (serverSelectorPathwayDateRef.current === selectedPlanDate && serverDailyEnergyDateRef.current === selectedPlanDate) {
+      return;
+    }
 
     let cancelled = false;
     void (async () => {
@@ -963,6 +968,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         if (cancelled || snap.error) return;
         serverSelectorPathwayDateRef.current = selectedPlanDate;
         setFunctionalMealSelector(snap.functionalMealSelector ?? null);
+        setPathwayModulation(snap.pathwayModulation ?? null);
+        setServerDailyEnergyModel(snap.dailyEnergyModel ?? null);
+        serverDailyEnergyDateRef.current = selectedPlanDate;
       } catch {
         /* rete: mantieni selettore client-side */
       }
@@ -971,6 +979,33 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       cancelled = true;
     };
   }, [selectedPlanDate, athleteId, loading]);
+
+  /** Sezioni pesanti (research traces, metabolic model) — dopo first paint. */
+  useEffect(() => {
+    if (!athleteId || loading) return;
+    const w = nutritionModuleWindowRef.current;
+    if (!w) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const snap = await fetchNutritionModuleContext({
+          athleteId,
+          from: w.from,
+          to: w.to,
+          pathwayDate: selectedPlanDate,
+          includeHeavy: true,
+        });
+        if (cancelled || snap.error) return;
+        setResearchTraceSummaries(snap.researchTraceSummaries ?? []);
+        setMetabolicEfficiencyGenerativeModel(snap.metabolicEfficiencyGenerativeModel ?? null);
+      } catch {
+        /* fail-soft */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, loading, selectedPlanDate, nutritionContextVersion]);
 
   const onDiaryComplianceRows = useCallback((rows: FoodDiaryComplianceRow[]) => {
     setDiaryMacroRows(rows);
@@ -1093,6 +1128,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const finalPlanDate = clampIsoDay(persisted ?? nextDate);
       setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
       setPathwayModulation(moduleData.pathwayModulation ?? null);
+      setServerDailyEnergyModel(moduleData.dailyEnergyModel ?? null);
+      serverDailyEnergyDateRef.current = finalPlanDate;
       nutritionModuleWindowRef.current = { from: startKey, to: endKey };
       serverSelectorPathwayDateRef.current = finalPlanDate;
       setSelectedPlanDate(finalPlanDate);
@@ -1154,6 +1191,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   );
 
   const nutritionDayModel = useMemo<NutritionDailyEnergyModel | null>(() => {
+    if (
+      serverDailyEnergyModel &&
+      serverDailyEnergyDateRef.current === selectedPlanDate
+    ) {
+      return serverDailyEnergyModel;
+    }
     if (!athleteId || !profile) return null;
     const routine = record(profile.routine_config);
     return computeNutritionDailyEnergyModel({
@@ -1184,8 +1227,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       dietDayMealsScalePct: resolvedDietDay.dayTypePct,
     });
   }, [
-    athleteId,
+    serverDailyEnergyModel,
     selectedPlanDate,
+    athleteId,
     profile,
     physio,
     effectiveDayContext,

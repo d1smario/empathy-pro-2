@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BioenergeticsDayViewModel } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
-import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
+import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/nutrition-plan-day-empty";
 import {
   buildMonitoringChannelsFromStripAiParse,
   buildOpenAiStripRealityCompact,

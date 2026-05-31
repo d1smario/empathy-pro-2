@@ -13,6 +13,7 @@ import type {
   TrainingAdaptationLoopViewModel,
   TrainingBioenergeticModulationViewModel,
 } from "@/api/training/contracts";
+import type { NutritionDailyEnergyModel } from "@/lib/empathy/schemas";
 import type { CrossDomainInterpretationRoadmap } from "@empathy/contracts";
 export type { CrossDomainInterpretationRoadmap };
 
@@ -273,6 +274,8 @@ export type NutritionModuleViewModel = {
   pathwayModulation?: NutritionPathwayModulationViewModel | null;
   functionalFoodRecommendations?: FunctionalFoodRecommendationsViewModel | null;
   functionalMealSelector?: FunctionalMealSelectorViewModel | null;
+  /** Solver energia giornaliero (canonical server) quando `pathwayDate` è in finestra. */
+  dailyEnergyModel?: NutritionDailyEnergyModel | null;
   executed: Array<Record<string, unknown>>;
   planned: NutritionPlannedWorkoutRow[];
   researchTraceSummaries?: KnowledgeResearchTraceSummary[];

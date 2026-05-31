@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 import { buildViryaResearchPlans } from "@/lib/knowledge/training-research-context";
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     }
     await requireAthleteReadContext(req, athleteId);
 
-    const athleteMemory = await resolveAthleteMemory(athleteId);
+    const athleteMemory = await resolveAthleteMemorySlice(athleteId, { slice: "training" });
     const canonicalState = athleteMemory.physiology ?? (await resolveCanonicalPhysiologyState(athleteId));
     const twinState = athleteMemory.twin;
     const readSpineCoverage = summarizeReadSpineCoverage(athleteMemory);

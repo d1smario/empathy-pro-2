@@ -28,31 +28,9 @@ const DEFAULT_MEAL_TIMES: FlatMealTimes = {
   snack_pm: "16:30",
 };
 
-export type BioPlannedMealRow = {
-  slot: MealSlotKey;
-  entry_time: string;
-  food_label: string;
-  carbs_g: number;
-  protein_g: number;
-  fat_g: number;
-  kcal: number;
-  insulin_load: number;
-  glycemic_load: number;
-};
-
-export type NutritionPlanDayContext = {
-  planSource: "nutrition_plans" | "calendar_training_solver" | "none";
-  dailyCarbsG: number;
-  dailyKcal: number;
-  plannedMeals: BioPlannedMealRow[];
-};
-
-export const EMPTY_NUTRITION_PLAN_DAY: NutritionPlanDayContext = {
-  planSource: "none",
-  dailyCarbsG: 0,
-  dailyKcal: 0,
-  plannedMeals: [],
-};
+import type { BioPlannedMealRow, NutritionPlanDayContext } from "@/lib/bioenergetics/nutrition-plan-day-empty";
+export type { BioPlannedMealRow, NutritionPlanDayContext } from "@/lib/bioenergetics/nutrition-plan-day-empty";
+export { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/nutrition-plan-day-empty";
 
 function asRecord(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
