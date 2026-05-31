@@ -15,6 +15,14 @@ export type BiomechDbCameraPlane = "sagittal" | "frontal" | "oblique" | "multivi
 const BIOMECH_JOB_SELECT =
   "id, athlete_id, status, modality, stated_exercise_id, camera_plane, media_storage_path, media_content_type, source, provider, external_session_id, error_message, result_import_id, created_at, updated_at";
 
+const BIOMECH_JOB_SELECT_LEGACY =
+  "id, athlete_id, status, modality, stated_exercise_id, camera_plane, media_storage_path, media_content_type, error_message, result_import_id, created_at, updated_at";
+
+function isMissingColumnError(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? "").toLowerCase();
+  return msg.includes("column") && (msg.includes("does not exist") || msg.includes("could not find"));
+}
+
 export type CreateBiomechCaptureJobInput = {
   athleteId: string;
   discipline: BiomechanicsDiscipline;
@@ -139,22 +147,27 @@ export async function createBiomechanicsCaptureJob(
   db: SupabaseClient,
   input: CreateBiomechCaptureJobInput,
 ): Promise<BiomechanicsCaptureJobV1> {
-  const { data, error } = await db
+  const baseRow = {
+    athlete_id: input.athleteId,
+    status: "pending" as const,
+    modality: mapBiomechanicsDisciplineToDbModality(input.discipline),
+    stated_exercise_id: input.statedExerciseId?.trim() || null,
+    camera_plane: mapBiomechanicsCameraPlaneToDb(input.cameraPlane),
+    media_storage_path: input.mediaStoragePath,
+    media_content_type: input.mediaContentType,
+  };
+
+  let result = await db
     .from("biomech_capture_jobs")
-    .insert({
-      athlete_id: input.athleteId,
-      status: "pending",
-      modality: mapBiomechanicsDisciplineToDbModality(input.discipline),
-      stated_exercise_id: input.statedExerciseId?.trim() || null,
-      camera_plane: mapBiomechanicsCameraPlaneToDb(input.cameraPlane),
-      media_storage_path: input.mediaStoragePath,
-      media_content_type: input.mediaContentType,
-      source: input.source,
-      provider: "generic_cv",
-    })
+    .insert({ ...baseRow, source: input.source, provider: "generic_cv" })
     .select(BIOMECH_JOB_SELECT)
     .single<BiomechCaptureJobRow>();
 
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await db.from("biomech_capture_jobs").insert(baseRow).select(BIOMECH_JOB_SELECT_LEGACY).single<BiomechCaptureJobRow>();
+  }
+
+  const { data, error } = result;
   if (error || !data) {
     throw new Error(error?.message ?? "biomech_capture_job_insert_failed");
   }
@@ -163,7 +176,7 @@ export async function createBiomechanicsCaptureJob(
 }
 
 export async function listBiomechanicsCaptureJobs(db: SupabaseClient, athleteId: string): Promise<BiomechanicsCaptureJobV1[]> {
-  const { data, error } = await db
+  let result = await db
     .from("biomech_capture_jobs")
     .select(BIOMECH_JOB_SELECT)
     .eq("athlete_id", athleteId)
@@ -171,10 +184,20 @@ export async function listBiomechanicsCaptureJobs(db: SupabaseClient, athleteId:
     .limit(20)
     .returns<BiomechCaptureJobRow[]>();
 
-  if (error) {
-    throw new Error(error.message || "biomech_capture_jobs_read_failed");
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await db
+      .from("biomech_capture_jobs")
+      .select(BIOMECH_JOB_SELECT_LEGACY)
+      .eq("athlete_id", athleteId)
+      .order("created_at", { ascending: false })
+      .limit(20)
+      .returns<BiomechCaptureJobRow[]>();
   }
-  return (data ?? []).map(mapBiomechJobRow);
+
+  if (result.error) {
+    throw new Error(result.error.message || "biomech_capture_jobs_read_failed");
+  }
+  return (result.data ?? []).map(mapBiomechJobRow);
 }
 
 export async function listBiomechanicsSessionImports(
@@ -199,22 +222,31 @@ export async function getBiomechanicsCaptureJobById(
   db: SupabaseClient,
   input: { athleteId: string; jobId: string },
 ): Promise<BiomechanicsCaptureJobV1 | null> {
-  const { data, error } = await db
+  let result = await db
     .from("biomech_capture_jobs")
     .select(BIOMECH_JOB_SELECT)
     .eq("id", input.jobId)
     .eq("athlete_id", input.athleteId)
     .maybeSingle<BiomechCaptureJobRow>();
 
-  if (error) throw new Error(error.message || "biomech_capture_job_read_failed");
-  return data ? mapBiomechJobRow(data) : null;
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await db
+      .from("biomech_capture_jobs")
+      .select(BIOMECH_JOB_SELECT_LEGACY)
+      .eq("id", input.jobId)
+      .eq("athlete_id", input.athleteId)
+      .maybeSingle<BiomechCaptureJobRow>();
+  }
+
+  if (result.error) throw new Error(result.error.message || "biomech_capture_job_read_failed");
+  return result.data ? mapBiomechJobRow(result.data) : null;
 }
 
 export async function claimBiomechanicsCaptureJob(
   db: SupabaseClient,
   input: { athleteId: string; jobId: string },
 ): Promise<BiomechCaptureJobRow | null> {
-  const { data, error } = await db
+  let result = await db
     .from("biomech_capture_jobs")
     .update({ status: "processing", updated_at: new Date().toISOString(), error_message: null })
     .eq("id", input.jobId)
@@ -223,8 +255,19 @@ export async function claimBiomechanicsCaptureJob(
     .select(BIOMECH_JOB_SELECT)
     .maybeSingle<BiomechCaptureJobRow>();
 
-  if (error) throw new Error(error.message || "biomech_capture_job_claim_failed");
-  return data ?? null;
+  if (result.error && isMissingColumnError(result.error)) {
+    result = await db
+      .from("biomech_capture_jobs")
+      .update({ status: "processing", updated_at: new Date().toISOString(), error_message: null })
+      .eq("id", input.jobId)
+      .eq("athlete_id", input.athleteId)
+      .eq("status", "pending")
+      .select(BIOMECH_JOB_SELECT_LEGACY)
+      .maybeSingle<BiomechCaptureJobRow>();
+  }
+
+  if (result.error) throw new Error(result.error.message || "biomech_capture_job_claim_failed");
+  return result.data ?? null;
 }
 
 export async function failBiomechanicsCaptureJob(

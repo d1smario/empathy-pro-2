@@ -23,6 +23,11 @@ export type ProcessBiomechCaptureResult =
   | { ok: true; stagingRunId: string; jobId: string; confidence01: number }
   | { ok: false; code: string; message: string };
 
+function isStagingDomainError(error: { message?: string } | null | undefined): boolean {
+  const msg = (error?.message ?? "").toLowerCase();
+  return msg.includes("interpretation_staging_runs_domain_check") || (msg.includes("domain") && msg.includes("check"));
+}
+
 function reverseDiscipline(modality: string | null): BiomechanicsDiscipline {
   if (modality === "cycling" || modality === "running" || modality === "gym") return modality;
   return "movement_screening";
@@ -136,12 +141,20 @@ export async function processBiomechanicsCaptureJob(
     .single<{ id: string }>();
 
   if (stagingErr || !stagingRow) {
+    const stagingMessage = stagingErr?.message ?? "Staging non creato.";
     await failBiomechanicsCaptureJob(db, {
       athleteId: input.athleteId,
       jobId: input.jobId,
       errorMessage: stagingErr?.message ?? "staging_insert_failed",
     });
-    return { ok: false, code: "staging_failed", message: stagingErr?.message ?? "Staging non creato." };
+    if (isStagingDomainError(stagingErr)) {
+      return {
+        ok: false,
+        code: "migration_required",
+        message: "Migration Supabase 072_lab_staging_domains_v1 non applicata. Applica le migration lab su Supabase.",
+      };
+    }
+    return { ok: false, code: "staging_failed", message: stagingMessage };
   }
 
   return {

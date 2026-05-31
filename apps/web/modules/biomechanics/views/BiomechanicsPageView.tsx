@@ -224,8 +224,9 @@ export default function BiomechanicsPageView() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [reviewStagingRunId, setReviewStagingRunId] = useState<string | null>(null);
+  const [lastCreatedJob, setLastCreatedJob] = useState<BiomechanicsCaptureJobV1 | null>(null);
 
-  const latestJob = captureJobs[0] ?? null;
+  const latestJob = captureJobs[0] ?? lastCreatedJob;
   const latestJobStaging = pendingStaging.find((row) => row.jobId === latestJob?.id) ?? pendingStaging[0] ?? null;
   const latestJobAwaitingReview = Boolean(latestJob && latestJobStaging);
   const source: BiomechanicsCaptureSource = file?.type.startsWith("image/") ? "image" : "smartphone_video";
@@ -292,6 +293,8 @@ export default function BiomechanicsPageView() {
         cameraPlane,
         source,
       });
+      setLastCreatedJob(out.job);
+      setCaptureJobs((prev) => [out.job, ...prev.filter((job) => job.id !== out.job.id)]);
       setMessage("Upload completato — elaborazione CV...");
       setFile(null);
       const stagingRunId = await onProcessJob(out.job.id);
@@ -365,6 +368,12 @@ export default function BiomechanicsPageView() {
         <div className="scroll-mt-28">
           <GenerativeModuleSubnav />
         </div>
+
+        {error ? (
+          <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-100">
+            <strong className="font-semibold">Biomechanics non disponibile:</strong> {error}
+          </div>
+        ) : null}
 
         <section id="gen-body" className="scroll-mt-28">
           <Pro2SectionCard
