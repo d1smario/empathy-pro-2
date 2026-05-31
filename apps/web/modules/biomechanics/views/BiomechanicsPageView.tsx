@@ -100,6 +100,85 @@ function LatestJobCard({
   );
 }
 
+function CaptureNextSteps({
+  latestJob,
+  awaitingReview,
+  stagingRunId,
+  processingJobId,
+  onAnalyze,
+  hasConfirmedReport,
+}: {
+  latestJob: BiomechanicsCaptureJobV1 | null;
+  awaitingReview: boolean;
+  stagingRunId: string | null;
+  processingJobId: string | null;
+  onAnalyze: () => void;
+  hasConfirmedReport: boolean;
+}) {
+  if (awaitingReview && stagingRunId) {
+    return (
+      <div className="mt-4 rounded-2xl border border-amber-500/35 bg-amber-500/10 p-4">
+        <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-amber-200">Prossimo passo</p>
+        <p className="mt-2 text-sm text-amber-50">Proposta CV pronta. Valida per generare efficienza, simmetria e rischio nel twin.</p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Pro2Link href={`/biomechanics/staging/${stagingRunId}`} className="justify-center">
+            Valida proposta CV
+          </Pro2Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (latestJob?.status === "pending") {
+    return (
+      <div className="mt-4 rounded-2xl border border-fuchsia-500/35 bg-fuchsia-500/10 p-4">
+        <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-fuchsia-200">Prossimo passo</p>
+        <p className="mt-2 text-sm text-fuchsia-50">
+          Video in coda ({latestJob.id.slice(0, 8)}…). Avvia l&apos;analisi CV per ottenere angoli e rischi proposti.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Pro2Button onClick={onAnalyze} disabled={processingJobId != null} className="justify-center">
+            {processingJobId === latestJob.id ? "Analisi in corso..." : "Analizza video"}
+          </Pro2Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (latestJob?.status === "processing") {
+    return (
+      <div className="mt-4 rounded-2xl border border-cyan-500/35 bg-cyan-500/10 p-4">
+        <p className="text-sm text-cyan-100">Analisi CV in corso… attendi qualche secondo e ricarica la pagina.</p>
+      </div>
+    );
+  }
+
+  if (latestJob?.status === "failed") {
+    return (
+      <div className="mt-4 rounded-2xl border border-rose-500/35 bg-rose-500/10 p-4">
+        <p className="text-sm text-rose-100">
+          Ultima analisi fallita{latestJob.errorMessage ? `: ${latestJob.errorMessage}` : "."} Carica di nuovo il video.
+        </p>
+      </div>
+    );
+  }
+
+  if (hasConfirmedReport) {
+    return (
+      <div className="mt-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4">
+        <p className="text-sm text-emerald-100">Report confermato disponibile nella sezione sessioni sotto.</p>
+        <div className="mt-3">
+          <Pro2Link href="#biomech-report" variant="secondary" className="justify-center">
+            Vai al report
+          </Pro2Link>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
 function SessionList({ sessions }: { sessions: BiomechanicsSessionImportV1[] }) {
   if (!sessions.length) {
     return (
@@ -253,6 +332,18 @@ export default function BiomechanicsPageView() {
     }
   }
 
+  async function runAnalyzeLatestJob() {
+    if (!latestJob) return;
+    const stagingRunId = await onProcessJob(latestJob.id);
+    await refresh();
+    if (stagingRunId) {
+      setReviewStagingRunId(stagingRunId);
+      setMessage("Proposta CV pronta — valida per generare il report.");
+    }
+  }
+
+  const activeStagingId = reviewStagingRunId ?? latestJobStaging?.id ?? null;
+
   return (
     <Pro2AthleteRequiredGate enabled>
       <Pro2ModulePageShell
@@ -275,67 +366,12 @@ export default function BiomechanicsPageView() {
           <GenerativeModuleSubnav />
         </div>
 
-        <section id="gen-domain" className="scroll-mt-28">
-          <Pro2SectionCard
-            accent="emerald"
-            icon={Camera}
-            title="Capture line"
-            subtitle="Upload firmato su Storage privato, poi job canonico in biomech_capture_jobs."
-          >
-            <div className="grid gap-3 sm:grid-cols-3">
-              <LatestJobCard
-                job={latestJob}
-                awaitingReview={latestJobAwaitingReview}
-                stagingRunId={latestJobStaging?.id ?? null}
-              />
-              <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] p-4">
-                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-cyan-200">Archivio capture</p>
-                <p className="mt-2 text-lg font-semibold text-white">{captureCountLabel}</p>
-                <p className="mt-1 text-xs text-gray-400">Job più recenti, scoped su atleta attivo.</p>
-              </div>
-              <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] p-4">
-                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-fuchsia-200">Report confermato</p>
-                <p className="mt-2 text-lg font-semibold text-white">
-                  {latestEfficiency ? `${Math.round(latestEfficiency.biomechanicalEfficiency01 * 100)}%` : "—"}
-                </p>
-                <p className="mt-1 text-xs text-gray-400">Efficienza biomeccanica (domain engine).</p>
-              </div>
-            </div>
-            {pendingStaging.length ? (
-              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                {pendingStaging.length} review CV in attesa —{" "}
-                <Link href={`/biomechanics/staging/${pendingStaging[0]!.id}`} className="underline">
-                  apri validazione
-                </Link>
-              </div>
-            ) : null}
-            {latestJob?.status === "pending" && !latestJobAwaitingReview ? (
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Pro2Button
-                  variant="secondary"
-                  onClick={() => void onProcessJob(latestJob.id).then(async (stagingRunId) => {
-                    await refresh();
-                    if (stagingRunId) {
-                      setReviewStagingRunId(stagingRunId);
-                      setMessage("Proposta CV pronta — conferma in review per alimentare il twin.");
-                    }
-                  })}
-                  disabled={processingJobId != null}
-                  className="justify-center"
-                >
-                  {processingJobId === latestJob.id ? "Elaborazione CV..." : "Elabora ultimo job"}
-                </Pro2Button>
-              </div>
-            ) : null}
-          </Pro2SectionCard>
-        </section>
-
         <section id="gen-body" className="scroll-mt-28">
           <Pro2SectionCard
             accent="cyan"
             icon={UploadCloud}
             title="Nuova cattura"
-            subtitle="File supportati: MP4, MOV, JPEG, PNG, WEBP. La pagina non analizza il video: crea solo il job canonico."
+            subtitle="Carica il video → analisi CV → validazione → report efficienza nel twin."
           >
             <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
               <label className="space-y-2 text-sm text-gray-300">
@@ -382,13 +418,21 @@ export default function BiomechanicsPageView() {
               </Pro2Button>
               {file ? <p className="text-xs text-gray-400">{file.name} · {(file.size / 1_000_000).toFixed(1)} MB</p> : null}
             </div>
+            <CaptureNextSteps
+              latestJob={latestJob}
+              awaitingReview={latestJobAwaitingReview}
+              stagingRunId={activeStagingId}
+              processingJobId={processingJobId}
+              onAnalyze={() => void runAnalyzeLatestJob()}
+              hasConfirmedReport={sessions.length > 0}
+            />
             {message ? (
               <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
                 {message}
-                {(reviewStagingRunId ?? latestJobStaging?.id) ? (
+                {activeStagingId ? (
                   <>
                     {" "}
-                    <Link href={`/biomechanics/staging/${reviewStagingRunId ?? latestJobStaging?.id}`} className="font-semibold underline">
+                    <Link href={`/biomechanics/staging/${activeStagingId}`} className="font-semibold underline">
                       Apri review →
                     </Link>
                   </>
@@ -396,6 +440,43 @@ export default function BiomechanicsPageView() {
               </p>
             ) : null}
             {error ? <p className="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</p> : null}
+          </Pro2SectionCard>
+        </section>
+
+        <section id="gen-domain" className="scroll-mt-28">
+          <Pro2SectionCard
+            accent="emerald"
+            icon={Camera}
+            title="Stato capture"
+            subtitle="Job, review in attesa e ultimo report confermato."
+          >
+            <div className="grid gap-3 sm:grid-cols-3">
+              <LatestJobCard
+                job={latestJob}
+                awaitingReview={latestJobAwaitingReview}
+                stagingRunId={latestJobStaging?.id ?? null}
+              />
+              <div className="rounded-2xl border border-cyan-500/25 bg-cyan-500/[0.06] p-4">
+                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-cyan-200">Archivio capture</p>
+                <p className="mt-2 text-lg font-semibold text-white">{captureCountLabel}</p>
+                <p className="mt-1 text-xs text-gray-400">Job più recenti, scoped su atleta attivo.</p>
+              </div>
+              <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] p-4">
+                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-fuchsia-200">Report confermato</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {latestEfficiency ? `${Math.round(latestEfficiency.biomechanicalEfficiency01 * 100)}%` : "—"}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">Efficienza biomeccanica (domain engine).</p>
+              </div>
+            </div>
+            {pendingStaging.length ? (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {pendingStaging.length} review CV in attesa —{" "}
+                <Link href={`/biomechanics/staging/${pendingStaging[0]!.id}`} className="underline">
+                  apri validazione
+                </Link>
+              </div>
+            ) : null}
           </Pro2SectionCard>
         </section>
 
@@ -428,12 +509,12 @@ export default function BiomechanicsPageView() {
           </Pro2SectionCard>
         </section>
 
-        <section id="gen-cross" className="scroll-mt-28">
+        <section id="biomech-report" className="scroll-mt-28">
           <Pro2SectionCard
             accent="violet"
             icon={Activity}
-            title="Sessioni e twin readiness"
-            subtitle="Qui compaiono le sessioni confermate dopo review CV e motore deterministico."
+            title="Report sessioni"
+            subtitle="Efficienza, simmetria e rischio dopo validazione CV."
           >
             {loading ? <p className="text-sm text-gray-400">Caricamento archivio Biomechanics...</p> : <SessionList sessions={sessions} />}
           </Pro2SectionCard>
