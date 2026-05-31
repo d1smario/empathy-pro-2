@@ -3,6 +3,7 @@ import type {
   AthleteAerodynamicsMemory,
   AthleteBiomechanicsMemory,
   AthleteHealthMemory,
+  AthleteHumanEfficiencyMemory,
   AthleteIdentityMemory,
   AthleteKnowledgeMemory,
   AthleteMemory,
@@ -26,6 +27,7 @@ export type AthleteMemoryPatch = {
   training?: AthleteTrainingMemory;
   biomechanics?: AthleteBiomechanicsMemory;
   aerodynamics?: AthleteAerodynamicsMemory;
+  humanEfficiency?: AthleteHumanEfficiencyMemory;
   source: AthleteMemoryPatchSource;
 };
 
@@ -93,6 +95,7 @@ export function applyAthleteMemoryPatch(
     training: patch.training ?? memory.training,
     biomechanics: patch.biomechanics ?? memory.biomechanics,
     aerodynamics: patch.aerodynamics ?? memory.aerodynamics,
+    humanEfficiency: patch.humanEfficiency ?? memory.humanEfficiency,
     audit: {
       computedAt: patch.source.updatedAt,
       sources: [...memory.audit.sources, patch.source],

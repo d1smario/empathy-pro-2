@@ -7,6 +7,7 @@ export type {
   AthleteBiomechanicsMemory,
   AthleteEvidenceMemoryItem,
   AthleteHealthMemory,
+  AthleteHumanEfficiencyMemory,
   AthleteIdentityMemory,
   AthleteMemory,
   AthleteMemoryPatchSource,

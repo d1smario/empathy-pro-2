@@ -4,6 +4,7 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import {
   listBiomechanicsCaptureJobs,
   listBiomechanicsSessionImports,
+  listPendingBiomechanicsStagingRuns,
 } from "@/lib/biomechanics/biomech-capture-pipeline";
 
 export const dynamic = "force-dynamic";
@@ -19,12 +20,13 @@ export async function GET(req: NextRequest) {
     }
 
     const { db } = await requireAthleteReadContext(req, athleteId);
-    const [sessions, captureJobs] = await Promise.all([
+    const [sessions, captureJobs, pendingStaging] = await Promise.all([
       listBiomechanicsSessionImports(db, athleteId),
       listBiomechanicsCaptureJobs(db, athleteId),
+      listPendingBiomechanicsStagingRuns(db, athleteId),
     ]);
 
-    return NextResponse.json({ ok: true, sessions, captureJobs }, { headers: NO_STORE });
+    return NextResponse.json({ ok: true, sessions, captureJobs, pendingStaging }, { headers: NO_STORE });
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status, headers: NO_STORE });

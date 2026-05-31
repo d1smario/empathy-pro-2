@@ -30,6 +30,11 @@ import { preferredTagsFromTraces, type AthleteWorkoutArchetypeTraceView } from "
 import { createEmptyAthleteMemory } from "@/lib/memory/athlete-memory-store";
 import { applyAthleteMemoryPatch } from "@/lib/memory/athlete-memory-writer";
 import {
+  buildAerodynamicsMemoryFromTestRows,
+  buildBiomechanicsMemoryFromSessionRows,
+} from "@/lib/memory/biomech-aero-memory-projections";
+import { buildHumanEfficiencyFromLabMemory } from "@/lib/memory/human-efficiency-projection";
+import {
   getCachedAthleteMemory,
   setCachedAthleteMemory,
 } from "@/lib/memory/athlete-memory-cache";
@@ -319,6 +324,8 @@ async function resolveAthleteMemoryInternal(athleteId: string, slice: MemorySlic
     diaryRes,
     nutritionConstraintsRes,
     archetypeTracesRes,
+    biomechImportsRes,
+    aeroTestsRes,
   ] =
     await Promise.all([
     supabase.from("athlete_profiles").select("*").eq("id", athleteId).maybeSingle(),
@@ -474,6 +481,22 @@ async function resolveAthleteMemoryInternal(athleteId: string, slice: MemorySlic
           .eq("athlete_id", athleteId)
           .order("observed_at", { ascending: false })
           .limit(24)
+      : emptyListQuery(),
+    flags.biomechAero
+      ? supabase
+          .from("biomech_session_imports")
+          .select("id, athlete_id, source, recorded_at, payload, created_at")
+          .eq("athlete_id", athleteId)
+          .order("recorded_at", { ascending: false })
+          .limit(12)
+      : emptyListQuery(),
+    flags.biomechAero
+      ? supabase
+          .from("aero_test_sessions")
+          .select("id, athlete_id, source, recorded_at, position, equipment, geometry, cda_estimate, optimization, scores, payload, created_at")
+          .eq("athlete_id", athleteId)
+          .order("recorded_at", { ascending: false })
+          .limit(12)
       : emptyListQuery(),
   ]);
 
@@ -767,6 +790,39 @@ async function resolveAthleteMemoryInternal(athleteId: string, slice: MemorySlic
       updatedAt: now,
     },
   });
+
+  if (flags.biomechAero) {
+    const biomechRows = optionalRead(biomechImportsRes as { error: { message?: string; code?: string } | null; data: unknown });
+    const aeroRows = optionalRead(aeroTestsRes as { error: { message?: string; code?: string } | null; data: unknown });
+    const biomechanics = buildBiomechanicsMemoryFromSessionRows(athleteId, biomechRows);
+    const aerodynamics = buildAerodynamicsMemoryFromTestRows(athleteId, aeroRows);
+    const humanEfficiencyScore = buildHumanEfficiencyFromLabMemory({
+      athleteId,
+      biomechanics,
+      aerodynamics,
+    });
+    memory = applyAthleteMemoryPatch(memory, {
+      biomechanics,
+      aerodynamics,
+      humanEfficiency: humanEfficiencyScore
+        ? {
+            globalHumanEfficiency01: humanEfficiencyScore.globalHumanEfficiency01,
+            physiologicalEfficiency01: humanEfficiencyScore.physiologicalEfficiency01,
+            mechanicalEfficiency01: humanEfficiencyScore.mechanicalEfficiency01,
+            aerodynamicEfficiency01: humanEfficiencyScore.aerodynamicEfficiency01,
+            confidence01: humanEfficiencyScore.confidence01,
+            algorithmVersion: humanEfficiencyScore.algorithmVersion,
+            computedAt: humanEfficiencyScore.computedAt,
+          }
+        : undefined,
+      source: {
+        domain: "biomechanics",
+        source: "supabase.biomech_session_imports+aero_test_sessions",
+        sourceId: athleteId,
+        updatedAt: now,
+      },
+    });
+  }
 
   return memory;
 }

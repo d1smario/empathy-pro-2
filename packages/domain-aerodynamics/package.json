@@ -10,7 +10,7 @@
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/aerodynamics-scoring.test.ts"
+    "test": "tsx --test src/aerodynamics-scoring.test.ts src/position-surrogate.test.ts src/course-projection.test.ts"
   },
   "dependencies": {
     "@empathy/contracts": "0.1.0"

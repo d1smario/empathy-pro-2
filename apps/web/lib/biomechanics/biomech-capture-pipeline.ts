@@ -12,6 +12,9 @@ import type {
 export type BiomechDbModality = "gym" | "running" | "cycling" | "field_sport" | "other";
 export type BiomechDbCameraPlane = "sagittal" | "frontal" | "oblique" | "multiview" | "unknown";
 
+const BIOMECH_JOB_SELECT =
+  "id, athlete_id, status, modality, stated_exercise_id, camera_plane, media_storage_path, media_content_type, source, provider, external_session_id, error_message, result_import_id, created_at, updated_at";
+
 export type CreateBiomechCaptureJobInput = {
   athleteId: string;
   discipline: BiomechanicsDiscipline;
@@ -31,6 +34,9 @@ type BiomechCaptureJobRow = {
   camera_plane: BiomechDbCameraPlane | null;
   media_storage_path: string | null;
   media_content_type: string | null;
+  source: string | null;
+  provider: string | null;
+  external_session_id: string | null;
   error_message: string | null;
   result_import_id: string | null;
   created_at: string;
@@ -74,11 +80,15 @@ export function mapBiomechanicsCameraPlaneToDb(cameraPlane: BiomechanicsCameraPl
 }
 
 export function mapBiomechJobRow(row: BiomechCaptureJobRow): BiomechanicsCaptureJobV1 {
+  const source =
+    typeof row.source === "string" && row.source.trim()
+      ? (row.source as BiomechanicsCaptureSource)
+      : "smartphone_video";
   return {
     id: row.id,
     athleteId: row.athlete_id,
     status: row.status,
-    source: "smartphone_video",
+    source,
     discipline: row.modality === "cycling" || row.modality === "running" || row.modality === "gym" ? row.modality : "movement_screening",
     cameraPlane:
       row.camera_plane === "frontal"
@@ -99,12 +109,27 @@ export function mapBiomechJobRow(row: BiomechCaptureJobRow): BiomechanicsCapture
 
 export function mapBiomechSessionImportRow(row: BiomechSessionImportRow): BiomechanicsSessionImportV1 {
   const payload = row.payload;
+  const discipline =
+    typeof payload.discipline === "string"
+      ? (payload.discipline as BiomechanicsDiscipline)
+      : "movement_screening";
+  const source =
+    typeof row.source === "string" && row.source.trim()
+      ? (row.source as BiomechanicsCaptureSource)
+      : "manual_import";
   return {
     id: row.id,
     athleteId: row.athlete_id,
     recordedAt: row.recorded_at,
-    source: "manual_import",
-    discipline: "movement_screening",
+    source,
+    discipline,
+    calibration: payload.calibration as BiomechanicsSessionImportV1["calibration"],
+    landmarks: Array.isArray(payload.landmarks) ? (payload.landmarks as BiomechanicsSessionImportV1["landmarks"]) : undefined,
+    jointAngles: Array.isArray(payload.jointAngles) ? (payload.jointAngles as BiomechanicsSessionImportV1["jointAngles"]) : undefined,
+    anthropometrics: payload.anthropometrics as BiomechanicsSessionImportV1["anthropometrics"],
+    movementPatterns: payload.movementPatterns as BiomechanicsSessionImportV1["movementPatterns"],
+    riskScores: payload.riskScores as BiomechanicsSessionImportV1["riskScores"],
+    efficiencyScores: payload.efficiencyScores as BiomechanicsSessionImportV1["efficiencyScores"],
     payloadVersion: "biomechanics_session_import_v1",
     payload,
   };
@@ -124,10 +149,10 @@ export async function createBiomechanicsCaptureJob(
       camera_plane: mapBiomechanicsCameraPlaneToDb(input.cameraPlane),
       media_storage_path: input.mediaStoragePath,
       media_content_type: input.mediaContentType,
+      source: input.source,
+      provider: "generic_cv",
     })
-    .select(
-      "id, athlete_id, status, modality, stated_exercise_id, camera_plane, media_storage_path, media_content_type, error_message, result_import_id, created_at, updated_at",
-    )
+    .select(BIOMECH_JOB_SELECT)
     .single<BiomechCaptureJobRow>();
 
   if (error || !data) {
@@ -140,9 +165,7 @@ export async function createBiomechanicsCaptureJob(
 export async function listBiomechanicsCaptureJobs(db: SupabaseClient, athleteId: string): Promise<BiomechanicsCaptureJobV1[]> {
   const { data, error } = await db
     .from("biomech_capture_jobs")
-    .select(
-      "id, athlete_id, status, modality, stated_exercise_id, camera_plane, media_storage_path, media_content_type, error_message, result_import_id, created_at, updated_at",
-    )
+    .select(BIOMECH_JOB_SELECT)
     .eq("athlete_id", athleteId)
     .order("created_at", { ascending: false })
     .limit(20)
@@ -170,4 +193,128 @@ export async function listBiomechanicsSessionImports(
     throw new Error(error.message || "biomech_session_imports_read_failed");
   }
   return (data ?? []).map(mapBiomechSessionImportRow);
+}
+
+export async function getBiomechanicsCaptureJobById(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string },
+): Promise<BiomechanicsCaptureJobV1 | null> {
+  const { data, error } = await db
+    .from("biomech_capture_jobs")
+    .select(BIOMECH_JOB_SELECT)
+    .eq("id", input.jobId)
+    .eq("athlete_id", input.athleteId)
+    .maybeSingle<BiomechCaptureJobRow>();
+
+  if (error) throw new Error(error.message || "biomech_capture_job_read_failed");
+  return data ? mapBiomechJobRow(data) : null;
+}
+
+export async function claimBiomechanicsCaptureJob(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string },
+): Promise<BiomechCaptureJobRow | null> {
+  const { data, error } = await db
+    .from("biomech_capture_jobs")
+    .update({ status: "processing", updated_at: new Date().toISOString(), error_message: null })
+    .eq("id", input.jobId)
+    .eq("athlete_id", input.athleteId)
+    .eq("status", "pending")
+    .select(BIOMECH_JOB_SELECT)
+    .maybeSingle<BiomechCaptureJobRow>();
+
+  if (error) throw new Error(error.message || "biomech_capture_job_claim_failed");
+  return data ?? null;
+}
+
+export async function failBiomechanicsCaptureJob(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string; errorMessage: string },
+): Promise<void> {
+  const { error } = await db
+    .from("biomech_capture_jobs")
+    .update({
+      status: "failed",
+      error_message: input.errorMessage.slice(0, 500),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.jobId)
+    .eq("athlete_id", input.athleteId);
+  if (error) throw new Error(error.message || "biomech_capture_job_fail_update_failed");
+}
+
+export async function completeBiomechanicsCaptureJob(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string; resultImportId: string },
+): Promise<void> {
+  const { error } = await db
+    .from("biomech_capture_jobs")
+    .update({
+      status: "completed",
+      result_import_id: input.resultImportId,
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.jobId)
+    .eq("athlete_id", input.athleteId);
+  if (error) throw new Error(error.message || "biomech_capture_job_complete_failed");
+}
+
+export async function insertBiomechanicsSessionImport(
+  db: SupabaseClient,
+  input: {
+    athleteId: string;
+    source: BiomechanicsCaptureSource;
+    recordedAt: string;
+    payload: Record<string, unknown>;
+    externalSessionId?: string | null;
+  },
+): Promise<string> {
+  const { data, error } = await db
+    .from("biomech_session_imports")
+    .insert({
+      athlete_id: input.athleteId,
+      schema_version: 1,
+      source: input.source,
+      recorded_at: input.recordedAt,
+      external_session_id: input.externalSessionId ?? null,
+      payload: input.payload,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error || !data) throw new Error(error?.message ?? "biomech_session_import_insert_failed");
+  return data.id;
+}
+
+export async function listPendingBiomechanicsStagingRuns(
+  db: SupabaseClient,
+  athleteId: string,
+): Promise<Array<{ id: string; status: string; createdAt: string; jobId: string | null }>> {
+  const { data, error } = await db
+    .from("interpretation_staging_runs")
+    .select("id, status, created_at, candidate_bundle")
+    .eq("athlete_id", athleteId)
+    .eq("domain", "biomechanics")
+    .eq("status", "pending_validation")
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  if (error) {
+    if (error.message?.includes("interpretation_staging_runs")) return [];
+    throw new Error(error.message || "biomech_staging_list_failed");
+  }
+
+  return (data ?? []).map((row) => {
+    const bundle =
+      row.candidate_bundle && typeof row.candidate_bundle === "object" && !Array.isArray(row.candidate_bundle)
+        ? (row.candidate_bundle as Record<string, unknown>)
+        : {};
+    return {
+      id: String(row.id),
+      status: String(row.status),
+      createdAt: String(row.created_at),
+      jobId: typeof bundle.captureJobId === "string" ? bundle.captureJobId : null,
+    };
+  });
 }

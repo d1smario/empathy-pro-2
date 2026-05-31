@@ -116,6 +116,16 @@ export type AthleteAerodynamicsMemory = {
   historicalEvolution?: Array<Pick<AerodynamicsTwinSnapshotV1, "computedAt" | "currentCdaM2" | "optimizedCdaM2" | "scores" | "confidence01">>;
 };
 
+export type AthleteHumanEfficiencyMemory = {
+  globalHumanEfficiency01?: number;
+  physiologicalEfficiency01?: number;
+  mechanicalEfficiency01?: number;
+  aerodynamicEfficiency01?: number;
+  confidence01?: number;
+  algorithmVersion?: string;
+  computedAt?: IsoDateTime;
+};
+
 export type AthleteMemory = {
   athleteId: string;
   identity: AthleteIdentityMemory;
@@ -132,6 +142,7 @@ export type AthleteMemory = {
   training?: AthleteTrainingMemory;
   biomechanics?: AthleteBiomechanicsMemory;
   aerodynamics?: AthleteAerodynamicsMemory;
+  humanEfficiency?: AthleteHumanEfficiencyMemory;
   audit: {
     computedAt: IsoDateTime;
     sources: AthleteMemoryPatchSource[];

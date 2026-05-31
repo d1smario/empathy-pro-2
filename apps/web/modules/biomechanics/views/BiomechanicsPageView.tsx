@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Activity, AlertTriangle, Camera, CheckCircle2, Clock3, UploadCloud } from "lucide-react";
 import type {
@@ -17,6 +18,8 @@ import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
   fetchBiomechanicsSessions,
+  importBiomechanicsOpenCapSession,
+  processBiomechanicsCaptureJob,
   uploadBiomechanicsCapture,
 } from "@/modules/biomechanics/services/biomechanics-module-api";
 
@@ -87,8 +90,7 @@ function SessionList({ sessions }: { sessions: BiomechanicsSessionImportV1[] }) 
   if (!sessions.length) {
     return (
       <p className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-        Nessuna sessione confermata. La prima fase salva i capture job; la promozione CV/validazione arriverà nello step
-        successivo.
+        Nessuna sessione confermata. Elabora un job pending, valida la proposta CV, poi conferma per alimentare il twin.
       </p>
     );
   }
@@ -100,6 +102,13 @@ function SessionList({ sessions }: { sessions: BiomechanicsSessionImportV1[] }) 
           <p className="mt-1 text-xs text-gray-400">
             {formatDateTime(session.recordedAt)} · {session.source}
           </p>
+          {session.efficiencyScores ? (
+            <p className="nutrition-muted mt-2 mb-0 text-[0.72rem]">
+              Efficienza {Math.round(session.efficiencyScores.biomechanicalEfficiency01 * 100)}% · simmetria{" "}
+              {Math.round(session.efficiencyScores.symmetry01 * 100)}% · rischio{" "}
+              {Math.round(session.efficiencyScores.injuryRisk01 * 100)}%
+            </p>
+          ) : null}
         </div>
       ))}
     </div>
@@ -113,8 +122,12 @@ export default function BiomechanicsPageView() {
   const [file, setFile] = useState<File | null>(null);
   const [sessions, setSessions] = useState<BiomechanicsSessionImportV1[]>([]);
   const [captureJobs, setCaptureJobs] = useState<BiomechanicsCaptureJobV1[]>([]);
+  const [pendingStaging, setPendingStaging] = useState<Array<{ id: string; jobId: string | null }>>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [processingJobId, setProcessingJobId] = useState<string | null>(null);
+  const [openCapSessionId, setOpenCapSessionId] = useState("");
+  const [importingOpenCap, setImportingOpenCap] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -129,6 +142,7 @@ export default function BiomechanicsPageView() {
       const result = await fetchBiomechanicsSessions(athleteId);
       setSessions(result.sessions);
       setCaptureJobs(result.captureJobs);
+      setPendingStaging(result.pendingStaging.map((row) => ({ id: row.id, jobId: row.jobId })));
       if (result.error) setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Biomechanics non disponibile.");
@@ -146,6 +160,30 @@ export default function BiomechanicsPageView() {
     const pending = captureJobs.filter((job) => job.status === "pending" || job.status === "processing").length;
     return `${captureJobs.length} job · ${pending} attivi`;
   }, [captureJobs]);
+
+  const latestEfficiency = sessions[0]?.efficiencyScores ?? null;
+
+  async function onProcessJob(jobId: string) {
+    if (!athleteId || processingJobId) return;
+    setProcessingJobId(jobId);
+    setError(null);
+    setMessage(null);
+    try {
+      const out = await processBiomechanicsCaptureJob({ athleteId, jobId });
+      if (!out.ok) {
+        setError(out.message || out.error || "Elaborazione fallita.");
+        return;
+      }
+      if (out.stagingRunId) {
+        setMessage(`Proposta CV pronta — apri review per confermare.`);
+      }
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Elaborazione fallita.");
+    } finally {
+      setProcessingJobId(null);
+    }
+  }
 
   async function onUpload() {
     if (!athleteId || !file || uploading) return;
@@ -170,13 +208,38 @@ export default function BiomechanicsPageView() {
     }
   }
 
+  async function onImportOpenCap() {
+    if (!athleteId || !openCapSessionId.trim() || importingOpenCap) return;
+    setImportingOpenCap(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const out = await importBiomechanicsOpenCapSession({
+        athleteId,
+        externalSessionId: openCapSessionId.trim(),
+        discipline,
+      });
+      if (!out.ok) {
+        setError(out.message || out.error || "Import OpenCap fallito.");
+        return;
+      }
+      setMessage("Sessione OpenCap in review — conferma per promuovere al twin.");
+      setOpenCapSessionId("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Import OpenCap fallito.");
+    } finally {
+      setImportingOpenCap(false);
+    }
+  }
+
   return (
     <Pro2AthleteRequiredGate enabled>
       <Pro2ModulePageShell
         eyebrow="Biomechanics Engine · Capture"
         eyebrowClassName="text-emerald-300"
         title="Biomechanics"
-        description="Cattura video/foto e crea un job biomeccanico legato all'atleta. CV, validazione e promozione a twin restano nella pipeline dedicata: nessun numero generato dalla UI."
+        description="Cattura media → CV esterno → review atleta/coach → motore deterministico → twin biomeccanico."
         headerActions={
           <>
             <Pro2Link href="/training" variant="secondary" className="justify-center border border-sky-500/35 bg-sky-500/10">
@@ -207,11 +270,33 @@ export default function BiomechanicsPageView() {
                 <p className="mt-1 text-xs text-gray-400">Job più recenti, scoped su atleta attivo.</p>
               </div>
               <div className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] p-4">
-                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-fuchsia-200">Sessioni confermate</p>
-                <p className="mt-2 text-lg font-semibold text-white">{sessions.length}</p>
-                <p className="mt-1 text-xs text-gray-400">Import validati pronti per il domain engine.</p>
+                <p className="font-mono text-[0.65rem] uppercase tracking-[0.22em] text-fuchsia-200">Report confermato</p>
+                <p className="mt-2 text-lg font-semibold text-white">
+                  {latestEfficiency ? `${Math.round(latestEfficiency.biomechanicalEfficiency01 * 100)}%` : "—"}
+                </p>
+                <p className="mt-1 text-xs text-gray-400">Efficienza biomeccanica (domain engine).</p>
               </div>
             </div>
+            {pendingStaging.length ? (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {pendingStaging.length} review CV in attesa —{" "}
+                <Link href={`/biomechanics/staging/${pendingStaging[0]!.id}`} className="underline">
+                  apri validazione
+                </Link>
+              </div>
+            ) : null}
+            {latestJob?.status === "pending" ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Pro2Button
+                  variant="secondary"
+                  onClick={() => onProcessJob(latestJob.id)}
+                  disabled={processingJobId != null}
+                  className="justify-center"
+                >
+                  {processingJobId === latestJob.id ? "Elaborazione CV..." : "Elabora ultimo job"}
+                </Pro2Button>
+              </div>
+            ) : null}
           </Pro2SectionCard>
         </section>
 
@@ -272,12 +357,41 @@ export default function BiomechanicsPageView() {
           </Pro2SectionCard>
         </section>
 
+        <section className="scroll-mt-28">
+          <Pro2SectionCard
+            accent="fuchsia"
+            icon={Camera}
+            title="Import OpenCap"
+            subtitle="Session UUID da app.opencap.ai → sidecar OPENCAP_API_BASE_URL → stesso staging/review."
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="min-w-[16rem] flex-1 space-y-2 text-sm text-gray-300">
+                <span className="font-mono text-[0.65rem] uppercase tracking-[0.2em] text-gray-500">Session ID</span>
+                <input
+                  value={openCapSessionId}
+                  onChange={(e) => setOpenCapSessionId(e.currentTarget.value)}
+                  placeholder="7272a71a-e70a-4794-a253-39e11cb7542c"
+                  className="w-full rounded-xl border border-white/15 bg-black/50 px-3 py-2 text-white"
+                />
+              </label>
+              <Pro2Button
+                variant="secondary"
+                onClick={onImportOpenCap}
+                disabled={!openCapSessionId.trim() || importingOpenCap || !athleteId}
+                className="justify-center"
+              >
+                {importingOpenCap ? "Import..." : "Importa OpenCap"}
+              </Pro2Button>
+            </div>
+          </Pro2SectionCard>
+        </section>
+
         <section id="gen-cross" className="scroll-mt-28">
           <Pro2SectionCard
             accent="violet"
             icon={Activity}
             title="Sessioni e twin readiness"
-            subtitle="Qui compariranno le sessioni confermate dal worker/CV prima di alimentare il twin biomeccanico."
+            subtitle="Qui compaiono le sessioni confermate dopo review CV e motore deterministico."
           >
             {loading ? <p className="text-sm text-gray-400">Caricamento archivio Biomechanics...</p> : <SessionList sessions={sessions} />}
           </Pro2SectionCard>
@@ -291,9 +405,9 @@ export default function BiomechanicsPageView() {
             subtitle="La pagina non calcola angoli, rischi o score: quelli arrivano solo dal domain engine dopo validazione."
           >
             <p className="text-sm leading-relaxed text-gray-300">
-              Questo step abilita la linea operativa corretta: media reale su Storage, job persistito per atleta, lettura
-              archivio. Il prossimo step può aggiungere staging CV e promozione controllata a{" "}
-              <code className="text-gray-100">BiomechanicsTwinSnapshotV1</code>.
+              I numeri canonici (efficienza, simmetria, rischio) provengono solo da{" "}
+              <code className="text-gray-100">@empathy/domain-biomechanics</code> dopo conferma staging. Il CV esterno
+              propone landmark/angoli; atleta e coach validano prima della promozione a twin.
             </p>
           </Pro2SectionCard>
         </section>

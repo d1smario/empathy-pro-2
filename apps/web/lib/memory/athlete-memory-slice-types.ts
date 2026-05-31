@@ -1,4 +1,4 @@
-export type MemorySlice = "full" | "training" | "nutrition" | "dashboard" | "bioenergetics";
+export type MemorySlice = "full" | "training" | "nutrition" | "dashboard" | "bioenergetics" | "biomechanics" | "aerodynamics";
 
 export type ResolveAthleteMemorySliceOptions = {
   slice?: MemorySlice;
@@ -90,6 +90,40 @@ export function getMemorySliceQueryFlags(slice: MemorySlice): MemorySliceQueryFl
         nutritionConstraints: true,
         trainingArchetypeTraces: false,
         biomechAero: false,
+        includeIngestPayload: false,
+      };
+    case "biomechanics":
+      return {
+        realityIngest: false,
+        healthPanels: false,
+        evidenceHits: false,
+        coachAppTraces: false,
+        systemicModulation: false,
+        healthObservations: false,
+        healthSystemGraph: false,
+        bioenergeticsResponses: false,
+        knowledge: false,
+        foodDiary: false,
+        nutritionConstraints: false,
+        trainingArchetypeTraces: false,
+        biomechAero: true,
+        includeIngestPayload: false,
+      };
+    case "aerodynamics":
+      return {
+        realityIngest: false,
+        healthPanels: false,
+        evidenceHits: false,
+        coachAppTraces: false,
+        systemicModulation: false,
+        healthObservations: false,
+        healthSystemGraph: false,
+        bioenergeticsResponses: false,
+        knowledge: false,
+        foodDiary: false,
+        nutritionConstraints: false,
+        trainingArchetypeTraces: false,
+        biomechAero: true,
         includeIngestPayload: false,
       };
     case "full":

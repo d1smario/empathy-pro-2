@@ -30,6 +30,7 @@ function apiErrorMessage(json: unknown, fallback: string): string {
 export type AerodynamicsTestsResponse = {
   tests: AerodynamicsTestSessionV1[];
   captureJobs: AerodynamicsCaptureJobV1[];
+  pendingStaging: Array<{ id: string; status: string; createdAt: string; jobId: string | null }>;
   error: string | null;
 };
 
@@ -56,6 +57,7 @@ export async function fetchAerodynamicsTests(athleteId: string): Promise<Aerodyn
     return {
       tests: [],
       captureJobs: [],
+      pendingStaging: [],
       error: apiErrorMessage(json, "Aerodynamics non disponibile."),
     };
   }
@@ -63,6 +65,7 @@ export async function fetchAerodynamicsTests(athleteId: string): Promise<Aerodyn
   return {
     tests: json.tests ?? [],
     captureJobs: json.captureJobs ?? [],
+    pendingStaging: (json as { pendingStaging?: AerodynamicsTestsResponse["pendingStaging"] }).pendingStaging ?? [],
     error: null,
   };
 }
@@ -126,4 +129,86 @@ export async function uploadAerodynamicsCapture(input: {
     throw new Error(apiErrorMessage(json, "Creazione job Aerodynamics non riuscita."));
   }
   return { job: json.job };
+}
+
+export async function processAerodynamicsCaptureJob(input: {
+  athleteId: string;
+  jobId: string;
+}): Promise<{ ok: boolean; stagingRunId?: string; error?: string; message?: string }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch("/api/aerodynamics/capture/process", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+    body: JSON.stringify(input),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Elaborazione CV fallita."), message: String(json.message ?? "") };
+  }
+  return { ok: true, stagingRunId: typeof json.stagingRunId === "string" ? json.stagingRunId : undefined };
+}
+
+export async function fetchAerodynamicsStagingRunDetail(runId: string): Promise<{
+  ok: boolean;
+  run?: Record<string, unknown>;
+  signedUrl?: string | null;
+  scenarioCompare?: import("@empathy/contracts").AerodynamicsScenarioCompareV1 | null;
+  error?: string;
+}> {
+  const headers = await buildSupabaseAuthHeaders();
+  const res = await fetch(`/api/aerodynamics/staging-runs/${encodeURIComponent(runId)}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Staging non disponibile.") };
+  }
+  return {
+    ok: true,
+    run: json.run as Record<string, unknown>,
+    signedUrl: typeof json.signedUrl === "string" ? json.signedUrl : null,
+    scenarioCompare: (json.scenarioCompare as import("@empathy/contracts").AerodynamicsScenarioCompareV1 | null) ?? null,
+  };
+}
+
+export async function applyAerodynamicsStagingRun(
+  runId: string,
+  selectedScenarioId?: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/aerodynamics/staging-runs/${encodeURIComponent(runId)}/apply`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+    body: JSON.stringify({ selectedScenarioId: selectedScenarioId ?? "baseline" }),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Conferma fallita.") };
+  }
+  return { ok: true };
+}
+
+export async function rejectAerodynamicsStagingRun(runId: string): Promise<{ ok: boolean; error?: string }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/aerodynamics/staging-runs/${encodeURIComponent(runId)}/apply`, {
+    method: "PATCH",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+    body: JSON.stringify({ status: "rejected" }),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Rifiuto fallito.") };
+  }
+  return { ok: true };
 }

@@ -147,3 +147,6 @@ export function computeAerodynamicsScores(input: {
     aeroEfficiency01,
   };
 }
+
+export * from "./position-surrogate";
+export * from "./course-projection";

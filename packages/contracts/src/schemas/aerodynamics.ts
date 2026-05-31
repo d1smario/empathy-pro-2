@@ -59,6 +59,26 @@ export type AerodynamicsScores = {
   aeroEfficiency01: number;
 };
 
+export type AerodynamicsPositionScenarioV1 = {
+  id: string;
+  label: string;
+  position: AerodynamicsPositionSnapshot;
+  equipment?: AerodynamicsEquipmentSnapshot;
+  cdaM2: number;
+  wattSavingsVsBaseline: number;
+  changedVariables: Array<keyof AerodynamicsPositionSnapshot>;
+  confidence01: number;
+  method: "surrogate_model";
+};
+
+export type AerodynamicsScenarioCompareV1 = {
+  version: "aero_scenario_compare_v1";
+  referenceSpeedKph: number;
+  baselineScenarioId: string;
+  selectedScenarioId?: string;
+  candidates: AerodynamicsPositionScenarioV1[];
+};
+
 export type AerodynamicsCaptureJobV1 = {
   id: string;
   athleteId: string;

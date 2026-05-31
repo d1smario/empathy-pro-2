@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Bike, CheckCircle2, Clock3, Gauge, UploadCloud, Wind } from "lucide-react";
 import type {
@@ -16,6 +17,7 @@ import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
 import {
   fetchAerodynamicsTests,
+  processAerodynamicsCaptureJob,
   uploadAerodynamicsCapture,
 } from "@/modules/aerodynamics/services/aerodynamics-module-api";
 
@@ -78,8 +80,7 @@ function AeroTestList({ tests }: { tests: AerodynamicsTestSessionV1[] }) {
   if (!tests.length) {
     return (
       <p className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-        Nessun test aero confermato. La prima fase salva capture job; ricostruzione/staging e promozione a CdA arrivano
-        nello step successivo.
+        Nessun test aero confermato. Elabora un job, valida la proposta CV, poi conferma per CdA canonico.
       </p>
     );
   }
@@ -105,8 +106,10 @@ export default function AerodynamicsPageView() {
   const [file, setFile] = useState<File | null>(null);
   const [tests, setTests] = useState<AerodynamicsTestSessionV1[]>([]);
   const [captureJobs, setCaptureJobs] = useState<AerodynamicsCaptureJobV1[]>([]);
+  const [pendingStaging, setPendingStaging] = useState<Array<{ id: string; jobId: string | null }>>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [processingJobId, setProcessingJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -122,6 +125,7 @@ export default function AerodynamicsPageView() {
       const result = await fetchAerodynamicsTests(athleteId);
       setTests(result.tests);
       setCaptureJobs(result.captureJobs);
+      setPendingStaging(result.pendingStaging.map((row) => ({ id: row.id, jobId: row.jobId })));
       if (result.error) setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Aerodynamics non disponibile.");
@@ -139,6 +143,26 @@ export default function AerodynamicsPageView() {
     const active = captureJobs.filter((job) => job.status === "pending" || job.status === "processing").length;
     return `${captureJobs.length} job · ${active} attivi`;
   }, [captureJobs]);
+
+  async function onProcessJob(jobId: string) {
+    if (!athleteId || processingJobId) return;
+    setProcessingJobId(jobId);
+    setError(null);
+    setMessage(null);
+    try {
+      const out = await processAerodynamicsCaptureJob({ athleteId, jobId });
+      if (!out.ok) {
+        setError(out.message || out.error || "Elaborazione fallita.");
+        return;
+      }
+      setMessage("Proposta geometry pronta — apri review per confermare.");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Elaborazione fallita.");
+    } finally {
+      setProcessingJobId(null);
+    }
+  }
 
   async function onUpload() {
     if (!athleteId || !file || uploading) return;
@@ -168,7 +192,7 @@ export default function AerodynamicsPageView() {
         eyebrow="Aerodynamics Engine · Capture"
         eyebrowClassName="text-cyan-300"
         title="Aerodynamics"
-        description="Cattura foto/video ciclista + bici per job aero. La UI non fa CFD e non inventa CdA: salva input reali per staging, validazione e domain engine."
+        description="Cattura media → CV geometry → review atleta/coach → motore deterministico → twin aero."
         headerActions={
           <>
             <Pro2Link href="/training" variant="secondary" className="justify-center border border-orange-500/35 bg-orange-500/10">
@@ -206,6 +230,26 @@ export default function AerodynamicsPageView() {
                 <p className="mt-1 text-xs text-gray-400">Solo da test session validata.</p>
               </div>
             </div>
+            {pendingStaging.length ? (
+              <div className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                {pendingStaging.length} review geometry in attesa —{" "}
+                <Link href={`/aerodynamics/staging/${pendingStaging[0]!.id}`} className="underline">
+                  apri validazione
+                </Link>
+              </div>
+            ) : null}
+            {latestJob?.status === "pending" ? (
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Pro2Button
+                  variant="secondary"
+                  onClick={() => onProcessJob(latestJob.id)}
+                  disabled={processingJobId != null}
+                  className="justify-center"
+                >
+                  {processingJobId === latestJob.id ? "Elaborazione CV..." : "Elabora ultimo job"}
+                </Pro2Button>
+              </div>
+            ) : null}
           </Pro2SectionCard>
         </section>
 
@@ -272,12 +316,12 @@ export default function AerodynamicsPageView() {
             accent="amber"
             icon={Bike}
             title="Guardrail aero"
-            subtitle="Surrogate/AI possono proporre geometria; i numeri canonici restano nel domain engine."
+            subtitle="Scenario matrix surrogate (AiRO-like) + validazione umana prima del twin."
           >
             <p className="text-sm leading-relaxed text-gray-300">
-              Questo modulo salva input reali e job. Il prossimo step potrà promuovere un{" "}
-              <code className="text-gray-100">AerodynamicsTestSessionV1</code> confermato con CdA, watt savings e time
-              savings calcolati da <code className="text-gray-100">@empathy/domain-aerodynamics</code>.
+              CV propone geometry; il motore genera scenari posizione bounded. Confermi uno scenario →{" "}
+              <code className="text-gray-100">@empathy/domain-aerodynamics</code> calcola CdA, watt e time savings.
+              Badge: <span className="text-cyan-200">Surrogate model</span>.
             </p>
           </Pro2SectionCard>
         </section>
