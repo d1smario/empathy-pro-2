@@ -5,6 +5,8 @@ import type {
   AerodynamicsPositionSnapshot,
 } from "@empathy/contracts";
 
+import { isLabInlineMockEnabled, labInlineGeometryProposal } from "@/lib/lab/lab-inline-mock-fixtures";
+
 export const GEOMETRY_PROPOSAL_VERSION = "geometry_proposal_v1" as const;
 
 export type AeroGeometryCvRequest = {
@@ -130,6 +132,10 @@ export async function extractAeroGeometryFromCv(
   input: AeroGeometryCvRequest,
   options?: { fetchImpl?: FetchImpl; apiUrl?: string; apiKey?: string; timeoutMs?: number },
 ): Promise<AeroGeometryProposalV1> {
+  if (isLabInlineMockEnabled()) {
+    return parseAeroGeometryProposalV1(labInlineGeometryProposal());
+  }
+
   const apiUrl = options?.apiUrl ?? readEnv("AERO_GEOMETRY_CV_API_URL");
   const apiKey = options?.apiKey ?? readEnv("AERO_GEOMETRY_CV_API_KEY");
   if (!apiUrl) {

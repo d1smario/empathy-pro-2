@@ -4,7 +4,8 @@
  */
 import http from "node:http";
 
-const PORT = Number.parseInt(process.env.LAB_MOCK_PORT ?? "3310", 10);
+const PORT = Number.parseInt(process.env.PORT ?? process.env.LAB_MOCK_PORT ?? "3310", 10);
+const HOST = process.env.LAB_MOCK_HOST ?? (process.env.PORT ? "0.0.0.0" : "127.0.0.1");
 const DEV_TOKEN = process.env.LAB_MOCK_TOKEN ?? "dev-local-lab";
 
 const poseProposal = {
@@ -116,7 +117,7 @@ const server = http.createServer(async (req, res) => {
   sendJson(res, 404, { error: "not_found" });
 });
 
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`[lab-dev-mock] listening on http://127.0.0.1:${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`[lab-dev-mock] listening on http://${HOST}:${PORT}`);
   console.log(`[lab-dev-mock] token (optional): ${DEV_TOKEN}`);
 });

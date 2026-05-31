@@ -6,6 +6,7 @@ import {
   type BiomechPoseProposalV1,
 } from "@/lib/biomechanics/biomech-pose-cv-adapter";
 import { parseOpenCapMotToJointAngles } from "@/lib/biomechanics/adapters/opencap-mot-mapper";
+import { isLabInlineMockEnabled, labInlinePoseProposal } from "@/lib/lab/lab-inline-mock-fixtures";
 
 export type OpenCapImportRequest = {
   externalSessionId: string;
@@ -38,6 +39,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export async function fetchOpenCapPoseProposal(input: OpenCapImportRequest): Promise<BiomechPoseProposalV1> {
+  if (isLabInlineMockEnabled()) {
+    return parseBiomechPoseProposalV1(labInlinePoseProposal("opencap"));
+  }
+
   const baseUrl = readEnv("OPENCAP_API_BASE_URL");
   if (!baseUrl) {
     throw new OpenCapImportError("provider_unavailable", "OpenCap sidecar non configurato (OPENCAP_API_BASE_URL).");

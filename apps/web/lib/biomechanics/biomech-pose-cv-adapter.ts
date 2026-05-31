@@ -7,6 +7,8 @@ import type {
   BiomechanicsRiskScores,
 } from "@empathy/contracts";
 
+import { isLabInlineMockEnabled, labInlinePoseProposal } from "@/lib/lab/lab-inline-mock-fixtures";
+
 export const POSE_PROPOSAL_VERSION = "pose_proposal_v1" as const;
 
 export type BiomechPoseCvRequest = {
@@ -158,6 +160,10 @@ export async function extractBiomechPoseFromCv(
   input: BiomechPoseCvRequest,
   options?: { fetchImpl?: FetchImpl; apiUrl?: string; apiKey?: string; timeoutMs?: number },
 ): Promise<BiomechPoseProposalV1> {
+  if (isLabInlineMockEnabled()) {
+    return parseBiomechPoseProposalV1(labInlinePoseProposal());
+  }
+
   const apiUrl = options?.apiUrl ?? readEnv("BIOMECH_POSE_CV_API_URL");
   const apiKey = options?.apiKey ?? readEnv("BIOMECH_POSE_CV_API_KEY");
   if (!apiUrl) {
