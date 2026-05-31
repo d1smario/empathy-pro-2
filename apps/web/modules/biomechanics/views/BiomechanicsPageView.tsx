@@ -107,6 +107,7 @@ function CaptureNextSteps({
   processingJobId,
   onAnalyze,
   hasConfirmedReport,
+  actionError,
 }: {
   latestJob: BiomechanicsCaptureJobV1 | null;
   awaitingReview: boolean;
@@ -114,6 +115,7 @@ function CaptureNextSteps({
   processingJobId: string | null;
   onAnalyze: () => void;
   hasConfirmedReport: boolean;
+  actionError: string | null;
 }) {
   if (awaitingReview && stagingRunId) {
     return (
@@ -136,6 +138,7 @@ function CaptureNextSteps({
         <p className="mt-2 text-sm text-fuchsia-50">
           Video in coda ({latestJob.id.slice(0, 8)}…). Avvia l&apos;analisi CV per ottenere angoli e rischi proposti.
         </p>
+        {actionError ? <p className="mt-2 text-sm text-rose-200">{actionError}</p> : null}
         <div className="mt-4 flex flex-wrap gap-3">
           <Pro2Button onClick={onAnalyze} disabled={processingJobId != null} className="justify-center">
             {processingJobId === latestJob.id ? "Analisi in corso..." : "Analizza video"}
@@ -231,10 +234,10 @@ export default function BiomechanicsPageView() {
   const latestJobAwaitingReview = Boolean(latestJob && latestJobStaging);
   const source: BiomechanicsCaptureSource = file?.type.startsWith("image/") ? "image" : "smartphone_video";
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { preserveError?: boolean }) => {
     if (!athleteId) return;
     setLoading(true);
-    setError(null);
+    if (!opts?.preserveError) setError(null);
     try {
       const result = await fetchBiomechanicsSessions(athleteId);
       setSessions(result.sessions);
@@ -298,10 +301,12 @@ export default function BiomechanicsPageView() {
       setMessage("Upload completato — elaborazione CV...");
       setFile(null);
       const stagingRunId = await onProcessJob(out.job.id);
-      await refresh();
       if (stagingRunId) {
+        await refresh();
         setReviewStagingRunId(stagingRunId);
         setMessage("Proposta CV pronta — conferma in review per alimentare il twin.");
+      } else {
+        await refresh({ preserveError: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload Biomechanics fallito.");
@@ -337,11 +342,15 @@ export default function BiomechanicsPageView() {
 
   async function runAnalyzeLatestJob() {
     if (!latestJob) return;
+    setMessage("Analisi CV in corso...");
     const stagingRunId = await onProcessJob(latestJob.id);
-    await refresh();
     if (stagingRunId) {
+      await refresh();
       setReviewStagingRunId(stagingRunId);
       setMessage("Proposta CV pronta — valida per generare il report.");
+    } else {
+      await refresh({ preserveError: true });
+      setMessage(null);
     }
   }
 
@@ -434,6 +443,7 @@ export default function BiomechanicsPageView() {
               processingJobId={processingJobId}
               onAnalyze={() => void runAnalyzeLatestJob()}
               hasConfirmedReport={sessions.length > 0}
+              actionError={error}
             />
             {message ? (
               <p className="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">

@@ -161,7 +161,13 @@ export async function processBiomechanicsCaptureJob(input: {
   });
   const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   if (!res.ok || !json.ok) {
-    return { ok: false, error: apiErrorMessage(json, "Elaborazione CV fallita."), message: String(json.message ?? "") };
+    const message = typeof json.message === "string" && json.message.trim() ? json.message : undefined;
+    const code = typeof json.code === "string" ? json.code : undefined;
+    return {
+      ok: false,
+      error: message ?? apiErrorMessage(json, "Elaborazione CV fallita."),
+      message: message ?? code ?? "",
+    };
   }
   return { ok: true, stagingRunId: typeof json.stagingRunId === "string" ? json.stagingRunId : undefined };
 }

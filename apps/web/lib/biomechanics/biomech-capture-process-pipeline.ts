@@ -18,6 +18,7 @@ import {
   extractBiomechPoseFromCv,
   type BiomechPoseProposalV1,
 } from "@/lib/biomechanics/biomech-pose-cv-adapter";
+import { isLabInlineMockEnabled } from "@/lib/lab/lab-inline-mock-fixtures";
 
 export type ProcessBiomechCaptureResult =
   | { ok: true; stagingRunId: string; jobId: string; confidence01: number }
@@ -69,23 +70,30 @@ export async function processBiomechanicsCaptureJob(
   }
 
   const admin = createBiomechServiceRoleClient();
-  if (!admin) {
-    await failBiomechanicsCaptureJob(db, {
-      athleteId: input.athleteId,
-      jobId: input.jobId,
-      errorMessage: "biomech_service_role_unavailable",
-    });
-    return { ok: false, code: "service_role", message: "Servizio storage non configurato." };
-  }
+  let mediaDownloadUrl: string;
 
-  const signed = await admin.storage.from(BIOMECH_CAPTURE_BUCKET).createSignedUrl(mediaPath, 600);
-  if (signed.error || !signed.data?.signedUrl) {
-    await failBiomechanicsCaptureJob(db, {
-      athleteId: input.athleteId,
-      jobId: input.jobId,
-      errorMessage: signed.error?.message ?? "signed_url_failed",
-    });
-    return { ok: false, code: "media_url", message: "Impossibile aprire il media catturato." };
+  if (isLabInlineMockEnabled()) {
+    mediaDownloadUrl = "inline://lab-mock";
+  } else {
+    if (!admin) {
+      await failBiomechanicsCaptureJob(db, {
+        athleteId: input.athleteId,
+        jobId: input.jobId,
+        errorMessage: "biomech_service_role_unavailable",
+      });
+      return { ok: false, code: "service_role", message: "Servizio storage non configurato." };
+    }
+
+    const signed = await admin.storage.from(BIOMECH_CAPTURE_BUCKET).createSignedUrl(mediaPath, 600);
+    if (signed.error || !signed.data?.signedUrl) {
+      await failBiomechanicsCaptureJob(db, {
+        athleteId: input.athleteId,
+        jobId: input.jobId,
+        errorMessage: signed.error?.message ?? "signed_url_failed",
+      });
+      return { ok: false, code: "media_url", message: "Impossibile aprire il media catturato." };
+    }
+    mediaDownloadUrl = signed.data.signedUrl;
   }
 
   const discipline = reverseDiscipline(claimed.modality);
@@ -94,7 +102,7 @@ export async function processBiomechanicsCaptureJob(
   let proposal: BiomechPoseProposalV1;
   try {
     proposal = await extractBiomechPoseFromCv({
-      mediaDownloadUrl: signed.data.signedUrl,
+      mediaDownloadUrl,
       athleteId: input.athleteId,
       discipline,
       cameraPlane,
