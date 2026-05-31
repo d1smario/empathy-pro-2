@@ -372,6 +372,15 @@ export function NutritionMealPlanWorkspace({
                 : null}
             </div>
           ) : null}
+          {intelligentMealPlan?.pathwayBoostStatus === "usda_cache_miss" ? (
+            <div
+              className="mb-3 rounded-lg border border-amber-500/30 bg-amber-950/25 px-3 py-2 text-[12px] leading-relaxed text-amber-100/90"
+              role="status"
+            >
+              Pathway attivo: swap alimenti applicati nel piano, ma la cache USDA (ranking top alimenti) non è
+              disponibile. Popola `nutrition_fdc_foods` o riprova più tardi per i suggerimenti densità-nutriente.
+            </div>
+          ) : null}
           {intelligentMealPlan ? (
             <>
               <div className="empathy-meal-plan-expo-shell">

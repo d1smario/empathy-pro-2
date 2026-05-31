@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PlannedWorkout } from "@empathy/contracts";
 import { computeNutritionDailyEnergyModel } from "@/lib/nutrition/daily-energy-solver";
 import { defaultFoodDiaryEntryTimeHmsForMealSlot } from "@/lib/nutrition/food-diary-entry-time";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { parsePro2BuilderSessionFromNotes } from "@/lib/training/builder/pro2-session-notes";
 import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 import { resolvePlannedSessionMetrics } from "@/lib/training/physiology/planned-session-metrics";
@@ -139,7 +139,7 @@ export async function loadNutritionPlanDayContext(
 
   if (plannedWorkouts.length > 0) {
     const profile = profileRes.data as Record<string, unknown> | null;
-    const memory = await resolveAthleteMemory(athleteId).catch(() => null);
+    const memory = await resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }).catch(() => null);
     const athleteFtpW = memory?.physiology?.physiologicalProfile?.ftpWatts ?? null;
     const dedupedPlanned = dedupePlannedWorkoutDbRows(
       plannedWorkouts.map((p) => ({

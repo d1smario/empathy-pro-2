@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import type { MultiscaleBottleneckApiOk } from "@/lib/knowledge/multiscale-bottleneck-contract";
 import { buildMultiscaleSignalSnapshotFromAthlete } from "@/lib/knowledge/multiscale-signal-from-state";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveCanonicalPhysiologyState } from "@/lib/physiology/profile-resolver";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     await requireAthleteReadContext(req, athleteId);
 
-    const athleteMemory = await resolveAthleteMemory(athleteId);
+    const athleteMemory = await resolveAthleteMemorySlice(athleteId, { slice: "dashboard" });
     const physiology = athleteMemory.physiology ?? (await resolveCanonicalPhysiologyState(athleteId));
     const snapshot = buildMultiscaleSignalSnapshotFromAthlete(physiology, athleteMemory.twin);
     const bottleneck = computeMetabolicBottleneckView(snapshot);

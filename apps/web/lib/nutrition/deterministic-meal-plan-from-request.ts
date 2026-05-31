@@ -248,10 +248,23 @@ export async function buildDeterministicMealPlanFromRequest(
           .slice(0, 820)
       : pathwayTransparency;
 
+  const pathwayBoostStatus =
+    validBoostTargets.length === 0
+      ? undefined
+      : boostLines.length === 0
+        ? ("usda_cache_miss" as const)
+        : ("applied" as const);
+
+  const usdaCacheMissNote =
+    pathwayBoostStatus === "usda_cache_miss"
+      ? "Cache USDA alimenti ricchi non disponibile: gli swap pathway (legumi/frutta/B12) restano attivi nel composer; ranking top-3 USDA non mostrato finché la cache FDC non è popolata."
+      : null;
+
   const dayBits = [
     `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (${orderedSlots.length} slot)`,
     suppressedNote,
     typeof boostSummary === "string" && boostSummary.trim() ? boostSummary : null,
+    usdaCacheMissNote,
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),
     ...req.pathwayTimingLines.slice(0, 4),
     ...req.trainingDayLines.slice(0, 3),
@@ -268,6 +281,7 @@ export async function buildDeterministicMealPlanFromRequest(
       dayBits.join(" · ").slice(0, 800) ||
       "Distribuire i pasti secondo orari e target solver; rispettare intolleranze, allergie ed esclusioni del profilo.",
     mealRotationStaples: Array.from(dayCtx.usedStaples),
+    pathwayBoostStatus,
   };
 
   /**

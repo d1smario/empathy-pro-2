@@ -87,9 +87,9 @@
 
 ## Allineamento spina lettura (indicativo)
 
-- **Preferito per stato atleta aggregato:** `resolveAthleteMemorySlice(athleteId, { slice })` lato server — `full` | `training` | `nutrition` | `dashboard`; cache in-process TTL ~45s (`athlete-memory-cache.ts`).
+- **Preferito per stato atleta aggregato:** `resolveAthleteMemorySlice(athleteId, { slice })` lato server — `full` | `training` | `nutrition` | `dashboard`; cache in-process TTL ~45s (`athlete-memory-cache.ts`). Caller migrati: planned-window, generate, day-adaptation, nutrition/module+route, dashboard hub/reasoning, virya-context, import, analytics, profile (dashboard), executed, device-export, multiscale-bottleneck, garmin callback, bioenergetics load-nutrition-plan.
+- **Eccezione esplicita full memory:** `GET /api/athlete-memory` (endpoint canonico full).
 - **Bioenergetics giorno:** eccezione documentata — `loadBioenergeticDayMemorySlice()` (finestra operativa per data ISO), non `resolveAthleteMemory` full.
-- **Endpoint paralleli da convergere nel tempo:** `profile-latest`, strip fisiologia solo DB, dove esiste già risoluzione canonica in `GET /api/profile` o in memory.
 
 ---
 

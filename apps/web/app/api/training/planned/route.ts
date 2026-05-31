@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import {
   AthleteReadContextError,
   requireAthleteReadContext,
@@ -64,7 +64,7 @@ function calendarAuditSuffix(
 
 async function memoryOrNull(athleteId: string) {
   try {
-    return await resolveAthleteMemory(athleteId);
+    return await resolveAthleteMemorySlice(athleteId, { slice: "training" });
   } catch {
     return null;
   }

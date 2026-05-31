@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { persistRealityDeviceExport } from "@/lib/reality/provider-adapters";
 import { buildCoverageQualityNote } from "@/lib/reality/coverage-quality";
 import { buildNutritionDeviceCanonicalPreview, buildNutritionDeviceCoverage } from "@/lib/reality/nutrition-device-signals";
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       status: "ok",
       ingestion,
-      athleteMemory: await resolveAthleteMemory(body.athlete_id),
+      athleteMemory: await resolveAthleteMemorySlice(body.athlete_id, { slice: "nutrition" }),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Nutrition device export failed";

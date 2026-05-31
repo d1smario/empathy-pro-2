@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext, requireAthleteWriteContext } from "@/lib/auth/athlete-read-context";
 import { requireAuthenticatedTrainingUser } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { writeAthleteMemoryDomainPatch } from "@/lib/memory/athlete-memory-domain-writer";
 
 export const runtime = "nodejs";
@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const { db } = await requireAthleteReadContext(req, athleteId);
 
     const [athleteMemory, executedRes] = await Promise.all([
-      resolveAthleteMemory(athleteId),
+      resolveAthleteMemorySlice(athleteId, { slice: "dashboard" }),
       db
         .from("executed_workouts")
         .select("date, trace_summary, duration_minutes, tss, kj, kcal")

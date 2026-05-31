@@ -873,6 +873,13 @@ const NUTRIENT_CANONICAL_SWAPS: Partial<Record<NutrientTargetId, NutrientSwapSpe
     noun: "legumi cotti",
     bridge: "Magnesio da legumi (cofactor chinasi).",
   },
+  zn_mg: {
+    fromKey: "mixed_veg",
+    toKey: "legumes_cooked",
+    name: "Legumi cotti (zinco)",
+    noun: "legumi cotti",
+    bridge: "Zinco complementare da legumi.",
+  },
   vitB12_mcg: {
     fromKey: "yogurt_plain",
     toKey: "egg_whole",

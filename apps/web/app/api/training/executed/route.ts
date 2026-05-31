@@ -4,7 +4,7 @@ import {
   requireAthleteReadContext,
   requireAthleteWriteContext,
 } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { normalizeDateKey } from "@/lib/training/calendar-analyzer-helpers";
 
@@ -54,12 +54,12 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500, headers: NO_STORE });
     }
-    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+    let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
     let athleteMemoryError: string | null = null;
     try {
-      athleteMemory = await resolveAthleteMemory(body.athlete_id);
+      athleteMemory = await resolveAthleteMemorySlice(body.athlete_id, { slice: "training" });
     } catch (memErr) {
-      athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemory failed";
+      athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemorySlice failed";
     }
     return NextResponse.json(
       {

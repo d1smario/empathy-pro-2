@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import {
   exchangeGarminAuthorizationCode,
   fetchGarminApiUserId,
@@ -295,7 +295,7 @@ export async function GET(req: NextRequest) {
   };
 
   let ingestion: Awaited<ReturnType<typeof persistRealityProviderCallback>>["ingestion"] | null = null;
-  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
 
   if (callbackState.athleteId) {
     const persisted = await persistRealityProviderCallback({
@@ -312,7 +312,7 @@ export async function GET(req: NextRequest) {
       hasError: Boolean(error),
     });
     ingestion = persisted.ingestion;
-    athleteMemory = await resolveAthleteMemory(callbackState.athleteId);
+    athleteMemory = await resolveAthleteMemorySlice(callbackState.athleteId, { slice: "training" });
   }
 
   logGarminCallbackEvent({

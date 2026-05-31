@@ -212,6 +212,8 @@ export type IntelligentMealPlanAssembledCore = {
   dayInteractionSummary: string;
   /** Staple usati nel giorno (deterministico) — da salvare in cache settimanale client. */
   mealRotationStaples?: string[];
+  /** Stato applicazione boost pathway: swap alimenti + ranking USDA. */
+  pathwayBoostStatus?: "applied" | "usda_cache_miss";
   /** Presente dopo `finalizeIntelligentMealPlanCore` (API). */
   nutrientRollup?: MealPlanNutrientRollup;
   hydrationRoutine?: MealPlanHydrationRoutine;
