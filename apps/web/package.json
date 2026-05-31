@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "lab:mock": "node scripts/lab-dev-mock-server.mjs",
     "garmin-ingest": "tsx scripts/garmin-large-push-ingest.ts",
     "garmin-pipeline-diag": "node scripts/garmin-pipeline-diag.mjs",
     "test:wahoo-daycode": "tsx --test lib/integrations/wahoo-daycode.test.ts",
