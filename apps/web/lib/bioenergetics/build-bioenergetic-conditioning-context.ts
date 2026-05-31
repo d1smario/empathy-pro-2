@@ -10,6 +10,7 @@ import type {
 import { analyzeBioenergeticBiaLiteratureV1 } from "@empathy/domain-bioenergetics";
 import type { BioenergeticTimelineEvent } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { readFastingGlucoseMmolL } from "@/lib/health/lab-marker-resolver";
 import { deviceExportsHaveHrSignal, extractBestBioimpedanceSnapshot } from "@/lib/bioenergetics/bioenergetic-device-signals-for-context";
 import { resolveMealTimelineIsoTs } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
@@ -124,20 +125,12 @@ function labAnchorsFromBiomarkers(slice: BioenergeticDayMemorySlice): Bioenerget
         : typeof row.created_at === "string"
           ? row.created_at
           : `${slice.date}T07:00:00`;
-    const g =
-      num(values.glucose_mmol_l) ??
-      num(values.glucose_mmol) ??
-      num(values.fasting_glucose_mmol) ??
-      (typeof values.glucose_mg_dl === "number"
-        ? values.glucose_mg_dl / 18
-        : typeof values.glucose_mg_dl === "string"
-          ? Number(values.glucose_mg_dl) / 18
-          : null);
-    if (g != null && Number.isFinite(g) && g > 0 && g < 35) {
+    const g = readFastingGlucoseMmolL(values);
+    if (g != null) {
       out.push({
         ts,
         analyteId: "glucose_mmol_anchor",
-        value: Math.round(g * 100) / 100,
+        value: g,
         unit: "mmol/L",
         provenance: "measured",
         fasting: true,

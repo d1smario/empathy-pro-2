@@ -10,6 +10,7 @@ import {
 } from "@/lib/twin/twin-adaptation-fallbacks";
 import type { AdaptationGuidance } from "@/lib/empathy/schemas/adaptation";
 import type { AthleteMemory } from "@/lib/empathy/schemas/memory";
+import { deriveBioDaySignalsFromAthleteMemory } from "@/lib/nutrition/derive-bio-day-signals-from-memory";
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
 import { resolveAcuteMealEstimateFromDiary } from "@/lib/nutrition/acute-meal-estimate-from-diary";
 import {
@@ -173,6 +174,7 @@ export async function resolveOperationalSignalsBundle(input: {
       physiologyState,
       operationalContext,
     }),
+    bioDaySignals: deriveBioDaySignalsFromAthleteMemory(athleteMemory),
   });
 
   const approvedApplicationPatches = await resolveApprovedApplicationPatches(athleteId).catch(() => []);

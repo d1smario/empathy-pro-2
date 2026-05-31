@@ -58,7 +58,7 @@ export type CrossDomainInterpretationEdge = {
  */
 export type CrossDomainInterpretationRoadmap = {
   schemaVersion: 1;
-  layer: "interpretation_bridge_stub_v1";
+  layer: "interpretation_bridge_stub_v1" | "interpretation_bridge_v2_multiscale";
   /** Policy orchestrazione (bump quando cambiano regole di defer/wired). */
   policyVersion: string;
   athleteId: string;

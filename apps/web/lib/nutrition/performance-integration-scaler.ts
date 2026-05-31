@@ -3,6 +3,7 @@ import type { TrainingDayOperationalContext } from "@/lib/training/day-operation
 import type { BioenergeticModulation } from "@/lib/training/bioenergetic-modulation";
 import type { DiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
 import type { AcuteMealMetabolicEstimate } from "@/lib/empathy/schemas/nutrition";
+import type { BioDaySignalsLite } from "@/lib/nutrition/derive-bio-day-signals-from-memory";
 
 type LoopPick = {
   status: "aligned" | "watch" | "regenerate";
@@ -59,6 +60,8 @@ export function buildNutritionPerformanceIntegration(input: {
   diarySignals?: DiaryAdaptiveSignals | null;
   adherenceOptIn?: boolean;
   acuteMealEstimate?: AcuteMealMetabolicEstimate | null;
+  /** Segnali bio day lite da memoria (no assembler completo). */
+  bioDaySignals?: BioDaySignalsLite | null;
 }): NutritionPerformanceIntegrationDials {
   const rationale: string[] = [];
   const bio = input.bioenergeticModulation;
@@ -158,6 +161,15 @@ export function buildNutritionPerformanceIntegration(input: {
     fuelingChoScale = Math.min(fuelingChoScale, 0.94);
     rationale.push("Volume operativo seduta ridotto: CHO/h intra temperati in linea con meno costo energetico atteso.");
   }
+
+  const bioDay = input.bioDaySignals;
+  if (bioDay?.suggestPeriChoBoost) {
+    fuelingChoScale = round(clamp(Math.max(fuelingChoScale, 1.04), 0.82, 1.12), 3);
+    rationale.push(...bioDay.rationale.slice(0, 2));
+  } else if (bioDay?.hasBloodPanel && !bioDay.hasDiaryInWindow) {
+    rationale.push(...bioDay.rationale.slice(0, 1));
+  }
+
   fuelingChoScale = round(clamp(fuelingChoScale, 0.82, 1.12), 3);
 
   let proteinBiasPctPoints = 0;

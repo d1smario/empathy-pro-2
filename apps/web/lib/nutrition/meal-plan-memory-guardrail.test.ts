@@ -9,6 +9,8 @@ import {
 } from "./mediterranean-meal-composer";
 import type { MealSlotKey } from "./intelligent-meal-plan-types";
 import { inferCanonicalFoodKeyPreferName, nutrientsForMealPlanItem } from "./canonical-food-composition";
+import { buildHealthLabPathwayBridge } from "./health-lab-pathway-bridge";
+import { buildActiveNutrientTargets } from "./pathway-cofactors-to-nutrient-targets";
 
 /**
  * Guardrail "memoria-driven" del sistema generativo meal plan.
@@ -404,4 +406,26 @@ test("pathway redox vit C: lunch preferisce frutta vit C-densa al posto di verdu
   );
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
   assert.ok(keys.includes("mixed_fruit"), `Atteso mixed_fruit, got: ${keys.join(", ")}`);
+});
+
+test("pathway lab ferro: ferritina bassa → lunch swap legumi (fe_mg)", () => {
+  const bridge = buildHealthLabPathwayBridge({
+    blood: { ferritin_ng_ml: 22 },
+    panels: [{ type: "blood", values: { ferritin_ng_ml: 22 } }],
+    systemicModulationSnapshots: [],
+  });
+  const targets = buildActiveNutrientTargets({ cofactorStrings: bridge.cofactorStrings });
+  const targetIds = targets.map((t) => t.nutrientId);
+  assert.ok(targetIds.includes("fe_mg"), `Atteso fe_mg da lab bridge, got: ${targetIds.join(", ")}`);
+
+  const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
+  const macros = { kcal: 900, carbsG: 110, proteinG: 45, fatG: 28 };
+  const meal = applyNutrientBoostSwaps(
+    composeMediterraneanMeal("lunch", macros, ctx),
+    "lunch",
+    targetIds,
+    ctx,
+  );
+  const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
+  assert.ok(keys.includes("legumes_cooked"), `Atteso legumes_cooked per ferro lab-driven, got: ${keys.join(", ")}`);
 });

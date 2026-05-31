@@ -1,6 +1,10 @@
 import { useEffect } from "react";
 import type { KnowledgeResearchTraceSummary } from "@/api/knowledge/contracts";
-import type { NutritionMetabolicEfficiencyGenerativeViewModel } from "@/api/nutrition/contracts";
+import type {
+  CrossDomainInterpretationRoadmap,
+  NutritionMetabolicEfficiencyGenerativeViewModel,
+  NutrientInterrogationViewModel,
+} from "@/api/nutrition/contracts";
 import { fetchNutritionModuleContext } from "@/modules/nutrition/services/nutrition-module-api";
 
 type WindowRef = { from: string; to: string } | null;
@@ -14,6 +18,13 @@ export function useNutritionHeavyModuleEnrichment(input: {
   nutritionContextVersion: number;
   onResearchTraces: (rows: KnowledgeResearchTraceSummary[]) => void;
   onMetabolicModel: (model: NutritionMetabolicEfficiencyGenerativeViewModel | null) => void;
+  onCrossDomainRoadmap?: (roadmap: CrossDomainInterpretationRoadmap | null) => void;
+  onNutrientInterrogation?: (vm: NutrientInterrogationViewModel | null) => void;
+  onPathwayRefresh?: (payload: {
+    pathwayModulation: Awaited<ReturnType<typeof fetchNutritionModuleContext>>["pathwayModulation"];
+    functionalMealSelector: Awaited<ReturnType<typeof fetchNutritionModuleContext>>["functionalMealSelector"];
+    functionalFoodRecommendations: Awaited<ReturnType<typeof fetchNutritionModuleContext>>["functionalFoodRecommendations"];
+  }) => void;
 }) {
   useEffect(() => {
     if (!input.athleteId || input.loading) return;
@@ -32,6 +43,13 @@ export function useNutritionHeavyModuleEnrichment(input: {
         if (cancelled || snap.error) return;
         input.onResearchTraces(snap.researchTraceSummaries ?? []);
         input.onMetabolicModel(snap.metabolicEfficiencyGenerativeModel ?? null);
+        input.onCrossDomainRoadmap?.(snap.crossDomainInterpretationRoadmap ?? null);
+        input.onNutrientInterrogation?.(snap.nutrientInterrogation ?? null);
+        input.onPathwayRefresh?.({
+          pathwayModulation: snap.pathwayModulation ?? null,
+          functionalMealSelector: snap.functionalMealSelector ?? null,
+          functionalFoodRecommendations: snap.functionalFoodRecommendations ?? null,
+        });
       } catch {
         /* fail-soft */
       }
@@ -47,5 +65,8 @@ export function useNutritionHeavyModuleEnrichment(input: {
     input.nutritionContextVersion,
     input.onResearchTraces,
     input.onMetabolicModel,
+    input.onCrossDomainRoadmap,
+    input.onNutrientInterrogation,
+    input.onPathwayRefresh,
   ]);
 }

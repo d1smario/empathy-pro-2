@@ -1,6 +1,7 @@
 import type { NutritionPathwayModulationViewModel } from "@/api/nutrition/contracts";
+import { buildPathwayAbsorptionTimingLines } from "@/lib/nutrition/pathway-absorption-hints";
 
-/** Righe compatte per LLM: fasi, finestre, classe emivita qualitativa. */
+/** Righe compatte per LLM: fasi, finestre, classe emivita qualitativa + hint assorbimento PK v2. */
 export function buildPathwayTimingLinesForMealPlan(vm: NutritionPathwayModulationViewModel | null | undefined): string[] {
   if (!vm?.pathways?.length) return [];
   const out: string[] = [];
@@ -12,5 +13,6 @@ export function buildPathwayTimingLinesForMealPlan(vm: NutritionPathwayModulatio
       );
     }
   }
-  return out.slice(0, 28);
+  out.push(...buildPathwayAbsorptionTimingLines(vm));
+  return out.slice(0, 32);
 }

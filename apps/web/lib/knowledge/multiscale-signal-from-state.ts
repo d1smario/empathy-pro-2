@@ -18,7 +18,7 @@ export function buildMultiscaleSignalSnapshotFromAthlete(
   const redoxStressIndex =
     rPerf != null && rTwin != null ? Math.max(rPerf, rTwin) : rPerf ?? rTwin ?? undefined;
 
-  const twinInflammationRisk = twin?.inflammationRisk ?? bio.inflammationProxy ?? undefined;
+  const twinInflammationRisk = twin?.inflammationRisk ?? bio?.inflammationProxy ?? undefined;
 
   const gutRaw = lac.gutStressScore;
   const gutStressScorePct = gutRaw != null && Number.isFinite(gutRaw) ? gutRaw * 100 : undefined;

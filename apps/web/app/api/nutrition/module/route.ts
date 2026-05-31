@@ -14,6 +14,12 @@ import { buildMetabolicEfficiencyGenerativeModel } from "@/lib/bioenergetics/met
 import { buildFunctionalFoodRecommendationsViewModel } from "@/lib/nutrition/functional-food-recommendations";
 import { buildFunctionalMealSelectorViewModel } from "@/lib/nutrition/functional-meal-selector";
 import { buildNutritionPathwayModulationViewModel } from "@/lib/nutrition/pathway-modulation-model";
+import { buildHealthLabPathwayBridge } from "@/lib/nutrition/health-lab-pathway-bridge";
+import { buildEvidencePathwayBridge } from "@/lib/nutrition/evidence-pathway-bridge";
+import { buildMultiscalePathwayBridge } from "@/lib/nutrition/multiscale-pathway-bridge";
+import { buildHealthPanelModulatorBridge } from "@/lib/nutrition/health-panel-modulator-bridge";
+import { buildNutrientInterrogationViewModel } from "@/lib/nutrition/build-nutrient-interrogation-view-model";
+import { buildActiveNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import { buildCrossDomainInterpretationRoadmapV1 } from "@/lib/nutrition/cross-domain-interpretation-roadmap";
 import {
   mergeNutritionModuleProfileWithAthleteProfileRow,
@@ -42,7 +48,8 @@ function buildNutritionApplicationDirective(
 ) {
   const applied = patches.filter((patch) => patch.status === "applied");
   const pending = patches.filter((patch) => patch.status === "pending");
-  const active = applied.length ? applied : pending;
+  /** L2 staging: applied patches hanno priorità; pending come fallback. */
+  const active = [...applied, ...pending.filter((p) => !applied.some((a) => a.id === p.id))];
   const text = active.map((patch) => `${patch.target} ${patch.action} ${patch.reason ?? ""}`.toLowerCase()).join(" ");
   const coachText = coachNutritionEvidence.lines.join(" ").toLowerCase();
   const mergedText = `${text} ${coachText}`;
@@ -61,6 +68,11 @@ function buildNutritionApplicationDirective(
     coachValidatedMemoryCount: coachNutritionEvidence.count,
     coachValidatedMemoryLines: coachNutritionEvidence.lines,
     focus: focus.length ? focus : ["baseline_support"],
+    stagingPatchActions: active.slice(0, 6).map((p) => ({
+      status: p.status,
+      target: p.target,
+      action: p.action,
+    })),
     solverPolicy: "do_not_override_kcal_macro_catalog" as const,
     timingPolicy: "coach_validated_context_for_pre_peri_post" as const,
     rationale: [
@@ -184,6 +196,9 @@ export async function GET(req: NextRequest) {
     let functionalFoodRecommendations = null;
     let functionalMealSelector = null;
     let dailyEnergyModel = null;
+    let multiscaleBridge: ReturnType<typeof buildMultiscalePathwayBridge> = null;
+    let healthLabBridge: ReturnType<typeof buildHealthLabPathwayBridge> | null = null;
+    let healthPanelModulators: ReturnType<typeof buildHealthPanelModulatorBridge> | null = null;
 
     const metabolicEfficiencyGenerativeModel = includeHeavy
       ? buildMetabolicEfficiencyGenerativeModel({
@@ -195,6 +210,16 @@ export async function GET(req: NextRequest) {
       : null;
 
     if (pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to) {
+      healthLabBridge = buildHealthLabPathwayBridge(athleteMemory.health);
+      const evidenceBridge = buildEvidencePathwayBridge({
+        evidenceItems: athleteMemory.evidenceMemory?.items ?? [],
+        researchTraces: includeHeavy ? researchTraceSummaries : [],
+      });
+      multiscaleBridge = buildMultiscalePathwayBridge({
+        physiology: physiologyState,
+        twin: twinState,
+      });
+      healthPanelModulators = buildHealthPanelModulatorBridge(athleteMemory.health);
       const rowsForDay = plannedRaw.filter((row) => row.date.slice(0, 10) === pathwayDateParam);
       pathwayModulation = buildNutritionPathwayModulationViewModel({
         date: pathwayDateParam,
@@ -208,6 +233,9 @@ export async function GET(req: NextRequest) {
         }),
         physiology: physiologyState,
         twin: twinState,
+        healthLabBridge,
+        evidenceBridge,
+        multiscaleBridge,
       });
       functionalFoodRecommendations = buildFunctionalFoodRecommendationsViewModel(pathwayModulation.pathways);
       functionalMealSelector = buildFunctionalMealSelectorViewModel({
@@ -252,6 +280,18 @@ export async function GET(req: NextRequest) {
             })
         : [];
 
+    const nutrientInterrogation =
+      includeHeavy && pathwayModulation
+        ? buildNutrientInterrogationViewModel({
+            activeTargets: buildActiveNutrientTargets({
+              cofactorStrings: pathwayModulation.pathways.flatMap((p) => p.cofactors),
+            }),
+            multiscaleBridge,
+            healthLabBridge,
+            healthPanelModulators,
+          })
+        : null;
+
     const crossDomainInterpretationRoadmap = includeHeavy
       ? buildCrossDomainInterpretationRoadmapV1({
           athleteId,
@@ -285,6 +325,9 @@ export async function GET(req: NextRequest) {
             : null,
           researchTraceSummaries,
           hasNutritionPerformanceIntegration: nutritionPerformanceIntegration != null,
+          multiscaleBridge,
+          healthPanelModulators,
+          nutrientInterrogation,
         })
       : null;
 
@@ -339,6 +382,7 @@ export async function GET(req: NextRequest) {
       }),
       researchTraceSummaries,
       crossDomainInterpretationRoadmap,
+      nutrientInterrogation,
       error,
     });
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");

@@ -8,6 +8,9 @@ import type { SessionKnowledgePacket } from "@/lib/empathy/schemas/knowledge";
 import type { PhysiologyState } from "@/lib/empathy/schemas/physiology";
 import type { TwinState } from "@/lib/empathy/schemas/twin";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
+import type { HealthLabPathwayBridgeResult } from "@/lib/nutrition/health-lab-pathway-bridge";
+import type { EvidencePathwayBridgeResult } from "@/lib/nutrition/evidence-pathway-bridge";
+import type { MultiscalePathwayBridgeResult } from "@/lib/nutrition/multiscale-pathway-bridge";
 
 type TwinLike = Pick<TwinState, "glycogenStatus" | "readiness" | "redoxStressIndex" | "inflammationRisk"> | null;
 type PhysioLike = Pick<PhysiologyState, "metabolicProfile" | "lactateProfile" | "performanceProfile" | "recoveryProfile"> | null;
@@ -148,6 +151,12 @@ export type BuildNutritionPathwayModulationInput = {
   }>;
   physiology: PhysioLike;
   twin: TwinLike;
+  /** Bridge lab ematici (già risolto da slice memory nutrition — zero fetch extra). */
+  healthLabBridge?: HealthLabPathwayBridgeResult | null;
+  /** Evidence / knowledge traces → pathway extensions (Interpretation layer). */
+  evidenceBridge?: EvidencePathwayBridgeResult | null;
+  /** Ontology multiscala → cofattori (sync, zero fetch). */
+  multiscaleBridge?: MultiscalePathwayBridgeResult | null;
 };
 
 /**
@@ -210,6 +219,25 @@ export function buildNutritionPathwayModulationViewModel(
     if (!pkt) continue;
     const row = pathwayFromSessionPacket(pkt, s.label);
     if (row) pathways.push(row);
+  }
+
+  const labBridge = input.healthLabBridge;
+  if (labBridge?.pathwayExtension) {
+    pathways.push(labBridge.pathwayExtension);
+    for (const note of labBridge.notes.slice(0, 4)) notes.push(note);
+  }
+
+  for (const ext of input.evidenceBridge?.pathwayExtensions ?? []) {
+    pathways.push(ext);
+  }
+  if (input.evidenceBridge?.notes.length) {
+    for (const note of input.evidenceBridge.notes.slice(0, 3)) notes.push(note);
+  }
+
+  const multiscaleBridge = input.multiscaleBridge;
+  if (multiscaleBridge?.pathwayExtension) {
+    pathways.push(multiscaleBridge.pathwayExtension);
+    for (const note of multiscaleBridge.notes.slice(0, 3)) notes.push(note);
   }
 
   const aggregateInhibitors = uniq(pathways.flatMap((p) => p.inhibitorsToAvoid));

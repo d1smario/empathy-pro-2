@@ -6,6 +6,7 @@ import type {
   NutritionPathwayModulationViewModel,
   NutritionPerformanceIntegrationDials,
 } from "@/api/nutrition/contracts";
+import { buildPathwayAbsorptionHints } from "@/lib/nutrition/pathway-absorption-hints";
 
 type AdaptationLoopLike = {
   status?: "aligned" | "watch" | "regenerate" | string;
@@ -171,6 +172,12 @@ export function buildFunctionalMealSelectorViewModel(input: {
   const dirIron = focus.includes("iron_absorption_support");
   const dirGut = focus.includes("gut_absorption_tolerance");
   const dirFuel = focus.includes("fueling_timing");
+  const appliedPatches = (input.approvedNutritionPatches ?? []).filter((p) => p.action);
+  const appliedIronPatch = appliedPatches.some((p) => /iron|ferr|ferro/i.test(`${p.action} ${p.reason ?? ""}`));
+  const appliedRedoxPatch = appliedPatches.some((p) => /redox|vit\s*c|antioxid/i.test(`${p.action} ${p.reason ?? ""}`));
+  const appliedGutPatch = appliedPatches.some((p) => /gut|microbiota|assorb/i.test(`${p.action} ${p.reason ?? ""}`));
+
+  const absorptionHints = buildPathwayAbsorptionHints(input.pathwayModulation);
 
   const glycogenTargets = targetsMatching(targets, /leucine|leucina|magnesium|magnesio|potassium|potassio|thiamine|tiamina|b1/i);
   const redoxTargets = targetsMatching(targets, /redox|vitamin_c|vitamina c|omega|zinc|zinco|selen|nitrate|nitrati|niacin|niacina|b3|iron|ferro|ferritin/i);
@@ -179,11 +186,11 @@ export function buildFunctionalMealSelectorViewModel(input: {
 
   const slots: FunctionalMealSelectorSlotViewModel[] = [];
   const dominantRedox =
-    redox >= 55 || inflammation >= 55 || pathwayLabels.some((label) => label.includes("redox")) || dirRedox || dirIron;
+    redox >= 55 || inflammation >= 55 || pathwayLabels.some((label) => label.includes("redox")) || dirRedox || dirIron || appliedRedoxPatch || appliedIronPatch;
   const lowGlycogen = glycogen < 48 || pathwayLabels.some((label) => label.includes("glicogeno"));
   const snackAmPreferGlycogen = lowGlycogen || dirFuel;
   const gutFocus =
-    pathwayLabels.some((label) => label.includes("intest") || label.includes("microbiota") || label.includes("gut")) || dirGut;
+    pathwayLabels.some((label) => label.includes("intest") || label.includes("microbiota") || label.includes("gut")) || dirGut || appliedGutPatch;
   const approvedPatchNotes =
     input.approvedNutritionPatches?.slice(0, 3).map((patch) => {
       const confidence = patch.confidence != null ? ` · confidenza ${Math.round(patch.confidence * 100)}%` : "";
@@ -260,6 +267,11 @@ export function buildFunctionalMealSelectorViewModel(input: {
     for (const line of (dir.coachValidatedMemoryLines ?? []).slice(0, 2)) {
       if (line.trim()) directiveNotes.push(`Memoria coach validate: ${line.trim().slice(0, 180)}`);
     }
+  }
+  if (absorptionHints.length) {
+    directiveNotes.push(
+      `Assorbimento qualitativo (PK v2): ${absorptionHints.map((h) => h.rationaleIt).slice(0, 2).join(" · ")}`,
+    );
   }
 
   return {

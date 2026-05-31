@@ -244,9 +244,38 @@ export type NutritionApplicationDirectiveViewModel = {
   coachValidatedMemoryCount?: number;
   coachValidatedMemoryLines?: string[];
   focus: string[];
+  stagingPatchActions?: Array<{ status: string; target: string; action: string }>;
   solverPolicy: "do_not_override_kcal_macro_catalog";
   timingPolicy: "coach_validated_context_for_pre_peri_post";
   rationale: string[];
+};
+
+export type NutrientInterrogationSubDomain =
+  | "nutrigenomics"
+  | "epigenetics"
+  | "microbiota"
+  | "neuroendocrine"
+  | "enzyme_flux"
+  | "health_lab";
+
+export type NutrientInterrogationItem = {
+  nutrientId: string;
+  labelIt: string;
+  activatedNodes: Array<{ id: string; labelIt: string; kind: string }>;
+  geneSymbols: string[];
+  signallingAxes: string[];
+  healthLabSignals: string[];
+  subDomains: NutrientInterrogationSubDomain[];
+  rationaleIt: string;
+};
+
+/** Drill-down multiscala per nutriente attivo (Interpretation — lazy `includeHeavy`). */
+export type NutrientInterrogationViewModel = {
+  schemaVersion: 1;
+  ontologyVersion: string;
+  dominantBottleneckLevelIt: string;
+  items: NutrientInterrogationItem[];
+  notes: string[];
 };
 
 /**
@@ -284,6 +313,8 @@ export type NutritionModuleViewModel = {
    * Presente su ogni risposta 200 di `GET /api/nutrition/module`.
    */
   crossDomainInterpretationRoadmap?: CrossDomainInterpretationRoadmap | null;
+  /** Interrogazione nutrienti multiscala — solo con `includeHeavy=1` e `pathwayDate`. */
+  nutrientInterrogation?: NutrientInterrogationViewModel | null;
   error?: string | null;
 };
 

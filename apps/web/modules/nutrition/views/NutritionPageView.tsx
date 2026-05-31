@@ -40,9 +40,11 @@ import type {
   NutritionApplicationDirectiveViewModel,
   NutritionMetabolicEfficiencyGenerativeViewModel,
   NutritionPathwayModulationViewModel,
+  NutrientInterrogationViewModel,
   NutritionPerformanceIntegrationDials,
   UsdaRichFoodItemViewModel,
 } from "@/api/nutrition/contracts";
+import type { CrossDomainInterpretationRoadmap } from "@empathy/contracts";
 import type {
   TrainingAdaptationLoopViewModel,
   TrainingBioenergeticModulationViewModel,
@@ -789,6 +791,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const [researchTraceSummaries, setResearchTraceSummaries] = useState<KnowledgeResearchTraceSummary[]>([]);
   const [metabolicEfficiencyGenerativeModel, setMetabolicEfficiencyGenerativeModel] =
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
+  const [crossDomainInterpretationRoadmap, setCrossDomainInterpretationRoadmap] =
+    useState<CrossDomainInterpretationRoadmap | null>(null);
+  const [nutrientInterrogation, setNutrientInterrogation] = useState<NutrientInterrogationViewModel | null>(null);
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
   const [pathwayModulation, setPathwayModulation] = useState<NutritionPathwayModulationViewModel | null>(null);
   const [nutritionApplicationDirective, setNutritionApplicationDirective] = useState<NutritionApplicationDirectiveViewModel | null>(
@@ -987,6 +992,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     nutritionContextVersion,
     onResearchTraces: setResearchTraceSummaries,
     onMetabolicModel: setMetabolicEfficiencyGenerativeModel,
+    onCrossDomainRoadmap: setCrossDomainInterpretationRoadmap,
+    onNutrientInterrogation: setNutrientInterrogation,
+    onPathwayRefresh: (payload) => {
+      if (payload.pathwayModulation) setPathwayModulation(payload.pathwayModulation);
+      if (payload.functionalMealSelector) setFunctionalMealSelector(payload.functionalMealSelector);
+    },
   });
 
   const onDiaryComplianceRows = useCallback((rows: FoodDiaryComplianceRow[]) => {
@@ -4058,6 +4069,70 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       : ""}
                     . Questo segnale modula le leve training-nutrizione ma non sostituisce i motori fisiologici.
                   </p>
+                </details>
+              ) : null}
+              {crossDomainInterpretationRoadmap ? (
+                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                  <summary>+ Roadmap cross-domain · domini cablati vs backlog</summary>
+                  <p className="nutrition-muted mb-2 mt-2 text-[0.74rem] leading-snug">
+                    {crossDomainInterpretationRoadmap.roadmapHeadlineIt}
+                  </p>
+                  <ul className="mb-3 list-none space-y-2 pl-0 text-[0.78rem]">
+                    {crossDomainInterpretationRoadmap.nodes.slice(0, 8).map((node) => (
+                      <li
+                        key={node.domainId}
+                        className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-white">{node.domainId.replace(/_/g, " ")}</strong>
+                          <span className="nutrition-ui-chip text-[0.65rem]">{node.probeStatus}</span>
+                        </div>
+                        <p className="nutrition-muted mt-1 mb-0 text-[0.74rem]">{node.summaryLineIt}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  {crossDomainInterpretationRoadmap.edges.length ? (
+                    <p className="nutrition-muted mb-0 text-[0.72rem]">
+                      {crossDomainInterpretationRoadmap.edges.length} collegamenti attivi tra domini (interpretazione qualitativa).
+                    </p>
+                  ) : null}
+                </details>
+              ) : null}
+              {nutrientInterrogation?.items.length ? (
+                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                  <summary>+ Interrogazione nutrienti · ontology multiscala</summary>
+                  <p className="nutrition-muted mb-2 mt-2 text-[0.74rem] leading-snug">
+                    Collo dominante: {nutrientInterrogation.dominantBottleneckLevelIt} · ontology{" "}
+                    {nutrientInterrogation.ontologyVersion}
+                  </p>
+                  <ul className="mb-0 list-none space-y-2 pl-0 text-[0.78rem]">
+                    {nutrientInterrogation.items.slice(0, 6).map((item) => (
+                      <li
+                        key={item.nutrientId}
+                        className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <strong className="text-white">{item.labelIt}</strong>
+                          {item.subDomains.slice(0, 3).map((sd) => (
+                            <span key={sd} className="nutrition-ui-chip text-[0.65rem]">
+                              {sd.replace(/_/g, " ")}
+                            </span>
+                          ))}
+                        </div>
+                        {item.geneSymbols.length ? (
+                          <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">
+                            Geni: {item.geneSymbols.join(", ")}
+                          </p>
+                        ) : null}
+                        {item.activatedNodes.length ? (
+                          <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">
+                            Nodi: {item.activatedNodes.map((n) => n.labelIt).slice(0, 3).join(" · ")}
+                          </p>
+                        ) : null}
+                        <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">{item.rationaleIt}</p>
+                      </li>
+                    ))}
+                  </ul>
                 </details>
               ) : null}
               <details className="collapsible-card" style={{ marginBottom: "10px" }}>
