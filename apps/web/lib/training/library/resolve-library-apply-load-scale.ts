@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveOperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveLatestRecoverySummary } from "@/lib/reality/recovery-summary";
 import {
   resolveDailyBuilderLoadAdaptation,
@@ -30,7 +30,7 @@ export async function resolveLibraryApplyLoadScale(input: {
   archetypeKey: string;
 }): Promise<LibraryApplyLoadScaleResult> {
   const [athleteMemory, recoverySummary] = await Promise.all([
-    resolveAthleteMemory(input.athleteId),
+    resolveAthleteMemorySlice(input.athleteId, { slice: "dashboard" }),
     resolveLatestRecoverySummary(input.athleteId).catch(() => null),
   ]);
 

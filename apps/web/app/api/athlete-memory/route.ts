@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { parseMemorySliceParam } from "@/lib/memory/parse-memory-slice-param";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,10 +15,14 @@ export async function GET(req: NextRequest) {
     }
     await requireAthleteReadContext(req, athleteId);
 
-    const athleteMemory = await resolveAthleteMemory(athleteId);
-    return NextResponse.json(athleteMemory, {
-      headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
-    });
+    const slice = parseMemorySliceParam(req.nextUrl.searchParams.get("slice"));
+    const athleteMemory = await resolveAthleteMemorySlice(athleteId, { slice });
+    return NextResponse.json(
+      { slice, ...athleteMemory },
+      {
+        headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },
+      },
+    );
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json({ error: err.message }, { status: err.status });

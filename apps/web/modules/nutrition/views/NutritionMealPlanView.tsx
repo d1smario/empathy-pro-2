@@ -381,6 +381,24 @@ export function NutritionMealPlanWorkspace({
               disponibile. Popola `nutrition_fdc_foods` o riprova più tardi per i suggerimenti densità-nutriente.
             </div>
           ) : null}
+          {intelligentMealPlan?.pathwayTargetRollup?.length ? (
+            <div
+              className="mb-3 rounded-lg border border-fuchsia-500/25 bg-fuchsia-950/20 px-3 py-2 text-[12px] leading-relaxed text-zinc-200"
+              role="status"
+            >
+              <p className="mb-2 font-semibold text-fuchsia-200/90">Pathway · target vs rollup giorno</p>
+              <ul className="mb-0 grid gap-1 sm:grid-cols-2">
+                {intelligentMealPlan.pathwayTargetRollup.map((line) => (
+                  <li key={line.nutrientId} className="flex items-baseline justify-between gap-2">
+                    <span className="text-zinc-300">{line.labelIt}</span>
+                    <span className={line.status === "met" ? "text-emerald-300" : "text-amber-300"}>
+                      {line.dayValue} {line.unit} / ≥{line.floor} {line.unit}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           {intelligentMealPlan ? (
             <>
               <div className="empathy-meal-plan-expo-shell">

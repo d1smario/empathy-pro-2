@@ -1,6 +1,6 @@
 import "server-only";
 
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 
 /**
  * Enriches the user PubMed string with a short tail from **existing** athlete knowledge modulations
@@ -10,7 +10,7 @@ export async function augmentPubmedQueryWithAthleteMemory(baseQ: string, athlete
   const trimmed = baseQ.trim();
   if (!trimmed) return trimmed;
 
-  const memory = await resolveAthleteMemory(athleteId);
+  const memory = await resolveAthleteMemorySlice(athleteId, { slice: "dashboard" });
   const tailParts: string[] = [];
   for (const m of memory.knowledge?.activeModulations ?? []) {
     for (const line of m.hardConstraints ?? []) {

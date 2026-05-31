@@ -2,13 +2,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExecutedWorkout, PlannedWorkout } from "@empathy/contracts";
 import { executedWorkoutFromDbRow, plannedWorkoutFromDbRow, type ExecutedWorkoutDbRow, type PlannedWorkoutDbRow } from "@empathy/domain-training";
 import { filterDeviceExportsByAthleteDataSourcePreference } from "@/lib/bioenergetics/bioenergetic-device-exports-preference-filter";
+import { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-device-exports-panel-date";
 import { loadDataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
-import { wellnessExportMatchesPanelDate } from "@/lib/physiology/wellness-day-key-from-device-export";
-import {
-  EMPTY_NUTRITION_PLAN_DAY,
-  loadNutritionPlanDayContext,
-  type NutritionPlanDayContext,
-} from "@/lib/bioenergetics/load-nutrition-plan-for-day";
+import { EMPTY_NUTRITION_PLAN_DAY, type NutritionPlanDayContext } from "@/lib/bioenergetics/nutrition-plan-day-empty";
+import { loadNutritionPlanDayContext } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 
 export type BioenergeticDayMemorySlice = {
@@ -33,17 +30,8 @@ function addDaysIsoDate(date: string, deltaDays: number): string {
   return base.toISOString().slice(0, 10);
 }
 
-/** Esporta per test: filtra export il cui giorno logico o `created_at` coincide con il pannello. */
-export function filterDeviceExportsForPanelDate(
-  candidates: Array<Record<string, unknown>>,
-  panelDate: string,
-): Array<Record<string, unknown>> {
-  return candidates.filter((row) => {
-    if (wellnessExportMatchesPanelDate(row, panelDate)) return true;
-    const ca = typeof row.created_at === "string" ? row.created_at : "";
-    return ca.slice(0, 10) === panelDate;
-  });
-}
+/** Esporta per test: re-export da modulo senza dipendenze server-only. */
+export { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-device-exports-panel-date";
 
 /**
  * Carica la fetta di memoria operativa per una giornata ISO (stesse tabelle canoniche,

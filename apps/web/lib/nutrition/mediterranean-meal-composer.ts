@@ -837,7 +837,7 @@ export function composeMediterraneanMeal(
 }
 
 type NutrientSwapSpec = {
-  fromKey: string;
+  fromKeys: string[];
   toKey: string;
   name: string;
   noun: string;
@@ -846,57 +846,148 @@ type NutrientSwapSpec = {
 
 const NUTRIENT_CANONICAL_SWAPS: Partial<Record<NutrientTargetId, NutrientSwapSpec>> = {
   folate_mcg: {
-    fromKey: "mixed_veg",
+    fromKeys: ["mixed_veg"],
     toKey: "legumes_cooked",
     name: "Legumi cotti (folato)",
     noun: "legumi cotti (lenticchie/ceci)",
     bridge: "Folato e ferro vegetali da legumi (pathway cofactor).",
   },
   vitC_mg: {
-    fromKey: "mixed_veg",
+    fromKeys: ["mixed_veg"],
     toKey: "mixed_fruit",
     name: "Frutta fresca (vit C)",
     noun: "frutta fresca mista",
     bridge: "Vitamina C e antiossidanti (pathway redox).",
   },
   fe_mg: {
-    fromKey: "mixed_veg",
+    fromKeys: ["mixed_veg"],
     toKey: "legumes_cooked",
     name: "Legumi cotti (ferro)",
     noun: "legumi cotti",
     bridge: "Ferro vegetale complementare al target proteico.",
   },
   mg_mg: {
-    fromKey: "mixed_veg",
+    fromKeys: ["mixed_veg"],
     toKey: "legumes_cooked",
     name: "Legumi cotti (magnesio)",
     noun: "legumi cotti",
     bridge: "Magnesio da legumi (cofactor chinasi).",
   },
   zn_mg: {
-    fromKey: "mixed_veg",
+    fromKeys: ["mixed_veg"],
     toKey: "legumes_cooked",
     name: "Legumi cotti (zinco)",
     noun: "legumi cotti",
     bridge: "Zinco complementare da legumi.",
   },
   vitB12_mcg: {
-    fromKey: "yogurt_plain",
+    fromKeys: ["yogurt_plain"],
     toKey: "egg_whole",
     name: "Uova (B12)",
     noun: "uova",
     bridge: "Vitamina B12 e cobalamina (pathway eritropoiesi).",
   },
+  omega3G: {
+    fromKeys: ["chicken_breast", "beef_lean", "egg_whole"],
+    toKey: "fish_white",
+    name: "Pesce (omega-3)",
+    noun: "pesce bianco o azzurro",
+    bridge: "Omega-3 EPA/DHA da pesce (pathway lipidico).",
+  },
+};
+
+/** Swap colazione: cereali/yogurt → frutta/legumi/pesce quando pathway attivo. */
+const BREAKFAST_NUTRIENT_SWAPS: Partial<
+  Record<NutrientTargetId, { fromKeys: string[]; spec: NutrientSwapSpec; defaultGrams: number }>
+> = {
+  vitC_mg: {
+    fromKeys: ["oat_dry", "crackers_whole", "bread_whole"],
+    defaultGrams: 120,
+    spec: {
+      fromKeys: ["oat_dry"],
+      toKey: "mixed_fruit",
+      name: "Frutta fresca (vit C)",
+      noun: "frutta fresca mista",
+      bridge: "Vitamina C colazione (pathway redox).",
+    },
+  },
+  folate_mcg: {
+    fromKeys: ["oat_dry", "crackers_whole"],
+    defaultGrams: 80,
+    spec: {
+      fromKeys: ["oat_dry"],
+      toKey: "legumes_cooked",
+      name: "Legumi cotti leggeri (folato)",
+      noun: "legumi cotti (porzione colazione)",
+      bridge: "Folato da legumi a colazione.",
+    },
+  },
+  fe_mg: {
+    fromKeys: ["oat_dry"],
+    defaultGrams: 80,
+    spec: {
+      fromKeys: ["oat_dry"],
+      toKey: "legumes_cooked",
+      name: "Legumi cotti (ferro)",
+      noun: "legumi cotti (porzione colazione)",
+      bridge: "Ferro vegetale colazione.",
+    },
+  },
+  mg_mg: {
+    fromKeys: ["oat_dry"],
+    defaultGrams: 80,
+    spec: {
+      fromKeys: ["oat_dry"],
+      toKey: "legumes_cooked",
+      name: "Legumi cotti (magnesio)",
+      noun: "legumi cotti (porzione colazione)",
+      bridge: "Magnesio colazione.",
+    },
+  },
+  zn_mg: {
+    fromKeys: ["oat_dry"],
+    defaultGrams: 80,
+    spec: {
+      fromKeys: ["oat_dry"],
+      toKey: "legumes_cooked",
+      name: "Legumi cotti (zinco)",
+      noun: "legumi cotti (porzione colazione)",
+      bridge: "Zinco colazione.",
+    },
+  },
+  vitB12_mcg: {
+    fromKeys: ["yogurt_plain", "plant_drink_generic"],
+    defaultGrams: 100,
+    spec: {
+      fromKeys: ["yogurt_plain"],
+      toKey: "egg_whole",
+      name: "Uova (B12)",
+      noun: "uova",
+      bridge: "Vitamina B12 colazione.",
+    },
+  },
+  omega3G: {
+    fromKeys: ["yogurt_plain", "egg_whole", "whey_powder"],
+    defaultGrams: 90,
+    spec: {
+      fromKeys: ["yogurt_plain", "egg_whole"],
+      toKey: "fish_white",
+      name: "Pesce (omega-3)",
+      noun: "pesce affumicato o azzurro",
+      bridge: "Omega-3 EPA/DHA colazione (pathway lipidico).",
+    },
+  },
 };
 
 /** Swap snack: CHO base → frutta (vit C) o legumi leggeri (folato/Mg/Fe). */
 const SNACK_NUTRIENT_SWAPS: Partial<
-  Record<NutrientTargetId, { fromKeys: string[]; spec: NutrientSwapSpec }>
+  Record<NutrientTargetId, { fromKeys: string[]; spec: NutrientSwapSpec; defaultGrams: number }>
 > = {
   vitC_mg: {
     fromKeys: ["oat_dry", "crackers_whole", "yogurt_plain", "plant_drink_generic"],
+    defaultGrams: 80,
     spec: {
-      fromKey: "oat_dry",
+      fromKeys: ["oat_dry"],
       toKey: "mixed_fruit",
       name: "Frutta fresca (vit C)",
       noun: "frutta fresca mista",
@@ -905,8 +996,9 @@ const SNACK_NUTRIENT_SWAPS: Partial<
   },
   folate_mcg: {
     fromKeys: ["oat_dry", "crackers_whole"],
+    defaultGrams: 80,
     spec: {
-      fromKey: "oat_dry",
+      fromKeys: ["oat_dry"],
       toKey: "legumes_cooked",
       name: "Legumi cotti leggeri (folato)",
       noun: "legumi cotti (porzione spuntino)",
@@ -915,8 +1007,9 @@ const SNACK_NUTRIENT_SWAPS: Partial<
   },
   fe_mg: {
     fromKeys: ["oat_dry", "crackers_whole"],
+    defaultGrams: 80,
     spec: {
-      fromKey: "oat_dry",
+      fromKeys: ["oat_dry"],
       toKey: "legumes_cooked",
       name: "Legumi cotti (ferro)",
       noun: "legumi cotti (porzione spuntino)",
@@ -925,12 +1018,24 @@ const SNACK_NUTRIENT_SWAPS: Partial<
   },
   mg_mg: {
     fromKeys: ["oat_dry", "crackers_whole"],
+    defaultGrams: 80,
     spec: {
-      fromKey: "oat_dry",
+      fromKeys: ["oat_dry"],
       toKey: "legumes_cooked",
       name: "Legumi cotti (magnesio)",
       noun: "legumi cotti (porzione spuntino)",
       bridge: "Magnesio spuntino.",
+    },
+  },
+  omega3G: {
+    fromKeys: ["yogurt_plain", "deli_lean"],
+    defaultGrams: 70,
+    spec: {
+      fromKeys: ["yogurt_plain", "deli_lean"],
+      toKey: "fish_white",
+      name: "Pesce (omega-3)",
+      noun: "pesce azzurro (porzione spuntino)",
+      bridge: "Omega-3 EPA/DHA spuntino.",
     },
   },
 };
@@ -971,7 +1076,7 @@ function applySwapSpecToMeal(
 
 /**
  * Post-compose: sostituisce voci swappabili quando il sistema intelligente ha target micronutrienti attivi.
- * Lunch/dinner: verdure miste → legumi/frutta; snack: cereali/gallette → frutta/legumi leggeri; B12: yogurt → uova.
+ * Colazione / pranzo-cena / spuntini: swap deterministici su canonical keys (no LLM).
  */
 export function applyNutrientBoostSwaps(
   meal: MediterraneanComposedMeal,
@@ -983,20 +1088,35 @@ export function applyNutrientBoostSwaps(
 
   const isMain = slot === "lunch" || slot === "dinner";
   const isSnack = slot === "snack_am" || slot === "snack_pm" || slot === "snack_evening";
-  if (!isMain && !isSnack) return meal;
+  const isBreakfast = slot === "breakfast";
+  if (!isMain && !isSnack && !isBreakfast) return meal;
 
   for (const id of targetIds) {
     if (isMain) {
       const swapSpec = NUTRIENT_CANONICAL_SWAPS[id];
       if (!swapSpec) continue;
-      if (ctx?.dietType === "vegan" && swapSpec.toKey === "egg_whole") continue;
-      const next = applySwapSpecToMeal(meal, swapSpec, [swapSpec.fromKey], 150);
+      if (ctx?.dietType === "vegan" && (swapSpec.toKey === "egg_whole" || swapSpec.toKey === "fish_white")) continue;
+      if (ctx?.dietType === "vegetarian" && swapSpec.toKey === "fish_white") continue;
+      const next = applySwapSpecToMeal(meal, swapSpec, swapSpec.fromKeys, 150);
+      if (next !== meal) return next;
+    } else if (isBreakfast) {
+      const breakfastSwap = BREAKFAST_NUTRIENT_SWAPS[id];
+      if (!breakfastSwap) continue;
+      if (ctx?.dietType === "vegan" && (breakfastSwap.spec.toKey === "egg_whole" || breakfastSwap.spec.toKey === "fish_white")) continue;
+      if (ctx?.dietType === "vegetarian" && breakfastSwap.spec.toKey === "fish_white") continue;
+      const next = applySwapSpecToMeal(
+        meal,
+        breakfastSwap.spec,
+        breakfastSwap.fromKeys,
+        breakfastSwap.defaultGrams,
+      );
       if (next !== meal) return next;
     } else {
       const snackSwap = SNACK_NUTRIENT_SWAPS[id];
       if (!snackSwap) continue;
-      if (ctx?.dietType === "vegan" && snackSwap.spec.toKey === "egg_whole") continue;
-      const next = applySwapSpecToMeal(meal, snackSwap.spec, snackSwap.fromKeys, 80);
+      if (ctx?.dietType === "vegan" && (snackSwap.spec.toKey === "egg_whole" || snackSwap.spec.toKey === "fish_white")) continue;
+      if (ctx?.dietType === "vegetarian" && snackSwap.spec.toKey === "fish_white") continue;
+      const next = applySwapSpecToMeal(meal, snackSwap.spec, snackSwap.fromKeys, snackSwap.defaultGrams);
       if (next !== meal) return next;
     }
   }

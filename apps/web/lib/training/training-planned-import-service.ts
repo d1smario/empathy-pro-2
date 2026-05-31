@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { buildRealityIngestionEnvelope } from "@/lib/reality/build-ingestion-envelope";
 import { buildPlannedTrainingImportQuality } from "@/lib/reality/training-import-quality";
 import { decompressTrainingImportBuffer } from "@/lib/training/import-parser";
@@ -26,7 +26,7 @@ const STRUCTURED_NOTES_HEAD = "[STRUCTURED_PLAN_IMPORT]";
 
 export type PlannedImportServiceOk = {
   status: "ok";
-  athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null;
+  athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null;
   athleteMemoryError?: string;
   ingestion: unknown;
   importedCount: number;
@@ -162,12 +162,12 @@ export async function runPlannedProgramFileImport(
       .eq("id", importJobId);
   }
 
-  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
   let athleteMemoryError: string | undefined;
   try {
-    athleteMemory = await resolveAthleteMemory(input.athleteId);
+    athleteMemory = await resolveAthleteMemorySlice(input.athleteId, { slice: "training", skipCache: true });
   } catch (memErr) {
-    athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemory failed";
+    athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemorySlice failed";
   }
 
   return {
@@ -346,12 +346,12 @@ export async function runStructuredPlannedSingleImport(
       .eq("id", importJobId);
   }
 
-  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemory>> | null = null;
+  let athleteMemory: Awaited<ReturnType<typeof resolveAthleteMemorySlice>> | null = null;
   let athleteMemoryError: string | undefined;
   try {
-    athleteMemory = await resolveAthleteMemory(input.athleteId);
+    athleteMemory = await resolveAthleteMemorySlice(input.athleteId, { slice: "training", skipCache: true });
   } catch (memErr) {
-    athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemory failed";
+    athleteMemoryError = memErr instanceof Error ? memErr.message : "resolveAthleteMemorySlice failed";
   }
 
   return {

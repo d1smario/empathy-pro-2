@@ -8,7 +8,7 @@ import "server-only";
  */
 
 import { createServerSupabaseClient } from "@/lib/supabase-server";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { resolveInternalLoadState } from "@/lib/internal-load/internal-load-resolver";
 import { extractDiaryAdaptiveSignals } from "@/lib/nutrition/diary-adaptive-signals";
 import { computeEpi } from "@/lib/epi/epi-engine";
@@ -141,7 +141,7 @@ export async function resolveEpiForDate(athleteId: string, dateIso?: string): Pr
   const supabase = createServerSupabaseClient();
 
   const [memory, checkinRes, compliance] = await Promise.all([
-    resolveAthleteMemory(athleteId),
+    resolveAthleteMemorySlice(athleteId, { slice: "bioenergetics" }),
     supabase
       .from("athlete_daily_checkins")
       .select("*")

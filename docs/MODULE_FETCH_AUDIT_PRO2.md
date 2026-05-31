@@ -87,8 +87,21 @@
 
 ## Allineamento spina lettura (indicativo)
 
-- **Preferito per stato atleta aggregato:** `resolveAthleteMemorySlice(athleteId, { slice })` lato server — `full` | `training` | `nutrition` | `dashboard`; cache in-process TTL ~45s (`athlete-memory-cache.ts`). Caller migrati: planned-window, generate, day-adaptation, nutrition/module+route, dashboard hub/reasoning, virya-context, import, analytics, profile (dashboard), executed, device-export, multiscale-bottleneck, garmin callback, bioenergetics load-nutrition-plan.
-- **Eccezione esplicita full memory:** `GET /api/athlete-memory` (endpoint canonico full).
+- **Preferito per stato atleta aggregato:** `resolveAthleteMemorySlice(athleteId, { slice })` lato server — `full` | `training` | `nutrition` | `dashboard` | `bioenergetics`; cache in-process TTL ~45s (`athlete-memory-cache.ts`). Caller migrati: planned-window, generate, day-adaptation, nutrition/module+route, dashboard hub/reasoning, virya-context, import, analytics, profile (dashboard), executed, device-export, multiscale-bottleneck, garmin callback, bioenergetics load-nutrition-plan, **pubmed-query, epi-resolver, library-apply-load-scale, import-render-profile, training-planned-import, athlete-memory-domain-writer (post-patch slice)**.
+- **`GET /api/athlete-memory`:** default `slice=full`; query opzionale `?slice=training|nutrition|dashboard|bioenergetics` per payload ridotto (`parse-memory-slice-param.ts`).
+
+### Route API senza consumer prodotto (2026-05)
+
+Mantenute per compat / script / inviti; **nessun fetch da moduli prodotto** al momento del audit:
+
+| Route | Note |
+|-------|------|
+| `GET /api/knowledge/bindings` | Knowledge admin; usare `/api/knowledge/research-traces` in UI |
+| `POST /api/integrations/ingest-clips` | Ingest clip legacy |
+| `GET /api/training/import-jobs` | Storico import; UI usa `/api/training/import` |
+| `GET /api/invites/lookup` | Anteprima token invito (server-side / invite page) |
+
+Non rimuovere senza verifica V1/script esterni condivisi.
 - **Bioenergetics giorno:** eccezione documentata — `loadBioenergeticDayMemorySlice()` (finestra operativa per data ISO), non `resolveAthleteMemory` full.
 
 ---

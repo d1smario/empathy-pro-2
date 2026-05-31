@@ -1,3 +1,4 @@
+/** @deprecated Nessun consumer prodotto Pro 2 — ingest clip legacy. Vedi `docs/MODULE_FETCH_AUDIT_PRO2.md`. */
 import { type NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { createServerSupabaseClient } from "@/lib/supabase-server";

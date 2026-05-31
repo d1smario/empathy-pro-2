@@ -1,7 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { athleteIdByNormalizedEmail } from "@/lib/auth/bootstrap-app-user-profile";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { invalidateAthleteMemoryCache } from "@/lib/memory/athlete-memory-cache";
+import type { MemorySlice } from "@/lib/memory/athlete-memory-slice-types";
 
 type ProfileUpsertPatch = {
   domain: "profile";
@@ -101,6 +102,10 @@ function normalizeEvidenceRow(row: Record<string, unknown>, athleteId: string) {
   };
 }
 
+async function freshAthleteMemoryAfterPatch(athleteId: string, slice: MemorySlice) {
+  return resolveAthleteMemorySlice(athleteId, { slice, skipCache: true });
+}
+
 export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPatch) {
   const supabase = createServerSupabaseClient();
 
@@ -120,7 +125,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
             return {
               athleteId: canonicalId,
               status: "updated_existing" as const,
-              athleteMemory: await resolveAthleteMemory(canonicalId),
+              athleteMemory: await freshAthleteMemoryAfterPatch(canonicalId, "dashboard"),
             };
           }
         }
@@ -136,7 +141,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
         return {
           athleteId,
           status: "created" as const,
-          athleteMemory: athleteId ? await resolveAthleteMemory(athleteId) : null,
+          athleteMemory: athleteId ? await freshAthleteMemoryAfterPatch(athleteId, "dashboard") : null,
         };
       }
 
@@ -146,7 +151,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       return {
         athleteId: patch.athleteId,
         status: "updated" as const,
-        athleteMemory: await resolveAthleteMemory(patch.athleteId),
+        athleteMemory: await freshAthleteMemoryAfterPatch(patch.athleteId, "dashboard"),
       };
     }
 
@@ -163,7 +168,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       return {
         athleteId: patch.athleteId,
         status: "ok" as const,
-        athleteMemory: await resolveAthleteMemory(patch.athleteId),
+        athleteMemory: await freshAthleteMemoryAfterPatch(patch.athleteId, "nutrition"),
       };
     }
 
@@ -181,7 +186,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       return {
         athleteId: patch.athleteId,
         status: "ok" as const,
-        athleteMemory: await resolveAthleteMemory(patch.athleteId),
+        athleteMemory: await freshAthleteMemoryAfterPatch(patch.athleteId, "nutrition"),
       };
     }
 
@@ -190,7 +195,7 @@ export async function writeAthleteMemoryDomainPatch(patch: AthleteMemoryDomainPa
       const { error: insertErr } = await supabase.from("knowledge_evidence_hits").insert(rows);
       if (insertErr) throw new Error(insertErr.message);
       invalidateAthleteMemoryCache(patch.athleteId);
-      const athleteMemory = await resolveAthleteMemory(patch.athleteId);
+      const athleteMemory = await freshAthleteMemoryAfterPatch(patch.athleteId, "dashboard");
       return {
         athleteId: patch.athleteId,
         status: "ok" as const,

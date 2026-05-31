@@ -1,6 +1,6 @@
 import type { BioenergeticDayKernelOutput, BioenergeticSeriesPoint, PlanRealityFusionMetaV1 } from "@/api/bioenergetics/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
-import type { BioPlannedMealRow, NutritionPlanDayContext } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
+import type { BioPlannedMealRow, NutritionPlanDayContext } from "@/lib/bioenergetics/nutrition-plan-day-empty";
 import { resolveMealTimelineIsoTs } from "@/lib/bioenergetics/bioenergetic-day-timeline";
 import { num } from "@/lib/bioenergetics/bioenergetic-day-payload-parsers";
 import { buildSimulatedGluLacDiurnalSubHourly, type SimTimelineEventV1 } from "@empathy/domain-bioenergetics";

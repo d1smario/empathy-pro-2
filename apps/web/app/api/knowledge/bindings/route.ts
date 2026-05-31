@@ -1,3 +1,4 @@
+/** @deprecated Nessun consumer prodotto Pro 2 — preferire `/api/knowledge/research-traces`. Mantenuto per script/admin. */
 import type { KnowledgeBindingViewModel } from "@/api/knowledge/contracts";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { resolveAthleteKnowledgeMemory } from "@/lib/knowledge/knowledge-memory-resolver";

@@ -1,3 +1,4 @@
+/** @deprecated Nessun consumer UI Pro 2 — storico job import; UI usa `/api/training/import`. */
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { mapRealityImportJobs } from "@/lib/reality/import-job-mapper";

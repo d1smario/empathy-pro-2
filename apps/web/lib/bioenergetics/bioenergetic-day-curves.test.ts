@@ -5,8 +5,8 @@ import type { ExecutedWorkout, PlannedWorkout } from "@empathy/contracts";
 import { averagePowerWattsFromKjAndDuration } from "@empathy/domain-bioenergetics";
 import { ATHLETE_TIME_SERIES_CHANNEL_V1 } from "@empathy/contracts";
 import type { BioenergeticDayMemorySlice } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
-import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/load-nutrition-plan-for-day";
-import { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-day-memory-slice";
+import { EMPTY_NUTRITION_PLAN_DAY } from "@/lib/bioenergetics/nutrition-plan-day-empty";
+import { filterDeviceExportsForPanelDate } from "@/lib/bioenergetics/bioenergetic-device-exports-panel-date";
 import {
   buildBioenergeticDaySeries,
   extractMeasuredGluLacFromSlice,

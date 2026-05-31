@@ -16,10 +16,8 @@ import type {
   PhysiologyState,
 } from "@/lib/empathy/schemas";
 import { buildOperationalDynamicsLines } from "@/lib/platform/operational-dynamics-lines";
-import {
-  computeNutritionDailyEnergyModel,
-  normalizeLifestyleActivityClass,
-} from "@/lib/nutrition/daily-energy-solver";
+import { resolveNutritionDayModel } from "@/modules/nutrition/hooks/resolve-nutrition-day-model";
+import { useNutritionHeavyModuleEnrichment } from "@/modules/nutrition/hooks/use-nutrition-heavy-module-enrichment";
 import {
   assignPathwayTargetsToMealSlots,
   catalogIdsForSlot,
@@ -981,31 +979,15 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [selectedPlanDate, athleteId, loading]);
 
   /** Sezioni pesanti (research traces, metabolic model) — dopo first paint. */
-  useEffect(() => {
-    if (!athleteId || loading) return;
-    const w = nutritionModuleWindowRef.current;
-    if (!w) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const snap = await fetchNutritionModuleContext({
-          athleteId,
-          from: w.from,
-          to: w.to,
-          pathwayDate: selectedPlanDate,
-          includeHeavy: true,
-        });
-        if (cancelled || snap.error) return;
-        setResearchTraceSummaries(snap.researchTraceSummaries ?? []);
-        setMetabolicEfficiencyGenerativeModel(snap.metabolicEfficiencyGenerativeModel ?? null);
-      } catch {
-        /* fail-soft */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [athleteId, loading, selectedPlanDate, nutritionContextVersion]);
+  useNutritionHeavyModuleEnrichment({
+    athleteId,
+    loading,
+    selectedPlanDate,
+    nutritionModuleWindow: nutritionModuleWindowRef.current,
+    nutritionContextVersion,
+    onResearchTraces: setResearchTraceSummaries,
+    onMetabolicModel: setMetabolicEfficiencyGenerativeModel,
+  });
 
   const onDiaryComplianceRows = useCallback((rows: FoodDiaryComplianceRow[]) => {
     setDiaryMacroRows(rows);
@@ -1190,53 +1172,37 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     [selectedPlanSessions, selectedExecutedSessions, physio?.ftp_watts],
   );
 
-  const nutritionDayModel = useMemo<NutritionDailyEnergyModel | null>(() => {
-    if (
-      serverDailyEnergyModel &&
-      serverDailyEnergyDateRef.current === selectedPlanDate
-    ) {
-      return serverDailyEnergyModel;
-    }
-    if (!athleteId || !profile) return null;
-    const routine = record(profile.routine_config);
-    return computeNutritionDailyEnergyModel({
+  const nutritionDayModel = useMemo<NutritionDailyEnergyModel | null>(
+    () =>
+      resolveNutritionDayModel({
+        athleteId: athleteId ?? "",
+        selectedPlanDate,
+        serverDailyEnergyModel,
+        serverDailyEnergyDate: serverDailyEnergyDateRef.current,
+        profile,
+        physio,
+        plannedTraining: effectiveDayContext.sessions.map((session) => ({
+          durationMinutes: session.durationMin,
+          kcal: session.kcal,
+          tss: session.tss,
+          avgPowerW: session.avgPowerW,
+        })),
+        recoverySummary,
+        nutritionPerformanceIntegration,
+        dietDayMealsScalePct: resolvedDietDay.dayTypePct,
+      }),
+    [
+      serverDailyEnergyModel,
+      selectedPlanDate,
       athleteId,
-      date: selectedPlanDate,
-      birthDate: profile.birth_date,
-      sex: profile.sex,
-      heightCm: profile.height_cm,
-      weightKg: profile.weight_kg,
-      bodyFatPct: profile.body_fat_pct,
-      muscleMassKg: profile.muscle_mass_kg,
-      ftpWatts: physio?.ftp_watts ?? null,
-      vo2maxMlMinKg: physio?.vo2max_ml_min_kg ?? null,
-      lifestyleActivityClass:
-        profile.lifestyle_activity_class ??
-        normalizeLifestyleActivityClass(routine.lifestyle_activity_class as string | null | undefined),
-      recoveryStatus: recoverySummary?.status ?? "unknown",
-      recoverySleepHours: recoverySummary?.sleepDurationHours ?? null,
-      recoveryHrvMs: recoverySummary?.hrvMs ?? null,
-      recoveryStrainScore: recoverySummary?.strainScore ?? null,
-      plannedTraining: effectiveDayContext.sessions.map((session) => ({
-        durationMinutes: session.durationMin,
-        kcalTarget: session.kcal,
-        tssTarget: session.tss,
-        avgPowerW: session.avgPowerW,
-      })),
-      performanceIntegration: nutritionPerformanceIntegration,
-      dietDayMealsScalePct: resolvedDietDay.dayTypePct,
-    });
-  }, [
-    serverDailyEnergyModel,
-    selectedPlanDate,
-    athleteId,
-    profile,
-    physio,
-    effectiveDayContext,
-    recoverySummary,
-    nutritionPerformanceIntegration,
-    resolvedDietDay.dayTypePct,
-  ]);
+      profile,
+      physio,
+      effectiveDayContext,
+      recoverySummary,
+      nutritionPerformanceIntegration,
+      resolvedDietDay.dayTypePct,
+    ],
+  );
 
   /** BMR assente o peso non letto → pasti solver ~solo quota training; evita silenzio in UI. */
   const lowMealsBudgetWarning = useMemo(() => {

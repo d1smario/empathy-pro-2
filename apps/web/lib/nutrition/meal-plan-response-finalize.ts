@@ -17,6 +17,8 @@ import {
 import { buildHydrationRoutineFromMealPlanRequest } from "@/lib/nutrition/meal-plan-hydration-routine";
 import { buildMealPlanNutrientIntegrationHints } from "@/lib/nutrition/meal-plan-nutrient-integration-hints";
 import { dedupeLunchDinnerMainProteins } from "@/lib/nutrition/meal-plan-protein-dedupe";
+import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { buildPathwayTargetRollupComparison } from "@/lib/nutrition/pathway-target-rollup-compare";
 
 function enrichSlot(slot: IntelligentMealPlanSlotOut, snapshot: FdcCanonicalSnapshot): IntelligentMealPlanSlotOut {
   const items = slot.items.map((it) => {
@@ -77,10 +79,19 @@ export async function finalizeIntelligentMealPlanCore(
     dayInteractionSummary = `${dayInteractionSummary} · ${integrationHints.join(" · ")}`.slice(0, 900);
   }
 
+  const boostTargets =
+    req.nutrientBoostTargets?.filter(
+      (t): t is { nutrientId: NutrientTargetId; labelIt: string } =>
+        typeof t.nutrientId === "string" && typeof t.labelIt === "string" && t.labelIt.trim() !== "",
+    ) ?? [];
+  const pathwayTargetRollup =
+    boostTargets.length > 0 ? buildPathwayTargetRollupComparison(boostTargets, dayTotals) : undefined;
+
   return {
     ...core,
     slots,
     dayInteractionSummary,
+    pathwayTargetRollup,
     nutrientRollup: {
       disclaimerIt:
         "Composizione da cache USDA FDC (nutrition_fdc_foods) quando disponibile; fallback alla banca canonica interna per voci non ancora mappate. GI/II derivati da macro USDA (Wolever-style estimate, salvati in DB).",

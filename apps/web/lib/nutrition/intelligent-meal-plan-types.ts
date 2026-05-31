@@ -4,6 +4,7 @@
  */
 
 import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
+import type { PathwayTargetRollupLine } from "@/lib/nutrition/pathway-target-rollup-compare";
 import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 
 /** Ordine canonico pasti (5): due spuntini + tre principali. Il 6° pasto (serale) è `snack_evening` quando Diet = 6 pasti. */
@@ -214,6 +215,8 @@ export type IntelligentMealPlanAssembledCore = {
   mealRotationStaples?: string[];
   /** Stato applicazione boost pathway: swap alimenti + ranking USDA. */
   pathwayBoostStatus?: "applied" | "usda_cache_miss";
+  /** Target pathway attivi vs rollup giornaliero (post-USDA). */
+  pathwayTargetRollup?: PathwayTargetRollupLine[];
   /** Presente dopo `finalizeIntelligentMealPlanCore` (API). */
   nutrientRollup?: MealPlanNutrientRollup;
   hydrationRoutine?: MealPlanHydrationRoutine;

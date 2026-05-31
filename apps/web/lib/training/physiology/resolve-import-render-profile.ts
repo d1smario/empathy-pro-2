@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { Pro2RenderProfile } from "@/lib/training/builder/pro2-session-contract";
-import { resolveAthleteMemory } from "@/lib/memory/athlete-memory-resolver";
+import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { isUsableAthleteFtpWatts } from "@/lib/training/physiology/resolve-athlete-ftp-watts";
 
 const DEFAULT_IMPORT_RENDER_PROFILE: Pro2RenderProfile = {
@@ -22,7 +22,7 @@ function isUsableHrMax(value: unknown): value is number {
 export async function resolveImportRenderProfileForAthlete(athleteId: string): Promise<Pro2RenderProfile> {
   if (!athleteId.trim()) return { ...DEFAULT_IMPORT_RENDER_PROFILE };
   try {
-    const mem = await resolveAthleteMemory(athleteId);
+    const mem = await resolveAthleteMemorySlice(athleteId, { slice: "training" });
     const phys = mem?.physiology?.physiologicalProfile;
     const recovery = mem?.physiology?.recoveryProfile;
     const performance = mem?.physiology?.performanceProfile;
