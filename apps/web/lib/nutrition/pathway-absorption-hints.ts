@@ -1,8 +1,10 @@
 import type { NutritionPathwayModulationViewModel } from "@/api/nutrition/contracts";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { catalogIdToNutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 
 export type PathwayAbsorptionHint = {
-  nutrientId: string;
+  nutrientId: NutrientTargetId;
   slotPreference: MealSlotKey[];
   avoidWith: string[];
   pairWith: string[];
@@ -25,6 +27,22 @@ const B12_HINT: PathwayAbsorptionHint = {
   rationaleIt: "B12: assorbimento migliore con pasto proteico regolare (classe emivita oraria).",
 };
 
+const B1_HINT: PathwayAbsorptionHint = {
+  nutrientId: "thiamineB1_mg",
+  slotPreference: ["breakfast", "lunch"],
+  avoidWith: ["alcol nelle ore pre-carico intenso"],
+  pairWith: ["CHO complessi", "pasto misto"],
+  rationaleIt: "Tiamina (PDH/glicolisi): distribuzione su colazione/pranzo regolari (enzyme-linked v3).",
+};
+
+const MG_HINT: PathwayAbsorptionHint = {
+  nutrientId: "mg_mg",
+  slotPreference: ["lunch", "snack_pm"],
+  avoidWith: [],
+  pairWith: ["pasto misto", "idratazione"],
+  rationaleIt: "Magnesio (PFK/PDH): preferenza pranzo/spuntino pomeridiano peri-stimolo.",
+};
+
 const VIT_D_HINT: PathwayAbsorptionHint = {
   nutrientId: "vitD_mcg",
   slotPreference: ["lunch", "dinner"],
@@ -41,15 +59,41 @@ const FAT_SOLUBLE_HINT: PathwayAbsorptionHint = {
   rationaleIt: "Micronutrienti liposolubili: preferire pasti principali con grassi alimentari.",
 };
 
+const STATIC_HINTS: PathwayAbsorptionHint[] = [
+  IRON_HINT,
+  B12_HINT,
+  B1_HINT,
+  MG_HINT,
+  VIT_D_HINT,
+  FAT_SOLUBLE_HINT,
+];
+
 function pathwayText(vm: NutritionPathwayModulationViewModel | null | undefined): string {
   if (!vm?.pathways?.length) return "";
   return vm.pathways
-    .flatMap((p) => [...(p.cofactors ?? []), ...(p.inhibitorsToAvoid ?? []), p.pathwayLabel])
+    .flatMap((p) => [
+      ...(p.cofactors ?? []),
+      ...(p.inhibitorsToAvoid ?? []),
+      p.pathwayLabel,
+      ...(p.stimulatedBy ?? []),
+    ])
     .join(" ")
     .toLowerCase();
 }
 
-/** Hint qualitativi PK v2 (classi emivita, no concentrazioni plasmatiche). */
+function hasStimulatedNode(vm: NutritionPathwayModulationViewModel | null | undefined, nodeId: string): boolean {
+  return Boolean(vm?.pathways.some((p) => p.stimulatedBy?.includes(nodeId)));
+}
+
+function mergeHintsByNutrient(hints: PathwayAbsorptionHint[]): PathwayAbsorptionHint[] {
+  const byId = new Map<NutrientTargetId, PathwayAbsorptionHint>();
+  for (const h of hints) {
+    if (!byId.has(h.nutrientId)) byId.set(h.nutrientId, h);
+  }
+  return [...byId.values()];
+}
+
+/** Hint qualitativi PK v2/v3 (classi emivita + enzyme-linked slot prefs). */
 export function buildPathwayAbsorptionHints(
   vm: NutritionPathwayModulationViewModel | null | undefined,
 ): PathwayAbsorptionHint[] {
@@ -57,9 +101,20 @@ export function buildPathwayAbsorptionHints(
   const out: PathwayAbsorptionHint[] = [];
   if (/ferr|iron|ferro|eritropo/i.test(haystack)) out.push(IRON_HINT);
   if (/b12|cobalam/i.test(haystack)) out.push(B12_HINT);
+  if (/tiamin|thiamin|\bb1\b|pdh|piruvato/i.test(haystack)) out.push(B1_HINT);
+  if (/magnes|\bmg\b|pfk|chinasi/i.test(haystack)) out.push(MG_HINT);
   if (/vit\s*d|vitamina d|colecalcif/i.test(haystack)) out.push(VIT_D_HINT);
   if (/vit\s*a|vit\s*e|vit\s*k|liposolub/i.test(haystack)) out.push(FAT_SOLUBLE_HINT);
-  return out;
+
+  if (hasStimulatedNode(vm, "enzyme.pdh")) {
+    if (!out.some((h) => h.nutrientId === "thiamineB1_mg")) out.push(B1_HINT);
+    if (!out.some((h) => h.nutrientId === "mg_mg")) out.push(MG_HINT);
+  }
+  if (hasStimulatedNode(vm, "enzyme.pfk") && !out.some((h) => h.nutrientId === "mg_mg")) {
+    out.push(MG_HINT);
+  }
+
+  return mergeHintsByNutrient(out);
 }
 
 export function buildPathwayAbsorptionTimingLines(
@@ -70,10 +125,49 @@ export function buildPathwayAbsorptionTimingLines(
   );
 }
 
+export function resolveNutrientTargetIdForHintLookup(nutrientOrCatalogId: string): NutrientTargetId | null {
+  const fromCatalog = catalogIdToNutrientTargetId(nutrientOrCatalogId);
+  if (fromCatalog) return fromCatalog;
+  if (STATIC_HINTS.some((h) => h.nutrientId === nutrientOrCatalogId)) {
+    return nutrientOrCatalogId as NutrientTargetId;
+  }
+  return null;
+}
+
 export function preferredSlotsForNutrientBoost(
   nutrientId: string,
   vm: NutritionPathwayModulationViewModel | null | undefined,
 ): MealSlotKey[] | null {
-  const hint = buildPathwayAbsorptionHints(vm).find((h) => h.nutrientId === nutrientId);
+  const resolved = resolveNutrientTargetIdForHintLookup(nutrientId) ?? nutrientId;
+  const hint = buildPathwayAbsorptionHints(vm).find((h) => h.nutrientId === resolved);
   return hint?.slotPreference ?? null;
+}
+
+export function slotPriorityForNutrientTarget(
+  nutrientOrCatalogId: string,
+  vm: NutritionPathwayModulationViewModel | null | undefined,
+  focusFallback: MealSlotKey[],
+): MealSlotKey[] {
+  const prefs = preferredSlotsForNutrientBoost(nutrientOrCatalogId, vm);
+  if (!prefs?.length) return focusFallback;
+  const rest = focusFallback.filter((s) => !prefs.includes(s));
+  return [...prefs, ...rest];
+}
+
+export function nutrientBoostAppliesToSlot(
+  nutrientId: string,
+  slot: MealSlotKey,
+  vm: NutritionPathwayModulationViewModel | null | undefined,
+): boolean {
+  const prefs = preferredSlotsForNutrientBoost(nutrientId, vm);
+  if (!prefs?.length) return true;
+  return prefs.includes(slot);
+}
+
+export function preferredSlotsLabelIt(
+  nutrientId: string,
+  vm: NutritionPathwayModulationViewModel | null | undefined,
+): string[] {
+  const prefs = preferredSlotsForNutrientBoost(nutrientId, vm);
+  return prefs ?? [];
 }

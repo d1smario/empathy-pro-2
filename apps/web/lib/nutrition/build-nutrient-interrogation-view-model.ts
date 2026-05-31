@@ -12,6 +12,8 @@ import type { HealthLabPathwayBridgeResult } from "@/lib/nutrition/health-lab-pa
 import type { HealthPanelModulatorBridgeResult } from "@/lib/nutrition/health-panel-modulator-bridge";
 import type { MultiscalePathwayBridgeResult } from "@/lib/nutrition/multiscale-pathway-bridge";
 import type { ActiveNutrientTarget } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { preferredSlotsLabelIt } from "@/lib/nutrition/pathway-absorption-hints";
+import type { NutritionPathwayModulationViewModel } from "@/api/nutrition/contracts";
 
 function uniq<T>(items: T[]): T[] {
   return Array.from(new Set(items));
@@ -72,6 +74,7 @@ export type BuildNutrientInterrogationInput = {
   multiscaleBridge: MultiscalePathwayBridgeResult | null;
   healthLabBridge?: HealthLabPathwayBridgeResult | null;
   healthPanelModulators?: HealthPanelModulatorBridgeResult | null;
+  pathwayModulation?: NutritionPathwayModulationViewModel | null;
 };
 
 /**
@@ -140,6 +143,7 @@ export function buildNutrientInterrogationViewModel(
       geneSymbols: geneSymbolsForNodes(nodeIds),
       signallingAxes: signallingAxesForNodes(nodeIds),
       healthLabSignals,
+      preferredSlotsIt: preferredSlotsLabelIt(target.nutrientId, input.pathwayModulation),
       subDomains: [...subDomains],
       rationaleIt: rationaleParts.join(" ") || "Target attivo da pathway modulation.",
     };

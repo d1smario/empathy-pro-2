@@ -1,7 +1,8 @@
-import type { FunctionalFoodTargetViewModel, FunctionalMealSelectorSlotViewModel } from "@/api/nutrition/contracts";
+import type { FunctionalFoodTargetViewModel, FunctionalMealSelectorSlotViewModel, NutritionPathwayModulationViewModel } from "@/api/nutrition/contracts";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { MEAL_SLOT_KEYS } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { slotPriorityForFocus } from "@/lib/nutrition/functional-meal-selector";
+import { slotPriorityForNutrientTarget } from "@/lib/nutrition/pathway-absorption-hints";
 
 export type PathwayMealSlotKey = MealSlotKey;
 
@@ -18,6 +19,8 @@ export function assignPathwayTargetsToMealSlots(input: {
   maxPerSlot?: number;
   /** Se presente, assegna target ai pasti in base al focus funzionale invece della rotazione hash. */
   selectorSlots?: FunctionalMealSelectorSlotViewModel[];
+  /** Pathway modulation per PK v3 slot prefs per nutriente. */
+  pathwayModulation?: NutritionPathwayModulationViewModel | null;
 }): Record<PathwayMealSlotKey, FunctionalFoodTargetViewModel[]> {
   const maxPerSlot = Math.max(1, Math.min(5, Math.trunc(input.maxPerSlot ?? 3) || 3));
   const empty: Record<PathwayMealSlotKey, FunctionalFoodTargetViewModel[]> = {
@@ -40,7 +43,12 @@ export function assignPathwayTargetsToMealSlots(input: {
     for (let i = 0; i < withUsdaFirst.length; i++) {
       const target = withUsdaFirst[i]!;
       const selectorSlot = input.selectorSlots[i % input.selectorSlots.length];
-      const priorities = selectorSlot ? slotPriorityForFocus(selectorSlot.focus) : SLOTS;
+      const focusPriority = selectorSlot ? slotPriorityForFocus(selectorSlot.focus) : SLOTS;
+      const priorities = slotPriorityForNutrientTarget(
+        target.nutrientId,
+        input.pathwayModulation,
+        focusPriority,
+      );
       for (const slot of priorities) {
         if (empty[slot].length < maxPerSlot) {
           empty[slot].push(target);

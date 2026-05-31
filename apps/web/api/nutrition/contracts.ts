@@ -265,6 +265,7 @@ export type NutrientInterrogationItem = {
   geneSymbols: string[];
   signallingAxes: string[];
   healthLabSignals: string[];
+  preferredSlotsIt: string[];
   subDomains: NutrientInterrogationSubDomain[];
   rationaleIt: string;
 };

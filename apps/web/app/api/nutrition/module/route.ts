@@ -20,6 +20,11 @@ import { buildMultiscalePathwayBridge } from "@/lib/nutrition/multiscale-pathway
 import { buildHealthPanelModulatorBridge } from "@/lib/nutrition/health-panel-modulator-bridge";
 import { buildNutrientInterrogationViewModel } from "@/lib/nutrition/build-nutrient-interrogation-view-model";
 import { buildActiveNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import {
+  mergeResearchTraceSummaries,
+  plansToSyncFromMultiscaleActivation,
+} from "@/lib/knowledge/multiscale-research-plan";
+import { syncResearchTracePlans } from "@/lib/knowledge/virya-research-trace-sync";
 import { buildCrossDomainInterpretationRoadmapV1 } from "@/lib/nutrition/cross-domain-interpretation-roadmap";
 import {
   mergeNutritionModuleProfileWithAthleteProfileRow,
@@ -199,6 +204,8 @@ export async function GET(req: NextRequest) {
     let multiscaleBridge: ReturnType<typeof buildMultiscalePathwayBridge> = null;
     let healthLabBridge: ReturnType<typeof buildHealthLabPathwayBridge> | null = null;
     let healthPanelModulators: ReturnType<typeof buildHealthPanelModulatorBridge> | null = null;
+    let researchTracesResolved = researchTraceSummaries;
+    let multiscaleResearchSynced = false;
 
     const metabolicEfficiencyGenerativeModel = includeHeavy
       ? buildMetabolicEfficiencyGenerativeModel({
@@ -211,16 +218,41 @@ export async function GET(req: NextRequest) {
 
     if (pathwayDateParam && pathwayDateParam >= from && pathwayDateParam <= to) {
       healthLabBridge = buildHealthLabPathwayBridge(athleteMemory.health);
-      const evidenceBridge = buildEvidencePathwayBridge({
-        evidenceItems: athleteMemory.evidenceMemory?.items ?? [],
-        researchTraces: includeHeavy ? researchTraceSummaries : [],
-      });
       multiscaleBridge = buildMultiscalePathwayBridge({
         physiology: physiologyState,
         twin: twinState,
       });
       healthPanelModulators = buildHealthPanelModulatorBridge(athleteMemory.health);
       const rowsForDay = plannedRaw.filter((row) => row.date.slice(0, 10) === pathwayDateParam);
+      const firstPlannedRow = rowsForDay[0];
+
+      if (includeHeavy && multiscaleBridge) {
+        const plansToSync = plansToSyncFromMultiscaleActivation(
+          {
+            athleteId,
+            anchorDate: pathwayDateParam,
+            bridge: multiscaleBridge,
+            plannedWorkoutId: firstPlannedRow?.id ?? null,
+          },
+          researchTracesResolved,
+        );
+        if (plansToSync.length) {
+          try {
+            const synced = await syncResearchTracePlans(plansToSync);
+            researchTracesResolved = mergeResearchTraceSummaries(researchTracesResolved, synced, 4);
+            multiscaleResearchSynced = synced.length > 0;
+          } catch (error) {
+            if (!isMissingKnowledgeFoundationError(error)) {
+              console.error("multiscale research trace sync failed", error);
+            }
+          }
+        }
+      }
+
+      const evidenceBridge = buildEvidencePathwayBridge({
+        evidenceItems: athleteMemory.evidenceMemory?.items ?? [],
+        researchTraces: includeHeavy ? researchTracesResolved : [],
+      });
       pathwayModulation = buildNutritionPathwayModulationViewModel({
         date: pathwayDateParam,
         plannedSessions: rowsForDay.map((row) => {
@@ -289,6 +321,7 @@ export async function GET(req: NextRequest) {
             multiscaleBridge,
             healthLabBridge,
             healthPanelModulators,
+            pathwayModulation,
           })
         : null;
 
@@ -323,11 +356,12 @@ export async function GET(req: NextRequest) {
           recoverySummary: recoverySummary
             ? { status: recoverySummary.status, guidance: recoverySummary.guidance }
             : null,
-          researchTraceSummaries,
+          researchTraceSummaries: researchTracesResolved,
           hasNutritionPerformanceIntegration: nutritionPerformanceIntegration != null,
           multiscaleBridge,
           healthPanelModulators,
           nutrientInterrogation,
+          multiscaleResearchSynced,
         })
       : null;
 
@@ -380,7 +414,7 @@ export async function GET(req: NextRequest) {
           plannedAdaptationTarget: builderSession?.adaptationTarget ?? null,
         };
       }),
-      researchTraceSummaries,
+      researchTraceSummaries: researchTracesResolved,
       crossDomainInterpretationRoadmap,
       nutrientInterrogation,
       error,

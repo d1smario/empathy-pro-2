@@ -3,6 +3,7 @@
  * Nessun LLM genera la struttura del piano; le kcal per voce seguono porzioni e banca composizione canonica.
  */
 
+import type { NutritionPathwayModulationViewModel } from "@/api/nutrition/contracts";
 import type { ScaledMealItemNutrients } from "@/lib/nutrition/canonical-food-composition";
 import type { PathwayTargetRollupLine } from "@/lib/nutrition/pathway-target-rollup-compare";
 import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
@@ -138,6 +139,8 @@ export type IntelligentMealPlanRequest = {
    * certi boost (es. redox → Vit C / Se / Zn) solo quando il pathway è incluso nel twin/fisiologia del giorno.
    */
   pathwayModulationActiveLabels?: string | null;
+  /** Pathway VM per PK v3 slot prefs nel composer (non serializzato in UI oltre al necessario). */
+  pathwayModulation?: NutritionPathwayModulationViewModel | null;
   /** Giorno gara: pranzo pre-gara da memoria generativa (composer deterministico). */
   racePreLunch?: RacePreLunchDayContext | null;
 };

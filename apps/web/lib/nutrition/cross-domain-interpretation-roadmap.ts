@@ -44,6 +44,8 @@ export type BuildCrossDomainInterpretationRoadmapInput = {
   multiscaleBridge?: MultiscalePathwayBridgeResult | null;
   healthPanelModulators?: HealthPanelModulatorBridgeResult | null;
   nutrientInterrogation?: NutrientInterrogationViewModel | null;
+  /** True quando includeHeavy ha sincronizzato nuovi trace da attivazione multiscala. */
+  multiscaleResearchSynced?: boolean;
 };
 
 function uniqAnchors(sessions: BuildCrossDomainInterpretationRoadmapInput["plannedSessions"]): string[] {
@@ -98,9 +100,12 @@ export function buildCrossDomainInterpretationRoadmapV1(
     multiscaleBridge,
     healthPanelModulators,
     nutrientInterrogation,
+    multiscaleResearchSynced,
   } = input;
 
   const multiscaleWired = Boolean(multiscaleBridge?.pathwayExtension) || hasMultiscalePathway(pathwayModulation);
+  const tracesActive = researchTraceSummaries.some((t) => (t.latestResultSummary ?? "").trim().length > 0);
+  const knowledgeGraphWired = tracesActive || Boolean(multiscaleResearchSynced);
   const panelMicro = healthPanelModulators?.subDomainsActive.includes("microbiota");
   const panelEpigen = healthPanelModulators?.subDomainsActive.includes("epigenetics");
   const panelNeuro = healthPanelModulators?.subDomainsActive.includes("neuroendocrine");
@@ -119,7 +124,6 @@ export function buildCrossDomainInterpretationRoadmapV1(
   const twinReady = twin != null;
   const physReady = physiology != null;
   const sessionKnowledge = hasSessionKnowledgePathway(pathwayModulation);
-  const tracesActive = researchTraceSummaries.some((t) => (t.latestResultSummary ?? "").trim().length > 0);
 
   const deferredProbeKeys: string[] = [
     "nutrig.retrieve_variant_bundle_when_health_uploaded",
@@ -255,10 +259,12 @@ export function buildCrossDomainInterpretationRoadmapV1(
 
   nodes.push({
     domainId: "external_knowledge_graph",
-    probeStatus: tracesActive ? "wired_deterministic" : "deferred_retrieval",
-    summaryLineIt: tracesActive
-      ? `Knowledge traces recenti (${researchTraceSummaries.length} riepiloghi) — ampliamento grafo deferred finché orchestrato.`
-      : "Grafo knowledge esterno — deferred (PubChem/Reactome/Europe PMC su trigger policy future).",
+    probeStatus: knowledgeGraphWired ? "wired_deterministic" : "deferred_retrieval",
+    summaryLineIt: multiscaleResearchSynced
+      ? `Trace espansione sincronizzati da attivazione multiscala (${researchTraceSummaries.length} riepiloghi).`
+      : tracesActive
+        ? `Knowledge traces recenti (${researchTraceSummaries.length} riepiloghi) collegati al pathway evidence.`
+        : "Grafo knowledge esterno — deferred (PubChem/Reactome/Europe PMC su trigger policy future).",
     evidenceRefs: researchTraceSummaries.slice(0, 4).map((t) => `trace:${t.traceId}`),
   });
 

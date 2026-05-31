@@ -270,7 +270,7 @@ export function buildFunctionalMealSelectorViewModel(input: {
   }
   if (absorptionHints.length) {
     directiveNotes.push(
-      `Assorbimento qualitativo (PK v2): ${absorptionHints.map((h) => h.rationaleIt).slice(0, 2).join(" · ")}`,
+      `Assorbimento qualitativo (PK v3): ${absorptionHints.map((h) => `${h.nutrientId}→${h.slotPreference.join("/")}`).slice(0, 3).join(" · ")}`,
     );
   }
 

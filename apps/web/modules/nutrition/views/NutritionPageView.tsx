@@ -1345,8 +1345,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         athleteId: athleteId ?? "",
         maxPerSlot: 3,
         selectorSlots: functionalMealSelector?.slots,
+        pathwayModulation,
       }),
-    [functionalFoodRecommendations.targets, selectedPlanDate, athleteId, functionalMealSelector?.slots],
+    [functionalFoodRecommendations.targets, selectedPlanDate, athleteId, functionalMealSelector?.slots, pathwayModulation],
   );
 
   useEffect(() => {
@@ -4127,6 +4128,11 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                         {item.activatedNodes.length ? (
                           <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">
                             Nodi: {item.activatedNodes.map((n) => n.labelIt).slice(0, 3).join(" · ")}
+                          </p>
+                        ) : null}
+                        {item.preferredSlotsIt?.length ? (
+                          <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">
+                            Pasti preferiti: {item.preferredSlotsIt.join(", ")}
                           </p>
                         ) : null}
                         <p className="nutrition-muted mt-1 mb-0 text-[0.72rem]">{item.rationaleIt}</p>

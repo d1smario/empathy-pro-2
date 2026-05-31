@@ -14,6 +14,7 @@ import { applyNutrientBoostSwaps, composeMediterraneanMeal, createMediterraneanD
 import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
+import { nutrientBoostAppliesToSlot } from "@/lib/nutrition/pathway-absorption-hints";
 import { rankUsdaCacheForTargets, type UsdaRankedFood } from "@/lib/nutrition/usda-nutrient-density-ranker";
 import { racePreLunchContextLine } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { disambiguatedShortFoodLabel } from "@/lib/nutrition/usda-food-label";
@@ -167,12 +168,13 @@ export async function buildDeterministicMealPlanFromRequest(
     if (line) boostLines.push(line);
   }
 
-  /** Slot in cui applicare swap pathway (main + spuntini con target timing). */
-  const PRIMARY_BOOST_SLOTS = new Set<MealSlotKey>(["lunch", "dinner", "snack_am", "snack_pm"]);
-
+  /** Slot in cui applicare swap pathway (PK v3: per nutriente se prefs, altrimenti main+snack). */
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const isSuppressed = suppressed.includes(slot.slot);
-    let items = pickItemsForSlot(slot, dayCtx, boostTargetIds);
+    const slotBoostIds = validBoostTargets
+      .filter((t) => nutrientBoostAppliesToSlot(t.nutrientId, slot.slot, req.pathwayModulation))
+      .map((t) => t.nutrientId);
+    let items = pickItemsForSlot(slot, dayCtx, slotBoostIds);
     if (!isSuppressed && slot.targetKcal > 0) {
       items = rescaleSlotKcalToTarget(
         {
@@ -200,14 +202,18 @@ export async function buildDeterministicMealPlanFromRequest(
           ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
           : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`;
 
-    /**
-     * Boost note per slot: appare solo nei pasti principali (lunch/dinner). È un SUGGERIMENTO
-     * COMPLEMENTARE (non sostituisce la scelta del composer): es. aggiungere 1 cucchiaio di semi
-     * di lino al pasto, una porzione di verdura ricca, ecc.
-     */
+    const slotBoostLines: string[] = [];
+    for (const t of validBoostTargets) {
+      if (!nutrientBoostAppliesToSlot(t.nutrientId, slot.slot, req.pathwayModulation)) continue;
+      const rows = boostRanking[t.nutrientId];
+      if (!rows || rows.length === 0) continue;
+      const line = formatBoostLineForNutrient(t.labelIt, rows);
+      if (line) slotBoostLines.push(line);
+    }
+
     const slotBoostNote =
-      !isSuppressed && PRIMARY_BOOST_SLOTS.has(slot.slot) && boostLines.length > 0
-        ? `Suggerimenti complementari (sistema intelligente · cofactors pathway): ${boostLines.slice(0, 4).join(" | ")}`
+      !isSuppressed && slotBoostLines.length > 0
+        ? `Suggerimenti complementari (sistema intelligente · cofactors pathway): ${slotBoostLines.slice(0, 4).join(" | ")}`
         : undefined;
 
     const slotBoostSuffix = slotBoostNote ? ` · ${slotBoostNote}` : "";

@@ -31,6 +31,7 @@ export type MultiscalePathwayBridgeResult = {
   cofactorStrings: string[];
   bottleneck: MetabolicBottleneckView;
   activatedNodeIds: string[];
+  activatedEnzymeIds: string[];
   subgraphNodeIds: string[];
   pathwayExtension: NutritionPathwaySupportItem | null;
   notes: string[];
@@ -72,6 +73,10 @@ export function buildMultiscalePathwayBridge(input: {
 
   const cofactorStrings = resolveMultiscaleTagsToCofactorStrings([...tagSet]);
   const subgraphNodeIds = uniq([...subgraph.nodes.map((n) => n.id), ...extraEnzymeIds]);
+  const activatedEnzymeIds = uniq([
+    ...extraEnzymeIds,
+    ...bottleneck.activatedNodeIds.filter((id) => id.startsWith("enzyme.")),
+  ]);
   const notes: string[] = [
     `Multiscala: collo dominante ${metabolicLevelLabelIt(bottleneck.dominantBottleneck.level)} (score ${Math.round(bottleneck.dominantBottleneck.score * 100)}%).`,
     `${bottleneck.activatedNodeIds.length} nodi attivi · ${subgraph.nodes.length} nel sottografo interpretativo.`,
@@ -82,6 +87,7 @@ export function buildMultiscalePathwayBridge(input: {
       cofactorStrings: [],
       bottleneck,
       activatedNodeIds: bottleneck.activatedNodeIds,
+      activatedEnzymeIds,
       subgraphNodeIds,
       pathwayExtension: null,
       notes,
@@ -90,6 +96,7 @@ export function buildMultiscalePathwayBridge(input: {
 
   const stimulatedBy = uniq([
     ...bottleneck.activatedNodeIds.slice(0, 8),
+    ...extraEnzymeIds,
     ...bottleneck.suggestedInterpretationTags.slice(0, 4),
   ]);
 
@@ -119,6 +126,7 @@ export function buildMultiscalePathwayBridge(input: {
     cofactorStrings,
     bottleneck,
     activatedNodeIds: bottleneck.activatedNodeIds,
+    activatedEnzymeIds,
     subgraphNodeIds,
     pathwayExtension,
     notes,

@@ -201,6 +201,7 @@ export function buildIntelligentMealPlanRequest(input: {
       suppressedSlots: suppressedSlots.length > 0 ? suppressedSlots : undefined,
       nutrientBoostTargets: nutrientBoostTargets.length > 0 ? nutrientBoostTargets : undefined,
       pathwayModulationActiveLabels: pathwayModulationActiveLabels ?? undefined,
+      pathwayModulation: input.pathwayModulation ?? undefined,
       mealPlanSolverMeta: {
         dailyMealsKcalTotal,
         integrationLeverLines: (input.integrationLeverLines ?? []).slice(0, 16),
