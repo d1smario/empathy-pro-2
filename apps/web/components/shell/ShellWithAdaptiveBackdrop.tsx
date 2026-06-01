@@ -6,6 +6,7 @@ import { requiresResolvedAthleteForPath } from "@/lib/shell/requires-resolved-at
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { ShellMainFrame } from "@/components/shell/ShellMainFrame";
 import { ProductSidebar } from "@/components/navigation/ProductSidebar";
+import { MobileAppRecoveryBanner } from "@/components/shell/MobileAppRecoveryBanner";
 
 /**
  * Matrix + orb pieni fuori dai moduli generativi; dentro training/nutrition/… matrix off e area contenuto leggermente velata per focus minimal.
@@ -20,6 +21,7 @@ export function ShellWithAdaptiveBackdrop({ children }: { children: React.ReactN
       <div className="flex min-h-screen">
         <ProductSidebar />
         <ShellMainFrame generative={generative} athleteGate={athleteGate}>
+          <MobileAppRecoveryBanner />
           {children}
         </ShellMainFrame>
       </div>

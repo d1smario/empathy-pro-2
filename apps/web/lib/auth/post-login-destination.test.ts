@@ -62,3 +62,26 @@ test("resolvePostLoginDestination: atleta con accesso mantiene hub sicuri", () =
     "/profile",
   );
 });
+
+test("resolvePostLoginDestination: preferMobile mappa hub su /m/*", () => {
+  assert.equal(
+    resolvePostLoginDestination({
+      next: "/dashboard",
+      appRole: "private",
+      hasAthleteAccess: true,
+      hasOperatorAccess: false,
+      preferMobile: true,
+    }),
+    "/m/dashboard",
+  );
+  assert.equal(
+    resolvePostLoginDestination({
+      next: "/profile",
+      appRole: "private",
+      hasAthleteAccess: true,
+      hasOperatorAccess: false,
+      preferMobile: true,
+    }),
+    "/m/profile",
+  );
+});

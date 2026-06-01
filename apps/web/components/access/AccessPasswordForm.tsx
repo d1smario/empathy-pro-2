@@ -7,6 +7,7 @@ import { clearPendingAppRoleCookieClient, setPendingAppRoleCookieClient } from "
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
+import { isMobileBrowserClient } from "@/lib/shell/mobile-detect";
 import { ACCESS_POST_SIGNUP_PLAN_PATH, postSignupRegistrationPath } from "@/lib/auth/post-registration-redirects";
 import { Pro2Button } from "@/components/ui/empathy";
 
@@ -167,6 +168,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
       appRole: redirectRole,
       hasAthleteAccess,
       hasOperatorAccess,
+      preferMobile: isMobileBrowserClient(),
     });
     window.location.assign(target);
   }

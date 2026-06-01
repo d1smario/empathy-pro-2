@@ -10,6 +10,20 @@ import { Pro2Link } from "@/components/ui/empathy";
 import { cn } from "@/lib/cn";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { useProductHref } from "@/lib/shell/use-product-href";
+
+function SessionDayLink({ date, variant }: { date: string; variant: "planned" | "executed" }) {
+  const href = useProductHref(`/training/session/${date}`);
+  const className =
+    variant === "planned"
+      ? "shrink-0 border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs hover:bg-orange-500/15"
+      : "shrink-0 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs hover:bg-emerald-500/15";
+  return (
+    <Pro2Link href={href} variant="ghost" className={className}>
+      Day
+    </Pro2Link>
+  );
+}
 
 type ApiErr = { ok: false; error?: string; planned?: []; executed?: [] };
 
@@ -147,13 +161,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
                     <span className="mx-2 text-gray-600">·</span>
                     {formatPlannedWorkoutCardTitle(w)}
                   </div>
-                  <Pro2Link
-                    href={`/training/session/${w.date}`}
-                    variant="ghost"
-                    className="shrink-0 border border-orange-500/30 bg-orange-500/10 px-2 py-1 text-xs hover:bg-orange-500/15"
-                  >
-                    Day
-                  </Pro2Link>
+                  <SessionDayLink date={w.date} variant="planned" />
                 </div>
               </li>
             ))}
@@ -176,13 +184,7 @@ export function TrainingPlannedWindowCard({ className }: { className?: string })
                     <span className="mx-2 text-gray-600">·</span>
                     {formatExecutedWorkoutSummary(w)}
                   </div>
-                  <Pro2Link
-                    href={`/training/session/${w.date}`}
-                    variant="ghost"
-                    className="shrink-0 border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs hover:bg-emerald-500/15"
-                  >
-                    Day
-                  </Pro2Link>
+                  <SessionDayLink date={w.date} variant="executed" />
                 </div>
               </li>
             ))}

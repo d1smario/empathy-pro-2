@@ -21,7 +21,9 @@ export function requiresResolvedAthleteForPath(pathname: string): boolean {
     seg === "nutrition" ||
     seg === "physiology" ||
     seg === "health" ||
+    seg === "bioenergetics" ||
     seg === "biomechanics" ||
-    seg === "aerodynamics"
+    seg === "aerodynamics" ||
+    seg === "longevity"
   );
 }

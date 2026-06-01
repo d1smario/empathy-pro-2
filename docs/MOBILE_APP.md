@@ -13,6 +13,12 @@ Esperienza **telefono** parallela al desktop. Stesso deploy Vercel, stesso auth 
 | `/nutrition/diary` | `/m/nutrition/diary` |
 | `/profile` | `/m/profile` |
 | `/settings` | `/m/settings` |
+| `/health` | `/m/health` |
+| `/physiology` | `/m/physiology` |
+| `/bioenergetics` | `/m/bioenergetics` |
+| `/biomechanics` | `/m/biomechanics` |
+| `/aerodynamics` | `/m/aerodynamics` |
+| `/longevity` | `/m/longevity` |
 
 Builder, VIRYA, coach `/athletes`, lab staging: **solo desktop** (nessun redirect automatico).
 
@@ -21,6 +27,14 @@ Builder, VIRYA, coach `/athletes`, lab staging: **solo desktop** (nessun redirec
 Su client mobile (User-Agent / `Sec-CH-UA-Mobile`), le route desktop mappate redirectano a `/m/...`.
 
 **Opt-out:** cookie `empathy_desktop=1` oppure **Impostazioni → Usa versione desktop** (drawer menu o `/m/settings`).
+
+**Recupero app mobile:** se vedi ancora la sidebar PC su telefono:
+
+1. Apri **`/m/dashboard?app=1`** (link diretto o banner in alto nella versione desktop)
+2. Oppure **Impostazioni → Usa app mobile** (`/m/settings`)
+3. Cancella cookie `empathy_desktop` dal browser se persiste
+
+**Nota coach:** account coach → `/athletes` resta desktop (app mobile atleta in fase 2).
 
 ## PWA
 
@@ -44,7 +58,16 @@ Su client mobile (User-Agent / `Sec-CH-UA-Mobile`), le route desktop mappate red
 ## QA smoke
 
 - [ ] Login atleta su telefono → `/m/dashboard`
-- [ ] Bottom nav: Oggi, Training, Nutrition, Profile
+- [ ] Bottom nav: Oggi, Training, Nutrition, Profile, Moduli (drawer)
+- [ ] Drawer: griglia moduli (Health, Physiology, BioEnergetics, Longevity, Biomechanics, Aerodynamics)
+- [ ] Link «Giornata» calendario resta su `/m/training/session/...`
 - [ ] Cookie desktop → `/dashboard` con sidebar PC
 - [ ] Desktop browser invariato (nessun redirect senza UA mobile)
 - [ ] `npm run verify` verde
+
+## Fase 2 (roadmap)
+
+- Layout mobile dedicati (calendar/nutrition compatti)
+- Coach mobile (`/m/athletes`)
+- Icone PNG maskable 192/512
+- Nascondere CTA builder su shell mobile

@@ -7,6 +7,7 @@ import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
 import { PENDING_APP_ROLE_COOKIE, parsePendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { ensureBillingEntitlementForUser } from "@/lib/billing/ensure-billing-entitlement";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
+import { isMobileClientRequest } from "@/lib/shell/mobile-detect";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -105,6 +106,7 @@ export async function GET(request: NextRequest) {
     appRole,
     hasAthleteAccess: entitlement?.hasAthleteAccess ?? false,
     hasOperatorAccess: entitlement?.hasOperatorAccess ?? false,
+    preferMobile: isMobileClientRequest(request),
   });
 
   return NextResponse.redirect(`${origin}${dest}`);

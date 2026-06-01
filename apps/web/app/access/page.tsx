@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { cookies, headers } from "next/headers";
 import { getTranslations } from "next-intl/server";
 import { AccessAuthPanel } from "@/components/access/AccessAuthPanel";
 import { AccessRedirectIfSession } from "@/components/access/AccessRedirectIfSession";
@@ -8,6 +9,8 @@ import { safeAppInternalPath } from "@/core/routing/guards";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { Pro2Link } from "@/components/ui/empathy";
 import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
+import { EMPATHY_DESKTOP_COOKIE, EMPATHY_MOBILE_COOKIE } from "@/core/navigation/mobile-module-registry";
+import { isMobilePreferred } from "@/lib/shell/mobile-detect";
 import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
@@ -48,12 +51,21 @@ export default async function AccessPage({
         const role = (prof as { role?: string } | null)?.role;
         const appRole = role === "coach" ? "coach" : "private";
         const ent = await loadUserAccessEntitlement(admin ?? sb, user.id);
+        const hdrs = headers();
+        const cookieStore = cookies();
+        const preferMobile = isMobilePreferred({
+          desktopCookie: cookieStore.get(EMPATHY_DESKTOP_COOKIE)?.value,
+          mobileCookie: cookieStore.get(EMPATHY_MOBILE_COOKIE)?.value,
+          userAgent: hdrs.get("user-agent"),
+          secChUaMobile: hdrs.get("sec-ch-ua-mobile"),
+        });
         redirect(
           resolvePostLoginDestination({
             next: safeNext,
             appRole,
             hasAthleteAccess: ent.hasAthleteAccess,
             hasOperatorAccess: ent.hasOperatorAccess,
+            preferMobile,
           }),
         );
       }

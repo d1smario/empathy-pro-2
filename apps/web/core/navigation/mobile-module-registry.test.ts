@@ -13,6 +13,10 @@ test("toMobilePath: dashboard e training session", () => {
   assert.equal(toMobilePath("/training/session/2026-06-03"), "/m/training/session/2026-06-03");
   assert.equal(toMobilePath("/nutrition/diary"), "/m/nutrition/diary");
   assert.equal(toMobilePath("/nutrition/meal-plan"), "/m/nutrition/meal-plan");
+  assert.equal(toMobilePath("/health"), "/m/health");
+  assert.equal(toMobilePath("/physiology"), "/m/physiology");
+  assert.equal(toMobilePath("/bioenergetics"), "/m/bioenergetics");
+  assert.equal(toMobilePath("/longevity"), "/m/longevity");
 });
 
 test("toMobilePath: builder e coach restano null", () => {

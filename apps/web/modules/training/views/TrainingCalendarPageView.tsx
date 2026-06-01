@@ -30,6 +30,7 @@ import {
 import { isViryaPlannedWorkout } from "@/lib/training/virya/virya-planned-notes";
 import { useAthleteFtpWatts } from "@/lib/training/physiology/use-athlete-ftp-watts";
 import { useActiveAthlete } from "@/lib/use-active-athlete";
+import { useIsMobileApp, useProductHref } from "@/lib/shell/use-product-href";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
@@ -228,6 +229,8 @@ export default function TrainingCalendarPageView() {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDate, setSelectedDate] = useState(() => toDateKey(new Date()));
+  const isMobileApp = useIsMobileApp();
+  const selectedSessionHref = useProductHref(`/training/session/${selectedDate}`);
 
   useEffect(() => {
     const q = normalizeIsoDateParam(searchParams.get("date"));
@@ -908,7 +911,7 @@ export default function TrainingCalendarPageView() {
       }
     >
       <div className="scroll-mt-28">
-        <TrainingSubnav />
+        {isMobileApp ? null : <TrainingSubnav />}
       </div>
 
       {readSpineCoverage && athleteId ? (
@@ -1675,7 +1678,7 @@ export default function TrainingCalendarPageView() {
                     {saving ? "Import…" : fileImportForm.mode === "planned" ? "Importa programma" : "Importa allenamento"}
                   </button>
                   <Pro2Link
-                    href={`/training/session/${selectedDate}`}
+                    href={selectedSessionHref}
                     variant="ghost"
                     className="border border-cyan-500/35 bg-cyan-500/10 text-cyan-100"
                   >
@@ -1792,7 +1795,7 @@ export default function TrainingCalendarPageView() {
                           <div className="flex flex-wrap items-center justify-between gap-2">
                             <span>{formatExecutedWorkoutSummary(w)}</span>
                             <Pro2Link
-                              href={`/training/session/${selectedDate}`}
+                              href={selectedSessionHref}
                               variant="ghost"
                               className="shrink-0 border border-sky-500/35 px-2 py-1 text-xs"
                             >

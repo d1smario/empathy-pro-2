@@ -23,6 +23,7 @@ import { contractHasGymScheda } from "@/lib/training/planned-workout-display";
 import { ChevronDown, Copy, ExternalLink, Trash2, Download, ArrowRightLeft } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useProductHref } from "@/lib/shell/use-product-href";
 
 const LIFESTYLE_CATS: readonly LifestylePracticeCategory[] = [
   "yoga",
@@ -146,7 +147,7 @@ export function CalendarPlannedBuilderDetail({
   const titleKcal = sessionMetrics.kcal > 0 ? sessionMetrics.kcal : null;
   const chartFtpW = athleteFtpWatts ?? contract?.renderProfile?.ftpW;
 
-  const sessionHref = `/training/session/${workout.date}`;
+  const sessionHref = useProductHref(`/training/session/${workout.date}`);
   const builderHref = `/training/builder?date=${encodeURIComponent(workout.date)}&replace_planned_id=${encodeURIComponent(workout.id)}`;
 
   const exportAid = resolvedAthleteId;

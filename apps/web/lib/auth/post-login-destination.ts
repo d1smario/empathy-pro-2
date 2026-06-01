@@ -1,5 +1,6 @@
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 import { safeAppInternalPath } from "@/core/routing/guards";
+import { preferMobileAppPath } from "@/core/navigation/mobile-module-registry";
 import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
 
 /**
@@ -8,8 +9,11 @@ import { ACCESS_PLAN_PATH } from "@/lib/billing/paywall-config";
  */
 const POST_LOGIN_SAFE_PATHS = new Set([
   "/dashboard",
+  "/m/dashboard",
   "/profile",
+  "/m/profile",
   "/settings",
+  "/m/settings",
   "/athletes",
   ACCESS_PLAN_PATH,
 ]);
@@ -20,6 +24,8 @@ export type PostLoginDestinationInput = {
   appRole: PendingAppRole;
   hasAthleteAccess: boolean;
   hasOperatorAccess: boolean;
+  /** Su telefono/tablet: hub sicuri → equivalente `/m/*`. */
+  preferMobile?: boolean;
 };
 
 /**
@@ -29,6 +35,7 @@ export type PostLoginDestinationInput = {
  */
 export function resolvePostLoginDestination(input: PostLoginDestinationInput): string {
   const next = safeAppInternalPath(input.next, "/dashboard");
+  const preferMobile = input.preferMobile === true;
 
   if (input.appRole === "coach" || input.hasOperatorAccess) {
     return "/athletes";
@@ -40,11 +47,11 @@ export function resolvePostLoginDestination(input: PostLoginDestinationInput): s
 
   const base = (next.split("?")[0] ?? "/").replace(/\/$/, "") || "/";
   if (base === ACCESS_PLAN_PATH) {
-    return "/dashboard";
+    return preferMobileAppPath("/dashboard", preferMobile);
   }
   if (POST_LOGIN_SAFE_PATHS.has(base)) {
-    return next;
+    return preferMobileAppPath(next, preferMobile);
   }
 
-  return "/dashboard";
+  return preferMobileAppPath("/dashboard", preferMobile);
 }

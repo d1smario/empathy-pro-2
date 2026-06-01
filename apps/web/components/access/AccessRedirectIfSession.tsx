@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
+import { isMobileBrowserClient } from "@/lib/shell/mobile-detect";
 import type { PendingAppRole } from "@/lib/auth/pending-role-cookie";
 
 /**
@@ -58,6 +59,7 @@ export function AccessRedirectIfSession({ nextPath }: { nextPath: string }) {
         appRole,
         hasAthleteAccess,
         hasOperatorAccess,
+        preferMobile: isMobileBrowserClient(),
       });
       window.location.assign(dest);
     })();

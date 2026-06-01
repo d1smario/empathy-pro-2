@@ -1,10 +1,50 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { isMobileAppPath, toMobilePath, isMobileRedirectSourcePath } from "@/core/navigation/mobile-module-registry";
+import {
+  EMPATHY_DESKTOP_COOKIE,
+  EMPATHY_MOBILE_COOKIE,
+  isMobileAppPath,
+  toMobilePath,
+  isMobileRedirectSourcePath,
+} from "@/core/navigation/mobile-module-registry";
 import { isAnonymousAllowedPath, isProtectedProductShellPath } from "@/core/routing/guards";
 import { isSiteIndexingDisabled } from "@/lib/site-url";
 import { isMobileClientRequest } from "@/lib/shell/mobile-detect";
 import { forwardMiddlewareCookies, updateSupabaseSession } from "@/lib/supabase/update-session";
+
+const MOBILE_PREF_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+
+function applyMobilePreferenceCookies(response: NextResponse) {
+  response.cookies.set(EMPATHY_MOBILE_COOKIE, "1", {
+    path: "/",
+    maxAge: MOBILE_PREF_COOKIE_MAX_AGE,
+    sameSite: "lax",
+  });
+  response.cookies.set(EMPATHY_DESKTOP_COOKIE, "", {
+    path: "/",
+    maxAge: 0,
+    sameSite: "lax",
+  });
+}
+
+/** `?app=1` — forza shell mobile e rimuove opt-out desktop. */
+function redirectForMobileAppQuery(
+  request: NextRequest,
+  response: NextResponse,
+  pathname: string,
+): NextResponse | null {
+  if (request.nextUrl.searchParams.get("app") !== "1") return null;
+
+  const mobilePath = isMobileAppPath(pathname) ? pathname : (toMobilePath(pathname) ?? "/m/dashboard");
+  const dest = new URL(mobilePath, request.url);
+  dest.search = request.nextUrl.search;
+  dest.searchParams.delete("app");
+
+  const out = NextResponse.redirect(dest);
+  applyMobilePreferenceCookies(out);
+  forwardMiddlewareCookies(response, out);
+  return out;
+}
 
 /**
  * Supabase: refresh session cookie quando env pubblico è configurato.
@@ -17,6 +57,10 @@ export async function middleware(request: NextRequest) {
   let out = response;
 
   const pathname = request.nextUrl.pathname;
+  const mobileAppRedirect = redirectForMobileAppQuery(request, response, pathname);
+  if (mobileAppRedirect) {
+    out = mobileAppRedirect;
+  } else {
   const needsAuth =
     supabaseConfigured &&
     !user &&
@@ -46,6 +90,7 @@ export async function middleware(request: NextRequest) {
       out = NextResponse.redirect(dest);
       forwardMiddlewareCookies(response, out);
     }
+  }
   }
 
   if (isSiteIndexingDisabled()) {
