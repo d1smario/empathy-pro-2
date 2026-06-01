@@ -12,6 +12,10 @@ import type { Pro2BuilderSessionContract, Pro2RenderProfile } from "@/lib/traini
 import { intensityToRelativeLoad, type Pro2IntensityLabel } from "@/lib/training/builder/pro2-intensity";
 import { extractSessionDurationHintSec, scanFitWorkoutStepsFromBuffer } from "@/lib/training/fit-workout-step-scan";
 import {
+  expandFitWorkoutStepsForImport,
+  type FitWorkoutStepForImport,
+} from "@/lib/training/fit-workout-step-expand";
+import {
   detectFitTimeScale,
   fitStepDurationSecForImport,
   fitStepDurationSecLegacy,
@@ -266,11 +270,95 @@ function pickStepNumber(step: Record<string, unknown>, keys: string[]): number |
   return null;
 }
 
-/** Garmin/TP: spesso `repeat_count` (uint16) su definizione estesa del messaggio. */
+/** Garmin/TP: `repeat_count` su step singolo (non marker) — raro; preferire expand repeat FIT. */
 function fitStepRepeatMultiplier(step: Record<string, unknown>): number {
+  const dtype = normalizeFitWktDurationType(step);
+  if (dtype === "repeat_until_steps_cmplt") return 1;
   const n = pickStepNumber(step, ["repeat_count", "repeatCount", "num_repetitions", "repetitions"]);
   if (n == null || !Number.isFinite(n) || n < 2) return 1;
   return Math.min(400, Math.max(2, Math.round(n)));
+}
+
+function fitStepToManualBlock(
+  step: Record<string, unknown>,
+  ftpW: number,
+  mps: number,
+  timeScale: FitTimeScale,
+  legacy: boolean,
+): { block: ManualPlanBlock | null; ladder: StructuredIntervalRow | null } {
+  let durSec = legacy ? fitStepDurationSecLegacy(step, timeScale) : fitStepDurationSecForImport(step, mps, timeScale);
+  if (durSec == null) return { block: null, ladder: null };
+  durSec *= fitStepRepeatMultiplier(step);
+  const { low, high } = fitStepFtpRange(step, ftpW);
+  const dtype = normalizeFitWktDurationType(step);
+  const wLow = Math.round(low * ftpW);
+  const wHigh = Math.round(high * ftpW);
+  const wAvg = Math.round(((low + high) / 2) * ftpW);
+  const isRamp = Math.abs(high - low) >= 0.04;
+  const ladder: StructuredIntervalRow = {
+    index: 0,
+    durationSec: durSec,
+    powerAvgW: wAvg,
+    powerLowW: wLow,
+    powerHighW: wHigh,
+    durationType: dtype,
+    kind: isRamp ? "ramp" : "steady",
+    label: fitStepLabel(step),
+  };
+  const dm = splitDuration(durSec);
+  if (!isRamp) {
+    const b = defaultManualPlanBlock("steady", fitStepLabel(step) ?? "FIT step");
+    b.minutes = dm.minutes;
+    b.seconds = dm.seconds;
+    b.intensity = b.startIntensity = b.endIntensity = ftpFractionToZone((low + high) / 2);
+    return { block: b, ladder };
+  }
+  const b = defaultManualPlanBlock("ramp", fitStepLabel(step) ?? "FIT ramp");
+  b.minutes = dm.minutes;
+  b.seconds = dm.seconds;
+  b.startIntensity = ftpFractionToZone(low);
+  b.endIntensity = ftpFractionToZone(high);
+  b.intensity = b.endIntensity;
+  return { block: b, ladder };
+}
+
+function fitInterval2ShapeToManualBlock(
+  shape: NonNullable<FitWorkoutStepForImport["_fitInterval2"]>,
+  ftpW: number,
+  mps: number,
+  timeScale: FitTimeScale,
+  legacy: boolean,
+): { block: ManualPlanBlock; ladderRows: StructuredIntervalRow[] } | null {
+  const workParsed = fitStepToManualBlock(shape.work, ftpW, mps, timeScale, legacy);
+  const recParsed = fitStepToManualBlock(shape.recovery, ftpW, mps, timeScale, legacy);
+  if (!workParsed.block || !recParsed.block) return null;
+
+  const workSec =
+    workParsed.ladder?.durationSec ??
+    workParsed.block.minutes * 60 + workParsed.block.seconds;
+  const recSec =
+    recParsed.ladder?.durationSec ??
+    recParsed.block.minutes * 60 + recParsed.block.seconds;
+  const repeats = Math.max(2, shape.repeats);
+
+  const b = defaultManualPlanBlock("interval2", fitStepLabel(shape.work) ?? "Intervals");
+  b.repeats = repeats;
+  b.workSeconds = Math.max(10, workSec);
+  b.recoverSeconds = Math.max(10, recSec);
+  b.intensity = workParsed.block.intensity;
+  b.intensity2 = recParsed.block.intensity;
+  const totalSec = repeats * (b.workSeconds + b.recoverSeconds);
+  const dm = splitDuration(totalSec);
+  b.minutes = dm.minutes;
+  b.seconds = dm.seconds;
+
+  const ladderRows: StructuredIntervalRow[] = [];
+  for (let r = 0; r < repeats; r += 1) {
+    if (workParsed.ladder) ladderRows.push({ ...workParsed.ladder, index: ladderRows.length + 1 });
+    if (recParsed.ladder) ladderRows.push({ ...recParsed.ladder, index: ladderRows.length + 1 });
+  }
+
+  return { block: b, ladderRows };
 }
 
 function defaultMpsFromFitWorkout(workout: Record<string, unknown> | null | undefined): number {
@@ -354,8 +442,9 @@ function parseFitWorkoutToManualBlocks(
   ftpW: number,
 ): { blocks: ManualPlanBlock[]; wktName: string | null; intervalLadder: StructuredIntervalRow[] } {
   const scan = scanFitWorkoutStepsFromBuffer(buffer);
-  const steps = scan.workoutSteps;
-  if (!steps.length) throw new Error("FIT: nessun workout step decodificabile.");
+  const rawSteps = scan.workoutSteps;
+  if (!rawSteps.length) throw new Error("FIT: nessun workout step decodificabile.");
+  const steps = expandFitWorkoutStepsForImport(rawSteps);
   const mps = defaultMpsFromFitWorkout(scan.workout);
   /** Decisione UNICA per il file: ms vs s. Risolve regression "step da 1440' = 24h"
    *  dovuta a Garmin FIT SDK scale=1000 sui campi time-based (TrainingPeaks export). */
@@ -367,41 +456,24 @@ function parseFitWorkoutToManualBlocks(
     const blocks: ManualPlanBlock[] = [];
     const ladder: StructuredIntervalRow[] = [];
     for (const step of steps) {
-      let durSec = legacy ? fitStepDurationSecLegacy(step, timeScale) : fitStepDurationSecForImport(step, mps, timeScale);
-      if (durSec == null) continue;
-      durSec *= fitStepRepeatMultiplier(step);
-      const { low, high } = fitStepFtpRange(step, ftpW);
-      const dtype = normalizeFitWktDurationType(step);
-      const wLow = Math.round(low * ftpW);
-      const wHigh = Math.round(high * ftpW);
-      const wAvg = Math.round(((low + high) / 2) * ftpW);
-      const isRamp = Math.abs(high - low) >= 0.04;
-      ladder.push({
-        index: ladder.length + 1,
-        durationSec: durSec,
-        powerAvgW: wAvg,
-        powerLowW: wLow,
-        powerHighW: wHigh,
-        durationType: dtype,
-        kind: isRamp ? "ramp" : "steady",
-        label: fitStepLabel(step),
-      });
-      const dm = splitDuration(durSec);
-      if (!isRamp) {
-        const b = defaultManualPlanBlock("steady", "FIT step");
-        b.minutes = dm.minutes;
-        b.seconds = dm.seconds;
-        b.intensity = b.startIntensity = b.endIntensity = ftpFractionToZone((low + high) / 2);
-        blocks.push(b);
-      } else {
-        const b = defaultManualPlanBlock("ramp", "FIT ramp");
-        b.minutes = dm.minutes;
-        b.seconds = dm.seconds;
-        b.startIntensity = ftpFractionToZone(low);
-        b.endIntensity = ftpFractionToZone(high);
-        b.intensity = b.endIntensity;
-        blocks.push(b);
+      const interval2Shape = step._fitInterval2;
+      if (interval2Shape) {
+        const parsed = fitInterval2ShapeToManualBlock(interval2Shape, ftpW, mps, timeScale, legacy);
+        if (parsed) {
+          blocks.push(parsed.block);
+          for (const row of parsed.ladderRows) {
+            ladder.push({ ...row, index: ladder.length + 1 });
+          }
+        }
+        continue;
       }
+
+      const parsed = fitStepToManualBlock(step, ftpW, mps, timeScale, legacy);
+      if (!parsed.block) continue;
+      if (parsed.ladder) {
+        ladder.push({ ...parsed.ladder, index: ladder.length + 1 });
+      }
+      blocks.push(parsed.block);
     }
     return { blocks, ladder };
   };

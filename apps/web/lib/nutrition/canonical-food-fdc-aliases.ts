@@ -32,39 +32,61 @@ export const CANONICAL_FOOD_TO_FDC_ID: Record<string, number | undefined> = {
   potato_cooked: 170093, // Potatoes, baked, flesh and skin, without salt
   crackers_whole: 174985, // Crackers, wheat, regular
 
-  // Verdure (proxy ricchi di micro)
-  mixed_veg: 168462, // Spinach, raw — proxy verdura foglia ricca
+  // Verdure
+  mixed_veg: 168462, // Spinach, raw — proxy verdura foglia generica
+  spinach_raw: 168462,
+  kale_raw: 168421,
+  broccoli_raw: 170379,
+  bell_pepper_red: 170108,
+  asparagus_raw: 168389,
+  beetroot_raw: 2685576,
+  arugula_raw: 169387,
+  zucchini_raw: 169291,
+  tomato_raw: 170457,
+  carrot_raw: 170393,
+  lettuce_romaine: 169247,
 
   // Frutta
-  banana: 173944, // Bananas, raw
+  banana: 173944,
   mixed_fruit: 2346411, // Blueberries, raw — proxy frutta rossa ricca
+  orange_raw: 169097,
+  kiwi_raw: 327046,
+  strawberries_raw: 167762,
+  apple_raw: 1750340,
+  blueberries_raw: 2346411,
+  pear_raw: 169118,
 
   // Legumi
-  legumes_cooked: 172421, // Lentils, mature seeds, cooked, boiled, without salt — proxy legumi cotti
+  legumes_cooked: 172421, // Lentils, mature seeds, cooked, boiled, without salt
+  chickpeas_cooked: 173799,
+
+  // Semi / snack
+  pumpkin_seeds_raw: 170556,
+  almonds_raw: 2346393,
+  dark_chocolate_70: 170273,
 
   // Proteine animali
-  egg_whole: 171287, // Egg, whole, raw, fresh
-  chicken_breast: 171077, // Chicken, broiler/fryers, breast, skinless, boneless, meat only, raw
-  beef_lean: 168608, // Beef, grass-fed, ground, raw
+  egg_whole: 171287,
+  chicken_breast: 171077,
+  beef_lean: 168608,
   fish_white: 175167, // Fish, salmon, Atlantic, farmed, raw — proxy pesce ricco di micro/omega
-  deli_lean: 167876, // Pork, cured, ham, whole, separable lean only, unheated
+  deli_lean: 167876,
 
   // Latticini
-  milk_goat: 171278, // Milk, goat, fluid, with added vitamin D
-  yogurt_plain: 171284, // Yogurt, plain, whole milk
-  cheese_hard: 171247, // Cheese, parmesan, grated
+  milk_goat: 171278,
+  yogurt_plain: 171284,
+  cheese_hard: 171247,
+  ricotta_cheese: 170851,
+  cottage_cheese: 173417,
 
   // Grassi
-  olive_oil: 171413, // Oil, olive, salad or cooking
-  avocado: 171705, // Avocados, raw, all commercial varieties
+  olive_oil: 171413,
+  avocado: 171705,
 
   // Senza fdcId (proxy interni — USDA non offre un match diretto rilevante)
-  generic_mixed: undefined, // fallback neutro: non risolvere via cache
-  whey_powder: undefined, // proteina whey isolata — formula sintetica, non SR Legacy
-  omega_capsule: undefined, // integratore — non in USDA SR Legacy
-  // Riservate per futura mappatura quando il TS table cresce:
-  // farro_dry: ?  (USDA SR Legacy non ha farro raw; potrebbe usare 169745 = Spelt uncooked)
-  // milk_2pct: 171267  (presente in cache ma non in TS table)
+  generic_mixed: undefined,
+  whey_powder: undefined,
+  omega_capsule: undefined,
 };
 
 export function fdcIdForCanonicalKey(canonicalKey: string): number | undefined {
@@ -73,5 +95,5 @@ export function fdcIdForCanonicalKey(canonicalKey: string): number | undefined {
 
 /** Tutti i fdcId noti — utile per pre-caricare la cache USDA in batch. */
 export function allKnownFdcIds(): number[] {
-  return Object.values(CANONICAL_FOOD_TO_FDC_ID).filter((v): v is number => typeof v === "number");
+  return [...new Set(Object.values(CANONICAL_FOOD_TO_FDC_ID).filter((v): v is number => typeof v === "number"))];
 }

@@ -382,7 +382,7 @@ test("guardrail composizione CHO colazione: cho >= 130 g -> 2 fonti CHO solide d
   );
 });
 
-test("pathway folato: lunch sostituisce verdure miste con legumi folato-densi", () => {
+test("pathway folato: lunch aggiunge legumi folato-densi mantenendo verdure", () => {
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 900, carbsG: 110, proteinG: 45, fatG: 28 };
   const meal = applyNutrientBoostSwaps(
@@ -393,9 +393,24 @@ test("pathway folato: lunch sostituisce verdure miste con legumi folato-densi", 
   );
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
   assert.ok(keys.includes("legumes_cooked"), `Atteso legumi_cooked, got: ${keys.join(", ")}`);
+  const vegKeys = ["mixed_veg", "spinach_raw", "broccoli_raw", "zucchini_raw", "bell_pepper_red", "carrot_raw", "tomato_raw", "asparagus_raw", "arugula_raw", "lettuce_romaine"];
+  assert.ok(keys.some((k) => vegKeys.includes(k)), `Atteso contorno verdura, got: ${keys.join(", ")}`);
 });
 
-test("pathway redox vit C: lunch preferisce frutta vit C-densa al posto di verdure miste", () => {
+test("pathway folato: colazione non usa legumi — integrazione se non coperto", () => {
+  const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
+  const macros = { kcal: 550, carbsG: 70, proteinG: 28, fatG: 16 };
+  const meal = applyNutrientBoostSwaps(
+    composeMediterraneanMeal("breakfast", macros, ctx),
+    "breakfast",
+    ["folate_mcg"],
+    ctx,
+  );
+  const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
+  assert.ok(!keys.includes("legumes_cooked"), `Legumi non ammessi a colazione, got: ${keys.join(", ")}`);
+});
+
+test("pathway redox vit C: lunch aggiunge fonte vit C densa", () => {
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 850, carbsG: 100, proteinG: 42, fatG: 26 };
   const meal = applyNutrientBoostSwaps(
@@ -405,10 +420,11 @@ test("pathway redox vit C: lunch preferisce frutta vit C-densa al posto di verdu
     ctx,
   );
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
-  assert.ok(keys.includes("mixed_fruit"), `Atteso mixed_fruit, got: ${keys.join(", ")}`);
+  const vitCKeys = new Set(["bell_pepper_red", "kiwi_raw", "orange_raw", "strawberries_raw", "mixed_fruit"]);
+  assert.ok(keys.some((k) => vitCKeys.has(k)), `Atteso alimento vit C-denso, got: ${keys.join(", ")}`);
 });
 
-test("pathway lab ferro: ferritina bassa → lunch swap legumi (fe_mg)", () => {
+test("pathway lab ferro: ferritina bassa → lunch aggiunge ferro vegetale (fe_mg)", () => {
   const bridge = buildHealthLabPathwayBridge({
     blood: { ferritin_ng_ml: 22 },
     panels: [{ type: "blood", values: { ferritin_ng_ml: 22 } }],
@@ -427,5 +443,6 @@ test("pathway lab ferro: ferritina bassa → lunch swap legumi (fe_mg)", () => {
     ctx,
   );
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
-  assert.ok(keys.includes("legumes_cooked"), `Atteso legumes_cooked per ferro lab-driven, got: ${keys.join(", ")}`);
+  const feKeys = new Set(["spinach_raw", "chickpeas_cooked", "legumes_cooked"]);
+  assert.ok(keys.some((k) => feKeys.has(k)), `Atteso fonte ferro vegetale, got: ${keys.join(", ")}`);
 });

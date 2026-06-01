@@ -10,7 +10,15 @@ import { rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-t
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
-import { applyNutrientBoostSwaps, composeMediterraneanMeal, createMediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
+import {
+  applyNutrientBoostSwaps,
+  composeMediterraneanMeal,
+  createMediterraneanDayContext,
+} from "@/lib/nutrition/mediterranean-meal-composer";
+import {
+  buildIntegrationHintItemsForSlot,
+  uncoveredNutrientTargetsForSlot,
+} from "@/lib/nutrition/nutrient-pathway-slot-registry";
 import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
@@ -102,11 +110,13 @@ function pickItemsForSlot(
     boostTargetIds,
     dayCtx,
   );
+  const uncovered = uncoveredNutrientTargetsForSlot(boostTargetIds, slot.slot, dayCtx.dietType);
+  const integrationItems = buildIntegrationHintItemsForSlot(slot.slot, uncovered, 2);
   const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
   const bridgePrefix = groupTitles
     ? `Target funzionali (solver): ${groupTitles.slice(0, 180)}${groupTitles.length > 180 ? "…" : ""}. `
     : "";
-  const bridged = composed.items.map((it) => ({
+  const bridged = [...composed.items, ...integrationItems].map((it) => ({
     ...it,
     functionalBridge: `${bridgePrefix}Composizione mediterranea semplice: ${it.functionalBridge}`.slice(0, 500),
   }));
@@ -141,11 +151,9 @@ export async function buildDeterministicMealPlanFromRequest(
   );
 
   /**
-   * STEP C — Bridge "sistema intelligente → generatore" (regola utente):
-   *   il pathway-modulation produce `cofactors`/`substrates` (es. "B12, folati, ferro" per eritropoiesi),
-   *   il request builder li mappa in `nutrientBoostTargets`, e qui interroghiamo la cache USDA per i
-   *   top-3 alimenti più ricchi di ciascun nutriente. Il generatore NON ragiona sul pathway: scrive solo
-   *   note testuali nel piano (`slotCoherence` e `dayInteractionSummary`).
+   * Bridge pathway → generatore unico (`nutrient-pathway-slot-registry` + composer):
+   * cofactors attivi applicano swap/add solo se ammessi per slot; altrimenti integrazione nel piano.
+   * Ranking USDA top-3 = note testuali complementari (non sostituisce la composizione).
    */
   const validBoostTargets = req.nutrientBoostTargets ? selectValidBoostTargets(req.nutrientBoostTargets) : [];
   const boostTargetIds = validBoostTargets.map((t) => t.nutrientId);
@@ -263,7 +271,7 @@ export async function buildDeterministicMealPlanFromRequest(
 
   const usdaCacheMissNote =
     pathwayBoostStatus === "usda_cache_miss"
-      ? "Cache USDA alimenti ricchi non disponibile: gli swap pathway (legumi/frutta/B12) restano attivi nel composer; ranking top-3 USDA non mostrato finché la cache FDC non è popolata."
+      ? "Cache USDA alimenti ricchi non disponibile: il generatore usa il registro slot×nutriente canonico; ranking top-3 USDA non mostrato finché la cache FDC non è popolata."
       : null;
 
   const dayBits = [

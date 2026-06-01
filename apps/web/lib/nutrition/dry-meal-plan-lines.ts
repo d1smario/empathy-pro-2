@@ -109,7 +109,7 @@ function fallbackDryLinesForMealSlot(mealSlotKey: MealSlotKey, slot: DryMealSlot
   if (mealSlotKey === "snack_pm") {
     return [
       "40–55 g gallette integrali o pane tostato",
-      "50–70 g affettato magro o hummus",
+      "50–70 g affettato magro o ricotta",
       `${clamp(18 + slot.fatG * 0.45, 15, 38)} g frutta secca o olio su cracker`,
     ];
   }

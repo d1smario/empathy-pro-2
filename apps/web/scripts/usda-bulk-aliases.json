@@ -1,9 +1,9 @@
 {
-  "ok": 11,
+  "ok": 119,
   "fail": 0,
-  "skipped": 0,
-  "total": 11,
-  "generatedAt": "2026-05-06T19:34:52.852Z",
+  "skipped": 1,
+  "total": 120,
+  "generatedAt": "2026-05-31T19:04:08.890Z",
   "aliases": {
     "bread_white": {
       "fdcId": 174925,
@@ -41,8 +41,8 @@
       "dataType": "Foundation"
     },
     "oats_raw": {
-      "fdcId": 172989,
-      "description": "Cereals, QUAKER, Quick Oats, Dry",
+      "fdcId": 168872,
+      "description": "Oat bran, raw",
       "dataType": "SR Legacy"
     },
     "spelt_cooked": {
@@ -105,6 +105,11 @@
       "description": "Carrots, raw",
       "dataType": "SR Legacy"
     },
+    "broccoli_raw": {
+      "fdcId": 170379,
+      "description": "Broccoli, raw",
+      "dataType": "SR Legacy"
+    },
     "cauliflower_raw": {
       "fdcId": 2685573,
       "description": "Cauliflower, raw",
@@ -144,6 +149,11 @@
       "fdcId": 1104647,
       "description": "Garlic, raw",
       "dataType": "Foundation"
+    },
+    "artichoke_raw": {
+      "fdcId": 169236,
+      "description": "Jerusalem-artichokes, raw",
+      "dataType": "SR Legacy"
     },
     "asparagus_raw": {
       "fdcId": 168389,
@@ -205,6 +215,11 @@
       "description": "Beans, black, mature seeds, cooked, boiled, without salt",
       "dataType": "SR Legacy"
     },
+    "chickpeas_cooked": {
+      "fdcId": 172421,
+      "description": "Lentils, mature seeds, cooked, boiled, without salt",
+      "dataType": "SR Legacy"
+    },
     "peas_green": {
       "fdcId": 170419,
       "description": "Peas, green, raw",
@@ -218,11 +233,6 @@
     "edamame_cooked": {
       "fdcId": 168411,
       "description": "Edamame, frozen, prepared",
-      "dataType": "SR Legacy"
-    },
-    "fava_beans_cooked": {
-      "fdcId": 173753,
-      "description": "Broadbeans (fava beans), mature seeds, cooked, boiled, without salt",
       "dataType": "SR Legacy"
     },
     "apple_raw": {
@@ -258,6 +268,11 @@
     "pear_raw": {
       "fdcId": 169118,
       "description": "Pears, raw",
+      "dataType": "SR Legacy"
+    },
+    "peach_raw": {
+      "fdcId": 169928,
+      "description": "Peaches, yellow, raw",
       "dataType": "SR Legacy"
     },
     "apricot_raw": {
@@ -335,6 +350,16 @@
       "description": "Turkey, all classes, breast, meat and skin, raw",
       "dataType": "SR Legacy"
     },
+    "beef_lean_raw": {
+      "fdcId": 168608,
+      "description": "Beef, grass-fed, ground, raw",
+      "dataType": "SR Legacy"
+    },
+    "beef_sirloin_raw": {
+      "fdcId": 2727574,
+      "description": "Beef, top sirloin steak, raw",
+      "dataType": "Foundation"
+    },
     "pork_tenderloin_raw": {
       "fdcId": 168249,
       "description": "Pork, fresh, loin, tenderloin, separable lean only, raw",
@@ -368,6 +393,11 @@
     "tuna_fresh_raw": {
       "fdcId": 173706,
       "description": "Fish, tuna, fresh, bluefin, raw",
+      "dataType": "SR Legacy"
+    },
+    "tuna_canned_water": {
+      "fdcId": 173708,
+      "description": "Fish, tuna, light, canned in oil, drained solids",
       "dataType": "SR Legacy"
     },
     "cod_raw": {
@@ -425,6 +455,11 @@
       "description": "Fish, trout, rainbow, farmed, raw",
       "dataType": "SR Legacy"
     },
+    "milk_whole": {
+      "fdcId": 171265,
+      "description": "Milk, whole, 3.25% milkfat, with added vitamin D",
+      "dataType": "SR Legacy"
+    },
     "milk_2pct": {
       "fdcId": 171267,
       "description": "Milk, reduced fat, fluid, 2% milkfat, with added vitamin A and vitamin D",
@@ -441,13 +476,23 @@
       "dataType": "SR Legacy"
     },
     "yogurt_plain": {
-      "fdcId": 171284,
-      "description": "Yogurt, plain, whole milk",
+      "fdcId": 171285,
+      "description": "Yogurt, fruit, low fat, 10 grams protein per 8 ounce",
+      "dataType": "SR Legacy"
+    },
+    "yogurt_greek": {
+      "fdcId": 171312,
+      "description": "Yogurt, Greek, nonfat, plain, CHOBANI",
       "dataType": "SR Legacy"
     },
     "cheese_parmesan": {
       "fdcId": 171247,
       "description": "Cheese, parmesan, grated",
+      "dataType": "SR Legacy"
+    },
+    "cheese_mozzarella": {
+      "fdcId": 171244,
+      "description": "Cheese, mozzarella, low moisture, part-skim",
       "dataType": "SR Legacy"
     },
     "cheese_ricotta": {
@@ -458,6 +503,11 @@
     "cheese_cottage": {
       "fdcId": 173417,
       "description": "Cheese, cottage, lowfat, 1% milkfat",
+      "dataType": "SR Legacy"
+    },
+    "cheese_cheddar": {
+      "fdcId": 169901,
+      "description": "Cheese, american cheddar, imitation",
       "dataType": "SR Legacy"
     },
     "butter_salted": {
@@ -549,62 +599,12 @@
       "fdcId": 171917,
       "description": "Beverages, tea, green, brewed, regular",
       "dataType": "SR Legacy"
-    },
-    "broccoli_raw": {
-      "fdcId": 170379,
-      "description": "Broccoli, raw",
-      "dataType": "SR Legacy"
-    },
-    "artichoke_raw": {
-      "fdcId": 169205,
-      "description": "Artichokes, (globe or french), raw",
-      "dataType": "SR Legacy"
-    },
-    "chickpeas_cooked": {
-      "fdcId": 173799,
-      "description": "Chickpeas (garbanzo beans, bengal gram), mature seeds, cooked, boiled, with salt",
-      "dataType": "SR Legacy"
-    },
-    "peach_raw": {
-      "fdcId": 169928,
-      "description": "Peaches, yellow, raw",
-      "dataType": "SR Legacy"
-    },
-    "beef_lean_raw": {
-      "fdcId": 168608,
-      "description": "Beef, grass-fed, ground, raw",
-      "dataType": "SR Legacy"
-    },
-    "beef_sirloin_raw": {
-      "fdcId": 2727574,
-      "description": "Beef, top sirloin steak, raw",
-      "dataType": "Foundation"
-    },
-    "tuna_canned_water": {
-      "fdcId": 171986,
-      "description": "Fish, tuna, light, canned in water, without salt, drained solids",
-      "dataType": "SR Legacy"
-    },
-    "milk_whole": {
-      "fdcId": 171265,
-      "description": "Milk, whole, 3.25% milkfat, with added vitamin D",
-      "dataType": "SR Legacy"
-    },
-    "yogurt_greek": {
-      "fdcId": 171312,
-      "description": "Yogurt, Greek, nonfat, plain, CHOBANI",
-      "dataType": "SR Legacy"
-    },
-    "cheese_mozzarella": {
-      "fdcId": 171244,
-      "description": "Cheese, mozzarella, low moisture, part-skim",
-      "dataType": "SR Legacy"
-    },
-    "cheese_cheddar": {
-      "fdcId": 170899,
-      "description": "Cheese, cheddar, sharp, sliced",
-      "dataType": "SR Legacy"
     }
   },
-  "failed": []
+  "failed": [
+    {
+      "id": "fava_beans_cooked",
+      "reason": "search_no_hit"
+    }
+  ]
 }
