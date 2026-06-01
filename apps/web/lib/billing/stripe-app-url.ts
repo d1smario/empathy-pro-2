@@ -21,7 +21,7 @@ export function stripeCheckoutSuccessUrl(): string {
 export function stripeCheckoutSuccessUrlAuthenticated(): string {
   const path =
     process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_SUCCESS_PATH_AUTHENTICATED?.trim() ||
-    "/access/plan?billing=success";
+    "/access/plan?billing=success&session_id={CHECKOUT_SESSION_ID}";
   return `${readStripeAppOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 

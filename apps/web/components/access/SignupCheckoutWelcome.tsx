@@ -10,43 +10,107 @@ type EntitlementResponse = {
   label?: string;
 };
 
+type SyncResponse = {
+  ok?: boolean;
+  synced?: boolean;
+  hasAthleteAccess?: boolean;
+  label?: string;
+  reason?: string | null;
+};
+
+type SignupCheckoutWelcomeProps = {
+  checkoutSessionId?: string | null;
+  initialReady?: boolean;
+  initialLabel?: string | null;
+};
+
 /**
- * Conferma post-checkout Stripe (gate `/access/plan`): messaggio benvenuto + sync entitlement.
+ * Conferma post-checkout Stripe (gate `/access/plan`): sync immediato + poll entitlement.
  */
-export function SignupCheckoutWelcome() {
+export function SignupCheckoutWelcome({
+  checkoutSessionId,
+  initialReady = false,
+  initialLabel = null,
+}: SignupCheckoutWelcomeProps) {
   const t = useTranslations("AccessPlan");
-  const [ready, setReady] = useState(false);
-  const [label, setLabel] = useState<string | null>(null);
+  const [ready, setReady] = useState(initialReady);
+  const [label, setLabel] = useState<string | null>(initialLabel);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
 
   useEffect(() => {
+    if (initialReady) return;
     let cancelled = false;
     let attempts = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 40;
 
-    async function poll() {
-      if (cancelled || attempts >= maxAttempts) return;
-      attempts += 1;
+    async function trySync(): Promise<boolean> {
+      const sid = checkoutSessionId?.trim();
+      if (!sid || !sid.startsWith("cs_")) return false;
+      try {
+        const res = await fetch("/api/billing/sync-checkout-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: sid }),
+        });
+        const data = (await res.json()) as SyncResponse;
+        if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
+          setReady(true);
+          setLabel(typeof data.label === "string" ? data.label : null);
+          setSyncNote(null);
+          return true;
+        }
+        if (!cancelled && res.ok && data.ok && !data.synced && data.reason) {
+          setSyncNote(t("welcomeSyncRetry"));
+        }
+      } catch {
+        /* poll continues */
+      }
+      return false;
+    }
+
+    async function pollEntitlement(): Promise<boolean> {
       try {
         const res = await fetch("/api/billing/entitlement", { cache: "no-store" });
         const data = (await res.json()) as EntitlementResponse;
         if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
           setReady(true);
           setLabel(typeof data.label === "string" ? data.label : null);
-          return;
+          return true;
         }
       } catch {
         /* retry */
       }
-      if (!cancelled) {
-        window.setTimeout(poll, 1500);
-      }
+      return false;
     }
 
-    void poll();
+    async function loop() {
+      if (cancelled || attempts >= maxAttempts) {
+        if (!cancelled && !ready) {
+          setSyncNote(t("welcomeSyncSlow"));
+        }
+        return;
+      }
+      attempts += 1;
+
+      if (attempts === 1) {
+        const synced = await trySync();
+        if (synced) return;
+      } else if (attempts % 4 === 0 && checkoutSessionId) {
+        const synced = await trySync();
+        if (synced) return;
+      }
+
+      const entitled = await pollEntitlement();
+      if (entitled || cancelled) return;
+
+      window.setTimeout(loop, 1500);
+    }
+
+    void loop();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [checkoutSessionId, initialReady, t]);
 
   return (
     <section
@@ -60,7 +124,7 @@ export function SignupCheckoutWelcome() {
       <p className="mt-4 max-w-xl text-sm leading-relaxed text-gray-300">{t("welcomeBody")}</p>
       {label ? <p className="mt-2 text-xs text-emerald-200/90">{label}</p> : null}
       {!ready ? (
-        <p className="mt-4 text-xs text-gray-500">{t("welcomeSyncing")}</p>
+        <p className="mt-4 text-xs text-gray-500">{syncNote ?? t("welcomeSyncing")}</p>
       ) : (
         <div className="mt-8 flex flex-wrap justify-center gap-3 sm:justify-start">
           <Pro2Button

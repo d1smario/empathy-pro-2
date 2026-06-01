@@ -9,11 +9,19 @@ import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
 import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
+import { readStripeSecretKey } from "@/lib/billing/stripe-secret";
+import { syncCheckoutSessionById, reconcileStripeSubscriptionsForUser } from "@/lib/billing/stripe-billing-persist";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
+import { createStripeServerClient } from "@empathy/integrations-stripe";
 
 export const dynamic = "force-dynamic";
+
+function firstSearchParam(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? value[0] : value;
+}
 
 export const metadata: Metadata = {
   title: "Abbonamento — Empathy Pro 2.0",
@@ -50,10 +58,36 @@ export default async function AccessPlanPage({
   }
 
   const admin = createSupabaseAdminClient();
-  const entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
-  const isCheckoutSuccess =
-    (typeof searchParams?.billing === "string" && searchParams.billing === "success") ||
-    (Array.isArray(searchParams?.billing) && searchParams.billing[0] === "success");
+  const isCheckoutSuccess = firstSearchParam(searchParams?.billing) === "success";
+  const checkoutSessionId = firstSearchParam(searchParams?.session_id);
+
+  if (isCheckoutSuccess && checkoutSessionId?.startsWith("cs_")) {
+    const stripeKey = readStripeSecretKey();
+    if (stripeKey) {
+      try {
+        const stripe = createStripeServerClient(stripeKey);
+        await syncCheckoutSessionById(stripe, checkoutSessionId, user.id, user.email ?? null);
+      } catch (err) {
+        console.warn("[access/plan] checkout sync failed", err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
+  let entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
+
+  if (!isCheckoutSuccess && !entitlement.hasAthleteAccess) {
+    const stripeKey = readStripeSecretKey();
+    if (stripeKey) {
+      try {
+        const stripe = createStripeServerClient(stripeKey);
+        await reconcileStripeSubscriptionsForUser(stripe, user.id, user.email ?? null);
+        entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
+      } catch (err) {
+        console.warn("[access/plan] billing reconcile failed", err instanceof Error ? err.message : err);
+      }
+    }
+  }
+
   if (entitlement.hasAthleteAccess && !isCheckoutSuccess) {
     redirect("/dashboard");
   }
@@ -89,7 +123,7 @@ export default async function AccessPlanPage({
           <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-400">
             {isCheckoutSuccess ? t("welcomeBody") : t("subtitle")}
           </p>
-          {showRequired ? (
+          {showRequired && !isCheckoutSuccess ? (
             <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
               {t("requiredAlert")}
             </p>
@@ -102,7 +136,11 @@ export default async function AccessPlanPage({
         </header>
 
         {isCheckoutSuccess ? (
-          <SignupCheckoutWelcome />
+          <SignupCheckoutWelcome
+            checkoutSessionId={checkoutSessionId ?? null}
+            initialReady={entitlement.hasAthleteAccess}
+            initialLabel={entitlement.hasAthleteAccess ? entitlement.label : null}
+          />
         ) : (
           <HomeStripePricing
             availability={hosted}

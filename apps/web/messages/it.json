@@ -128,6 +128,8 @@
     "welcomeTitle": "Benvenuto in Empathy",
     "welcomeBody": "Il tuo account è attivo e la prova gratuita è stata avviata con successo. Da qui puoi entrare in piattaforma e iniziare a usare Empathy Pro 2.0.",
     "welcomeSyncing": "Stiamo sincronizzando il tuo abbonamento…",
+    "welcomeSyncRetry": "Attendi qualche secondo: stiamo confermando il pagamento con Stripe.",
+    "welcomeSyncSlow": "La conferma sta impiegando più del solito. Resta su questa pagina: si aggiornerà automaticamente.",
     "welcomeEnterDashboard": "Entra in Empathy"
   },
   "AccountNotices": {
