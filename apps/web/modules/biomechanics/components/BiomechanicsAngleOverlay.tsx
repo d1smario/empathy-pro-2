@@ -2,28 +2,75 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empathy/contracts";
+import { deriveJointAnglesFromLandmarks, canvasToLandmarkCoords, findLandmarkAtCanvasPoint } from "@/lib/biomechanics/biomech-landmark-angles";
 import {
   drawBiomechSkeletonOverlay,
   listAvailablePhases,
   resolveOverlayLandmarks,
 } from "@/lib/biomechanics/biomech-skeleton-overlay";
+import { Pro2Button } from "@/components/ui/empathy";
 
 type Props = {
   jointAngles?: BiomechanicsJointAngleSample[];
   landmarks?: BiomechanicsLandmark3D[];
   videoUrl?: string | null;
   title?: string;
+  editable?: boolean;
+  onLandmarksChange?: (landmarks: BiomechanicsLandmark3D[], jointAngles: BiomechanicsJointAngleSample[]) => void;
 };
 
-export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl, title }: Props) {
+export function BiomechanicsAngleOverlay({
+  jointAngles = [],
+  landmarks,
+  videoUrl,
+  title,
+  editable = false,
+  onLandmarksChange,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragRef = useRef<string | null>(null);
+  const sizeRef = useRef({ width: 1, height: 1 });
+
   const [phasePct, setPhasePct] = useState(50);
+  const [draftLandmarks, setDraftLandmarks] = useState<BiomechanicsLandmark3D[]>(() =>
+    resolveOverlayLandmarks(landmarks),
+  );
+  const [activeLandmark, setActiveLandmark] = useState<string | null>(null);
+  const [baselineLandmarks, setBaselineLandmarks] = useState<BiomechanicsLandmark3D[]>(() =>
+    resolveOverlayLandmarks(landmarks),
+  );
 
   const phases = useMemo(() => listAvailablePhases(jointAngles), [jointAngles]);
-  const overlayLandmarks = useMemo(() => resolveOverlayLandmarks(landmarks), [landmarks]);
   const hasAngles = jointAngles.length > 0;
+
+  const geometryAngles = useMemo(
+    () => deriveJointAnglesFromLandmarks(draftLandmarks, jointAngles),
+    [draftLandmarks, jointAngles],
+  );
+
+  const displayAngles = geometryAngles.length ? geometryAngles : jointAngles;
+
+  useEffect(() => {
+    const next = resolveOverlayLandmarks(landmarks);
+    setDraftLandmarks(next);
+    setBaselineLandmarks(next);
+  }, [landmarks]);
+
+  const emitChange = useCallback(
+    (nextLandmarks: BiomechanicsLandmark3D[]) => {
+      const nextAngles = deriveJointAnglesFromLandmarks(nextLandmarks, jointAngles);
+      onLandmarksChange?.(nextLandmarks, nextAngles);
+    },
+    [jointAngles, onLandmarksChange],
+  );
+
+  const updateLandmarkAt = useCallback((name: string, x: number, y: number) => {
+    const { width, height } = sizeRef.current;
+    const { xMm, yMm } = canvasToLandmarkCoords(x, y, width, height);
+    setDraftLandmarks((prev) => prev.map((row) => (row.name === name ? { ...row, xMm, yMm, confidence01: 1 } : row)));
+  }, []);
 
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
@@ -33,6 +80,7 @@ export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl
     const rect = container.getBoundingClientRect();
     const width = Math.max(1, Math.round(rect.width));
     const height = Math.max(1, Math.round(rect.height));
+    sizeRef.current = { width, height };
     const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
     canvas.width = Math.round(width * dpr);
@@ -48,11 +96,12 @@ export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl
       ctx,
       width,
       height,
-      landmarks: overlayLandmarks,
-      jointAngles,
+      landmarks: draftLandmarks,
+      jointAngles: displayAngles,
       phasePct,
+      activeLandmark,
     });
-  }, [hasAngles, jointAngles, overlayLandmarks, phasePct]);
+  }, [activeLandmark, displayAngles, draftLandmarks, hasAngles, phasePct]);
 
   useEffect(() => {
     redraw();
@@ -83,6 +132,66 @@ export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl
     setPhasePct(phases.includes(50) ? 50 : phases[0]!);
   }, [phasePct, phases]);
 
+  const clientPoint = useCallback((event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }, []);
+
+  const onPointerDown = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!editable) return;
+      const pt = clientPoint(event);
+      if (!pt) return;
+      const { width, height } = sizeRef.current;
+      const name = findLandmarkAtCanvasPoint(draftLandmarks, pt.x, pt.y, width, height);
+      if (!name) return;
+      dragRef.current = name;
+      setActiveLandmark(name);
+      event.currentTarget.setPointerCapture(event.pointerId);
+      updateLandmarkAt(name, pt.x, pt.y);
+    },
+    [clientPoint, draftLandmarks, editable, updateLandmarkAt],
+  );
+
+  const onPointerMove = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!editable || !dragRef.current) return;
+      const pt = clientPoint(event);
+      if (!pt) return;
+      updateLandmarkAt(dragRef.current, pt.x, pt.y);
+    },
+    [clientPoint, editable, updateLandmarkAt],
+  );
+
+  const finishDrag = useCallback(() => {
+    if (!dragRef.current) return;
+    dragRef.current = null;
+    setActiveLandmark(null);
+    setDraftLandmarks((current) => {
+      emitChange(current);
+      return current;
+    });
+  }, [emitChange]);
+
+  const onPointerUp = useCallback(
+    (event: React.PointerEvent<HTMLCanvasElement>) => {
+      if (!editable) return;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      finishDrag();
+    },
+    [editable, finishDrag],
+  );
+
+  const onResetLandmarks = useCallback(() => {
+    const reset = [...baselineLandmarks];
+    setDraftLandmarks(reset);
+    emitChange(reset);
+  }, [baselineLandmarks, emitChange]);
+
   if (!hasAngles) {
     return (
       <p className="rounded-xl border border-white/10 px-4 py-3 text-sm text-gray-400">
@@ -94,6 +203,12 @@ export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl
   return (
     <div className="space-y-3">
       {title ? <p className="text-xs text-gray-400">{title}</p> : null}
+      {editable ? (
+        <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+          Trascina i punti <span className="text-fuchsia-200">rosa</span> per allinearli al video. Gli angoli si
+          ricalcolano in tempo reale; salva prima di confermare la sessione.
+        </p>
+      ) : null}
       <div
         ref={containerRef}
         className="relative aspect-video w-full overflow-hidden rounded-xl border border-violet-500/25 bg-black"
@@ -113,25 +228,40 @@ export function BiomechanicsAngleOverlay({ jointAngles = [], landmarks, videoUrl
             <p className="text-xs text-gray-500">Anteprima scheletro · angoli CV</p>
           </div>
         )}
-        <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden />
+        <canvas
+          ref={canvasRef}
+          className={`absolute inset-0 h-full w-full touch-none ${editable ? "cursor-crosshair" : "pointer-events-none"}`}
+          aria-label={editable ? "Editor landmark biomeccanici" : undefined}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        />
       </div>
-      {phases.length > 1 ? (
-        <label className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
-          <span className="font-mono uppercase tracking-[0.18em] text-violet-200">Fase ciclo</span>
-          <input
-            type="range"
-            min={Math.min(...phases)}
-            max={Math.max(...phases)}
-            step={1}
-            value={phasePct}
-            onChange={(event) => setPhasePct(Number(event.currentTarget.value))}
-            className="min-w-[12rem] flex-1 accent-fuchsia-500"
-          />
-          <span className="font-mono text-white">{phasePct}%</span>
-        </label>
-      ) : (
-        <p className="text-xs text-gray-500">Fase analisi: {phasePct}% ciclo</p>
-      )}
+      <div className="flex flex-wrap items-center gap-3">
+        {phases.length > 1 ? (
+          <label className="flex min-w-[14rem] flex-1 flex-wrap items-center gap-3 text-xs text-gray-400">
+            <span className="font-mono uppercase tracking-[0.18em] text-violet-200">Fase ciclo</span>
+            <input
+              type="range"
+              min={Math.min(...phases)}
+              max={Math.max(...phases)}
+              step={1}
+              value={phasePct}
+              onChange={(event) => setPhasePct(Number(event.currentTarget.value))}
+              className="min-w-[10rem] flex-1 accent-fuchsia-500"
+            />
+            <span className="font-mono text-white">{phasePct}%</span>
+          </label>
+        ) : (
+          <p className="text-xs text-gray-500">Fase analisi: {phasePct}% ciclo</p>
+        )}
+        {editable ? (
+          <Pro2Button variant="secondary" type="button" onClick={onResetLandmarks} className="justify-center text-xs">
+            Ripristina punti CV
+          </Pro2Button>
+        ) : null}
+      </div>
     </div>
   );
 }

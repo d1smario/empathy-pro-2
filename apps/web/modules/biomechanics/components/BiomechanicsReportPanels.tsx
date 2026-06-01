@@ -79,10 +79,17 @@ export function BiomechanicsReportPanels({
   data,
   mode = "confirmed",
   videoUrl,
+  editable = false,
+  onPoseAdjust,
 }: {
   data: BiomechanicsReportData;
   mode?: "preview" | "confirmed";
   videoUrl?: string | null;
+  editable?: boolean;
+  onPoseAdjust?: (
+    landmarks: NonNullable<BiomechanicsReportData["landmarks"]>,
+    jointAngles: NonNullable<BiomechanicsReportData["jointAngles"]>,
+  ) => void;
 }) {
   const envelopes = data.jointAngles?.length ? summarizeJointAngles(data.jointAngles) : [];
   const efficiency = data.efficiencyScores;
@@ -232,15 +239,23 @@ export function BiomechanicsReportPanels({
 
       <Section
         title="Overlay angoli"
-        subtitle="Scheletro CV, archi e valori in gradi sul frame chiave (fase ciclo)."
+        subtitle={
+          editable
+            ? "Trascina i punti sul video; angoli e KPI si aggiornano dopo ogni correzione."
+            : "Scheletro CV, archi e valori in gradi sul frame chiave (fase ciclo)."
+        }
       >
         <BiomechanicsAngleOverlay
           jointAngles={data.jointAngles}
           landmarks={data.landmarks}
           videoUrl={videoUrl}
+          editable={editable}
+          onLandmarksChange={onPoseAdjust}
           title={
             mode === "preview"
-              ? "Anteprima Kinovea-style sulla cattura — conferma per promuovere al report canonico."
+              ? editable
+                ? "Correggi i punti CV prima di confermare la sessione."
+                : "Anteprima sulla cattura — conferma per promuovere al report canonico."
               : "Annotazione angoli sulla sessione confermata."
           }
         />

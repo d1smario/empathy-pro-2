@@ -222,6 +222,30 @@ export async function fetchBiomechanicsStagingRunDetail(runId: string): Promise<
   };
 }
 
+export async function saveBiomechanicsStagingPoseCorrection(input: {
+  runId: string;
+  landmarks: import("@empathy/contracts").BiomechanicsLandmark3D[];
+  jointAngles: import("@empathy/contracts").BiomechanicsJointAngleSample[];
+}): Promise<{ ok: boolean; error?: string }> {
+  const headers = await buildSupabaseAuthHeaders();
+  headers.set("Content-Type", "application/json");
+  const res = await fetch(`/api/biomechanics/staging-runs/${encodeURIComponent(input.runId)}`, {
+    method: "PATCH",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+    body: JSON.stringify({
+      landmarks: input.landmarks,
+      jointAngles: input.jointAngles,
+    }),
+  });
+  const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Salvataggio correzione fallito.") };
+  }
+  return { ok: true };
+}
+
 export async function applyBiomechanicsStagingRun(runId: string): Promise<{ ok: boolean; error?: string }> {
   const headers = await buildSupabaseAuthHeaders();
   headers.set("Content-Type", "application/json");

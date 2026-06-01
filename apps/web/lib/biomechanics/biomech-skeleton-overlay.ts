@@ -1,5 +1,7 @@
 import type { BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empathy/contracts";
 
+import { deriveJointAnglesFromLandmarks } from "@/lib/biomechanics/biomech-landmark-angles";
+
 /** Normalized frame coords 0–1000 (x right, y down). CV sidecar uses the same space until metric calibration. */
 export const GOLDEN_SAGITTAL_LANDMARKS: BiomechanicsLandmark3D[] = [
   { name: "head", xMm: 520, yMm: 68, confidence01: 0.92 },
@@ -175,6 +177,8 @@ export type DrawSkeletonOverlayInput = {
   landmarks: readonly BiomechanicsLandmark3D[];
   jointAngles: readonly BiomechanicsJointAngleSample[];
   phasePct?: number;
+  /** Evidenzia il landmark in trascinamento. */
+  activeLandmark?: string | null;
 };
 
 export function drawBiomechSkeletonOverlay(input: DrawSkeletonOverlayInput): void {
@@ -184,8 +188,10 @@ export function drawBiomechSkeletonOverlay(input: DrawSkeletonOverlayInput): voi
   ctx.clearRect(0, 0, width, height);
 
   const phase = typeof input.phasePct === "number" ? input.phasePct : 50;
-  const angles = pickJointAnglesForPhase(input.jointAngles, phase);
-  const index = landmarkIndex(resolveOverlayLandmarks(input.landmarks));
+  const resolvedLandmarks = resolveOverlayLandmarks(input.landmarks);
+  const geometryAngles = deriveJointAnglesFromLandmarks(resolvedLandmarks, input.jointAngles);
+  const angles = pickJointAnglesForPhase(geometryAngles.length ? geometryAngles : input.jointAngles, phase);
+  const index = landmarkIndex(resolvedLandmarks);
   const point = (name: string): Point2D | null => {
     const row = index.get(name);
     return row ? scaleLandmarkToCanvas(row, width, height) : null;
@@ -208,11 +214,12 @@ export function drawBiomechSkeletonOverlay(input: DrawSkeletonOverlayInput): voi
 
   for (const row of index.values()) {
     const p = scaleLandmarkToCanvas(row, width, height);
+    const active = input.activeLandmark === row.name;
     ctx.beginPath();
-    ctx.fillStyle = "rgba(236, 72, 153, 0.95)";
+    ctx.fillStyle = active ? "rgba(251, 191, 36, 0.98)" : "rgba(236, 72, 153, 0.95)";
     ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    ctx.lineWidth = active ? 3 : 2;
+    ctx.arc(p.x, p.y, active ? 9 : 6, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
   }
