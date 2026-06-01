@@ -123,7 +123,12 @@
     "subtitle": "Athlete access requires a subscription. Enter your card on Stripe: the free trial starts immediately and you are not charged until it ends (when configured). Admins can also extend access with dedicated grants.",
     "backAccess": "Back to Access",
     "requiredAlert": "To use Training, VIRYA, integrations, and your profile you need to activate the trial with a card (or an admin-granted access).",
-    "skipIfAlready": "I already subscribed — dashboard"
+    "skipIfAlready": "I already subscribed — dashboard",
+    "welcomeEyebrow": "Registration complete",
+    "welcomeTitle": "Welcome to Empathy",
+    "welcomeBody": "Your account is active and your free trial has started successfully. You can now enter the platform and start using Empathy Pro 2.0.",
+    "welcomeSyncing": "Syncing your subscription…",
+    "welcomeEnterDashboard": "Enter Empathy"
   },
   "AccountNotices": {
     "eyebrow": "Platform message",
@@ -131,6 +136,7 @@
   },
   "Checkout": {
     "billingSuccess": "Done. You can enter the app from Access or the dashboard.",
+    "signupBillingSuccess": "Welcome to Empathy — registration and trial activation complete.",
     "billingCancel": "Payment not completed. You can try again whenever you want.",
     "payNotReady": "You can still pick a plan and a coach. The payment button activates when the environment is configured for subscriptions.",
     "perMonthSuffix": " / month",

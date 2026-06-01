@@ -2,11 +2,18 @@ import { isEmpathyBasePlanId, isEmpathyCoachAddOnId, type EmpathyCoachAddOnId } 
 import { type NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { createStripeServerClient } from "@empathy/integrations-stripe";
-import { stripeCheckoutCancelUrl, stripeCheckoutSuccessUrl } from "@/lib/billing/stripe-app-url";
+import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
+import {
+  stripeCheckoutCancelUrl,
+  stripeCheckoutCancelUrlAuthenticated,
+  stripeCheckoutSuccessUrl,
+  stripeCheckoutSuccessUrlAuthenticated,
+} from "@/lib/billing/stripe-app-url";
 import { isStripeHostedCheckoutEnabled } from "@/lib/billing/stripe-checkout-availability";
 import { isPostSignupCheckoutRequired } from "@/lib/billing/paywall-config";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
 import { readStripeSecretKey, readStripeSecretKeyKind } from "@/lib/billing/stripe-secret";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 import {
   formatMissingStripePriceMessage,
@@ -27,6 +34,30 @@ async function readOptionalCheckoutUser(): Promise<{ userId: string; email: stri
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
   return { userId: data.user.id, email: data.user.email ?? null };
+}
+
+async function readStripeCustomerIdForUser(userId: string): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return null;
+  const { data, error } = await admin
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  const id = (data as { stripe_customer_id?: string } | null)?.stripe_customer_id;
+  return typeof id === "string" && id.trim() !== "" ? id.trim() : null;
+}
+
+async function stripeCustomerHasActiveSubscription(
+  stripe: ReturnType<typeof createStripeServerClient>,
+  customerId: string,
+): Promise<boolean> {
+  const [active, trialing] = await Promise.all([
+    stripe.subscriptions.list({ customer: customerId, status: "active", limit: 1 }),
+    stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 1 }),
+  ]);
+  return active.data.length > 0 || trialing.data.length > 0;
 }
 
 /**
@@ -127,16 +158,49 @@ export async function POST(req: NextRequest) {
   };
 
   const stripe = createStripeServerClient(key);
+  let stripeCustomerId: string | null = null;
+
+  if (authUser) {
+    const admin = createSupabaseAdminClient();
+    const db = admin ?? createSupabaseCookieClient();
+    if (db) {
+      const entitlement = await loadUserAccessEntitlement(db, authUser.userId);
+      if (entitlement.hasAthleteAccess) {
+        return NextResponse.json(
+          {
+            alreadySubscribed: true as const,
+            redirectUrl: "/access/plan?billing=success",
+          },
+          { status: 409 },
+        );
+      }
+    }
+
+    stripeCustomerId = await readStripeCustomerIdForUser(authUser.userId);
+    if (stripeCustomerId && (await stripeCustomerHasActiveSubscription(stripe, stripeCustomerId))) {
+      return NextResponse.json(
+        {
+          alreadySubscribed: true as const,
+          redirectUrl: "/access/plan?billing=success",
+        },
+        { status: 409 },
+      );
+    }
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: lineItems,
-      success_url: stripeCheckoutSuccessUrl(),
-      cancel_url: stripeCheckoutCancelUrl(),
+      success_url: authUser ? stripeCheckoutSuccessUrlAuthenticated() : stripeCheckoutSuccessUrl(),
+      cancel_url: authUser ? stripeCheckoutCancelUrlAuthenticated() : stripeCheckoutCancelUrl(),
       allow_promotion_codes: true,
       payment_method_collection: "always",
-      ...(customerEmail ? { customer_email: customerEmail } : {}),
+      ...(stripeCustomerId
+        ? { customer: stripeCustomerId }
+        : customerEmail
+          ? { customer_email: customerEmail }
+          : {}),
       client_reference_id: `pro2:${body.basePlanId}${coachAddOnId ? `+${coachAddOnId}` : ""}`,
       metadata,
       subscription_data: {

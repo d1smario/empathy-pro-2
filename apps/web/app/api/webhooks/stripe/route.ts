@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { readStripeSecretKey, readStripeWebhookSecret } from "@/lib/billing/stripe-secret";
+import { ensureSubscriptionWelcomeNotice } from "@/lib/billing/grant-user-notice";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -101,6 +102,10 @@ async function handleCheckoutCompleted(stripe: Stripe, session: Stripe.Checkout.
   if (typeof session.subscription === "string") {
     const subscription = await stripe.subscriptions.retrieve(session.subscription);
     await upsertBillingSubscription(subscription);
+    const admin = createSupabaseAdminClient();
+    if (admin) {
+      await ensureSubscriptionWelcomeNotice(admin, metadata.userId);
+    }
   }
 }
 

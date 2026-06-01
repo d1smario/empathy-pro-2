@@ -17,8 +17,24 @@ export function stripeCheckoutSuccessUrl(): string {
   return `${readStripeAppOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+/** Redirect post-checkout per utente autenticato (registrazione atleta → gate `/access/plan`). */
+export function stripeCheckoutSuccessUrlAuthenticated(): string {
+  const path =
+    process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_SUCCESS_PATH_AUTHENTICATED?.trim() ||
+    "/access/plan?billing=success";
+  return `${readStripeAppOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 export function stripeCheckoutCancelUrl(): string {
   const path =
     process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_CANCEL_PATH?.trim() || "/?billing=cancel#piani";
+  return `${readStripeAppOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Redirect annullamento checkout per utente autenticato (gate post-registrazione). */
+export function stripeCheckoutCancelUrlAuthenticated(): string {
+  const path =
+    process.env.NEXT_PUBLIC_STRIPE_CHECKOUT_CANCEL_PATH_AUTHENTICATED?.trim() ||
+    "/access/plan?billing=cancel";
   return `${readStripeAppOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
 }

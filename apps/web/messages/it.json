@@ -123,7 +123,12 @@
     "subtitle": "Per usare Empathy come atleta serve un abbonamento. Inserisci la carta su Stripe: la prova gratuita parte subito e non viene addebitato fino alla scadenza (se configurata). L’admin può anche prolungare l’accesso con grant dedicati.",
     "backAccess": "Torna ad Access",
     "requiredAlert": "Per usare Training, VIRYA, integrazioni e profilo serve attivare la prova con carta (o un accesso concesso dall’admin).",
-    "skipIfAlready": "Ho già pagato — dashboard"
+    "skipIfAlready": "Ho già pagato — dashboard",
+    "welcomeEyebrow": "Registrazione completata",
+    "welcomeTitle": "Benvenuto in Empathy",
+    "welcomeBody": "Il tuo account è attivo e la prova gratuita è stata avviata con successo. Da qui puoi entrare in piattaforma e iniziare a usare Empathy Pro 2.0.",
+    "welcomeSyncing": "Stiamo sincronizzando il tuo abbonamento…",
+    "welcomeEnterDashboard": "Entra in Empathy"
   },
   "AccountNotices": {
     "eyebrow": "Messaggio piattaforma",
@@ -131,6 +136,7 @@
   },
   "Checkout": {
     "billingSuccess": "Operazione completata. Puoi entrare in app da Access o dalla dashboard.",
+    "signupBillingSuccess": "Benvenuto in Empathy — registrazione e attivazione prova completate.",
     "billingCancel": "Pagamento non completato. Puoi riprovare quando vuoi.",
     "payNotReady": "Puoi sempre selezionare pacchetto e coach. Il pulsante di pagamento si attiva quando l'ambiente è configurato per l'abbonamento.",
     "perMonthSuffix": " / mese",

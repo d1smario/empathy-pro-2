@@ -71,6 +71,25 @@ export function HomeStripePricing({
     if (e) setEmail(e);
   }, [prefillEmail]);
 
+  useEffect(() => {
+    if (!signupCheckoutGate || billingFlash === "success") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const data = (await res.json()) as { ok?: boolean; hasAthleteAccess?: boolean };
+        if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
+          window.location.assign("/access/plan?billing=success");
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [signupCheckoutGate, billingFlash]);
+
   const trialEligible =
     trialPolicy.eligiblePlanIds.includes(basePlanId) &&
     trialDaysConfigured != null &&
@@ -83,6 +102,7 @@ export function HomeStripePricing({
       return;
     }
     setLoading(withTrial ? "trial" : "subscribe");
+    let navigating = false;
     try {
       const res = await fetch("/api/billing/checkout-session", {
         method: "POST",
@@ -99,7 +119,14 @@ export function HomeStripePricing({
         error?: string;
         hint?: string;
         stripeKeyKind?: string;
+        alreadySubscribed?: boolean;
+        redirectUrl?: string;
       };
+      if (res.status === 409 && data.alreadySubscribed && data.redirectUrl) {
+        navigating = true;
+        window.location.assign(data.redirectUrl);
+        return;
+      }
       if (!res.ok) {
         const parts = [data.error ?? t("errGenericWithStatus", { status: res.status })];
         if (data.stripeKeyKind) parts.push(t("errStripeKeyKind", { kind: data.stripeKeyKind }));
@@ -108,6 +135,7 @@ export function HomeStripePricing({
         return;
       }
       if (data.url) {
+        navigating = true;
         window.location.href = data.url;
         return;
       }
@@ -115,7 +143,7 @@ export function HomeStripePricing({
     } catch {
       setErr(t("errRequestFailed"));
     } finally {
-      setLoading(false);
+      if (!navigating) setLoading(false);
     }
   }
 
@@ -138,7 +166,7 @@ export function HomeStripePricing({
           className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200"
           role="status"
         >
-          {t("billingSuccess")}
+          {signupCheckoutGate ? t("signupBillingSuccess") : t("billingSuccess")}
         </p>
       ) : null}
       {billingFlash === "cancel" ? (

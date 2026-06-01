@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { HomeStripePricing } from "@/components/marketing/HomeStripePricing";
+import { SignupCheckoutWelcome } from "@/components/access/SignupCheckoutWelcome";
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { Pro2Link } from "@/components/ui/empathy";
 import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
@@ -50,7 +51,10 @@ export default async function AccessPlanPage({
 
   const admin = createSupabaseAdminClient();
   const entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
-  if (entitlement.hasAthleteAccess) {
+  const isCheckoutSuccess =
+    (typeof searchParams?.billing === "string" && searchParams.billing === "success") ||
+    (Array.isArray(searchParams?.billing) && searchParams.billing[0] === "success");
+  if (entitlement.hasAthleteAccess && !isCheckoutSuccess) {
     redirect("/dashboard");
   }
 
@@ -76,11 +80,15 @@ export default async function AccessPlanPage({
         className="relative mx-auto max-w-4xl scroll-mt-0 px-4 py-12 outline-none sm:px-6 sm:py-16"
       >
         <header className="mb-10 border-b border-white/10 pb-8 text-center sm:text-left">
-          <p className="font-mono text-[0.6rem] uppercase tracking-[0.28em] text-gray-500">{t("eyebrow")}</p>
+          <p className="font-mono text-[0.6rem] uppercase tracking-[0.28em] text-gray-500">
+            {isCheckoutSuccess ? t("welcomeEyebrow") : t("eyebrow")}
+          </p>
           <h1 className="mt-3 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 bg-clip-text text-3xl font-black tracking-tight text-transparent sm:text-4xl">
-            {t("title")}
+            {isCheckoutSuccess ? t("welcomeTitle") : t("title")}
           </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-400">{t("subtitle")}</p>
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-400">
+            {isCheckoutSuccess ? t("welcomeBody") : t("subtitle")}
+          </p>
           {showRequired ? (
             <p className="mt-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" role="alert">
               {t("requiredAlert")}
@@ -93,20 +101,24 @@ export default async function AccessPlanPage({
           </div>
         </header>
 
-        <HomeStripePricing
-          availability={hosted}
-          payReady={payReady}
-          basePlans={catalog.basePlans}
-          coachAddOns={catalog.coachAddOns}
-          trialPolicy={catalog.trialPolicy}
-          trialDaysConfigured={trialDaysConfigured}
-          compactIntro
-          hideSectionTitle
-          sectionId="access-plan-checkout"
-          prefillEmail={user.email ?? null}
-          signupCheckoutGate
-          billingFlash={billingFlash}
-        />
+        {isCheckoutSuccess ? (
+          <SignupCheckoutWelcome />
+        ) : (
+          <HomeStripePricing
+            availability={hosted}
+            payReady={payReady}
+            basePlans={catalog.basePlans}
+            coachAddOns={catalog.coachAddOns}
+            trialPolicy={catalog.trialPolicy}
+            trialDaysConfigured={trialDaysConfigured}
+            compactIntro
+            hideSectionTitle
+            sectionId="access-plan-checkout"
+            prefillEmail={user.email ?? null}
+            signupCheckoutGate
+            billingFlash={billingFlash}
+          />
+        )}
       </main>
     </BrutalistAppBackdrop>
   );
