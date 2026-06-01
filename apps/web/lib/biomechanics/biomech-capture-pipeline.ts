@@ -218,6 +218,23 @@ export async function listBiomechanicsSessionImports(
   return (data ?? []).map(mapBiomechSessionImportRow);
 }
 
+export async function getBiomechanicsSessionImportById(
+  db: SupabaseClient,
+  input: { athleteId: string; sessionId: string },
+): Promise<BiomechanicsSessionImportV1 | null> {
+  const { data, error } = await db
+    .from("biomech_session_imports")
+    .select("id, athlete_id, source, recorded_at, payload, created_at")
+    .eq("id", input.sessionId)
+    .eq("athlete_id", input.athleteId)
+    .maybeSingle<BiomechSessionImportRow>();
+
+  if (error) {
+    throw new Error(error.message || "biomech_session_import_read_failed");
+  }
+  return data ? mapBiomechSessionImportRow(data) : null;
+}
+
 export async function getBiomechanicsCaptureJobById(
   db: SupabaseClient,
   input: { athleteId: string; jobId: string },

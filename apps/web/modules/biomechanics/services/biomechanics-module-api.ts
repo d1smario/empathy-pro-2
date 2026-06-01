@@ -81,6 +81,33 @@ export async function fetchBiomechanicsSessions(athleteId: string): Promise<Biom
   };
 }
 
+export async function fetchBiomechanicsSessionDetail(input: {
+  athleteId: string;
+  sessionId: string;
+}): Promise<{ ok: boolean; session?: BiomechanicsSessionImportV1; signedUrl?: string | null; error?: string }> {
+  const url = `/api/biomechanics/sessions/${encodeURIComponent(input.sessionId)}?athleteId=${encodeURIComponent(input.athleteId)}`;
+  const headers = await buildSupabaseAuthHeaders();
+  const res = await fetch(url, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers,
+  });
+  const json = (await res.json().catch(() => ({}))) as
+    | ({ ok: true; session?: BiomechanicsSessionImportV1; signedUrl?: string | null } & Record<string, unknown>)
+    | ApiError;
+  if (!res.ok || !json.ok) {
+    return { ok: false, error: apiErrorMessage(json, "Report sessione non disponibile.") };
+  }
+  if (!json.session) {
+    return { ok: false, error: "session_not_found" };
+  }
+  return {
+    ok: true,
+    session: json.session,
+    signedUrl: typeof json.signedUrl === "string" ? json.signedUrl : null,
+  };
+}
+
 async function requestBiomechanicsSignUpload(input: { athleteId: string; file: File }): Promise<SignUploadOk> {
   const headers = await buildSupabaseAuthHeaders();
   headers.set("Content-Type", "application/json");

@@ -117,6 +117,8 @@ export async function applyBiomechanicsStagingRun(input: ApplyBiomechStagingInpu
     stagingRunId: input.runId,
     cvProvider: proposal.provider,
     cvModel: proposal.model ?? null,
+    mediaStoragePath: typeof bundle?.mediaStoragePath === "string" ? bundle.mediaStoragePath : null,
+    captureJobId: jobId,
   };
 
   const sessionImportId = await insertBiomechanicsSessionImport(input.db, {

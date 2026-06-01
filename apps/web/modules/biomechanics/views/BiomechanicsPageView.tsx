@@ -107,6 +107,7 @@ function CaptureNextSteps({
   processingJobId,
   onAnalyze,
   hasConfirmedReport,
+  latestSessionId,
   actionError,
 }: {
   latestJob: BiomechanicsCaptureJobV1 | null;
@@ -115,6 +116,7 @@ function CaptureNextSteps({
   processingJobId: string | null;
   onAnalyze: () => void;
   hasConfirmedReport: boolean;
+  latestSessionId: string | null;
   actionError: string | null;
 }) {
   if (awaitingReview && stagingRunId) {
@@ -171,13 +173,13 @@ function CaptureNextSteps({
     );
   }
 
-  if (hasConfirmedReport) {
+  if (hasConfirmedReport && latestSessionId) {
     return (
       <div className="mt-4 rounded-2xl border border-emerald-500/35 bg-emerald-500/10 p-4">
-        <p className="text-sm text-emerald-100">Report confermato disponibile nella sezione sessioni sotto.</p>
+        <p className="text-sm text-emerald-100">Report confermato con angoli, ROM e rischio per distretto.</p>
         <div className="mt-3">
-          <Pro2Link href="#biomech-report" variant="secondary" className="justify-center">
-            Vai al report
+          <Pro2Link href={`/biomechanics/sessions/${latestSessionId}`} variant="secondary" className="justify-center">
+            Apri report PDF
           </Pro2Link>
         </div>
       </div>
@@ -213,7 +215,11 @@ function SessionList({
   return (
     <div className="space-y-2">
       {sessions.slice(0, 5).map((session) => (
-        <div key={session.id} className="rounded-xl border border-white/10 bg-black/30 px-4 py-3">
+        <Link
+          key={session.id}
+          href={`/biomechanics/sessions/${session.id}`}
+          className="block rounded-xl border border-white/10 bg-black/30 px-4 py-3 transition hover:border-violet-500/40 hover:bg-violet-500/[0.06]"
+        >
           <p className="text-sm font-semibold text-white">{session.discipline}</p>
           <p className="mt-1 text-xs text-gray-400">
             {formatDateTime(session.recordedAt)} · {session.source}
@@ -225,7 +231,8 @@ function SessionList({
               {Math.round(session.efficiencyScores.injuryRisk01 * 100)}%
             </p>
           ) : null}
-        </div>
+          <p className="mt-2 text-xs font-semibold text-violet-200">Apri report completo →</p>
+        </Link>
       ))}
     </div>
   );
@@ -478,6 +485,7 @@ export default function BiomechanicsPageView() {
               processingJobId={processingJobId}
               onAnalyze={() => void runAnalyzeLatestJob()}
               hasConfirmedReport={sessions.length > 0}
+              latestSessionId={sessions[0]?.id ?? null}
               actionError={error}
             />
             {message ? (
@@ -521,6 +529,14 @@ export default function BiomechanicsPageView() {
                   {latestEfficiency ? `${Math.round(latestEfficiency.biomechanicalEfficiency01 * 100)}%` : "—"}
                 </p>
                 <p className="mt-1 text-xs text-gray-400">Efficienza biomeccanica (domain engine).</p>
+                {sessions[0] ? (
+                  <Link
+                    href={`/biomechanics/sessions/${sessions[0].id}`}
+                    className="mt-2 inline-block text-xs font-semibold text-fuchsia-200 underline"
+                  >
+                    Report completo →
+                  </Link>
+                ) : null}
               </div>
             </div>
             {pendingStaging.length ? (
