@@ -1,10 +1,12 @@
 import type { BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empathy/contracts";
 
+import type { BiomechanicsCaptureViewMode } from "@/lib/biomechanics/biomech-capture-view";
 import {
   angleBetweenPoints,
-  JOINT_ANGLE_TRIPLES,
+  getAngleTriplesForView,
   landmarkIndex,
   listAvailablePhases,
+  normalizeMonolateralLandmarks,
   type Point2D,
 } from "@/lib/biomechanics/biomech-skeleton-overlay";
 
@@ -12,17 +14,20 @@ function landmarkPoint(row: BiomechanicsLandmark3D): Point2D {
   return { x: row.xMm, y: row.yMm };
 }
 
-/** Ricalcola angoli articolari dalla geometria landmark (spazio normalizzato 0–1000). */
+/** Ricalcola angoli articolari dalla geometria landmark (piano 2D, presa monolaterale). */
 export function deriveJointAnglesFromLandmarks(
   landmarks: readonly BiomechanicsLandmark3D[],
   phaseTemplate: readonly BiomechanicsJointAngleSample[] = [],
+  viewMode: BiomechanicsCaptureViewMode = "monolateral_side",
 ): BiomechanicsJointAngleSample[] {
-  const index = landmarkIndex(landmarks);
+  const normalized = normalizeMonolateralLandmarks(landmarks);
+  const index = landmarkIndex(normalized);
   const phases = listAvailablePhases(phaseTemplate);
+  const triples = getAngleTriplesForView(viewMode);
   const out: BiomechanicsJointAngleSample[] = [];
 
   for (const phasePct of phases) {
-    for (const triple of JOINT_ANGLE_TRIPLES) {
+    for (const triple of triples) {
       const a = index.get(triple.a);
       const b = index.get(triple.b);
       const c = index.get(triple.c);

@@ -8,6 +8,7 @@ import type {
   BiomechanicsSegmentLengths,
 } from "@empathy/contracts";
 import { computeBiomechanicsEfficiencyScores } from "@empathy/domain-biomechanics";
+import { normalizeMonolateralLandmarks } from "@/lib/biomechanics/biomech-skeleton-overlay";
 
 export type BiomechanicsReportData = {
   discipline?: string;
@@ -77,6 +78,11 @@ function parseLandmarks(value: unknown): BiomechanicsLandmark3D[] | undefined {
   return rows.length ? rows : undefined;
 }
 
+function normalizeParsedLandmarks(rows: BiomechanicsLandmark3D[] | undefined): BiomechanicsLandmark3D[] | undefined {
+  if (!rows?.length) return undefined;
+  return normalizeMonolateralLandmarks(rows);
+}
+
 export function parseBiomechPoseProposal(patches: unknown): BiomechanicsReportData | null {
   const root = asRecord(patches);
   const proposal = asRecord(root?.biomechPoseProposal);
@@ -95,7 +101,7 @@ export function parseBiomechPoseProposal(patches: unknown): BiomechanicsReportDa
     provider: typeof proposal.provider === "string" ? proposal.provider : undefined,
     confidence01: typeof proposal.confidence01 === "number" ? proposal.confidence01 : undefined,
     jointAngles,
-    landmarks: parseLandmarks(proposal.landmarks),
+    landmarks: normalizeParsedLandmarks(parseLandmarks(proposal.landmarks)),
     movementPatterns,
     riskScores,
     efficiencyScores,

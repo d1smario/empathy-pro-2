@@ -1,5 +1,7 @@
 "use client";
 
+import type { BiomechanicsCameraPlane } from "@empathy/contracts";
+import { capturePlaneToViewMode, type BiomechanicsCaptureViewMode } from "@/lib/biomechanics/biomech-capture-view";
 import type { BiomechanicsSessionImportV1 } from "@empathy/contracts";
 import { computeBiomechanicsEfficiencyScores, summarizeJointAngles } from "@empathy/domain-biomechanics";
 import {
@@ -81,6 +83,7 @@ export function BiomechanicsReportPanels({
   videoUrl,
   editable = false,
   onPoseAdjust,
+  cameraPlane = "side",
 }: {
   data: BiomechanicsReportData;
   mode?: "preview" | "confirmed";
@@ -90,7 +93,9 @@ export function BiomechanicsReportPanels({
     landmarks: NonNullable<BiomechanicsReportData["landmarks"]>,
     jointAngles: NonNullable<BiomechanicsReportData["jointAngles"]>,
   ) => void;
+  cameraPlane?: BiomechanicsCameraPlane;
 }) {
+  const viewMode: BiomechanicsCaptureViewMode = capturePlaneToViewMode(cameraPlane);
   const envelopes = data.jointAngles?.length ? summarizeJointAngles(data.jointAngles) : [];
   const efficiency = data.efficiencyScores;
   const riskEntries = Object.entries(RISK_LABELS).filter(
@@ -250,6 +255,8 @@ export function BiomechanicsReportPanels({
           landmarks={data.landmarks}
           videoUrl={videoUrl}
           editable={editable}
+          cameraPlane={cameraPlane}
+          viewMode={viewMode}
           onLandmarksChange={onPoseAdjust}
           title={
             mode === "preview"

@@ -1,5 +1,5 @@
 /** Opt-in demo mode: no external sidecar; golden fixtures only. Set LAB_INLINE_MOCK=1 on Vercel/local. */
-import { GOLDEN_SAGITTAL_LANDMARKS } from "@/lib/biomechanics/biomech-skeleton-overlay";
+import { GOLDEN_MONOLATERAL_SIDE_LANDMARKS } from "@/lib/biomechanics/biomech-skeleton-overlay";
 
 export function isLabInlineMockEnabled(): boolean {
   const raw = process.env.LAB_INLINE_MOCK?.trim().replace(/\r?\n/g, "").toLowerCase();
@@ -14,17 +14,11 @@ export function labInlinePoseProposal(provider = "lab-inline-mock") {
     model: "golden-fixture-v1",
     jointAngles: [
       { joint: "hip" as const, side: "left" as const, angleDeg: 54, phasePct: 0, confidence01: 0.86 },
-      { joint: "hip" as const, side: "right" as const, angleDeg: 52, phasePct: 0, confidence01: 0.85 },
       { joint: "knee" as const, side: "left" as const, angleDeg: 168, phasePct: 0, confidence01: 0.9 },
-      { joint: "knee" as const, side: "right" as const, angleDeg: 165, phasePct: 0, confidence01: 0.88 },
       { joint: "ankle" as const, side: "left" as const, angleDeg: 108, phasePct: 0, confidence01: 0.84 },
-      { joint: "ankle" as const, side: "right" as const, angleDeg: 105, phasePct: 0, confidence01: 0.83 },
       { joint: "hip" as const, side: "left" as const, angleDeg: 88, phasePct: 50, confidence01: 0.86 },
-      { joint: "hip" as const, side: "right" as const, angleDeg: 91, phasePct: 50, confidence01: 0.85 },
       { joint: "knee" as const, side: "left" as const, angleDeg: 142, phasePct: 50, confidence01: 0.9 },
-      { joint: "knee" as const, side: "right" as const, angleDeg: 138, phasePct: 50, confidence01: 0.88 },
       { joint: "ankle" as const, side: "left" as const, angleDeg: 72, phasePct: 50, confidence01: 0.84 },
-      { joint: "ankle" as const, side: "right" as const, angleDeg: 69, phasePct: 50, confidence01: 0.83 },
     ],
     movementPatterns: {
       pelvicStability01: 0.8,
@@ -35,7 +29,7 @@ export function labInlinePoseProposal(provider = "lab-inline-mock") {
       compensationFlags: ["knee_valgus_mild"],
     },
     riskScores: { kneeRisk01: 0.2, lumbarRisk01: 0.65 },
-    landmarks: GOLDEN_SAGITTAL_LANDMARKS,
+    landmarks: GOLDEN_MONOLATERAL_SIDE_LANDMARKS,
   };
 }
 

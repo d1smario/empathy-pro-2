@@ -5,6 +5,7 @@ import type { BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empa
 import { computeBiomechanicsEfficiencyScores } from "@empathy/domain-biomechanics";
 
 import { deriveJointAnglesFromLandmarks } from "@/lib/biomechanics/biomech-landmark-angles";
+import { normalizeMonolateralLandmarks } from "@/lib/biomechanics/biomech-skeleton-overlay";
 import { POSE_PROPOSAL_VERSION, type BiomechPoseProposalV1 } from "@/lib/biomechanics/biomech-pose-cv-adapter";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -56,7 +57,11 @@ export async function patchBiomechanicsStagingPoseProposal(
     ? (existing.jointAngles as BiomechanicsJointAngleSample[])
     : [];
   const jointAngles =
-    input.jointAngles?.length ? input.jointAngles : deriveJointAnglesFromLandmarks(input.landmarks, templateAngles);
+    input.jointAngles?.length
+      ? input.jointAngles
+      : deriveJointAnglesFromLandmarks(input.landmarks, templateAngles);
+
+  const landmarks = normalizeMonolateralLandmarks(input.landmarks);
 
   const movementPatterns = existing.movementPatterns as BiomechPoseProposalV1["movementPatterns"];
   const riskScores = existing.riskScores as BiomechPoseProposalV1["riskScores"];
@@ -69,7 +74,7 @@ export async function patchBiomechanicsStagingPoseProposal(
   const updatedProposal: Record<string, unknown> = {
     ...existing,
     version: POSE_PROPOSAL_VERSION,
-    landmarks: input.landmarks,
+    landmarks,
     jointAngles,
     manuallyAdjusted: true,
     adjustedAt: new Date().toISOString(),

@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empathy/contracts";
+import type { BiomechanicsCameraPlane, BiomechanicsJointAngleSample, BiomechanicsLandmark3D } from "@empathy/contracts";
+import { capturePlaneToViewMode, captureViewModeLabel, type BiomechanicsCaptureViewMode } from "@/lib/biomechanics/biomech-capture-view";
 import { deriveJointAnglesFromLandmarks, canvasToLandmarkCoords, findLandmarkAtCanvasPoint } from "@/lib/biomechanics/biomech-landmark-angles";
 import {
   drawBiomechSkeletonOverlay,
   listAvailablePhases,
+  MONOLATERAL_LANDMARK_IDS,
+  landmarkLabelIt,
   resolveOverlayLandmarks,
 } from "@/lib/biomechanics/biomech-skeleton-overlay";
 import { Pro2Button } from "@/components/ui/empathy";
@@ -16,6 +19,8 @@ type Props = {
   videoUrl?: string | null;
   title?: string;
   editable?: boolean;
+  cameraPlane?: BiomechanicsCameraPlane;
+  viewMode?: BiomechanicsCaptureViewMode;
   onLandmarksChange?: (landmarks: BiomechanicsLandmark3D[], jointAngles: BiomechanicsJointAngleSample[]) => void;
 };
 
@@ -25,8 +30,12 @@ export function BiomechanicsAngleOverlay({
   videoUrl,
   title,
   editable = false,
+  cameraPlane = "side",
+  viewMode: viewModeProp,
   onLandmarksChange,
 }: Props) {
+  const viewMode = viewModeProp ?? capturePlaneToViewMode(cameraPlane);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -35,35 +44,36 @@ export function BiomechanicsAngleOverlay({
 
   const [phasePct, setPhasePct] = useState(50);
   const [draftLandmarks, setDraftLandmarks] = useState<BiomechanicsLandmark3D[]>(() =>
-    resolveOverlayLandmarks(landmarks),
+    resolveOverlayLandmarks(landmarks, viewMode),
   );
   const [activeLandmark, setActiveLandmark] = useState<string | null>(null);
   const [baselineLandmarks, setBaselineLandmarks] = useState<BiomechanicsLandmark3D[]>(() =>
-    resolveOverlayLandmarks(landmarks),
+    resolveOverlayLandmarks(landmarks, viewMode),
   );
 
   const phases = useMemo(() => listAvailablePhases(jointAngles), [jointAngles]);
   const hasAngles = jointAngles.length > 0;
 
   const geometryAngles = useMemo(
-    () => deriveJointAnglesFromLandmarks(draftLandmarks, jointAngles),
-    [draftLandmarks, jointAngles],
+    () => deriveJointAnglesFromLandmarks(draftLandmarks, jointAngles, viewMode),
+    [draftLandmarks, jointAngles, viewMode],
   );
 
   const displayAngles = geometryAngles.length ? geometryAngles : jointAngles;
 
   useEffect(() => {
-    const next = resolveOverlayLandmarks(landmarks);
+    const next = resolveOverlayLandmarks(landmarks, viewMode);
     setDraftLandmarks(next);
     setBaselineLandmarks(next);
-  }, [landmarks]);
+  }, [landmarks, viewMode]);
 
   const emitChange = useCallback(
     (nextLandmarks: BiomechanicsLandmark3D[]) => {
-      const nextAngles = deriveJointAnglesFromLandmarks(nextLandmarks, jointAngles);
-      onLandmarksChange?.(nextLandmarks, nextAngles);
+      const normalized = resolveOverlayLandmarks(nextLandmarks, viewMode);
+      const nextAngles = deriveJointAnglesFromLandmarks(normalized, jointAngles, viewMode);
+      onLandmarksChange?.(normalized, nextAngles);
     },
-    [jointAngles, onLandmarksChange],
+    [jointAngles, onLandmarksChange, viewMode],
   );
 
   const updateLandmarkAt = useCallback((name: string, x: number, y: number) => {
@@ -99,9 +109,11 @@ export function BiomechanicsAngleOverlay({
       landmarks: draftLandmarks,
       jointAngles: displayAngles,
       phasePct,
+      viewMode,
       activeLandmark,
+      showLandmarkNames: true,
     });
-  }, [activeLandmark, displayAngles, draftLandmarks, hasAngles, phasePct]);
+  }, [activeLandmark, displayAngles, draftLandmarks, hasAngles, phasePct, viewMode]);
 
   useEffect(() => {
     redraw();
@@ -205,8 +217,17 @@ export function BiomechanicsAngleOverlay({
       {title ? <p className="text-xs text-gray-400">{title}</p> : null}
       {editable ? (
         <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-          Trascina i punti <span className="text-fuchsia-200">rosa</span> per allinearli al video. Gli angoli si
-          ricalcolano in tempo reale; salva prima di confermare la sessione.
+          <span className="font-semibold text-amber-50">{captureViewModeLabel(viewMode)}</span>
+          {" · "}
+          Punti ({MONOLATERAL_LANDMARK_IDS.map((id) => landmarkLabelIt(id)).join(" · ")}) — trascina sul video, un solo
+          lato visibile. Gli angoli si ricalcolano in 2D; salva prima di confermare.
+        </p>
+      ) : (
+        <p className="text-xs text-gray-500">{captureViewModeLabel(viewMode)}</p>
+      )}
+      {viewMode === "multiview" ? (
+        <p className="rounded-xl border border-violet-500/25 bg-violet-500/10 px-3 py-2 text-xs text-violet-100">
+          Editor multi-view in fase 2. Per allineare i punti usa una cattura <strong>laterale</strong> (monolaterale).
         </p>
       ) : null}
       <div

@@ -9,6 +9,7 @@ import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { Pro2Button, Pro2Link } from "@/components/ui/empathy";
 import { parseBiomechPoseProposal, type BiomechanicsReportData } from "@/lib/biomechanics/biomech-report-utils";
 import { resolveOverlayLandmarks } from "@/lib/biomechanics/biomech-skeleton-overlay";
+import type { BiomechanicsCameraPlane } from "@empathy/contracts";
 import { BiomechanicsReportPanels } from "@/modules/biomechanics/components/BiomechanicsReportPanels";
 import {
   applyBiomechanicsStagingRun,
@@ -34,6 +35,19 @@ function withDerivedScores(
   return { ...base, landmarks, jointAngles, efficiencyScores };
 }
 
+function parseCameraPlaneFromBundle(bundle: Record<string, unknown> | null): BiomechanicsCameraPlane {
+  const plane = bundle?.cameraPlane;
+  if (plane === "side" || plane === "front" || plane === "rear" || plane === "oblique" || plane === "multi_view") {
+    return plane;
+  }
+  const db = bundle?.cameraPlaneDb;
+  if (db === "sagittal") return "side";
+  if (db === "frontal") return "front";
+  if (db === "oblique") return "oblique";
+  if (db === "multiview") return "multi_view";
+  return "side";
+}
+
 export default function BiomechanicsStagingReviewView({ runId }: { runId: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +55,7 @@ export default function BiomechanicsStagingReviewView({ runId }: { runId: string
   const [busy, setBusy] = useState<null | "confirm" | "reject" | "save">(null);
   const [done, setDone] = useState(false);
   const [signedUrl, setSignedUrl] = useState<string | null>(null);
+  const [cameraPlane, setCameraPlane] = useState<BiomechanicsCameraPlane>("side");
   const [reportData, setReportData] = useState<BiomechanicsReportData | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingSaveRef = useRef<{
@@ -99,6 +114,8 @@ export default function BiomechanicsStagingReviewView({ runId }: { runId: string
         return;
       }
       setSignedUrl(detail.signedUrl ?? null);
+      const bundle = asRecord(detail.run?.candidate_bundle);
+      setCameraPlane(parseCameraPlaneFromBundle(bundle));
       const patches = asRecord(detail.run?.proposed_structured_patches);
       const parsed = parseBiomechPoseProposal(patches);
       if (parsed) {
@@ -186,6 +203,7 @@ export default function BiomechanicsStagingReviewView({ runId }: { runId: string
             mode="preview"
             videoUrl={signedUrl}
             editable={!done}
+            cameraPlane={cameraPlane}
             onPoseAdjust={handlePoseAdjust}
           />
         </div>
