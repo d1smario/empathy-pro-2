@@ -76,10 +76,10 @@ export function HomeStripePricing({
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const res = await fetch("/api/billing/entitlement?repair=1", { cache: "no-store" });
         const data = (await res.json()) as { ok?: boolean; hasAthleteAccess?: boolean };
         if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
-          window.location.assign("/access/plan?billing=success");
+          window.location.assign("/dashboard?welcome=1");
         }
       } catch {
         /* ignore */

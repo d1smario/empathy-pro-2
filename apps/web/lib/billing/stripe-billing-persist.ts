@@ -214,6 +214,12 @@ export async function reconcileStripeSubscriptionsForUser(
     return { synced: false, reason: "no_stripe_customer" };
   }
 
+  const completedSessions = await stripe.checkout.sessions.list({ customer: customerId, limit: 10 });
+  for (const session of completedSessions.data) {
+    if (session.status !== "complete" || session.mode !== "subscription") continue;
+    await persistCompletedCheckoutSession(stripe, session, authUserId, authEmail);
+  }
+
   for (const status of ["active", "trialing"] as const) {
     const subs = await stripe.subscriptions.list({ customer: customerId, status, limit: 10 });
     for (const sub of subs.data) {

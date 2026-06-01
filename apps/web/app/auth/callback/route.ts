@@ -5,7 +5,7 @@ import { safeAppInternalPath } from "@/core/routing/guards";
 import { bootstrapAppUserProfile } from "@/lib/auth/bootstrap-app-user-profile";
 import { resolvePostLoginDestination } from "@/lib/auth/post-login-destination";
 import { PENDING_APP_ROLE_COOKIE, parsePendingAppRole } from "@/lib/auth/pending-role-cookie";
-import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
+import { ensureBillingEntitlementForUser } from "@/lib/billing/ensure-billing-entitlement";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -96,7 +96,9 @@ export async function GET(request: NextRequest) {
     .maybeSingle();
   const profileRole = (prof as { role?: string } | null)?.role;
   const appRole = pending ?? (profileRole === "coach" ? "coach" : "private");
-  const entitlement = await loadUserAccessEntitlement(db, user.id);
+  const entitlement = await ensureBillingEntitlementForUser(db, user.id, user.email ?? null, {
+    repairFromStripe: true,
+  });
 
   const dest = resolvePostLoginDestination({
     next,

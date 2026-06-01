@@ -1,16 +1,16 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
-import { loadUserAccessEntitlement, type UserAccessEntitlement } from "@/lib/billing/access-entitlement";
+import type { UserAccessEntitlement } from "@/lib/billing/access-entitlement";
+import { ensureBillingEntitlementForAuthUser } from "@/lib/billing/ensure-billing-entitlement";
 import { ACCESS_PLAN_PATH, isPaywallEnforced } from "@/lib/billing/paywall-config";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
 export { isPaywallEnforced };
 
 /**
  * Server-side gate per il layout (shell)/.
- * Loggato senza entitlement → `/access/plan` (checkout + trial).
+ * Loggato senza entitlement → sync Stripe (se pagato) → altrimenti `/access/plan`.
  */
 export async function gateAuthenticatedShellAccessOrRedirect(): Promise<UserAccessEntitlement | null> {
   const cookieClient = createSupabaseCookieClient();
@@ -21,14 +21,15 @@ export async function gateAuthenticatedShellAccessOrRedirect(): Promise<UserAcce
   } = await cookieClient.auth.getUser();
   if (!user) return null;
 
-  const adminClient = createSupabaseAdminClient();
-  const db = adminClient ?? cookieClient;
-
-  const entitlement = await loadUserAccessEntitlement(db, user.id);
-
   if (!isPaywallEnforced()) {
-    return entitlement;
+    return ensureBillingEntitlementForAuthUser(user.id, user.email ?? null, {
+      repairFromStripe: false,
+    });
   }
+
+  const entitlement = await ensureBillingEntitlementForAuthUser(user.id, user.email ?? null, {
+    repairFromStripe: true,
+  });
 
   if (entitlement.hasAthleteAccess || entitlement.hasOperatorAccess) {
     return entitlement;

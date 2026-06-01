@@ -6,15 +6,11 @@ import { SignupCheckoutWelcome } from "@/components/access/SignupCheckoutWelcome
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
 import { Pro2Link } from "@/components/ui/empathy";
 import { getEmpathyAccountCatalog } from "@/lib/account/plan-catalog";
-import { loadUserAccessEntitlement } from "@/lib/billing/access-entitlement";
 import { checkoutPayReady, hostedCheckoutAvailability } from "@/lib/billing/stripe-checkout-availability";
 import { readCheckoutTrialDays } from "@/lib/billing/stripe-checkout-trial";
-import { readStripeSecretKey } from "@/lib/billing/stripe-secret";
-import { syncCheckoutSessionById, reconcileStripeSubscriptionsForUser } from "@/lib/billing/stripe-billing-persist";
+import { ensureBillingEntitlementForAuthUser } from "@/lib/billing/ensure-billing-entitlement";
 import { getSupabasePublicConfig } from "@/lib/integrations/integration-status";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
-import { createStripeServerClient } from "@empathy/integrations-stripe";
 
 export const dynamic = "force-dynamic";
 
@@ -57,35 +53,16 @@ export default async function AccessPlanPage({
     redirect("/athletes");
   }
 
-  const admin = createSupabaseAdminClient();
   const isCheckoutSuccess = firstSearchParam(searchParams?.billing) === "success";
   const checkoutSessionId = firstSearchParam(searchParams?.session_id);
 
-  if (isCheckoutSuccess && checkoutSessionId?.startsWith("cs_")) {
-    const stripeKey = readStripeSecretKey();
-    if (stripeKey) {
-      try {
-        const stripe = createStripeServerClient(stripeKey);
-        await syncCheckoutSessionById(stripe, checkoutSessionId, user.id, user.email ?? null);
-      } catch (err) {
-        console.warn("[access/plan] checkout sync failed", err instanceof Error ? err.message : err);
-      }
-    }
-  }
+  const entitlement = await ensureBillingEntitlementForAuthUser(user.id, user.email ?? null, {
+    checkoutSessionId,
+    repairFromStripe: true,
+  });
 
-  let entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
-
-  if (!isCheckoutSuccess && !entitlement.hasAthleteAccess) {
-    const stripeKey = readStripeSecretKey();
-    if (stripeKey) {
-      try {
-        const stripe = createStripeServerClient(stripeKey);
-        await reconcileStripeSubscriptionsForUser(stripe, user.id, user.email ?? null);
-        entitlement = await loadUserAccessEntitlement(admin ?? sb, user.id);
-      } catch (err) {
-        console.warn("[access/plan] billing reconcile failed", err instanceof Error ? err.message : err);
-      }
-    }
+  if (entitlement.hasAthleteAccess && isCheckoutSuccess) {
+    redirect("/dashboard?welcome=1");
   }
 
   if (entitlement.hasAthleteAccess && !isCheckoutSuccess) {

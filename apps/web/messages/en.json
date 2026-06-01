@@ -130,6 +130,7 @@
     "welcomeSyncing": "Syncing your subscription…",
     "welcomeSyncRetry": "Please wait a few seconds while we confirm your payment with Stripe.",
     "welcomeSyncSlow": "Confirmation is taking longer than usual. Stay on this page — it will update automatically.",
+    "welcomeRedirecting": "Redirecting to Empathy…",
     "welcomeEnterDashboard": "Enter Empathy"
   },
   "AccountNotices": {

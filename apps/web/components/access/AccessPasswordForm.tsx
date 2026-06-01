@@ -146,7 +146,7 @@ export function AccessPasswordForm({ redirectAfterLogin, appRole }: Props) {
     let hasOperatorAccess = false;
     if (redirectRole !== "coach") {
       try {
-        const entRes = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const entRes = await fetch("/api/billing/entitlement?repair=1", { cache: "no-store" });
         const ent = (await entRes.json()) as {
           ok?: boolean;
           hasAthleteAccess?: boolean;

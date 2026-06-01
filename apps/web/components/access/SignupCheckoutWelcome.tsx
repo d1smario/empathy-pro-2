@@ -10,22 +10,21 @@ type EntitlementResponse = {
   label?: string;
 };
 
-type SyncResponse = {
-  ok?: boolean;
-  synced?: boolean;
-  hasAthleteAccess?: boolean;
-  label?: string;
-  reason?: string | null;
-};
-
 type SignupCheckoutWelcomeProps = {
   checkoutSessionId?: string | null;
   initialReady?: boolean;
   initialLabel?: string | null;
 };
 
+function entitlementUrl(sessionId?: string | null): string {
+  const params = new URLSearchParams({ repair: "1" });
+  const sid = sessionId?.trim();
+  if (sid?.startsWith("cs_")) params.set("session_id", sid);
+  return `/api/billing/entitlement?${params.toString()}`;
+}
+
 /**
- * Conferma post-checkout Stripe (gate `/access/plan`): sync immediato + poll entitlement.
+ * Conferma post-checkout Stripe: sync entitlement + redirect automatico in dashboard.
  */
 export function SignupCheckoutWelcome({
   checkoutSessionId,
@@ -36,6 +35,17 @@ export function SignupCheckoutWelcome({
   const [ready, setReady] = useState(initialReady);
   const [label, setLabel] = useState<string | null>(initialLabel);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
+
+  useEffect(() => {
+    if (!ready || redirecting) return;
+    setRedirecting(true);
+    setSyncNote(t("welcomeRedirecting"));
+    const timer = window.setTimeout(() => {
+      window.location.assign("/dashboard?welcome=1");
+    }, initialReady ? 800 : 1500);
+    return () => window.clearTimeout(timer);
+  }, [ready, redirecting, initialReady, t]);
 
   useEffect(() => {
     if (initialReady) return;
@@ -43,38 +53,14 @@ export function SignupCheckoutWelcome({
     let attempts = 0;
     const maxAttempts = 40;
 
-    async function trySync(): Promise<boolean> {
-      const sid = checkoutSessionId?.trim();
-      if (!sid || !sid.startsWith("cs_")) return false;
-      try {
-        const res = await fetch("/api/billing/sync-checkout-session", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId: sid }),
-        });
-        const data = (await res.json()) as SyncResponse;
-        if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
-          setReady(true);
-          setLabel(typeof data.label === "string" ? data.label : null);
-          setSyncNote(null);
-          return true;
-        }
-        if (!cancelled && res.ok && data.ok && !data.synced && data.reason) {
-          setSyncNote(t("welcomeSyncRetry"));
-        }
-      } catch {
-        /* poll continues */
-      }
-      return false;
-    }
-
     async function pollEntitlement(): Promise<boolean> {
       try {
-        const res = await fetch("/api/billing/entitlement", { cache: "no-store" });
+        const res = await fetch(entitlementUrl(checkoutSessionId), { cache: "no-store" });
         const data = (await res.json()) as EntitlementResponse;
         if (!cancelled && res.ok && data.ok && data.hasAthleteAccess) {
           setReady(true);
           setLabel(typeof data.label === "string" ? data.label : null);
+          setSyncNote(null);
           return true;
         }
       } catch {
@@ -85,20 +71,12 @@ export function SignupCheckoutWelcome({
 
     async function loop() {
       if (cancelled || attempts >= maxAttempts) {
-        if (!cancelled && !ready) {
+        if (!cancelled) {
           setSyncNote(t("welcomeSyncSlow"));
         }
         return;
       }
       attempts += 1;
-
-      if (attempts === 1) {
-        const synced = await trySync();
-        if (synced) return;
-      } else if (attempts % 4 === 0 && checkoutSessionId) {
-        const synced = await trySync();
-        if (synced) return;
-      }
 
       const entitled = await pollEntitlement();
       if (entitled || cancelled) return;
@@ -131,11 +109,12 @@ export function SignupCheckoutWelcome({
             type="button"
             variant="primary"
             className="justify-center px-8"
+            disabled={redirecting}
             onClick={() => {
               window.location.assign("/dashboard?welcome=1");
             }}
           >
-            {t("welcomeEnterDashboard")}
+            {redirecting ? t("welcomeRedirecting") : t("welcomeEnterDashboard")}
           </Pro2Button>
         </div>
       )}

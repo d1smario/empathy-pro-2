@@ -130,6 +130,7 @@
     "welcomeSyncing": "Stiamo sincronizzando il tuo abbonamento…",
     "welcomeSyncRetry": "Attendi qualche secondo: stiamo confermando il pagamento con Stripe.",
     "welcomeSyncSlow": "La conferma sta impiegando più del solito. Resta su questa pagina: si aggiornerà automaticamente.",
+    "welcomeRedirecting": "Reindirizzamento in Empathy…",
     "welcomeEnterDashboard": "Entra in Empathy"
   },
   "AccountNotices": {
