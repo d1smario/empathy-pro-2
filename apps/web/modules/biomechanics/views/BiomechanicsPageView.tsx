@@ -148,10 +148,15 @@ function CaptureNextSteps({
     );
   }
 
-  if (latestJob?.status === "processing") {
+  if (latestJob?.status === "processing" && !awaitingReview) {
     return (
       <div className="mt-4 rounded-2xl border border-cyan-500/35 bg-cyan-500/10 p-4">
-        <p className="text-sm text-cyan-100">Analisi CV in corso… attendi qualche secondo e ricarica la pagina.</p>
+        <p className="text-sm text-cyan-100">Analisi interrotta o in sospeso. Riprova l&apos;analisi CV.</p>
+        <div className="mt-3">
+          <Pro2Button onClick={onAnalyze} disabled={processingJobId != null} className="justify-center">
+            {processingJobId ? "Analisi in corso..." : "Riprova analisi"}
+          </Pro2Button>
+        </div>
       </div>
     );
   }
@@ -182,11 +187,26 @@ function CaptureNextSteps({
   return null;
 }
 
-function SessionList({ sessions }: { sessions: BiomechanicsSessionImportV1[] }) {
+function SessionList({
+  sessions,
+  pendingStagingId,
+}: {
+  sessions: BiomechanicsSessionImportV1[];
+  pendingStagingId: string | null;
+}) {
   if (!sessions.length) {
     return (
       <p className="rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
-        Nessuna sessione confermata. Elabora un job pending, valida la proposta CV, poi conferma per alimentare il twin.
+        Nessun report confermato ancora. L&apos;analisi CV produce una <strong>proposta in review</strong> — il report
+        (efficienza, simmetria, rischio) compare qui solo dopo conferma.
+        {pendingStagingId ? (
+          <>
+            {" "}
+            <Link href={`/biomechanics/staging/${pendingStagingId}`} className="font-semibold underline">
+              Apri review in attesa →
+            </Link>
+          </>
+        ) : null}
       </p>
     );
   }
@@ -229,9 +249,12 @@ export default function BiomechanicsPageView() {
   const [reviewStagingRunId, setReviewStagingRunId] = useState<string | null>(null);
   const [lastCreatedJob, setLastCreatedJob] = useState<BiomechanicsCaptureJobV1 | null>(null);
 
-  const latestJob = captureJobs[0] ?? lastCreatedJob;
+  const serverLatestJob = captureJobs[0] ?? null;
+  const latestJob =
+    serverLatestJob && lastCreatedJob?.id === serverLatestJob.id ? serverLatestJob : serverLatestJob ?? lastCreatedJob;
+  const activeStagingId = reviewStagingRunId ?? pendingStaging[0]?.id ?? null;
   const latestJobStaging = pendingStaging.find((row) => row.jobId === latestJob?.id) ?? pendingStaging[0] ?? null;
-  const latestJobAwaitingReview = Boolean(latestJob && latestJobStaging);
+  const latestJobAwaitingReview = pendingStaging.length > 0;
   const source: BiomechanicsCaptureSource = file?.type.startsWith("image/") ? "image" : "smartphone_video";
 
   const refresh = useCallback(async (opts?: { preserveError?: boolean }) => {
@@ -243,6 +266,10 @@ export default function BiomechanicsPageView() {
       setSessions(result.sessions);
       setCaptureJobs(result.captureJobs);
       setPendingStaging(result.pendingStaging.map((row) => ({ id: row.id, jobId: row.jobId })));
+      setLastCreatedJob(null);
+      if (result.pendingStaging[0]?.id) {
+        setReviewStagingRunId(result.pendingStaging[0].id);
+      }
       if (result.error) setError(result.error);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Biomechanics non disponibile.");
@@ -354,8 +381,6 @@ export default function BiomechanicsPageView() {
     }
   }
 
-  const activeStagingId = reviewStagingRunId ?? latestJobStaging?.id ?? null;
-
   return (
     <Pro2AthleteRequiredGate enabled>
       <Pro2ModulePageShell
@@ -377,6 +402,16 @@ export default function BiomechanicsPageView() {
         <div className="scroll-mt-28">
           <GenerativeModuleSubnav />
         </div>
+
+        {pendingStaging.length ? (
+          <div className="mb-4 rounded-2xl border border-amber-500/40 bg-amber-500/15 px-4 py-4 text-sm text-amber-50">
+            <strong className="font-semibold">Proposta CV pronta — non è ancora un report.</strong> Conferma in review per
+            generare efficienza/simmetria/rischio.{" "}
+            <Link href={`/biomechanics/staging/${activeStagingId}`} className="font-semibold underline">
+              Valida proposta CV →
+            </Link>
+          </div>
+        ) : null}
 
         {error ? (
           <div className="mb-4 rounded-2xl border border-rose-500/40 bg-rose-500/15 px-4 py-3 text-sm text-rose-100">
@@ -535,7 +570,11 @@ export default function BiomechanicsPageView() {
             title="Report sessioni"
             subtitle="Efficienza, simmetria e rischio dopo validazione CV."
           >
-            {loading ? <p className="text-sm text-gray-400">Caricamento archivio Biomechanics...</p> : <SessionList sessions={sessions} />}
+            {loading ? (
+              <p className="text-sm text-gray-400">Caricamento archivio Biomechanics...</p>
+            ) : (
+              <SessionList sessions={sessions} pendingStagingId={activeStagingId} />
+            )}
           </Pro2SectionCard>
         </section>
 

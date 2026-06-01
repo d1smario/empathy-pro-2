@@ -53,7 +53,30 @@ export async function processBiomechanicsCaptureJob(
   db: SupabaseClient,
   input: { athleteId: string; jobId: string; source?: BiomechanicsCaptureSource },
 ): Promise<ProcessBiomechCaptureResult> {
-  const claimed = await claimBiomechanicsCaptureJob(db, { athleteId: input.athleteId, jobId: input.jobId });
+  let claimed = await claimBiomechanicsCaptureJob(db, { athleteId: input.athleteId, jobId: input.jobId });
+  if (!claimed) {
+    const existingStaging = await findPendingBiomechanicsStagingForJob(db, {
+      athleteId: input.athleteId,
+      jobId: input.jobId,
+    });
+    if (existingStaging) {
+      return {
+        ok: true,
+        stagingRunId: existingStaging.id,
+        jobId: input.jobId,
+        confidence01: existingStaging.confidence01,
+      };
+    }
+
+    const reopened = await reopenBiomechanicsCaptureJobForRetry(db, {
+      athleteId: input.athleteId,
+      jobId: input.jobId,
+    });
+    if (reopened) {
+      claimed = await claimBiomechanicsCaptureJob(db, { athleteId: input.athleteId, jobId: input.jobId });
+    }
+  }
+
   if (!claimed) {
     return { ok: false, code: "job_not_pending", message: "Capture job non in coda o già elaborato." };
   }

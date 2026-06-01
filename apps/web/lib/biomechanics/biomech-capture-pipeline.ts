@@ -330,6 +330,58 @@ export async function insertBiomechanicsSessionImport(
   return data.id;
 }
 
+export async function reopenBiomechanicsCaptureJobForRetry(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string },
+): Promise<boolean> {
+  const { data, error } = await db
+    .from("biomech_capture_jobs")
+    .update({
+      status: "pending",
+      error_message: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", input.jobId)
+    .eq("athlete_id", input.athleteId)
+    .in("status", ["processing", "failed"])
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (error) throw new Error(error.message || "biomech_capture_job_reopen_failed");
+  return Boolean(data?.id);
+}
+
+export async function findPendingBiomechanicsStagingForJob(
+  db: SupabaseClient,
+  input: { athleteId: string; jobId: string },
+): Promise<{ id: string; confidence01: number } | null> {
+  const { data, error } = await db
+    .from("interpretation_staging_runs")
+    .select("id, confidence, candidate_bundle, proposed_structured_patches")
+    .eq("athlete_id", input.athleteId)
+    .eq("domain", "biomechanics")
+    .eq("status", "pending_validation")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    if (error.message?.includes("interpretation_staging_runs")) return null;
+    throw new Error(error.message || "biomech_staging_lookup_failed");
+  }
+
+  for (const row of data ?? []) {
+    const bundle =
+      row.candidate_bundle && typeof row.candidate_bundle === "object" && !Array.isArray(row.candidate_bundle)
+        ? (row.candidate_bundle as Record<string, unknown>)
+        : {};
+    if (bundle.captureJobId !== input.jobId) continue;
+    const confidence =
+      typeof row.confidence === "number" && Number.isFinite(row.confidence) ? row.confidence : 0.82;
+    return { id: String(row.id), confidence01: confidence };
+  }
+  return null;
+}
+
 export async function listPendingBiomechanicsStagingRuns(
   db: SupabaseClient,
   athleteId: string,
