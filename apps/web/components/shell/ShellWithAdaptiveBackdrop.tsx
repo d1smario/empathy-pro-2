@@ -4,8 +4,7 @@ import { usePathname } from "next/navigation";
 import { isGenerativePath } from "@/core/navigation/generative-modules";
 import { requiresResolvedAthleteForPath } from "@/lib/shell/requires-resolved-athlete-path";
 import { BrutalistAppBackdrop } from "@/components/shell/BrutalistAppBackdrop";
-import { Pro2AthleteRequiredGate } from "@/components/shell/Pro2AthleteRequiredGate";
-import { AccountNoticeBanner } from "@/components/shell/AccountNoticeBanner";
+import { ShellMainFrame } from "@/components/shell/ShellMainFrame";
 import { ProductSidebar } from "@/components/navigation/ProductSidebar";
 
 /**
@@ -20,18 +19,9 @@ export function ShellWithAdaptiveBackdrop({ children }: { children: React.ReactN
     <BrutalistAppBackdrop matrix={!generative}>
       <div className="flex min-h-screen">
         <ProductSidebar />
-        <main
-          id="main-content"
-          tabIndex={-1}
-          className={
-            generative
-              ? "min-w-0 flex-1 scroll-mt-0 bg-black/50 outline-none backdrop-blur-[2px]"
-              : "min-w-0 flex-1 scroll-mt-0 outline-none"
-          }
-        >
-          <AccountNoticeBanner />
-          <Pro2AthleteRequiredGate enabled={athleteGate}>{children}</Pro2AthleteRequiredGate>
-        </main>
+        <ShellMainFrame generative={generative} athleteGate={athleteGate}>
+          {children}
+        </ShellMainFrame>
       </div>
     </BrutalistAppBackdrop>
   );

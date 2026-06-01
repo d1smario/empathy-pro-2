@@ -3,6 +3,7 @@
  * Redirect policy lives in middleware (session refresh + gate when Supabase è configurato).
  */
 
+import { isMobileAppPath, stripMobileAppPrefix } from "@/core/navigation/mobile-module-registry";
 import { PRODUCT_MODULE_NAV } from "@/core/navigation/module-registry";
 
 const ANONYMOUS_PREFIXES = ["/preview"] as const;
@@ -19,11 +20,17 @@ export function isAnonymousAllowedPath(pathname: string): boolean {
   );
 }
 
-/** Moduli registrati in shell: richiedono sessione se Supabase pubblico è configurato. */
+/** Moduli registrati in shell desktop o mobile: richiedono sessione se Supabase pubblico è configurato. */
 export function isProtectedProductShellPath(pathname: string): boolean {
   const n = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
   if (n === "/admin" || n.startsWith("/admin/")) return true;
+  if (isMobileAppPath(n)) return true;
   return PRODUCT_MODULE_NAV.some((item) => n === item.href || n.startsWith(`${item.href}/`));
+}
+
+/** Path desktop equivalente (es. `/m/training/calendar` → `/training/calendar`). */
+export function desktopPathFromProductPath(pathname: string): string {
+  return stripMobileAppPrefix(pathname);
 }
 
 /**

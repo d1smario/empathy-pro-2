@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Empathy Pro 2.0",
     short_name: "Empathy",
     description: "Performance & metabolic adaptation platform",
-    start_url: "/",
+    start_url: "/m/dashboard",
     scope: "/",
     display: "standalone",
     orientation: "any",

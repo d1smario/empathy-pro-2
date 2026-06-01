@@ -1,4 +1,5 @@
 import { isProductModuleId, type ProductModuleId } from "@empathy/contracts";
+import { stripMobileAppPrefix } from "@/core/navigation/mobile-module-registry";
 
 /** Moduli dove la UI deve essere esposizione minimal (generazione / interpretazione), non dashboard-dense. */
 const GENERATIVE: ReadonlySet<ProductModuleId> = new Set([
@@ -17,7 +18,9 @@ export function isGenerativeProductModule(module: ProductModuleId): boolean {
 }
 
 export function isGenerativePath(pathname: string): boolean {
-  const normalized = pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
+  const normalized = stripMobileAppPrefix(
+    pathname.endsWith("/") && pathname.length > 1 ? pathname.slice(0, -1) : pathname,
+  );
   /** Builder denso (import graduale da V1): stesso shell ma backdrop / layout “prodotto”, non superficie generativa minimal. */
   if (
     normalized === "/training/builder" ||
@@ -37,7 +40,7 @@ export function isGenerativePath(pathname: string): boolean {
   ) {
     return false;
   }
-  const seg = pathname.split("/").filter(Boolean)[0];
+  const seg = normalized.split("/").filter(Boolean)[0];
   if (!seg || !isProductModuleId(seg)) return false;
   return GENERATIVE.has(seg);
 }

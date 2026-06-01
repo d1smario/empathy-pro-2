@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { isMobileAppPath, toMobilePath, isMobileRedirectSourcePath } from "@/core/navigation/mobile-module-registry";
 import { isAnonymousAllowedPath, isProtectedProductShellPath } from "@/core/routing/guards";
 import { isSiteIndexingDisabled } from "@/lib/site-url";
+import { isMobileClientRequest } from "@/lib/shell/mobile-detect";
 import { forwardMiddlewareCookies, updateSupabaseSession } from "@/lib/supabase/update-session";
 
 /**
@@ -27,6 +29,23 @@ export async function middleware(request: NextRequest) {
     dest.searchParams.set("next", returnTo);
     out = NextResponse.redirect(dest);
     forwardMiddlewareCookies(response, out);
+  } else if (pathname === "/m" || pathname === "/m/") {
+    const dest = new URL("/m/dashboard", request.url);
+    out = NextResponse.redirect(dest);
+    forwardMiddlewareCookies(response, out);
+  } else if (
+    user &&
+    isMobileClientRequest(request) &&
+    !isMobileAppPath(pathname) &&
+    isMobileRedirectSourcePath(pathname)
+  ) {
+    const mobile = toMobilePath(pathname);
+    if (mobile) {
+      const dest = new URL(mobile, request.url);
+      dest.search = request.nextUrl.search;
+      out = NextResponse.redirect(dest);
+      forwardMiddlewareCookies(response, out);
+    }
   }
 
   if (isSiteIndexingDisabled()) {
