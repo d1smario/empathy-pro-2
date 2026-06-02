@@ -24,7 +24,7 @@ import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-respo
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import { nutrientBoostAppliesToSlot } from "@/lib/nutrition/pathway-absorption-hints";
 import { rankUsdaCacheForTargets, type UsdaRankedFood } from "@/lib/nutrition/usda-nutrient-density-ranker";
-import { racePreLunchContextLine } from "@/lib/nutrition/race-day-pre-race-lunch";
+import { isRacePreRaceMealSlot, racePreLunchContextLine } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { disambiguatedShortFoodLabel } from "@/lib/nutrition/usda-food-label";
 
 /** Validi `NutrientTargetId` (subset di chiavi del CanonicalFoodNutrients) — keys statiche per filtro di sicurezza. */
@@ -207,8 +207,8 @@ export async function buildDeterministicMealPlanFromRequest(
 
     const baseCoherence = isSuppressed
       ? `Spuntino convenzionale soppresso: lo slot ${slot.slot} (${slot.scheduledTimeLocal || "—"}) ricade nella finestra di allenamento. Le kcal/CHO/elettroliti necessari sono coperti dal piano Fueling (gel + sport drink + idratazione).`
-      : slot.slot === "lunch" && req.racePreLunch
-        ? racePreLunchContextLine(req.racePreLunch)
+      : isRacePreRaceMealSlot(slot.slot, req.racePreLunch)
+        ? racePreLunchContextLine(req.racePreLunch!)
         : groupTitles
           ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
           : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`;

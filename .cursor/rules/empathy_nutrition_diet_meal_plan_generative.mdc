@@ -93,13 +93,15 @@ alwaysApply: false
 
 Quando il calendario o la routine segnalano una **gara** (`type`/`sessionName`/note con gara, oppure Profile → Routine → `day_mode = race`):
 
-1. **Orario pranzo** = start gara **− 3 h** (es. gara 13:30 → pranzo **10:30**). Vincola anche `resolveMealTimesForNutritionPlanDate`; **non** applicare lo spostamento pranzo post-fine seduta lunga.
-2. **Composizione pranzo** (canonico piattaforma, non per-atleta):
+1. **Orario pasto pre-gara** = start gara **− 3 h** (es. gara 13:00 → **10:00**; gara 10:00 → **07:00**). Slot Diet: **colazione** se T−3h prima delle 09:15, altrimenti **pranzo**. Vincola `resolveMealTimesForNutritionPlanDate`; **non** spostare post-fine seduta lunga.
+2. **Pasti prima/durante gara** (tranne il pasto pre-gara): soppressi nel piano solido → **Fueling**; **dopo** fine gara: merenda/cena/pre-sonno normali.
+3. **Generazione piano**: in giornata gara **non** bloccare su catalogo USDA pathway — il pre-gara è deterministico (`enrichIntelligentMealPlanRequestWithRaceDay` + server).
+4. **Composizione pasto pre-gara** (canonico piattaforma, non per-atleta):
    - pasta **o** riso: **3 g CHO/kg** peso atleta;
    - grana: **15–20 g**;
    - olio EVO: **15 g**;
    - se il target kcal dello slot Diet **non è coperto** dal nucleo sopra → **crostata o torta** ricca di CHO (no verdure voluminose pre-gara).
-3. **Implementazione:** `apps/web/lib/nutrition/race-day-pre-race-lunch.ts` (`RACE_DAY_PRE_RACE_LUNCH_PROTOCOL`) → `buildRacePreLunchDayContext` → composer `composeRacePreLunchMainMeal`.
+5. **Implementazione:** `race-day-pre-race-lunch.ts` → `buildRacePreLunchDayContext` (`mealSlot`, `computeRaceDaySuppressedSlots`) → `composeRacePreLunchMainMeal` sullo slot corretto; **vietato** pathway boost su quel slot (`deterministic-meal-plan-from-request.ts`).
 
 ## Test minimi obbligatori su modifica
 

@@ -19,6 +19,7 @@ import {
 import { buildActiveNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import {
   buildRacePreLunchDayContext,
+  computeRaceDaySuppressedSlots,
   racePreLunchContextLine,
   type PlannedSessionForRaceDetection,
 } from "@/lib/nutrition/race-day-pre-race-lunch";
@@ -88,15 +89,17 @@ export function buildIntelligentMealPlanRequest(input: {
           routineConfig: input.profile?.routine_config ?? null,
           planDate: input.planDate,
         });
+  const activeSlotKeys = mealRows.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
   const racePreLunch = buildRacePreLunchDayContext({
     weightKg: input.profile?.weight_kg,
     planDate: input.planDate,
     routineConfig: input.profile?.routine_config ?? null,
     plannedSessions: plannedResolved,
+    activeMealSlots: activeSlotKeys,
   });
   const raceWeight = { weightKg: input.profile?.weight_kg };
   const routineDigest = buildRoutineDigestForMealPlan(input.profile?.routine_config ?? null, input.planDate, {
-    plannedSessions: plannedForDay,
+    plannedSessions: plannedResolved,
     ...raceWeight,
   });
   const mealTimesFlat = routineMealTimesFlat(input.profile?.routine_config ?? null);
@@ -116,9 +119,19 @@ export function buildIntelligentMealPlanRequest(input: {
   });
   const mealRowsResolved = racePreLunch
     ? mealRows.map((row) =>
-        row.key === "lunch" ? { ...row, timeLocal: racePreLunch.lunchTimeLocal } : row,
+        row.key === racePreLunch.mealSlot ? { ...row, timeLocal: racePreLunch.lunchTimeLocal } : row,
       )
     : mealRows;
+
+  const raceSuppressed = racePreLunch
+    ? computeRaceDaySuppressedSlots({
+        ctx: racePreLunch,
+        activeSlots: mealRowsResolved.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k)),
+        mealTimesBySlot: Object.fromEntries(
+          mealRowsResolved.map((r) => [r.key, r.timeLocal] as const),
+        ) as Partial<Record<MealSlotKey, string>>,
+      })
+    : [];
 
   /**
    * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai
@@ -206,7 +219,10 @@ export function buildIntelligentMealPlanRequest(input: {
       athleteId: input.athleteId,
       planDate: input.planDate,
       postWorkoutMealBySlot: Object.keys(postWorkoutMealBySlot).length ? postWorkoutMealBySlot : undefined,
-      suppressedSlots: suppressedSlots.length > 0 ? suppressedSlots : undefined,
+      suppressedSlots:
+        suppressedSlots.length > 0 || raceSuppressed.length > 0
+          ? [...new Set([...suppressedSlots, ...raceSuppressed])]
+          : undefined,
       nutrientBoostTargets: nutrientBoostTargets.length > 0 ? nutrientBoostTargets : undefined,
       pathwayModulationActiveLabels: pathwayModulationActiveLabels ?? undefined,
       pathwayModulation: input.pathwayModulation ?? undefined,

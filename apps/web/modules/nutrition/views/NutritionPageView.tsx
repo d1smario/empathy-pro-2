@@ -107,7 +107,10 @@ import {
 } from "@/lib/nutrition/resolve-nutrition-diet-day";
 import { mealTimesFromRoutineWeekPlanForDate } from "@/lib/nutrition/routine-week-plan-meal-times";
 import { resolveMealTimesForNutritionPlanDate } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
-import { mapPlannedSessionsForRaceDetection } from "@/lib/nutrition/race-day-pre-race-lunch";
+import {
+  buildRacePreLunchDayContext,
+  mapPlannedSessionsForRaceDetection,
+} from "@/lib/nutrition/race-day-pre-race-lunch";
 import {
   buildRoutineSyntheticFuelingSessionInput,
   detectRoutineRaceDay,
@@ -1414,6 +1417,21 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     [mealPathwayBySlot, activeDietMealSlotKeys],
   );
 
+  /** Giorno gara: pasta/riso pre-gara è deterministico — non bloccare su catalogo pathway USDA. */
+  const raceDayPreRaceContext = useMemo(
+    () =>
+      buildRacePreLunchDayContext({
+        weightKg: profile?.weight_kg,
+        planDate: selectedPlanDate,
+        routineConfig: profile?.routine_config ?? null,
+        plannedSessions: mapPlannedSessionsForRaceDetection(selectedPlanSessions),
+        activeMealSlots: activeDietMealSlotKeys,
+      }),
+    [profile?.weight_kg, profile?.routine_config, selectedPlanDate, selectedPlanSessions, activeDietMealSlotKeys],
+  );
+
+  const mealPlanGenerationReady = mealPathwayUsdaReady || Boolean(raceDayPreRaceContext);
+
   const resolvedMealDailyEnergyKcal = nutritionDayModel?.totals.mealsKcal ?? dailyEnergyKcal;
   const resolvedFuelingChoGPerHour =
     (nutritionDayModel?.fueling.adjustedChoGPerHour ?? 0) > 0
@@ -2304,7 +2322,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   useEffect(() => {
     if (!athleteId) return;
     if (!intelligentMealPlanRequest) return;
-    if (!mealPathwayUsdaReady) return;
+    if (!mealPlanGenerationReady) return;
     if (intelligentMealPlan) return;
     if (intelligentMealLoading) return;
     if (intelligentMealError) return;
@@ -2312,7 +2330,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   }, [
     athleteId,
     intelligentMealPlanRequest,
-    mealPathwayUsdaReady,
+    mealPlanGenerationReady,
     intelligentMealPlan,
     intelligentMealLoading,
     intelligentMealError,
@@ -3464,9 +3482,16 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               intelligentMealLoading={intelligentMealLoading}
               intelligentMealError={intelligentMealError}
               canRequestIntelligentPlan={
-                mealRows.length > 0 && Boolean(intelligentMealPlanRequest) && mealPathwayUsdaReady
+                mealRows.length > 0 && Boolean(intelligentMealPlanRequest) && mealPlanGenerationReady
               }
-              mealPathwayCatalogPending={Boolean(intelligentMealPlanRequest) && !mealPathwayUsdaReady}
+              mealPathwayCatalogPending={
+                Boolean(intelligentMealPlanRequest) && !mealPlanGenerationReady
+              }
+              raceDayPreRaceNotice={
+                raceDayPreRaceContext
+                  ? `Giornata gara: pasto pre-gara (${raceDayPreRaceContext.mealSlot === "breakfast" ? "colazione" : "pranzo"}) alle ${raceDayPreRaceContext.lunchTimeLocal} — pasta/riso ${raceDayPreRaceContext.rule.carbsPerKgG} g CHO/kg, grana, olio 15 g. Pasti prima/durante gara → Fueling; solidi nel pomeriggio/post gara.`
+                  : null
+              }
               dietDayNotice={
                 mealRows.length > 0
                   ? [

@@ -8,6 +8,7 @@
  */
 
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { MEAL_SLOT_KEYS } from "@/lib/nutrition/intelligent-meal-plan-types";
 import type { MediterraneanComposedMeal, MediterraneanDayContext } from "@/lib/nutrition/mediterranean-meal-composer";
 import {
   formatMinutesToLocalHHmm,
@@ -57,7 +58,22 @@ export type RacePreLunchDayContext = {
   rule: RaceDayPreRaceLunchRule;
   raceLabel: string;
   raceStartLocal: string;
+  /** Orario pasto pre-gara (= start gara − 3 h). */
   lunchTimeLocal: string;
+  /** Slot Diet che ospita pasta/riso + grana + olio (colazione se gara mattutina, altrimenti pranzo). */
+  mealSlot: MealSlotKey;
+  raceStartMinutes: number;
+  raceEndMinutes: number;
+  preRaceMealMinutes: number;
+};
+
+const PRE_RACE_SLOT_LABEL_IT: Partial<Record<MealSlotKey, string>> = {
+  breakfast: "colazione",
+  lunch: "pranzo",
+  dinner: "cena",
+  snack_am: "spuntino mattina",
+  snack_pm: "merenda",
+  snack_evening: "spuntino serale",
 };
 
 const RACE_TEXT = /\b(gara|race|competition|gran fondo|granfondo|marathon|maratona|ironman|triathlon)\b/i;
@@ -171,6 +187,46 @@ export function computePreRaceLunchMinutes(raceStartMinutes: number, hoursBefore
   return Math.max(6 * 60, raceStartMinutes - Math.round(hoursBeforeRace * 60));
 }
 
+/**
+ * Assegna il pasto pre-gara allo slot Diet corretto:
+ * gara ~10 → pasta alle 7 in colazione; gara ~13–14 → pasta alle 10–11 in pranzo.
+ */
+export function resolvePreRaceMealSlot(
+  preRaceMinutes: number,
+  activeSlots: readonly MealSlotKey[],
+): MealSlotKey {
+  const set = new Set(activeSlots);
+  if (preRaceMinutes < 9 * 60 + 15 && set.has("breakfast")) return "breakfast";
+  if (set.has("lunch")) return "lunch";
+  if (set.has("breakfast")) return "breakfast";
+  return activeSlots[0] ?? "lunch";
+}
+
+/** Pasti prima della gara (e in finestra gara) → placeholder Fueling; solo post-gara restano solidi. */
+export function computeRaceDaySuppressedSlots(input: {
+  ctx: RacePreLunchDayContext;
+  activeSlots: readonly MealSlotKey[];
+  mealTimesBySlot: Partial<Record<MealSlotKey, string>>;
+}): MealSlotKey[] {
+  const out: MealSlotKey[] = [];
+  const { mealSlot, raceStartMinutes, raceEndMinutes } = input.ctx;
+  for (const slot of input.activeSlots) {
+    if (slot === mealSlot) continue;
+    const t = parseLocalTimeToMinutes(input.mealTimesBySlot[slot] ?? "");
+    if (t == null) {
+      if (slot === "breakfast" || slot === "snack_am") out.push(slot);
+      continue;
+    }
+    if (t < raceStartMinutes + 20) out.push(slot);
+    else if (t >= raceStartMinutes && t < raceEndMinutes + 15) out.push(slot);
+  }
+  return [...new Set(out)];
+}
+
+export function isRacePreRaceMealSlot(slot: MealSlotKey, ctx: RacePreLunchDayContext | null | undefined): boolean {
+  return Boolean(ctx && slot === ctx.mealSlot);
+}
+
 export function mapPlannedSessionsForRaceDetection(
   sessions: Array<{
     duration_minutes?: unknown;
@@ -195,6 +251,7 @@ export function buildRacePreLunchDayContext(input: {
   planDate: string;
   routineConfig: Record<string, unknown> | null | undefined;
   plannedSessions: PlannedSessionForRaceDetection[];
+  activeMealSlots?: readonly MealSlotKey[];
 }): RacePreLunchDayContext | null {
   const rule = getRaceDayPreRaceLunchProtocol();
   const race = detectPrimaryRaceSessionForDay({
@@ -205,20 +262,32 @@ export function buildRacePreLunchDayContext(input: {
   if (!race) return null;
   const weightKg = numFromUnknown(input.weightKg, 0);
   if (weightKg < 35) return null;
-  const lunchMin = computePreRaceLunchMinutes(race.startMinutes, rule.hoursBeforeRace);
+  const preRaceMealMinutes = computePreRaceLunchMinutes(race.startMinutes, rule.hoursBeforeRace);
+  const activeSlots =
+    input.activeMealSlots && input.activeMealSlots.length > 0
+      ? input.activeMealSlots
+      : (MEAL_SLOT_KEYS as readonly MealSlotKey[]);
+  const mealSlot = resolvePreRaceMealSlot(preRaceMealMinutes, activeSlots);
+  const raceEndMinutes = race.startMinutes + Math.max(45, race.durationMinutes);
+  const preRaceTimeLocal = formatMinutesToLocalHHmm(preRaceMealMinutes);
   return {
     weightKg,
     rule,
     raceLabel: race.label,
     raceStartLocal: race.raceStartLocal,
-    lunchTimeLocal: formatMinutesToLocalHHmm(lunchMin),
+    lunchTimeLocal: preRaceTimeLocal,
+    mealSlot,
+    raceStartMinutes: race.startMinutes,
+    raceEndMinutes,
+    preRaceMealMinutes,
   };
 }
 
 export function racePreLunchContextLine(ctx: RacePreLunchDayContext): string {
   const cho = Math.round(ctx.weightKg * ctx.rule.carbsPerKgG);
+  const slotLabel = PRE_RACE_SLOT_LABEL_IT[ctx.mealSlot] ?? ctx.mealSlot;
   return (
-    `Protocollo pre-gara: pranzo ${ctx.lunchTimeLocal} (${ctx.rule.hoursBeforeRace} h prima di ${ctx.raceStartLocal} · ${ctx.raceLabel}) — ` +
+    `Protocollo pre-gara: ${slotLabel} ${ctx.lunchTimeLocal} (${ctx.rule.hoursBeforeRace} h prima di ${ctx.raceStartLocal} · ${ctx.raceLabel}) — ` +
     `pasta o riso ${ctx.rule.carbsPerKgG} g CHO/kg (~${cho} g), grana ${ctx.rule.granaPadanoG.min}–${ctx.rule.granaPadanoG.max} g, olio ${ctx.rule.oliveOilG} g; ` +
     `se mancano kcal rispetto al target Diet → crostata/torta CHO (no verdure voluminose pre-gara).`
   );

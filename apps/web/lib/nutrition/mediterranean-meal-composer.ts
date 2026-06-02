@@ -859,7 +859,7 @@ export function composeMediterraneanMeal(
   if (slot === "snack_pm" || slot === "snack_evening") {
     return composeSnack(macros, seed, "snack_pm", ctx);
   }
-  if (slot === "lunch" && ctx?.racePreLunch) {
+  if (ctx?.racePreLunch && slot === ctx.racePreLunch.mealSlot) {
     return composeRacePreLunchMainMeal(slot, macros, seed, ctx.racePreLunch, ctx);
   }
   return composeMainMeal(slot, macros, seed, ctx);

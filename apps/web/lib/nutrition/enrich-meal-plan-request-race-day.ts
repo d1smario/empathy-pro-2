@@ -4,8 +4,10 @@
  */
 
 import type { IntelligentMealPlanRequest, IntelligentMealPlanRequestSlot } from "@/lib/nutrition/intelligent-meal-plan-types";
+import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
   buildRacePreLunchDayContext,
+  computeRaceDaySuppressedSlots,
   mapPlannedSessionsForRaceDetection,
   racePreLunchContextLine,
   type PlannedSessionForRaceDetection,
@@ -66,11 +68,13 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
           planDate: input.request.planDate,
         });
 
+  const activeSlots = input.request.slots.map((s) => s.slot);
   const racePreLunch = buildRacePreLunchDayContext({
     weightKg,
     planDate: input.request.planDate,
     routineConfig: routine,
     plannedSessions: planned,
+    activeMealSlots: activeSlots,
   });
   if (!racePreLunch) {
     return input.request;
@@ -83,19 +87,32 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
   ];
 
   const slots: IntelligentMealPlanRequestSlot[] = input.request.slots.map((slot) =>
-    slot.slot === "lunch" ? { ...slot, scheduledTimeLocal: racePreLunch.lunchTimeLocal } : slot,
+    slot.slot === racePreLunch.mealSlot
+      ? { ...slot, scheduledTimeLocal: racePreLunch.lunchTimeLocal }
+      : slot,
   );
+
+  const mealTimesBySlot = Object.fromEntries(
+    slots.map((s) => [s.slot, s.scheduledTimeLocal] as const),
+  ) as Partial<Record<MealSlotKey, string>>;
+  const raceSuppressed = computeRaceDaySuppressedSlots({
+    ctx: racePreLunch,
+    activeSlots,
+    mealTimesBySlot,
+  });
+  const suppressedSlots = [...new Set([...(input.request.suppressedSlots ?? []), ...raceSuppressed])];
 
   return {
     ...input.request,
     slots,
     contextLines,
     racePreLunch,
+    suppressedSlots: suppressedSlots.length ? suppressedSlots : undefined,
     mealPlanSolverMeta: {
       ...input.request.mealPlanSolverMeta,
       integrationLeverLines: [
         ...(input.request.mealPlanSolverMeta?.integrationLeverLines ?? []),
-        "Protocollo pre-gara attivo (routine · day_mode=race).",
+        `Protocollo pre-gara attivo (${racePreLunch.mealSlot} ${racePreLunch.lunchTimeLocal} · routine race).`,
       ].slice(0, 16),
     },
   };

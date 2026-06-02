@@ -246,6 +246,8 @@ export type NutritionMealPlanWorkspaceProps = {
   mealPathwayCatalogPending?: boolean;
   /** Se Diet non è configurato per il giorno della data selezionata. */
   dietDayNotice?: string | null;
+  /** Giornata gara: regola fissa pasta/riso T−3 h (non dipende da USDA pathway). */
+  raceDayPreRaceNotice?: string | null;
   onGenerateIntelligentMealPlan: () => void;
   onResetIntelligentMealPlan: () => void;
   coachMealRemovalKeys: Set<string>;
@@ -276,6 +278,7 @@ export function NutritionMealPlanWorkspace({
   canRequestIntelligentPlan,
   mealPathwayCatalogPending = false,
   dietDayNotice = null,
+  raceDayPreRaceNotice = null,
   onGenerateIntelligentMealPlan,
   onResetIntelligentMealPlan,
   coachMealRemovalKeys,
@@ -321,6 +324,11 @@ export function NutritionMealPlanWorkspace({
           </div>
           {mealPathwayCatalogPending ? (
             <p className="mb-3 text-xs text-slate-500">Caricamento integrazione USDA per gli slot pasto del giorno… poi potrai generare il piano.</p>
+          ) : null}
+          {raceDayPreRaceNotice ? (
+            <p className="mb-3 rounded-lg border border-fuchsia-500/40 bg-fuchsia-500/10 px-3 py-2 text-xs text-fuchsia-100" role="status">
+              {raceDayPreRaceNotice}
+            </p>
           ) : null}
           {dietDayNotice ? (
             <p className="mb-3 rounded-lg border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-xs text-amber-100" role="status">

@@ -165,8 +165,8 @@ export function resolveMealTimesForNutritionPlanDate(input: {
   });
   if (racePreLunch) {
     const mins = parseMealTimesToMinutes(base);
-    const lunchMin = parseLocalTimeToMinutes(racePreLunch.lunchTimeLocal) ?? mins.lunch;
-    mins.lunch = lunchMin;
+    const preMin = parseLocalTimeToMinutes(racePreLunch.lunchTimeLocal) ?? mins[racePreLunch.mealSlot];
+    mins[racePreLunch.mealSlot] = preMin;
     for (let i = 1; i < SLOT_ORDER.length; i++) {
       const k = SLOT_ORDER[i];
       const prev = SLOT_ORDER[i - 1];
