@@ -99,7 +99,7 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
     slots.map((s) => [s.slot, s.scheduledTimeLocal] as const),
   ) as Partial<Record<MealSlotKey, string>>;
   const racePostRecovery = buildRacePostRecoveryContext({
-    weightKg: input.weightKg,
+    weightKg,
     planDate: input.request.planDate,
     routineConfig: routine,
     plannedSessions: planned,
