@@ -96,7 +96,7 @@ export function buildEmpathyInterrogationMap(input: BuildEmpathyInterrogationMap
     level("L3_molecular_pathways", [
       sector(
         "molecular_pathways",
-        pathwayLabels.length ? "answered" : "active_stub",
+        pathwayLabels.length ? "answered" : "active",
         pathwayLabels.length
           ? pathwayLabels.slice(0, 4).join(" · ")
           : "Pathway template da twin/fisiologia quando seduta assente.",
@@ -145,7 +145,7 @@ export function buildEmpathyInterrogationMap(input: BuildEmpathyInterrogationMap
     level("L7_bioenergetics", [
       sector(
         "bioenergetics",
-        "active_stub",
+        "deferred",
         "Moduli luce/EMF/red-NIR in backlog; non modulano solver in questa fase.",
         [],
         [],
@@ -236,7 +236,7 @@ export function buildEmpathyInterrogationMap(input: BuildEmpathyInterrogationMap
       case "q10_microbiota_bacteria":
         return answerQuestion(
           q,
-          panelMicro ? "active_stub" : "deferred",
+          panelMicro ? "active" : "deferred",
           panelMicro ? "Modulatori microbiota da Health panel." : "Panel microbiota non collegato.",
           panelMicro ? ["health_panel:microbiota"] : [],
           panelMicro ? undefined : "microbiome.expand_16s",
@@ -246,7 +246,7 @@ export function buildEmpathyInterrogationMap(input: BuildEmpathyInterrogationMap
       case "q06_gene_networks":
         return answerQuestion(
           q,
-          multiscaleWired ? "answered" : "active_stub",
+          multiscaleWired || stimulus.geneNetworkTags.length ? "answered" : "active",
           [...stimulus.geneNetworkTags, ...(multiscaleWired ? ["multiscale_active"] : [])].join(" · ") || "—",
           multiscaleWired ? ["multiscale:ontology"] : [],
         );
