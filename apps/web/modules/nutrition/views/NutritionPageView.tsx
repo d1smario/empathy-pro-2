@@ -108,6 +108,11 @@ import {
 import { mealTimesFromRoutineWeekPlanForDate } from "@/lib/nutrition/routine-week-plan-meal-times";
 import { resolveMealTimesForNutritionPlanDate } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import { mapPlannedSessionsForRaceDetection } from "@/lib/nutrition/race-day-pre-race-lunch";
+import {
+  buildRoutineSyntheticFuelingSessionInput,
+  detectRoutineRaceDay,
+} from "@/lib/nutrition/routine-race-day-context";
+import { mergeRoutineConfigRecords } from "@/lib/nutrition/nutrition-module-profile-merge";
 import type { IntelligentMealPlanResponseBody, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
   buildNutritionAdaptationSectorBoxes,
@@ -372,7 +377,7 @@ function mergeNutritionProfileForSolver(mem: AthleteNutritionRow | null, mod: At
     body_fat_pct: mem.body_fat_pct ?? mod.body_fat_pct,
     muscle_mass_kg: mem.muscle_mass_kg ?? mod.muscle_mass_kg,
     lifestyle_activity_class: mem.lifestyle_activity_class ?? mod.lifestyle_activity_class,
-    routine_config: mem.routine_config ?? mod.routine_config,
+    routine_config: mergeRoutineConfigRecords(mem.routine_config, mod.routine_config),
     nutrition_config,
     supplement_config: mem.supplement_config ?? mod.supplement_config,
   };
@@ -1427,6 +1432,15 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       : resolvedFuelingTier === "high"
         ? "90-110 g/h"
         : "60-90 g/h";
+  const routineRaceDay = useMemo(
+    () =>
+      detectRoutineRaceDay({
+        routineConfig: profile?.routine_config ?? null,
+        planDate: selectedPlanDate,
+      }),
+    [profile?.routine_config, selectedPlanDate],
+  );
+
   const fuelingReadiness = useMemo(() => {
     const missing: string[] = [];
     if (!profile) {
@@ -1446,8 +1460,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       if (!hasPositiveNumber(physio.v_lamax)) missing.push("VLaMax");
       if (!hasPositiveNumber(physio.vo2max_ml_min_kg)) missing.push("VO2max");
     }
-    /** Fueling solo su seduta pianificata (Builder/calendario), non su eseguito retroattivo. */
-    if (!selectedPlanSessions.length) {
+    /** Fueling: seduta in calendario oppure giorno gara in routine (start + durata). */
+    if (!selectedPlanSessions.length && !routineRaceDay) {
       missing.push(FUELING_MISSING_DAY_TRAINING);
     }
     const onlyDayTrainingMissing = missing.length === 1 && missing[0] === FUELING_MISSING_DAY_TRAINING;
@@ -1460,7 +1474,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       hasProfileOrPhysiologyGap,
       dayTrainingAlsoMissing,
     };
-  }, [profile, physio, selectedPlanSessions.length]);
+  }, [profile, physio, selectedPlanSessions.length, routineRaceDay]);
 
   const fuelingExecutionConfirmations = useMemo(() => {
     const raw = record(profile?.nutrition_config).fueling_execution_confirmations;
@@ -1516,10 +1530,18 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       };
     });
 
+    const routineSynthetic = buildRoutineSyntheticFuelingSessionInput({
+      routineConfig: profile?.routine_config ?? null,
+      planDate: selectedPlanDate,
+    });
     const sources = plannedSources;
-    if (!sources.length) return [];
+    if (!sources.length && !routineSynthetic) return [];
 
-    const inputs = sources.map((s) => s.input);
+    const inputs = sources.length
+      ? sources.map((s) => s.input)
+      : routineSynthetic
+        ? [routineSynthetic]
+        : [];
 
     const analyzed = analyzePlannedSessionsForFueling({
       sessions: inputs,
@@ -1529,6 +1551,45 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       choIngestedGH: choGh,
     });
     const byId = new Map(analyzed.map((a) => [a.id, a]));
+
+    if (!sources.length && routineSynthetic) {
+      const analysis = byId.get(routineSynthetic.id);
+      return [
+        {
+          id: routineSynthetic.id,
+          builderContract: null,
+          title: routineSynthetic.title,
+          family: "endurance",
+          discipline: "cycling",
+          target: "race",
+          durationMin: routineSynthetic.durationMinutesDb,
+          tss: routineSynthetic.tssTargetDb,
+          kcal: 0,
+          structure: "Gara (routine)",
+          blockLabels: [],
+          intensityCues: [],
+          substrate: analysis
+            ? {
+                estimatedIntensityPctFtp: analysis.substrate.estimatedIntensityPctFtp,
+                lactateProducedG: round(analysis.substrate.lactateProducedG, 1),
+                glucoseFromCoriG: round(analysis.substrate.glucoseFromCoriG, 1),
+                glucoseNetFromCoriG: round(analysis.substrate.glucoseNetFromCoriG, 1),
+                exogenousOxidizedG: round(analysis.substrate.exogenousOxidizedG, 1),
+                choAvailableG: round(analysis.substrate.choAvailableG, 1),
+                glycolyticSharePct: round(analysis.substrate.glycolyticSharePct, 1),
+                gutPathwayRisk: analysis.substrate.gutPathwayRisk,
+                bloodDeliveryPctOfIngested: round(analysis.substrate.bloodDeliveryPctOfIngested, 1),
+                glycogenCombustedNetG: round(analysis.substrate.glycogenCombustedNetG, 1),
+                glucoseRequiredForStrategyG: round(analysis.substrate.glucoseRequiredForStrategyG, 1),
+              }
+            : null,
+          physiologicalIntent: analysis?.physiologicalIntent ?? ["Giornata gara da routine — supporto intra da Fueling."],
+          nutritionSupports: analysis?.nutritionSupports ?? [],
+          inhibitorsAndRisks: analysis?.inhibitorsAndRisks ?? [],
+          choEnergyWeight: analysis?.dayChoEnergyWeight ?? Math.max(1, routineSynthetic.tssTargetDb),
+        },
+      ];
+    }
 
     return sources.map((src) => {
       const session = src.session;
@@ -1595,6 +1656,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     physio?.ftp_watts,
     physiologyState,
     resolvedFuelingChoGPerHour,
+    profile?.routine_config,
+    selectedPlanDate,
   ]);
 
   const fuelingEngineDaySummary = useMemo(() => {

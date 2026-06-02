@@ -104,14 +104,17 @@ function pickItemsForSlot(
     proteinG: slot.targetProteinG,
     fatG: slot.targetFatG,
   };
-  const composed = applyNutrientBoostSwaps(
-    composeMediterraneanMeal(slot.slot, slotMacros, dayCtx),
-    slot.slot,
-    boostTargetIds,
-    dayCtx,
-  );
-  const uncovered = uncoveredNutrientTargetsForSlot(boostTargetIds, slot.slot, dayCtx.dietType);
-  const integrationItems = buildIntegrationHintItemsForSlot(slot.slot, uncovered, 2);
+  const isRacePreLunch = slot.slot === "lunch" && Boolean(dayCtx?.racePreLunch);
+  const meal = composeMediterraneanMeal(slot.slot, slotMacros, dayCtx);
+  const composed = isRacePreLunch
+    ? meal
+    : applyNutrientBoostSwaps(meal, slot.slot, boostTargetIds, dayCtx);
+  const uncovered = isRacePreLunch
+    ? []
+    : uncoveredNutrientTargetsForSlot(boostTargetIds, slot.slot, dayCtx.dietType);
+  const integrationItems = isRacePreLunch
+    ? []
+    : buildIntegrationHintItemsForSlot(slot.slot, uncovered, 2);
   const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
   const bridgePrefix = groupTitles
     ? `Target funzionali (solver): ${groupTitles.slice(0, 180)}${groupTitles.length > 180 ? "…" : ""}. `

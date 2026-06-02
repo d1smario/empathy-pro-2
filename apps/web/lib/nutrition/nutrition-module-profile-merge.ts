@@ -27,6 +27,30 @@ export type NutritionModuleFlatProfile = {
   preferred_meal_count: number | null;
 };
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
+}
+
+/** `week_plan` e `meal_times` da DB sovrascrivono la memoria atleta (routine gara non deve restare stale). */
+export function mergeRoutineConfigRecords(
+  fromMemory: Record<string, unknown> | null,
+  fromDb: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+  if (!fromMemory && !fromDb) return null;
+  if (!fromMemory) return fromDb;
+  if (!fromDb) return fromMemory;
+  const memWeek = asRecord(fromMemory.week_plan) ?? {};
+  const dbWeek = asRecord(fromDb.week_plan) ?? {};
+  const memMeals = asRecord(fromMemory.meal_times) ?? {};
+  const dbMeals = asRecord(fromDb.meal_times) ?? {};
+  return {
+    ...fromMemory,
+    ...fromDb,
+    week_plan: { ...memWeek, ...dbWeek },
+    meal_times: { ...memMeals, ...dbMeals },
+  };
+}
+
 function coerceDbNumeric(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim() !== "") {
@@ -98,7 +122,7 @@ export function mergeNutritionModuleProfileWithAthleteProfileRow(
             parseNutritionConfigRecord(rowNutrition),
           )
         : (rowNutrition ?? fromMemory.nutrition_config),
-    routine_config: rowRoutine ?? fromMemory.routine_config,
+    routine_config: mergeRoutineConfigRecords(fromMemory.routine_config, rowRoutine),
     preferred_meal_count:
       coerceDbNumeric(row?.preferred_meal_count) ?? fromMemory.preferred_meal_count ?? null,
   };

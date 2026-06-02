@@ -22,6 +22,7 @@ import {
   racePreLunchContextLine,
   type PlannedSessionForRaceDetection,
 } from "@/lib/nutrition/race-day-pre-race-lunch";
+import { buildRoutineSyntheticPlannedSessionsForRaceDetection } from "@/lib/nutrition/routine-race-day-context";
 
 export type PathwaySlotBundleInput = {
   pathwayTargets?: FunctionalFoodTargetViewModel[];
@@ -80,11 +81,18 @@ export function buildIntelligentMealPlanRequest(input: {
   const pathwayPathways = input.pathwayModulation?.pathways ?? [];
   const pathwayTimingLines = buildPathwayTimingLinesForMealPlan(input.pathwayModulation);
   const plannedForDay = input.plannedSessionsForDay ?? [];
+  const plannedResolved =
+    plannedForDay.length > 0
+      ? plannedForDay
+      : buildRoutineSyntheticPlannedSessionsForRaceDetection({
+          routineConfig: input.profile?.routine_config ?? null,
+          planDate: input.planDate,
+        });
   const racePreLunch = buildRacePreLunchDayContext({
     weightKg: input.profile?.weight_kg,
     planDate: input.planDate,
     routineConfig: input.profile?.routine_config ?? null,
-    plannedSessions: plannedForDay,
+    plannedSessions: plannedResolved,
   });
   const raceWeight = { weightKg: input.profile?.weight_kg };
   const routineDigest = buildRoutineDigestForMealPlan(input.profile?.routine_config ?? null, input.planDate, {
@@ -96,14 +104,14 @@ export function buildIntelligentMealPlanRequest(input: {
     routineConfig: input.profile?.routine_config ?? null,
     planDate: input.planDate,
     mealTimesFlatFromRoot: mealTimesFlat,
-    plannedSessions: plannedForDay,
+    plannedSessions: plannedResolved,
     ...raceWeight,
   });
   const suppressedSlots = computeSnackSlotsSuppressedByTrainingWindow({
     routineConfig: input.profile?.routine_config ?? null,
     planDate: input.planDate,
     mealTimesFlatFromRoot: mealTimesFlat,
-    plannedSessions: plannedForDay,
+    plannedSessions: plannedResolved,
     ...raceWeight,
   });
   const mealRowsResolved = racePreLunch

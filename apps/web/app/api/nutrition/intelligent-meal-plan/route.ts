@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { buildDeterministicMealPlanFromRequest } from "@/lib/nutrition/deterministic-meal-plan-from-request";
+import {
+  enrichIntelligentMealPlanRequestWithRaceDay,
+  plannedSessionsForRaceFromDbRows,
+} from "@/lib/nutrition/enrich-meal-plan-request-race-day";
 import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
 import { attachSolverBasisToAssembled } from "@/lib/nutrition/meal-plan-solver-basis";
@@ -37,11 +41,22 @@ export async function POST(req: NextRequest) {
     }
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const { data: profileRow } = await db
-      .from("athlete_profiles")
-      .select("nutrition_config, routine_config, preferred_meal_count")
-      .eq("id", athleteId)
-      .maybeSingle();
+    const planDate =
+      String((body.plan as Record<string, unknown> | undefined)?.planDate ?? "")
+        .slice(0, 10) || new Date().toISOString().slice(0, 10);
+
+    const [{ data: profileRow }, { data: plannedRows }] = await Promise.all([
+      db
+        .from("athlete_profiles")
+        .select("nutrition_config, routine_config, preferred_meal_count, weight_kg")
+        .eq("id", athleteId)
+        .maybeSingle(),
+      db
+        .from("planned_workouts")
+        .select("duration_minutes, type, notes")
+        .eq("athlete_id", athleteId)
+        .eq("date", planDate),
+    ]);
 
     const plan = body.plan as unknown;
     if (!isRecord(plan)) {
@@ -61,8 +76,9 @@ export async function POST(req: NextRequest) {
         : clientSlots.reduce((s, sl) => s + (Number.isFinite(sl.targetKcal) ? sl.targetKcal : 0), 0);
 
     const row = (profileRow ?? null) as Record<string, unknown> | null;
+
     const reconciled = reconcileMealPlanSlotsWithDiet({
-      planDate: String(planMerged.planDate ?? "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+      planDate,
       nutritionConfig: row?.nutrition_config ?? null,
       routineConfig: row?.routine_config ?? null,
       dailyMealsKcalTotal,
@@ -90,8 +106,23 @@ export async function POST(req: NextRequest) {
       },
     };
 
+    const routineConfig =
+      row?.routine_config && typeof row.routine_config === "object" && !Array.isArray(row.routine_config)
+        ? (row.routine_config as Record<string, unknown>)
+        : null;
+    const plannedSessions = plannedSessionsForRaceFromDbRows(
+      Array.isArray(plannedRows) ? plannedRows : [],
+    );
+
+    const withRace = enrichIntelligentMealPlanRequestWithRaceDay({
+      request: planFromDiet,
+      routineConfig,
+      weightKg: row?.weight_kg,
+      plannedSessions,
+    });
+
     const request = applyMealSlotRulesToIntelligentMealPlanRequest(
-      filterIntelligentMealPlanRequestFoods(planFromDiet),
+      filterIntelligentMealPlanRequestFoods(withRace),
     );
     if (request.athleteId !== athleteId) {
       return NextResponse.json({ error: "athleteId mismatch" }, { status: 400 });

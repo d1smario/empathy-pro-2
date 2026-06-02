@@ -81,6 +81,23 @@ test("resolveMealTimesForNutritionPlanDate: gara non sposta pranzo dopo fine sed
   assert.equal(times.lunch, "10:30");
 });
 
+test("composeMediterraneanMeal lunch pre-gara: niente spinaci nel piatto base", () => {
+  const raceCtx = buildRacePreLunchDayContext({
+    weightKg: 67,
+    planDate: "2026-06-02",
+    routineConfig: {
+      week_plan: { Tue: { day_mode: "race", training1_start_time: "14:00" } },
+    },
+    plannedSessions: [],
+  });
+  assert.ok(raceCtx);
+  const dayCtx = createMediterraneanDayContext("2026-06-02", undefined, undefined, "omnivore", undefined, undefined, raceCtx!);
+  const meal = composeMediterraneanMeal("lunch", { kcal: 900, carbsG: 200, proteinG: 30, fatG: 20 }, dayCtx);
+  const names = meal.items.map((i) => i.name.toLowerCase()).join(" ");
+  assert.match(names, /pasta|riso/);
+  assert.doesNotMatch(names, /spinac/);
+});
+
 test("composeMediterraneanMeal lunch pre-gara: pasta/riso + grana + olio", () => {
   const raceCtx = buildRacePreLunchDayContext({
     weightKg: 70,
