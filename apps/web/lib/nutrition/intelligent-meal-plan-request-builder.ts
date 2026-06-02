@@ -18,9 +18,12 @@ import {
 } from "@/lib/nutrition/nutrition-meal-times-training-coherence";
 import { buildActiveNutrientTargets } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import {
+  buildRacePostRecoveryContext,
   buildRacePreLunchDayContext,
   computeRaceDaySuppressedSlots,
+  racePostRecoveryContextLine,
   racePreLunchContextLine,
+  rebalanceMealRowsForRacePostRecovery,
   type PlannedSessionForRaceDetection,
 } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { buildRoutineSyntheticPlannedSessionsForRaceDetection } from "@/lib/nutrition/routine-race-day-context";
@@ -132,6 +135,20 @@ export function buildIntelligentMealPlanRequest(input: {
         ) as Partial<Record<MealSlotKey, string>>,
       })
     : [];
+  const mealTimesBySlot = Object.fromEntries(
+    mealRowsResolved.map((r) => [r.key, r.timeLocal] as const),
+  ) as Partial<Record<MealSlotKey, string>>;
+  const racePostRecovery = buildRacePostRecoveryContext({
+    weightKg: input.profile?.weight_kg,
+    planDate: input.planDate,
+    routineConfig: input.profile?.routine_config ?? null,
+    plannedSessions: plannedResolved,
+    activeMealSlots: mealRowsResolved.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k)),
+    mealTimesBySlot,
+  });
+  const mealRowsFinal = racePostRecovery
+    ? rebalanceMealRowsForRacePostRecovery(mealRowsResolved, racePostRecovery)
+    : mealRowsResolved;
 
   /**
    * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai
@@ -166,9 +183,9 @@ export function buildIntelligentMealPlanRequest(input: {
       ? pathwayPathways.map((p) => p.pathwayLabel.trim()).filter(Boolean).join(" · ").slice(0, 320)
       : null;
 
-  const slotOrder = mealRowsResolved.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
+  const slotOrder = mealRowsFinal.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k));
   const slots = slotOrder.map((slot) => {
-    const row = mealRowsResolved.find((r) => r.key === slot);
+    const row = mealRowsFinal.find((r) => r.key === slot);
     const bundle = mealPathwayBySlot[slot];
     const targets = bundle?.pathwayTargets ?? [];
     const foods = bundle?.foods ?? [];
@@ -243,9 +260,11 @@ export function buildIntelligentMealPlanRequest(input: {
       contextLines: [
         ...input.contextLines.slice(0, 18),
         ...(racePreLunch ? [racePreLunchContextLine(racePreLunch)] : []),
+        ...(racePostRecovery ? [racePostRecoveryContextLine(racePostRecovery)] : []),
       ],
       slots,
       racePreLunch: racePreLunch ?? undefined,
+      racePostRecovery: racePostRecovery ?? undefined,
     }),
   );
 }

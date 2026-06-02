@@ -34,5 +34,6 @@ export * from "./empathy-load-metrics-v2";
 export * from "./research";
 export * from "./common";
 export * from "./cross-domain-interpretation";
+export * from "./empathy-interrogation-framework";
 export * from "./biomechanics";
 export * from "./aerodynamics";

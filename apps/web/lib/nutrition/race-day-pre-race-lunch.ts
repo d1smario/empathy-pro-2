@@ -67,6 +67,29 @@ export type RacePreLunchDayContext = {
   preRaceMealMinutes: number;
 };
 
+export type RaceDayPostRecoveryRule = {
+  choPerKgByDuration: {
+    shortUnder120Min: number;
+    medium120To180Min: number;
+    longOver180Min: number;
+  };
+  proteinPerKgG: number;
+  mctPerKgG: number;
+};
+
+export type RacePostRecoveryContext = {
+  weightKg: number;
+  raceLabel: string;
+  raceEndMinutes: number;
+  recoveryTimeLocal: string;
+  mealSlot: MealSlotKey;
+  choPerKgG: number;
+  choG: number;
+  proteinG: number;
+  mctG: number;
+  totalKcal: number;
+};
+
 const PRE_RACE_SLOT_LABEL_IT: Partial<Record<MealSlotKey, string>> = {
   breakfast: "colazione",
   lunch: "pranzo",
@@ -187,6 +210,158 @@ export function computePreRaceLunchMinutes(raceStartMinutes: number, hoursBefore
   return Math.max(6 * 60, raceStartMinutes - Math.round(hoursBeforeRace * 60));
 }
 
+const RACE_DAY_POST_RECOVERY_RULE: RaceDayPostRecoveryRule = {
+  choPerKgByDuration: {
+    shortUnder120Min: 1.0,
+    medium120To180Min: 1.2,
+    longOver180Min: 1.5,
+  },
+  proteinPerKgG: 0.6,
+  mctPerKgG: 0.2,
+};
+
+export function getRaceDayPostRecoveryRule(): RaceDayPostRecoveryRule {
+  return RACE_DAY_POST_RECOVERY_RULE;
+}
+
+export function choosePostRaceChoPerKg(durationMinutes: number, rule: RaceDayPostRecoveryRule): number {
+  if (durationMinutes > 180) return rule.choPerKgByDuration.longOver180Min;
+  if (durationMinutes >= 120) return rule.choPerKgByDuration.medium120To180Min;
+  return rule.choPerKgByDuration.shortUnder120Min;
+}
+
+export function resolvePostRaceRecoveryMealSlot(input: {
+  raceEndMinutes: number;
+  activeSlots: readonly MealSlotKey[];
+  mealTimesBySlot: Partial<Record<MealSlotKey, string>>;
+}): MealSlotKey {
+  const targetMinutes = input.raceEndMinutes + 15;
+  const candidates = input.activeSlots
+    .map((slot) => {
+      const t = parseLocalTimeToMinutes(input.mealTimesBySlot[slot] ?? "");
+      return t == null ? null : { slot, minutes: t };
+    })
+    .filter((row): row is { slot: MealSlotKey; minutes: number } => row != null)
+    .filter((row) => row.minutes >= targetMinutes)
+    .sort((a, b) => a.minutes - b.minutes);
+  if (candidates.length > 0) return candidates[0]!.slot;
+  if (input.activeSlots.includes("snack_evening")) return "snack_evening";
+  if (input.activeSlots.includes("dinner")) return "dinner";
+  if (input.activeSlots.includes("snack_pm")) return "snack_pm";
+  return input.activeSlots[0] ?? "dinner";
+}
+
+export function buildRacePostRecoveryContext(input: {
+  weightKg: number | null | undefined;
+  planDate: string;
+  routineConfig: Record<string, unknown> | null | undefined;
+  plannedSessions: PlannedSessionForRaceDetection[];
+  activeMealSlots: readonly MealSlotKey[];
+  mealTimesBySlot: Partial<Record<MealSlotKey, string>>;
+}): RacePostRecoveryContext | null {
+  const race = detectPrimaryRaceSessionForDay({
+    planDate: input.planDate,
+    routineConfig: input.routineConfig,
+    plannedSessions: input.plannedSessions,
+  });
+  if (!race) return null;
+  const weightKg = numFromUnknown(input.weightKg, 0);
+  if (weightKg < 35) return null;
+  const rule = getRaceDayPostRecoveryRule();
+  const raceEndMinutes = race.startMinutes + Math.max(45, race.durationMinutes);
+  const choPerKgG = choosePostRaceChoPerKg(race.durationMinutes, rule);
+  const choG = Math.round(weightKg * choPerKgG);
+  const proteinG = Math.round(weightKg * rule.proteinPerKgG);
+  const mctG = Math.round(weightKg * rule.mctPerKgG);
+  const totalKcal = Math.round(choG * 4 + proteinG * 4 + mctG * 8.3);
+  const mealSlot = resolvePostRaceRecoveryMealSlot({
+    raceEndMinutes,
+    activeSlots: input.activeMealSlots,
+    mealTimesBySlot: input.mealTimesBySlot,
+  });
+  return {
+    weightKg,
+    raceLabel: race.label,
+    raceEndMinutes,
+    recoveryTimeLocal: formatMinutesToLocalHHmm(raceEndMinutes + 15),
+    mealSlot,
+    choPerKgG,
+    choG,
+    proteinG,
+    mctG,
+    totalKcal,
+  };
+}
+
+export type RacePostRecoveryMealRow = {
+  key: string;
+  label: string;
+  kcal: number;
+  carbs: number;
+  protein: number;
+  fat: number;
+  timeLocal: string;
+};
+
+/** Ribilancia kcal/macros degli altri slot per tenere il totale giornaliero dopo il recovery post-gara. */
+export function rebalanceMealRowsForRacePostRecovery(
+  rows: RacePostRecoveryMealRow[],
+  recoveryCtx: RacePostRecoveryContext,
+): RacePostRecoveryMealRow[] {
+  const idx = rows.findIndex((r) => r.key === recoveryCtx.mealSlot);
+  if (idx < 0) return rows;
+  const next = rows.map((r) => ({ ...r }));
+  const before = Math.round(next[idx]!.kcal);
+  next[idx] = {
+    ...next[idx]!,
+    kcal: recoveryCtx.totalKcal,
+    carbs: recoveryCtx.choG,
+    protein: recoveryCtx.proteinG,
+    fat: recoveryCtx.mctG,
+    timeLocal: recoveryCtx.recoveryTimeLocal,
+  };
+  let delta = recoveryCtx.totalKcal - before;
+  if (Math.abs(delta) < 5) return next;
+
+  const isMealSlotKey = (s: string): s is MealSlotKey =>
+    (MEAL_SLOT_KEYS as readonly string[]).includes(s);
+
+  const candidates = next
+    .map((row, i) => ({ row, i }))
+    .filter(({ i, row }) => i !== idx && isMealSlotKey(row.key))
+    .sort((a, b) => b.row.kcal - a.row.kcal);
+
+  if (delta > 0) {
+    for (const c of candidates) {
+      const minKcal = c.row.key.startsWith("snack") ? 70 : 130;
+      const reducible = Math.max(0, Math.round(c.row.kcal - minKcal));
+      if (reducible <= 0) continue;
+      const take = Math.min(delta, reducible);
+      const ratio = Math.max(0.1, (c.row.kcal - take) / Math.max(1, c.row.kcal));
+      c.row.kcal = Math.round(c.row.kcal - take);
+      c.row.carbs = Math.round(c.row.carbs * ratio);
+      c.row.protein = Math.round(c.row.protein * ratio);
+      c.row.fat = Math.max(0, Math.round(c.row.fat * ratio));
+      next[c.i] = { ...c.row };
+      delta -= take;
+      if (delta <= 0) break;
+    }
+  } else {
+    const donor = candidates[0];
+    if (donor) {
+      const add = Math.abs(delta);
+      const ratio = (donor.row.kcal + add) / Math.max(1, donor.row.kcal);
+      donor.row.kcal = Math.round(donor.row.kcal + add);
+      donor.row.carbs = Math.round(donor.row.carbs * ratio);
+      donor.row.protein = Math.round(donor.row.protein * ratio);
+      donor.row.fat = Math.max(0, Math.round(donor.row.fat * ratio));
+      next[donor.i] = { ...donor.row };
+    }
+  }
+
+  return next;
+}
+
 /**
  * Assegna il pasto pre-gara allo slot Diet corretto:
  * gara ~10 → pasta alle 7 in colazione; gara ~13–14 → pasta alle 10–11 in pranzo.
@@ -290,6 +465,14 @@ export function racePreLunchContextLine(ctx: RacePreLunchDayContext): string {
     `Protocollo pre-gara: ${slotLabel} ${ctx.lunchTimeLocal} (${ctx.rule.hoursBeforeRace} h prima di ${ctx.raceStartLocal} · ${ctx.raceLabel}) — ` +
     `pasta o riso ${ctx.rule.carbsPerKgG} g CHO/kg (~${cho} g), grana ${ctx.rule.granaPadanoG.min}–${ctx.rule.granaPadanoG.max} g, olio ${ctx.rule.oliveOilG} g; ` +
     `se mancano kcal rispetto al target Diet → crostata/torta CHO (no verdure voluminose pre-gara).`
+  );
+}
+
+export function racePostRecoveryContextLine(ctx: RacePostRecoveryContext): string {
+  return (
+    `Recovery post-gara (${ctx.raceLabel}) nello slot ${ctx.mealSlot}: ` +
+    `CHO ${ctx.choPerKgG.toFixed(1)} g/kg (~${ctx.choG} g), PRO 0.6 g/kg (~${ctx.proteinG} g), ` +
+    `MCT 0.2 g/kg (~${ctx.mctG} g), totale ~${ctx.totalKcal} kcal.`
   );
 }
 
@@ -459,5 +642,50 @@ export function composeRacePreLunchMainMeal(
     items,
     lines,
     totalApproxKcal,
+  };
+}
+
+export function composeRacePostRecoveryMeal(
+  slot: MealSlotKey,
+  seed: number,
+  ctx: RacePostRecoveryContext,
+  dayCtx?: MediterraneanDayContext,
+): MediterraneanComposedMeal {
+  const deny = (dayCtx?.denyFragments ?? []).join(" ").toLowerCase();
+  const preferRice = /\briso\b|\brice\b/.test(deny) ? false : Math.abs(seed) % 2 === 0;
+  const choItem = preferRice
+    ? item(
+        "Riso bianco (post-gara)",
+        `${Math.max(70, Math.round(ctx.choG / 0.8))} g riso (peso a crudo) per ~${ctx.choG} g CHO`,
+        ctx.choG * 4,
+        "cho_heavy",
+        "Recovery post-gara: CHO rapidi/medi per ripristino glicogeno.",
+      )
+    : item(
+        "Carbo Recovery Mix",
+        `${ctx.choG} g CHO da miscela carbo recovery`,
+        ctx.choG * 4,
+        "cho_heavy",
+        "Recovery post-gara: miscela carbo ad alta disponibilita.",
+      );
+  const proteinItem = item(
+    "EAA / proteine isolate low-azoto",
+    `${ctx.proteinG} g quota proteica (EAA o isolate low azotate)`,
+    ctx.proteinG * 4,
+    "protein",
+    "Recovery post-gara: supporto sintesi proteica con carico azotato contenuto.",
+  );
+  const mctItem = item(
+    "MCT oil",
+    `${ctx.mctG} g MCT oil`,
+    Math.round(ctx.mctG * 8.3),
+    "fat",
+    "Recovery post-gara: quota lipidica rapida da MCT.",
+  );
+  const items = [choItem, proteinItem, mctItem];
+  return {
+    items,
+    lines: items.map((i) => i.portionHint),
+    totalApproxKcal: items.reduce((sum, i) => sum + i.approxKcal, 0),
   };
 }

@@ -103,10 +103,21 @@ Quando il calendario o la routine segnalano una **gara** (`type`/`sessionName`/n
    - se il target kcal dello slot Diet **non è coperto** dal nucleo sopra → **crostata o torta** ricca di CHO (no verdure voluminose pre-gara).
 5. **Implementazione:** `race-day-pre-race-lunch.ts` → `buildRacePreLunchDayContext` (`mealSlot`, `computeRaceDaySuppressedSlots`) → `composeRacePreLunchMainMeal` sullo slot corretto; **vietato** pathway boost su quel slot (`deterministic-meal-plan-from-request.ts`).
 
+## Regola 9 — Giorno gara: recovery post-gara (tutti gli atleti)
+
+Dopo la fine gara, nel **primo slot solido** ≥ fine gara + 15 min (tipicamente merenda PM, cena o spuntino serale):
+
+1. **CHO dinamici** (g/kg peso): gara **&lt; 120 min** → **1.0**; **120–180 min** → **1.2**; **&gt; 180 min** → **1.5**.
+2. **PRO** **0.6 g/kg** (EAA / proteine isolate low-azotate); **MCT** **0.2 g/kg** (olio MCT).
+3. **Composizione** (deterministico): riso o “Carbo Recovery Mix” per CHO; EAA/proteine per PRO; olio MCT — `composeRacePostRecoveryMeal` sullo slot recovery.
+4. **Energia:** `rebalanceMealRowsForRacePostRecovery` imposta target kcal/macros dello slot recovery e **compensa** sugli altri pasti per **non alterare** il totale kcal giornaliero Diet.
+5. **Implementazione:** `buildRacePostRecoveryContext` → `racePostRecovery` su request (`buildIntelligentMealPlanRequest`, `enrichIntelligentMealPlanRequestWithRaceDay`, `deterministic-meal-plan-from-request.ts`).
+
 ## Test minimi obbligatori su modifica
 
 - `resolve-nutrition-diet-day.test.ts`
 - `diet-meal-slot-budgets.test.ts`
 - `meal-plan-memory-guardrail.test.ts` — esercita TUTTI gli slot × dietType × kcal range e fallisce se un item del composer non risolve nella memoria canonica. **Copre anche Regola 7**: lunch/dinner CHO > 100g non usa pane come principale; lunch/dinner CHO ≥ 130g ha ≥ 2 item `cho_heavy`; breakfast CHO ≥ 130g ha ≥ 2 fonti CHO solide complesse.
-- `race-day-pre-race-lunch.test.ts` — protocollo pre-gara (orario 3 h, composizione pasta/riso + grana + olio).
+- `race-day-pre-race-lunch.test.ts` — protocollo pre-gara (orario 3 h, composizione pasta/riso + grana + olio) e post-gara (CHO per durata, recovery meal, rebalance kcal).
+- `enrich-meal-plan-request-race-day.test.ts` — enrich server pre-gara + post-recovery con totale kcal invariato.
 - `canonical-food-composition.test.ts` — regression test su rule INFER specifiche e scaling per nome alimento.

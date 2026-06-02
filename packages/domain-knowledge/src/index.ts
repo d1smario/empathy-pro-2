@@ -27,3 +27,5 @@ export function countResearchPlanHops(plan: ResearchPlan): number {
 
 /** Multiscale biological engine (ontology seed, graph, bindings, bottleneck view). */
 export * from "./multiscale";
+/** Interrogation catalog L1–L10 (stimulus profiles, domande canoniche). */
+export * from "./interrogation";

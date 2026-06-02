@@ -1,7 +1,12 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildRacePostRecoveryContext,
   buildRacePreLunchDayContext,
+  choosePostRaceChoPerKg,
+  composeRacePostRecoveryMeal,
+  getRaceDayPostRecoveryRule,
+  rebalanceMealRowsForRacePostRecovery,
   buildRacePreRaceKcalTopUpItem,
   computePreRaceLunchMinutes,
   dryStapleGramsForTargetCarbs,
@@ -159,4 +164,89 @@ test("computePreRaceLunchMinutes", () => {
   const start = parseLocalTimeToMinutes("13:30");
   assert.ok(start != null);
   assert.equal(formatMinutesToLocalHHmm(computePreRaceLunchMinutes(start!, 3)), "10:30");
+});
+
+test("post-recovery C: CHO dinamico 1.2 g/kg per gara 150 min", () => {
+  const ctx = buildRacePostRecoveryContext({
+    weightKg: 67,
+    planDate: "2026-06-02",
+    routineConfig: {
+      week_plan: {
+        Tue: {
+          day_mode: "race",
+          training1_start_time: "14:00",
+          training1_duration_minutes: 150,
+        },
+      },
+    },
+    plannedSessions: [{ duration_minutes: 150, type: "race", sessionName: "Gara test" }],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
+    mealTimesBySlot: {
+      breakfast: "07:00",
+      snack_am: "10:00",
+      lunch: "12:30",
+      snack_pm: "16:30",
+      dinner: "20:00",
+    },
+  });
+  assert.ok(ctx);
+  assert.equal(ctx!.choPerKgG, 1.2);
+  assert.equal(ctx!.choG, Math.round(67 * 1.2));
+  assert.equal(ctx!.proteinG, Math.round(67 * 0.6));
+  assert.equal(ctx!.mctG, Math.round(67 * 0.2));
+  assert.ok(ctx!.totalKcal > 0);
+  assert.equal(ctx!.mealSlot, "dinner");
+});
+
+test("composeRacePostRecoveryMeal: include CHO + PRO + MCT items", () => {
+  const ctx = {
+    weightKg: 67,
+    raceLabel: "Gara test",
+    raceEndMinutes: 16 * 60 + 30,
+    recoveryTimeLocal: "16:45",
+    mealSlot: "snack_pm",
+    choPerKgG: 1.2,
+    choG: Math.round(67 * 1.2),
+    proteinG: Math.round(67 * 0.6),
+    mctG: Math.round(67 * 0.2),
+    totalKcal: Math.round(Math.round(67 * 1.2) * 4 + Math.round(67 * 0.6) * 4 + Math.round(67 * 0.2) * 8.3),
+  } as const;
+  const meal = composeRacePostRecoveryMeal("snack_pm", 2, ctx);
+  const labels = meal.items.map((i) => i.name.toLowerCase()).join(" | ");
+  assert.match(labels, /riso|carbo recovery/);
+  assert.match(labels, /eaa|proteine isolate/);
+  assert.match(labels, /mct/);
+  assert.ok(meal.totalApproxKcal > 0);
+});
+
+test("CHO post-gara per durata: 90 / 150 / 200 min", () => {
+  const rule = getRaceDayPostRecoveryRule();
+  assert.equal(choosePostRaceChoPerKg(90, rule), 1.0);
+  assert.equal(choosePostRaceChoPerKg(150, rule), 1.2);
+  assert.equal(choosePostRaceChoPerKg(200, rule), 1.5);
+});
+
+test("rebalanceMealRowsForRacePostRecovery: totale kcal giorno invariato", () => {
+  const recovery = {
+    weightKg: 67,
+    raceLabel: "Gara",
+    raceEndMinutes: 16 * 60 + 30,
+    recoveryTimeLocal: "16:45",
+    mealSlot: "dinner" as const,
+    choPerKgG: 1.2,
+    choG: 80,
+    proteinG: 40,
+    mctG: 13,
+    totalKcal: 536,
+  };
+  const rows = [
+    { key: "breakfast", label: "Colazione", kcal: 600, carbs: 80, protein: 25, fat: 15, timeLocal: "07:00" },
+    { key: "lunch", label: "Pranzo", kcal: 900, carbs: 120, protein: 40, fat: 25, timeLocal: "11:00" },
+    { key: "dinner", label: "Cena", kcal: 800, carbs: 90, protein: 45, fat: 30, timeLocal: "20:00" },
+  ];
+  const before = rows.reduce((s, r) => s + r.kcal, 0);
+  const out = rebalanceMealRowsForRacePostRecovery(rows, recovery);
+  const after = out.reduce((s, r) => s + r.kcal, 0);
+  assert.equal(after, before);
+  assert.equal(out.find((r) => r.key === "dinner")!.kcal, 536);
 });

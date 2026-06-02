@@ -151,6 +151,7 @@ export async function buildDeterministicMealPlanFromRequest(
     denyFragments,
     suppressed,
     req.racePreLunch ?? undefined,
+    req.racePostRecovery ?? undefined,
   );
 
   /**

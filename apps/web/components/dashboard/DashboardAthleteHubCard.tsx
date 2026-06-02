@@ -1,9 +1,11 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import type { EmpathyApplicationPlaybook } from "@empathy/contracts";
 import { useAthleteOperationalHub } from "@/lib/dashboard/use-athlete-operational-hub";
 import { Pro2Link } from "@/components/ui/empathy";
 import type { OperationalSignalsBundle } from "@/lib/dashboard/resolve-operational-signals-bundle";
+import { fetchNutritionModuleContext } from "@/modules/nutrition/services/nutrition-module-api";
 
 function parseDynamicsBracketLine(line: string): { tag: string; body: string } | null {
   const m = line.match(/^\[([^\]]+)\]\s*(.*)$/s);
@@ -187,8 +189,31 @@ function HubRow({
 }
 
 export function DashboardAthleteHubCard() {
-  const { ctxLoading, loading, error: err, hub } = useAthleteOperationalHub();
+  const { athleteId, ctxLoading, loading, error: err, hub } = useAthleteOperationalHub();
+  const [playbookPreview, setPlaybookPreview] = useState<EmpathyApplicationPlaybook | null>(null);
   const showLoading = ctxLoading || loading;
+
+  useEffect(() => {
+    if (!athleteId || showLoading) return;
+    const today = new Date().toISOString().slice(0, 10);
+    let cancelled = false;
+    void fetchNutritionModuleContext({
+      athleteId,
+      from: today,
+      to: today,
+      pathwayDate: today,
+      mode: "pathway",
+    })
+      .then((snap) => {
+        if (!cancelled) setPlaybookPreview(snap.applicationPlaybook ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setPlaybookPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, showLoading]);
 
   return (
     <section
@@ -320,6 +345,27 @@ export function DashboardAthleteHubCard() {
                   Hint delta include {hub.expectedVsObtainedPreview.recentCoachTracesInHint} trace coach recenti.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+          {playbookPreview && playbookPreview.directives.length > 0 ? (
+            <div className="mb-4 rounded-xl border border-fuchsia-500/25 bg-fuchsia-950/15 px-4 py-3 text-sm text-gray-200">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="font-mono text-[0.65rem] uppercase tracking-wider text-fuchsia-300/90">
+                  Playbook EMPATHY · oggi
+                </p>
+                <Pro2Link href="/nutrition/integration" variant="ghost" className="text-[0.65rem] text-pink-300">
+                  Integrazione
+                </Pro2Link>
+              </div>
+              <p className="mt-2 text-xs text-gray-400">{playbookPreview.playbookHeadlineIt}</p>
+              <ul className="mt-2 list-none space-y-1.5 pl-0 text-[0.78rem]">
+                {playbookPreview.directives.slice(0, 3).map((d) => (
+                  <li key={d.id}>
+                    <span className="text-white">{d.headlineIt}</span>
+                    <span className="text-gray-400"> — {d.actionIt}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
           {hub.crossModuleDynamicsLines.length > 0 ? (

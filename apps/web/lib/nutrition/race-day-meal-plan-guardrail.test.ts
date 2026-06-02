@@ -109,3 +109,50 @@ test("guardrail: gara mattutina 10:00 → pre-gara in colazione alle 07:00", () 
   assert.equal(ctx!.mealSlot, "breakfast");
   assert.equal(ctx!.lunchTimeLocal, "07:00");
 });
+
+test("guardrail: enrich + composer — recovery post-gara su slot dedicato", () => {
+  const base: IntelligentMealPlanRequest = {
+    athleteId: "test",
+    planDate: "2026-06-02",
+    dietType: "omnivore",
+    contextLines: [],
+    trainingDayLines: [],
+    pathwayTimingLines: [],
+    slots: slots3(),
+    mealPlanSolverMeta: { dailyMealsKcalTotal: 2000, integrationLeverLines: [] },
+  };
+  const enriched = enrichIntelligentMealPlanRequestWithRaceDay({
+    request: base,
+    routineConfig: {
+      week_plan: { Tue: { day_mode: "race", training1_start_time: "14:00", training1_duration_minutes: 150 } },
+    },
+    weightKg: 67,
+    plannedSessions: [],
+  });
+  assert.ok(enriched.racePostRecovery);
+  const dayCtx = createMediterraneanDayContext(
+    "2026-06-02",
+    undefined,
+    undefined,
+    "omnivore",
+    undefined,
+    undefined,
+    enriched.racePreLunch!,
+    enriched.racePostRecovery!,
+  );
+  const recoverySlot = enriched.racePostRecovery!.mealSlot;
+  const meal = composeMediterraneanMeal(
+    recoverySlot,
+    {
+      kcal: enriched.racePostRecovery!.totalKcal,
+      carbsG: enriched.racePostRecovery!.choG,
+      proteinG: enriched.racePostRecovery!.proteinG,
+      fatG: enriched.racePostRecovery!.mctG,
+    },
+    dayCtx,
+  );
+  const names = meal.items.map((i) => i.name.toLowerCase()).join(" ");
+  assert.match(names, /riso|carbo recovery/);
+  assert.match(names, /eaa|proteine isolate/);
+  assert.match(names, /mct/);
+});

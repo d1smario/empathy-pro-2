@@ -5,6 +5,7 @@ import type {
   NutritionMetabolicEfficiencyGenerativeViewModel,
   NutrientInterrogationViewModel,
 } from "@/api/nutrition/contracts";
+import type { EmpathyApplicationPlaybook } from "@empathy/contracts";
 import { fetchNutritionModuleContext } from "@/modules/nutrition/services/nutrition-module-api";
 
 type WindowRef = { from: string; to: string } | null;
@@ -21,6 +22,7 @@ export function useNutritionHeavyModuleEnrichment(input: {
   onMetabolicModel: (model: NutritionMetabolicEfficiencyGenerativeViewModel | null) => void;
   onCrossDomainRoadmap?: (roadmap: CrossDomainInterpretationRoadmap | null) => void;
   onNutrientInterrogation?: (vm: NutrientInterrogationViewModel | null) => void;
+  onApplicationPlaybook?: (playbook: EmpathyApplicationPlaybook | null) => void;
   onPathwayRefresh?: (payload: {
     pathwayModulation: Awaited<ReturnType<typeof fetchNutritionModuleContext>>["pathwayModulation"];
     functionalMealSelector: Awaited<ReturnType<typeof fetchNutritionModuleContext>>["functionalMealSelector"];
@@ -47,6 +49,7 @@ export function useNutritionHeavyModuleEnrichment(input: {
         input.onMetabolicModel(snap.metabolicEfficiencyGenerativeModel ?? null);
         input.onCrossDomainRoadmap?.(snap.crossDomainInterpretationRoadmap ?? null);
         input.onNutrientInterrogation?.(snap.nutrientInterrogation ?? null);
+        input.onApplicationPlaybook?.(snap.applicationPlaybook ?? null);
         input.onPathwayRefresh?.({
           pathwayModulation: snap.pathwayModulation ?? null,
           functionalMealSelector: snap.functionalMealSelector ?? null,
@@ -69,6 +72,7 @@ export function useNutritionHeavyModuleEnrichment(input: {
     input.onMetabolicModel,
     input.onCrossDomainRoadmap,
     input.onNutrientInterrogation,
+    input.onApplicationPlaybook,
     input.onPathwayRefresh,
   ]);
 }

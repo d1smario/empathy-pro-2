@@ -7,8 +7,8 @@
  */
 
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
-import type { RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
-import { composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
+import type { RacePostRecoveryContext, RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
+import { composeRacePostRecoveryMeal, composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { CANONICAL_FOOD_TABLE, inferCanonicalFoodKeyPreferName, scaleCanonicalNutrientsToGrams } from "@/lib/nutrition/canonical-food-composition";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import {
@@ -48,6 +48,8 @@ export type MediterraneanDayContext = {
   suppressedSlots?: MealSlotKey[];
   /** Giorno gara: protocollo pre-gara canonico (pranzo 3 h prima, pasta/riso 3 g CHO/kg). */
   racePreLunch?: RacePreLunchDayContext;
+  /** Giorno gara: snack recovery post-gara (CHO/PRO/MCT g/kg) con quota energetica dedicata. */
+  racePostRecovery?: RacePostRecoveryContext;
 };
 
 /** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
@@ -61,6 +63,7 @@ export function createMediterraneanDayContext(
   denyFragments?: string[],
   suppressedSlots?: MealSlotKey[],
   racePreLunch?: RacePreLunchDayContext,
+  racePostRecovery?: RacePostRecoveryContext,
 ): MediterraneanDayContext {
   const w =
     weekStapleCounts && Object.keys(weekStapleCounts).length
@@ -85,6 +88,7 @@ export function createMediterraneanDayContext(
     denyFragments: deny,
     suppressedSlots: supp,
     racePreLunch,
+    racePostRecovery,
   };
 }
 
@@ -861,6 +865,9 @@ export function composeMediterraneanMeal(
   }
   if (ctx?.racePreLunch && slot === ctx.racePreLunch.mealSlot) {
     return composeRacePreLunchMainMeal(slot, macros, seed, ctx.racePreLunch, ctx);
+  }
+  if (ctx?.racePostRecovery && slot === ctx.racePostRecovery.mealSlot) {
+    return composeRacePostRecoveryMeal(slot, seed, ctx.racePostRecovery, ctx);
   }
   return composeMainMeal(slot, macros, seed, ctx);
 }

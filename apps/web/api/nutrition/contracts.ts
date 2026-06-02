@@ -14,8 +14,13 @@ import type {
   TrainingBioenergeticModulationViewModel,
 } from "@/api/training/contracts";
 import type { NutritionDailyEnergyModel } from "@/lib/empathy/schemas";
-import type { CrossDomainInterpretationRoadmap } from "@empathy/contracts";
-export type { CrossDomainInterpretationRoadmap };
+import type {
+  CrossDomainInterpretationRoadmap,
+  EmpathyApplicationPlaybook,
+  EmpathyInterrogationBundle,
+  EmpathyInterrogationMap,
+} from "@empathy/contracts";
+export type { CrossDomainInterpretationRoadmap, EmpathyApplicationPlaybook, EmpathyInterrogationBundle, EmpathyInterrogationMap };
 
 export type NutritionPlanVm = {
   date: string;
@@ -316,6 +321,10 @@ export type NutritionModuleViewModel = {
   crossDomainInterpretationRoadmap?: CrossDomainInterpretationRoadmap | null;
   /** Interrogazione nutrienti multiscala — solo con `includeHeavy=1` e `pathwayDate`. */
   nutrientInterrogation?: NutrientInterrogationViewModel | null;
+  /** Mappa interrogativa L1–L10 quando `pathwayDate` in finestra. */
+  interrogationMap?: EmpathyInterrogationMap | null;
+  /** Consigli nutrizione, fueling, timing — stesso giorno di `pathwayDate`. */
+  applicationPlaybook?: EmpathyApplicationPlaybook | null;
   error?: string | null;
 };
 

@@ -44,7 +44,8 @@ import type {
   NutritionPerformanceIntegrationDials,
   UsdaRichFoodItemViewModel,
 } from "@/api/nutrition/contracts";
-import type { CrossDomainInterpretationRoadmap } from "@empathy/contracts";
+import type { CrossDomainInterpretationRoadmap, EmpathyApplicationPlaybook } from "@empathy/contracts";
+import { mergePlaybookIntoMealPlanRequest } from "@/lib/interpretation/materialize-application-playbook";
 import type {
   TrainingAdaptationLoopViewModel,
   TrainingBioenergeticModulationViewModel,
@@ -801,6 +802,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     useState<NutritionMetabolicEfficiencyGenerativeViewModel | null>(null);
   const [crossDomainInterpretationRoadmap, setCrossDomainInterpretationRoadmap] =
     useState<CrossDomainInterpretationRoadmap | null>(null);
+  const [applicationPlaybook, setApplicationPlaybook] = useState<EmpathyApplicationPlaybook | null>(null);
   const [nutrientInterrogation, setNutrientInterrogation] = useState<NutrientInterrogationViewModel | null>(null);
   const [functionalMealSelector, setFunctionalMealSelector] = useState<FunctionalMealSelectorViewModel | null>(null);
   const [pathwayModulation, setPathwayModulation] = useState<NutritionPathwayModulationViewModel | null>(null);
@@ -981,6 +983,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         serverSelectorPathwayDateRef.current = selectedPlanDate;
         setFunctionalMealSelector(snap.functionalMealSelector ?? null);
         setPathwayModulation(snap.pathwayModulation ?? null);
+        setApplicationPlaybook(snap.applicationPlaybook ?? null);
         setServerDailyEnergyModel(snap.dailyEnergyModel ?? null);
         serverDailyEnergyDateRef.current = selectedPlanDate;
       } catch {
@@ -1004,6 +1007,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     onMetabolicModel: setMetabolicEfficiencyGenerativeModel,
     onCrossDomainRoadmap: setCrossDomainInterpretationRoadmap,
     onNutrientInterrogation: setNutrientInterrogation,
+    onApplicationPlaybook: setApplicationPlaybook,
     onPathwayRefresh: (payload) => {
       if (payload.pathwayModulation) setPathwayModulation(payload.pathwayModulation);
       if (payload.functionalMealSelector) setFunctionalMealSelector(payload.functionalMealSelector);
@@ -1038,6 +1042,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
         setPathwayModulation(null);
+        setApplicationPlaybook(null);
         setNutritionApplicationDirective(null);
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
@@ -1081,6 +1086,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setMetabolicEfficiencyGenerativeModel(null);
         setFunctionalMealSelector(null);
         setPathwayModulation(null);
+        setApplicationPlaybook(null);
         setNutritionApplicationDirective(null);
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
@@ -1131,6 +1137,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const finalPlanDate = clampIsoDay(persisted ?? nextDate);
       setFunctionalMealSelector(null);
       setPathwayModulation(null);
+      setApplicationPlaybook(null);
       setServerDailyEnergyModel(null);
       serverDailyEnergyDateRef.current = null;
       nutritionModuleWindowRef.current = { from: startKey, to: endKey };
@@ -2231,11 +2238,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       trainingDayLines: trainingDayLinesForMealPlan,
       integrationLeverLines: mealPlanIntegrationSolverLines,
     });
+    const withPlaybook = mergePlaybookIntoMealPlanRequest(base, applicationPlaybook);
     const weekId = isoWeekBucketId(selectedPlanDate);
     const payload = readMealRotationWeekPayload(athleteId, weekId);
     const weeklyStapleCounts = aggregateStapleCountsForWeek(payload, selectedPlanDate);
     return {
-      ...base,
+      ...withPlaybook,
       ...(Object.keys(weeklyStapleCounts).length ? { weeklyStapleCounts } : {}),
     };
   }, [
@@ -2253,6 +2261,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     coachSessionFoodExclusions,
     selectedPlanSessions,
     nutritionApplicationDirective,
+    applicationPlaybook,
     diaryTwinContextLinesForMealPlan,
   ]);
 
@@ -4154,6 +4163,56 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                       : ""}
                     . Questo segnale modula le leve training-nutrizione ma non sostituisce i motori fisiologici.
                   </p>
+                </details>
+              ) : null}
+              {applicationPlaybook ? (
+                <details className="collapsible-card" style={{ marginBottom: "10px" }}>
+                  <summary>+ Playbook applicazione · EMPATHY</summary>
+                  <p className="nutrition-muted mb-2 mt-2 text-[0.74rem] leading-snug">
+                    {applicationPlaybook.playbookHeadlineIt}
+                  </p>
+                  {applicationPlaybook.directives.length ? (
+                    <ul className="mb-3 list-none space-y-2 pl-0 text-[0.78rem]">
+                      {applicationPlaybook.directives.slice(0, 3).map((d) => (
+                        <li
+                          key={d.id}
+                          className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-950/10 px-3 py-2"
+                        >
+                          <strong className="text-white">{d.headlineIt}</strong>
+                          <p className="nutrition-muted mt-1 mb-0 text-[0.74rem]">{d.actionIt}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {applicationPlaybook.nutritionAdvice.length ? (
+                    <ul className="mb-3 flex flex-wrap gap-2 list-none pl-0 text-[0.72rem]">
+                      {applicationPlaybook.nutritionAdvice.slice(0, 4).map((n) => (
+                        <li
+                          key={n.id}
+                          className="nutrition-ui-chip max-w-full border border-white/10 bg-white/[0.03] px-2 py-1"
+                          title={n.actionIt}
+                        >
+                          {n.headlineIt}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {applicationPlaybook.timingProtocols.length ? (
+                    <ul className="mb-3 list-none space-y-1 pl-0 text-[0.72rem] text-gray-400">
+                      {applicationPlaybook.timingProtocols.slice(0, 4).map((tp) => (
+                        <li key={tp.id}>
+                          [{tp.pathwayLabel ?? "Protocollo"}] {tp.windowLabelIt}: {tp.actionsIt.join(" · ")}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                  {applicationPlaybook.fuelingAdvice ? (
+                    <p className="nutrition-muted mb-0 text-[0.72rem] leading-snug">
+                      Fueling · {applicationPlaybook.fuelingAdvice.sessionLabel}:{" "}
+                      {applicationPlaybook.fuelingAdvice.protocolNotes.join(" · ")}
+                    </p>
+                  ) : null}
+                  <p className="nutrition-muted mt-2 mb-0 text-[0.68rem] opacity-80">{applicationPlaybook.disclaimerIt}</p>
                 </details>
               ) : null}
               {crossDomainInterpretationRoadmap ? (

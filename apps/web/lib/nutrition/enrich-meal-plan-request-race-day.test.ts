@@ -83,3 +83,26 @@ test("enrich meal plan — pranzo pre-gara senza sedute in calendario", () => {
   assert.equal(lunch?.scheduledTimeLocal, "11:00");
   assert.match(out.contextLines.join(" "), /Protocollo pre-gara/);
 });
+
+test("enrich meal plan — recovery post-gara su cena con totale kcal invariato", () => {
+  const req = baseRequest("2026-06-02");
+  const totalBefore = req.slots.reduce((s, slot) => s + slot.targetKcal, 0);
+  const out = enrichIntelligentMealPlanRequestWithRaceDay({
+    request: req,
+    routineConfig: {
+      week_plan: {
+        Tue: { day_mode: "race", training1_start_time: "14:00", training1_duration_minutes: 150 },
+      },
+    },
+    weightKg: 67,
+    plannedSessions: [],
+  });
+  assert.ok(out.racePostRecovery);
+  assert.equal(out.racePostRecovery!.mealSlot, "dinner");
+  const dinner = out.slots.find((s) => s.slot === "dinner");
+  assert.equal(dinner?.targetKcal, out.racePostRecovery!.totalKcal);
+  assert.equal(dinner?.targetCarbsG, out.racePostRecovery!.choG);
+  const totalAfter = out.slots.reduce((s, slot) => s + slot.targetKcal, 0);
+  assert.equal(totalAfter, totalBefore);
+  assert.match(out.contextLines.join(" "), /Recovery post-gara/);
+});

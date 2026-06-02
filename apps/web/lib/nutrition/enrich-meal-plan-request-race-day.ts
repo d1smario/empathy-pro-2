@@ -6,10 +6,13 @@
 import type { IntelligentMealPlanRequest, IntelligentMealPlanRequestSlot } from "@/lib/nutrition/intelligent-meal-plan-types";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
+  buildRacePostRecoveryContext,
   buildRacePreLunchDayContext,
   computeRaceDaySuppressedSlots,
   mapPlannedSessionsForRaceDetection,
+  racePostRecoveryContextLine,
   racePreLunchContextLine,
+  rebalanceMealRowsForRacePostRecovery,
   type PlannedSessionForRaceDetection,
 } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { buildRoutineSyntheticPlannedSessionsForRaceDetection } from "@/lib/nutrition/routine-race-day-context";
@@ -86,7 +89,7 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
     contextLine,
   ];
 
-  const slots: IntelligentMealPlanRequestSlot[] = input.request.slots.map((slot) =>
+  let slots: IntelligentMealPlanRequestSlot[] = input.request.slots.map((slot) =>
     slot.slot === racePreLunch.mealSlot
       ? { ...slot, scheduledTimeLocal: racePreLunch.lunchTimeLocal }
       : slot,
@@ -95,6 +98,40 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
   const mealTimesBySlot = Object.fromEntries(
     slots.map((s) => [s.slot, s.scheduledTimeLocal] as const),
   ) as Partial<Record<MealSlotKey, string>>;
+  const racePostRecovery = buildRacePostRecoveryContext({
+    weightKg: input.weightKg,
+    planDate: input.request.planDate,
+    routineConfig: routine,
+    plannedSessions: planned,
+    activeMealSlots: activeSlots,
+    mealTimesBySlot,
+  });
+  if (racePostRecovery) {
+    const rows = slots.map((s) => ({
+      key: s.slot,
+      label: s.labelIt,
+      kcal: s.targetKcal,
+      carbs: s.targetCarbsG,
+      protein: s.targetProteinG,
+      fat: s.targetFatG,
+      timeLocal: s.scheduledTimeLocal,
+    }));
+    const rebalanced = rebalanceMealRowsForRacePostRecovery(rows, racePostRecovery);
+    const byKey = new Map(rebalanced.map((r) => [r.key, r] as const));
+    slots = slots.map((slot) => {
+      const row = byKey.get(slot.slot);
+      if (!row) return slot;
+      return {
+        ...slot,
+        scheduledTimeLocal: row.timeLocal,
+        targetKcal: Math.max(50, Math.round(row.kcal)),
+        targetCarbsG: Math.max(0, Math.round(row.carbs)),
+        targetProteinG: Math.max(0, Math.round(row.protein)),
+        targetFatG: Math.max(0, Math.round(row.fat)),
+      };
+    });
+  }
+
   const raceSuppressed = computeRaceDaySuppressedSlots({
     ctx: racePreLunch,
     activeSlots,
@@ -102,18 +139,29 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
   });
   const suppressedSlots = [...new Set([...(input.request.suppressedSlots ?? []), ...raceSuppressed])];
 
+  const integrationLeverLines = [
+    ...(input.request.mealPlanSolverMeta?.integrationLeverLines ?? []),
+    `Protocollo pre-gara attivo (${racePreLunch.mealSlot} ${racePreLunch.lunchTimeLocal} · routine race).`,
+    ...(racePostRecovery
+      ? [
+          `Recovery post-gara (${racePostRecovery.mealSlot} ~${racePostRecovery.recoveryTimeLocal} · CHO ${racePostRecovery.choPerKgG} g/kg).`,
+        ]
+      : []),
+  ].slice(0, 16);
+
   return {
     ...input.request,
     slots,
-    contextLines,
+    contextLines: [
+      ...contextLines,
+      ...(racePostRecovery ? [racePostRecoveryContextLine(racePostRecovery)] : []),
+    ],
     racePreLunch,
+    racePostRecovery: racePostRecovery ?? undefined,
     suppressedSlots: suppressedSlots.length ? suppressedSlots : undefined,
     mealPlanSolverMeta: {
       ...input.request.mealPlanSolverMeta,
-      integrationLeverLines: [
-        ...(input.request.mealPlanSolverMeta?.integrationLeverLines ?? []),
-        `Protocollo pre-gara attivo (${racePreLunch.mealSlot} ${racePreLunch.lunchTimeLocal} · routine race).`,
-      ].slice(0, 16),
+      integrationLeverLines,
     },
   };
 }

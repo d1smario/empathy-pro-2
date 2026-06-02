@@ -32,6 +32,8 @@ import {
 } from "@/lib/nutrition/nutrition-module-profile-merge";
 import { buildNutritionModuleDailyEnergyModel } from "@/lib/nutrition/nutrition-module-daily-energy";
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
+import { resolveEmpathyInterrogationBundle } from "@/lib/interpretation/resolve-empathy-interrogation-bundle";
+import type { EmpathyInterrogationBundle } from "@empathy/contracts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -225,6 +227,7 @@ export async function GET(req: NextRequest) {
     let healthPanelModulators: ReturnType<typeof buildHealthPanelModulatorBridge> | null = null;
     let researchTracesResolved = researchTraceSummaries;
     let multiscaleResearchSynced = false;
+    let empathyInterrogationBundle: EmpathyInterrogationBundle | null = null;
 
     const metabolicEfficiencyGenerativeModel =
       includeHeavy && adaptationGuidance && bioenergeticModulation && adaptationLoop
@@ -317,6 +320,28 @@ export async function GET(req: NextRequest) {
         recoverySummary,
         nutritionPerformanceIntegration,
       });
+
+      if (pathwayModulation) {
+        const plannedSessionsForInterrogation = rowsForDay.map((row) => {
+          const bs = parsePro2BuilderSessionFromNotes(row.notes ?? null);
+          return {
+            label: String(bs?.sessionName ?? bs?.discipline ?? row.type ?? "Sessione"),
+            adaptationTarget: bs?.adaptationTarget ?? null,
+          };
+        });
+        empathyInterrogationBundle = resolveEmpathyInterrogationBundle({
+          athleteId,
+          anchorDate: pathwayDateParam,
+          plannedSessions: plannedSessionsForInterrogation,
+          pathwayModulation,
+          multiscaleBridge,
+          healthLabBridge,
+          healthPanelModulators,
+          recoverySummary,
+          nutritionPerformanceIntegration,
+          dailyEnergyModel,
+        });
+      }
     }
 
     if (mode === "pathway") {
@@ -347,6 +372,8 @@ export async function GET(req: NextRequest) {
         researchTraceSummaries: [],
         crossDomainInterpretationRoadmap: null,
         nutrientInterrogation: null,
+        interrogationMap: empathyInterrogationBundle?.interrogationMap ?? null,
+        applicationPlaybook: empathyInterrogationBundle?.applicationPlaybook ?? null,
         error: null,
       });
       res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
@@ -473,6 +500,8 @@ export async function GET(req: NextRequest) {
       researchTraceSummaries: researchTracesResolved,
       crossDomainInterpretationRoadmap,
       nutrientInterrogation,
+      interrogationMap: empathyInterrogationBundle?.interrogationMap ?? null,
+      applicationPlaybook: empathyInterrogationBundle?.applicationPlaybook ?? null,
       error,
     });
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
