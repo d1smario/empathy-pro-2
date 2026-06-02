@@ -612,7 +612,9 @@ function ReasoningDashboardPanel({
 }
 
 export default function BioenergeticTransparencyHubPageView() {
-  const { athleteId, ctxLoading, loading, error: err, hub, refetch } = useAthleteOperationalHub();
+  const { athleteId, ctxLoading, loading, error: err, hub, refetch } = useAthleteOperationalHub({
+    signals: "eager",
+  });
   const [reasoning, setReasoning] = useState<ReasoningDashboardOk | null>(null);
   const [reasoningLoading, setReasoningLoading] = useState(false);
   const [reasoningErr, setReasoningErr] = useState<string | null>(null);

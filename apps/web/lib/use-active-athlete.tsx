@@ -117,11 +117,11 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
 
     async function readStableUser() {
       if (!supabase) return null;
-      const attempts = 4;
+      const attempts = 2;
       for (let index = 0; index < attempts; index += 1) {
         const { data } = await supabase.auth.getUser();
         if (data.user) return data.user;
-        await new Promise((resolve) => setTimeout(resolve, 120 + index * 80));
+        await new Promise((resolve) => setTimeout(resolve, 80 + index * 60));
       }
       return null;
     }
@@ -287,26 +287,28 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
         const guessedLastName =
           typeof user.user_metadata?.last_name === "string" ? user.user_metadata.last_name : null;
 
-        const bootstrap = await fetch("/api/access/ensure-profile", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify({
-            userId: user.id,
-            role: "private",
-            athleteId: resolvedAthleteId,
-            email: user.email ?? null,
-            firstName: guessedFirstName,
-            lastName: guessedLastName,
-          }),
-        })
-          .then(async (response) => {
-            if (!response.ok) return null;
-            return (await response.json()) as { athleteId?: string | null; role?: AppRole };
+        if (!profile?.athlete_id) {
+          const bootstrap = await fetch("/api/access/ensure-profile", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({
+              userId: user.id,
+              role: "private",
+              athleteId: resolvedAthleteId,
+              email: user.email ?? null,
+              firstName: guessedFirstName,
+              lastName: guessedLastName,
+            }),
           })
-          .catch(() => null);
-        if (!active) return;
-        resolvedAthleteId = bootstrap?.athleteId ?? resolvedAthleteId;
+            .then(async (response) => {
+              if (!response.ok) return null;
+              return (await response.json()) as { athleteId?: string | null; role?: AppRole };
+            })
+            .catch(() => null);
+          if (!active) return;
+          resolvedAthleteId = bootstrap?.athleteId ?? resolvedAthleteId;
+        }
 
         /**
          * Identità canonica: non ricalcolare l'atleta attivo scansionando athlete_profiles per email.

@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "node ../../scripts/next-dev.mjs",
     "dev:3000": "node ../../node_modules/next/dist/bin/next dev . -p 3000",
+    "analyze": "ANALYZE=true next build",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

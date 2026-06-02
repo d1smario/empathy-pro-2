@@ -24,35 +24,21 @@ export async function fetchUsdaFoodsForCatalogIds(catalogIds: string[]): Promise
     return { foods: [], error: null, usdaConfigured: true };
   }
 
-  const runs = await Promise.all(
-    ids.map(async (catalogId) => {
-      const res = await fetch(`/api/nutrition/usda-by-nutrient?catalogId=${encodeURIComponent(catalogId)}`, {
-        cache: "no-store",
-      });
-      const j = (await res.json().catch(() => ({}))) as {
-        foods?: UsdaRichFoodItemViewModel[];
-        error?: string;
-      };
-      return { status: res.status, j };
-    }),
-  );
-
-  let error: string | null = null;
-  let usdaConfigured = true;
-  const foods: UsdaRichFoodItemViewModel[] = [];
-  for (const r of runs) {
-    if (r.status === 503) {
-      usdaConfigured = false;
-      error = r.j.error ?? "USDA_API_KEY non configurata (server).";
-    } else if (r.status < 200 || r.status >= 300) {
-      error = r.j.error ?? error ?? "Errore USDA.";
-    }
-    foods.push(...(r.j.foods ?? []));
-  }
+  const res = await fetch(`/api/nutrition/usda-by-nutrient?catalogIds=${encodeURIComponent(ids.join(","))}`, {
+    cache: "no-store",
+  });
+  const j = (await res.json().catch(() => ({}))) as {
+    foods?: UsdaRichFoodItemViewModel[];
+    error?: string;
+  };
+  const foods = j.foods ?? [];
+  const usdaConfigured = res.status !== 503;
+  const error =
+    res.ok ? (j.error ?? null) : j.error ?? (usdaConfigured ? "Errore USDA." : "USDA_API_KEY non configurata (server).");
 
   return {
     foods: mergeAndRankFoods(foods, 12),
-    error: usdaConfigured ? error : error,
+    error,
     usdaConfigured,
   };
 }

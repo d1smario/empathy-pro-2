@@ -16,6 +16,7 @@ export function useNutritionHeavyModuleEnrichment(input: {
   selectedPlanDate: string;
   nutritionModuleWindow: WindowRef;
   nutritionContextVersion: number;
+  enabled?: boolean;
   onResearchTraces: (rows: KnowledgeResearchTraceSummary[]) => void;
   onMetabolicModel: (model: NutritionMetabolicEfficiencyGenerativeViewModel | null) => void;
   onCrossDomainRoadmap?: (roadmap: CrossDomainInterpretationRoadmap | null) => void;
@@ -27,6 +28,7 @@ export function useNutritionHeavyModuleEnrichment(input: {
   }) => void;
 }) {
   useEffect(() => {
+    if (input.enabled === false) return;
     if (!input.athleteId || input.loading) return;
     const w = input.nutritionModuleWindow;
     if (!w) return;

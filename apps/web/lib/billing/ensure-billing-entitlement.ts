@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createStripeServerClient } from "@empathy/integrations-stripe";
+import { unstable_cache } from "next/cache";
 import {
   loadUserAccessEntitlement,
   type UserAccessEntitlement,
@@ -20,6 +21,26 @@ export type EnsureBillingEntitlementOptions = {
   /** Se true, interroga Stripe quando manca accesso (default). */
   repairFromStripe?: boolean;
 };
+
+const loadUserAccessEntitlementForAuthUserCached = unstable_cache(
+  async (userId: string) => {
+    const admin = createSupabaseAdminClient();
+    const cookieClient = createSupabaseCookieClient();
+    const db = admin ?? cookieClient;
+    if (!db) {
+      return {
+        hasOperatorAccess: false,
+        hasAthleteAccess: false,
+        source: "none",
+        validUntil: null,
+        label: "DB non configurato",
+      } satisfies UserAccessEntitlement;
+    }
+    return loadUserAccessEntitlement(db, userId);
+  },
+  ["billing", "user-access-entitlement-v2"],
+  { revalidate: 30 },
+);
 
 /**
  * Carica entitlement e, se manca accesso atleta, sync immediato da Stripe
@@ -88,5 +109,14 @@ export async function ensureBillingEntitlementForAuthUser(
       label: "DB non configurato",
     };
   }
+  const baseEntitlement = await loadUserAccessEntitlementForAuthUserCached(userId);
+  if (baseEntitlement.hasAthleteAccess || baseEntitlement.hasOperatorAccess) {
+    return baseEntitlement;
+  }
+
+  if (options?.repairFromStripe === false) {
+    return baseEntitlement;
+  }
+
   return ensureBillingEntitlementForUser(db, userId, email, options);
 }

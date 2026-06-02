@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Pro2Button } from "@/components/ui/empathy";
 import { clearPro2ClientSessionKeys } from "@/lib/app-session";
+import { useActiveAthlete } from "@/lib/use-active-athlete";
 import { createEmpathyBrowserSupabase } from "@/lib/supabase/browser";
 
 /**
@@ -15,35 +16,10 @@ export function SidebarSessionActions() {
   const pathname = usePathname() ?? "/dashboard";
   const router = useRouter();
   const t = useTranslations("Session");
-  const [configured, setConfigured] = useState<boolean | null>(null);
-  const [signedIn, setSignedIn] = useState(false);
+  const { loading, signedIn } = useActiveAthlete();
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch("/api/auth/session", { cache: "no-store" });
-        const json = (await res.json()) as {
-          ok?: boolean;
-          configured?: boolean;
-          signedIn?: boolean;
-        };
-        if (cancelled) return;
-        if (json?.ok === true) {
-          setConfigured(Boolean(json.configured));
-          setSignedIn(Boolean(json.signedIn));
-        } else {
-          setConfigured(null);
-        }
-      } catch {
-        if (!cancelled) setConfigured(null);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pathname]);
+  const configured = useMemo(() => Boolean(createEmpathyBrowserSupabase()), []);
 
   const signOut = useCallback(async () => {
     setBusy(true);
@@ -63,7 +39,7 @@ export function SidebarSessionActions() {
     );
   }
 
-  if (configured === null) {
+  if (loading) {
     return <div className="h-9 animate-pulse rounded-xl bg-white/5" aria-hidden />;
   }
 

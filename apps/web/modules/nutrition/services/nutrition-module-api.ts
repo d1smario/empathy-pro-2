@@ -5,6 +5,10 @@ import { fetchWithTimeout } from "@/lib/http/fetch-with-timeout";
 export type NutritionModuleContext = NutritionModuleViewModel;
 export type { NutritionPlannedWorkoutRow };
 
+const NUTRITION_MODULE_TTL_MS = 15_000;
+const nutritionModuleCache = new Map<string, { at: number; value: NutritionModuleContext }>();
+const nutritionModuleInflight = new Map<string, Promise<NutritionModuleContext>>();
+
 export async function fetchNutritionModuleContext(input: {
   athleteId: string;
   from: string;
@@ -13,7 +17,25 @@ export async function fetchNutritionModuleContext(input: {
   pathwayDate?: string;
   /** Research traces, metabolic model, cross-domain roadmap (default off per latenza). */
   includeHeavy?: boolean;
+  /** Riduce payload/calcolo lato server per casi specifici. */
+  mode?: "light" | "pathway";
 }): Promise<NutritionModuleContext> {
+  const cacheKey = JSON.stringify({
+    athleteId: input.athleteId,
+    from: input.from,
+    to: input.to,
+    pathwayDate: input.pathwayDate ?? null,
+    includeHeavy: Boolean(input.includeHeavy),
+    mode: input.mode ?? null,
+  });
+  const cached = nutritionModuleCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < NUTRITION_MODULE_TTL_MS) {
+    return cached.value;
+  }
+  const inflight = nutritionModuleInflight.get(cacheKey);
+  if (inflight) return inflight;
+
+  const run = (async () => {
   const params = new URLSearchParams({
     athleteId: input.athleteId,
     from: input.from,
@@ -22,6 +44,7 @@ export async function fetchNutritionModuleContext(input: {
   const pd = input.pathwayDate?.trim();
   if (pd) params.set("pathwayDate", pd);
   if (input.includeHeavy) params.set("includeHeavy", "1");
+  if (input.mode) params.set("mode", input.mode);
   let response: Response;
   try {
     response = await fetchWithTimeout(`/api/nutrition/module?${params.toString()}`, {
@@ -79,7 +102,17 @@ export async function fetchNutritionModuleContext(input: {
       error: payload.error ?? "Nutrition module fetch failed",
     };
   }
-  return (await response.json()) as NutritionModuleContext;
+  const ok = (await response.json()) as NutritionModuleContext;
+  if (!ok.error) {
+    nutritionModuleCache.set(cacheKey, { at: Date.now(), value: ok });
+  }
+  return ok;
+  })().finally(() => {
+    nutritionModuleInflight.delete(cacheKey);
+  });
+
+  nutritionModuleInflight.set(cacheKey, run);
+  return run;
 }
 
 

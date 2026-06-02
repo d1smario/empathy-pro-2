@@ -1,5 +1,4 @@
 import type { IntelligentMealPlanItemOut, IntelligentMealPlanSlotOut } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 
 /**
  * Macro per voce.
@@ -25,16 +24,26 @@ export function approxMacrosForPlanItem(item: IntelligentMealPlanItemOut): {
       fatG: round1(n.fatG),
     };
   }
-  const { nutrients } = nutrientsForMealPlanItem({
-    name: item.name,
-    portionHint: item.portionHint ?? "",
-    approxKcal: item.approxKcal,
-  });
+  const kcal = Math.max(1, Math.round(item.approxKcal ?? 0));
+  const role = item.macroRole ?? "mixed";
+  const macroSplit =
+    role === "cho_heavy"
+      ? { carbsPct: 0.72, proteinPct: 0.14, fatPct: 0.14 }
+      : role === "protein"
+        ? { carbsPct: 0.25, proteinPct: 0.45, fatPct: 0.3 }
+        : role === "fat"
+          ? { carbsPct: 0.18, proteinPct: 0.18, fatPct: 0.64 }
+          : role === "veg"
+            ? { carbsPct: 0.45, proteinPct: 0.2, fatPct: 0.35 }
+            : { carbsPct: 0.5, proteinPct: 0.2, fatPct: 0.3 };
+  const carbsG = (kcal * macroSplit.carbsPct) / 4;
+  const proteinG = (kcal * macroSplit.proteinPct) / 4;
+  const fatG = (kcal * macroSplit.fatPct) / 9;
   return {
-    kcal: Math.round(nutrients.kcal),
-    carbsG: round1(nutrients.carbsG),
-    proteinG: round1(nutrients.proteinG),
-    fatG: round1(nutrients.fatG),
+    kcal,
+    carbsG: round1(carbsG),
+    proteinG: round1(proteinG),
+    fatG: round1(fatG),
   };
 }
 

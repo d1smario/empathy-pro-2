@@ -972,9 +972,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       try {
         const snap = await fetchNutritionModuleContext({
           athleteId,
-          from: w.from,
-          to: w.to,
+          from: selectedPlanDate,
+          to: selectedPlanDate,
           pathwayDate: selectedPlanDate,
+          mode: "pathway",
         });
         if (cancelled || snap.error) return;
         serverSelectorPathwayDateRef.current = selectedPlanDate;
@@ -998,6 +999,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     selectedPlanDate,
     nutritionModuleWindow: nutritionModuleWindowRef.current,
     nutritionContextVersion,
+    enabled: pathname?.includes("/nutrition/predictor") || pathname?.includes("/nutrition/integration"),
     onResearchTraces: setResearchTraceSummaries,
     onMetabolicModel: setMetabolicEfficiencyGenerativeModel,
     onCrossDomainRoadmap: setCrossDomainInterpretationRoadmap,
@@ -1071,7 +1073,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         athleteId,
         from: startKey,
         to: endKey,
-        pathwayDate: pathwayDateGuess,
+        mode: "light",
       });
       if (moduleData.error) {
         setError(moduleData.error || "Errore caricamento");
@@ -1127,12 +1129,12 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
       const persisted = readPersistedNutritionPlanDate(athleteId);
       const finalPlanDate = clampIsoDay(persisted ?? nextDate);
-      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
-      setPathwayModulation(moduleData.pathwayModulation ?? null);
-      setServerDailyEnergyModel(moduleData.dailyEnergyModel ?? null);
-      serverDailyEnergyDateRef.current = finalPlanDate;
+      setFunctionalMealSelector(null);
+      setPathwayModulation(null);
+      setServerDailyEnergyModel(null);
+      serverDailyEnergyDateRef.current = null;
       nutritionModuleWindowRef.current = { from: startKey, to: endKey };
-      serverSelectorPathwayDateRef.current = finalPlanDate;
+      serverSelectorPathwayDateRef.current = null;
       setSelectedPlanDate(finalPlanDate);
       setLoading(false);
     }
@@ -1359,6 +1361,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   );
 
   useEffect(() => {
+    const isMealPlanRoute =
+      (pathname ?? "").replace(/\/$/, "") === "/nutrition" ||
+      (pathname ?? "").replace(/\/$/, "") === "/nutrition/meal-plan";
+    if (!isMealPlanRoute) return;
     if (!athleteId) return;
     const slots = pathwayTargetsByMealSlot;
     const keys: PathwayMealSlotKey[] = activeDietMealSlotKeys;
@@ -1405,17 +1411,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return () => {
       cancelled = true;
     };
-  }, [athleteId, pathwayTargetsByMealSlot, activeDietMealSlotKeys]);
-
-  /** Evita POST piano con catalogo USDA ancora in caricamento (output instabile / gruppi vuoti). */
-  const mealPathwayUsdaReady = useMemo(
-    () =>
-      activeDietMealSlotKeys.every((k) => {
-        const b = mealPathwayBySlot[k];
-        return Boolean(b && !b.loading);
-      }),
-    [mealPathwayBySlot, activeDietMealSlotKeys],
-  );
+  }, [athleteId, pathwayTargetsByMealSlot, activeDietMealSlotKeys, pathname]);
 
   /** Giorno gara: pasta/riso pre-gara è deterministico — non bloccare su catalogo pathway USDA. */
   const raceDayPreRaceContext = useMemo(
@@ -1430,7 +1426,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     [profile?.weight_kg, profile?.routine_config, selectedPlanDate, selectedPlanSessions, activeDietMealSlotKeys],
   );
 
-  const mealPlanGenerationReady = mealPathwayUsdaReady || Boolean(raceDayPreRaceContext);
+  const mealPlanGenerationReady = true;
 
   const resolvedMealDailyEnergyKcal = nutritionDayModel?.totals.mealsKcal ?? dailyEnergyKcal;
   const resolvedFuelingChoGPerHour =

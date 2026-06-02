@@ -8,6 +8,20 @@ import createNextIntlPlugin from "next-intl/plugin";
 
 const require = createRequire(import.meta.url);
 
+const withBundleAnalyzer = (() => {
+  if (process.env.ANALYZE !== "true" && process.env.ANALYZE !== "1") {
+    return (config) => config;
+  }
+  try {
+    // Lazy-require so normal builds don't pay for it.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    return require("@next/bundle-analyzer")({ enabled: true });
+  } catch {
+    console.warn("[next-config] ANALYZE enabled but @next/bundle-analyzer is not installed.");
+    return (config) => config;
+  }
+})();
+
 const withNextIntl = createNextIntlPlugin("./i18n/request.ts");
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,7 +85,7 @@ const nextConfig = {
   poweredByHeader: false,
   distDir,
   experimental: {
-    optimizePackageImports: ["lucide-react"],
+    optimizePackageImports: ["lucide-react", "recharts"],
     /** Garmin Partner Verification (Activity Details) può inviare POST grandi; su alcuni deploy può influenzare limiti body (documentazione Next/Vercel). Route Handler verifica comunque limiti piattaforma (~4.5 MB su Vercel Serverless). */
     serverActions: {
       bodySizeLimit: "128mb",
@@ -172,4 +186,4 @@ const withPWA = withPWAInit({
   },
 });
 
-export default withPWA(withNextIntl(nextConfig));
+export default withBundleAnalyzer(withPWA(withNextIntl(nextConfig)));

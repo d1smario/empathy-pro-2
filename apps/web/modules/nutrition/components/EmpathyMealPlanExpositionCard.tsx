@@ -28,8 +28,23 @@ import {
   weightedAvgGlycemicIndex,
   type GiBand,
 } from "@/lib/nutrition/meal-exposition-helpers";
-import { looksLikeMultiIngredientPortionHint } from "@/lib/nutrition/canonical-food-composition";
 import type { IntelligentMealPlanItemOut } from "@/lib/nutrition/intelligent-meal-plan-types";
+
+function looksLikeMultiIngredientPortionHint(hint: string): boolean {
+  const s = hint.trim().toLowerCase();
+  if (!s) return false;
+  return (
+    s.includes("+") ||
+    s.includes(" + ") ||
+    s.includes(" / ") ||
+    s.includes("mix") ||
+    s.includes("smoothie") ||
+    s.includes("bowl") ||
+    s.includes("insalata") ||
+    s.includes("piatto") ||
+    s.includes("combo")
+  );
+}
 
 function slotHeaderIcon(slot: MealSlotKey | "pre_sleep"): LucideIcon {
   switch (slot) {

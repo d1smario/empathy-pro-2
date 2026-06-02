@@ -36,6 +36,12 @@ import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/trainin
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function resolveModuleMode(req: NextRequest): "full" | "pathway" {
+  const raw = (req.nextUrl.searchParams.get("mode") ?? "").trim().toLowerCase();
+  if (raw === "pathway") return "pathway";
+  return "full";
+}
+
 function wantsHeavyModuleSections(req: NextRequest): boolean {
   const raw = (req.nextUrl.searchParams.get("includeHeavy") ?? "").trim().toLowerCase();
   return raw === "1" || raw === "true" || raw === "yes" || raw === "on";
@@ -103,6 +109,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { db } = await requireAthleteReadContext(req, athleteId);
+    const mode = resolveModuleMode(req);
     const includeHeavy = wantsHeavyModuleSections(req);
     const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
 
@@ -167,35 +174,47 @@ export async function GET(req: NextRequest) {
     );
     const physiologyState = athleteMemory.physiology;
     const twinState = athleteMemory.twin;
-    const {
-      adaptationGuidance,
-      operationalContext,
-      adaptationLoop,
-      bioenergeticModulation,
-      nutritionPerformanceIntegration,
-      approvedApplicationPatches,
-    } = await resolveOperationalSignalsBundle({
-      athleteId,
-      athleteMemory,
-      recoverySummary,
-    });
-    const nutritionApprovedPatches = approvedApplicationPatches.filter((patch) => {
-      const target = patch.target.toLowerCase();
-      return target.includes("nutrition") || target.includes("fueling") || target.includes("redox") || target.includes("gut");
-    });
-    const coachNutritionEvidence = (athleteMemory.evidenceMemory?.items ?? [])
-      .filter(
-        (item) =>
-          item.source === COACH_APPLICATION_EVIDENCE_SOURCE &&
-          (item.module === "nutrition" || (item.domain ?? "").toLowerCase().includes("nutrition")),
-      )
-      .slice(0, 6)
-      .map((item) => item.title ?? item.summary ?? "coach_memory")
-      .filter(Boolean);
-    const nutritionApplicationDirective = buildNutritionApplicationDirective(nutritionApprovedPatches, {
-      count: coachNutritionEvidence.length,
-      lines: coachNutritionEvidence,
-    });
+    let adaptationGuidance: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["adaptationGuidance"] | null = null;
+    let operationalContext: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["operationalContext"] | null = null;
+    let adaptationLoop: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["adaptationLoop"] | null = null;
+    let bioenergeticModulation: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["bioenergeticModulation"] | null = null;
+    let nutritionPerformanceIntegration:
+      | Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["nutritionPerformanceIntegration"]
+      | null = null;
+    let approvedApplicationPatches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"] = [];
+    let nutritionApprovedPatches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"] = [];
+    let nutritionApplicationDirective: ReturnType<typeof buildNutritionApplicationDirective> | null = null;
+
+    if (mode !== "pathway") {
+      const bundle = await resolveOperationalSignalsBundle({
+        athleteId,
+        athleteMemory,
+        recoverySummary,
+      });
+      adaptationGuidance = bundle.adaptationGuidance;
+      operationalContext = bundle.operationalContext;
+      adaptationLoop = bundle.adaptationLoop;
+      bioenergeticModulation = bundle.bioenergeticModulation;
+      nutritionPerformanceIntegration = bundle.nutritionPerformanceIntegration;
+      approvedApplicationPatches = bundle.approvedApplicationPatches;
+      nutritionApprovedPatches = approvedApplicationPatches.filter((patch) => {
+        const target = patch.target.toLowerCase();
+        return target.includes("nutrition") || target.includes("fueling") || target.includes("redox") || target.includes("gut");
+      });
+      const coachNutritionEvidence = (athleteMemory.evidenceMemory?.items ?? [])
+        .filter(
+          (item) =>
+            item.source === COACH_APPLICATION_EVIDENCE_SOURCE &&
+            (item.module === "nutrition" || (item.domain ?? "").toLowerCase().includes("nutrition")),
+        )
+        .slice(0, 6)
+        .map((item) => item.title ?? item.summary ?? "coach_memory")
+        .filter(Boolean);
+      nutritionApplicationDirective = buildNutritionApplicationDirective(nutritionApprovedPatches, {
+        count: coachNutritionEvidence.length,
+        lines: coachNutritionEvidence,
+      });
+    }
 
     let pathwayModulation = null;
     let functionalFoodRecommendations = null;
@@ -207,7 +226,8 @@ export async function GET(req: NextRequest) {
     let researchTracesResolved = researchTraceSummaries;
     let multiscaleResearchSynced = false;
 
-    const metabolicEfficiencyGenerativeModel = includeHeavy
+    const metabolicEfficiencyGenerativeModel =
+      includeHeavy && adaptationGuidance && bioenergeticModulation && adaptationLoop
       ? buildMetabolicEfficiencyGenerativeModel({
           adaptationGuidance,
           bioenergeticModulation,
@@ -276,11 +296,13 @@ export async function GET(req: NextRequest) {
         foodRecommendations: functionalFoodRecommendations,
         nutritionPerformanceIntegration,
         approvedNutritionPatches: nutritionApprovedPatches,
-        applicationDirective: {
-          focus: nutritionApplicationDirective.focus,
-          coachValidatedMemoryCount: nutritionApplicationDirective.coachValidatedMemoryCount,
-          coachValidatedMemoryLines: nutritionApplicationDirective.coachValidatedMemoryLines,
-        },
+        applicationDirective: nutritionApplicationDirective
+          ? {
+              focus: nutritionApplicationDirective.focus,
+              coachValidatedMemoryCount: nutritionApplicationDirective.coachValidatedMemoryCount,
+              coachValidatedMemoryLines: nutritionApplicationDirective.coachValidatedMemoryLines,
+            }
+          : null,
         adaptationLoop,
         recoverySummary,
         twin: twinState,
@@ -295,6 +317,40 @@ export async function GET(req: NextRequest) {
         recoverySummary,
         nutritionPerformanceIntegration,
       });
+    }
+
+    if (mode === "pathway") {
+      const res = NextResponse.json({
+        athleteId,
+        from,
+        to,
+        profile,
+        physio: null,
+        physiologyState: null,
+        twinState: null,
+        recoverySummary: null,
+        adaptationGuidance: null,
+        operationalContext: null,
+        adaptationLoop: null,
+        bioenergeticModulation: null,
+        nutritionPerformanceIntegration: null,
+        approvedApplicationPatches: [],
+        nutritionApprovedPatches: [],
+        nutritionApplicationDirective: null,
+        metabolicEfficiencyGenerativeModel: null,
+        pathwayModulation,
+        functionalFoodRecommendations,
+        functionalMealSelector,
+        dailyEnergyModel,
+        executed: [],
+        planned: [],
+        researchTraceSummaries: [],
+        crossDomainInterpretationRoadmap: null,
+        nutrientInterrogation: null,
+        error: null,
+      });
+      res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+      return res;
     }
 
     const roadmapAnchorDate =
