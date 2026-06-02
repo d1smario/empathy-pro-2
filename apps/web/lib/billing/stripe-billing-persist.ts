@@ -217,13 +217,21 @@ export async function reconcileStripeSubscriptionsForUser(
   const completedSessions = await stripe.checkout.sessions.list({ customer: customerId, limit: 10 });
   for (const session of completedSessions.data) {
     if (session.status !== "complete" || session.mode !== "subscription") continue;
-    await persistCompletedCheckoutSession(stripe, session, authUserId, authEmail);
+    try {
+      await persistCompletedCheckoutSession(stripe, session, authUserId, authEmail);
+    } catch {
+      /* session singola non blocca riconciliazione */
+    }
   }
 
   for (const status of ["active", "trialing"] as const) {
     const subs = await stripe.subscriptions.list({ customer: customerId, status, limit: 10 });
     for (const sub of subs.data) {
-      await upsertBillingSubscription(sub, authUserId);
+      try {
+        await upsertBillingSubscription(sub, authUserId);
+      } catch {
+        /* skip */
+      }
     }
   }
 

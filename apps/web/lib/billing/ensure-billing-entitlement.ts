@@ -1,7 +1,6 @@
 import "server-only";
 
 import { createStripeServerClient } from "@empathy/integrations-stripe";
-import { unstable_cache } from "next/cache";
 import {
   loadUserAccessEntitlement,
   type UserAccessEntitlement,
@@ -18,33 +17,26 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type EnsureBillingEntitlementOptions = {
   /** Checkout Stripe appena completato (`cs_...`). */
   checkoutSessionId?: string | null;
-  /** Se true, interroga Stripe quando manca accesso (default). */
+  /** Se true, interroga Stripe quando manca accesso. Mai nel layout shell. */
   repairFromStripe?: boolean;
 };
 
-const loadUserAccessEntitlementForAuthUserCached = unstable_cache(
-  async (userId: string) => {
-    const admin = createSupabaseAdminClient();
-    const cookieClient = createSupabaseCookieClient();
-    const db = admin ?? cookieClient;
-    if (!db) {
-      return {
-        hasOperatorAccess: false,
-        hasAthleteAccess: false,
-        source: "none",
-        validUntil: null,
-        label: "DB non configurato",
-      } satisfies UserAccessEntitlement;
-    }
-    return loadUserAccessEntitlement(db, userId);
-  },
-  ["billing", "user-access-entitlement-v2"],
-  { revalidate: 30 },
-);
+function noAccessEntitlement(label: string): UserAccessEntitlement {
+  return {
+    hasOperatorAccess: false,
+    hasAthleteAccess: false,
+    source: "none",
+    validUntil: null,
+    label,
+  };
+}
+
+function billingDb(): SupabaseClient | null {
+  return createSupabaseAdminClient() ?? createSupabaseCookieClient();
+}
 
 /**
- * Carica entitlement e, se manca accesso atleta, sync immediato da Stripe
- * (session checkout + riconciliazione customer) — non attendere solo il webhook.
+ * Carica entitlement da DB; opzionalmente sync Stripe (solo post-checkout / API repair).
  */
 export async function ensureBillingEntitlementForUser(
   db: SupabaseClient,
@@ -57,7 +49,7 @@ export async function ensureBillingEntitlementForUser(
     return entitlement;
   }
 
-  if (options.repairFromStripe === false) {
+  if (options.repairFromStripe !== true) {
     return entitlement;
   }
 
@@ -91,32 +83,24 @@ export async function ensureBillingEntitlementForUser(
   return entitlement;
 }
 
-/** Helper server: cookie client + admin per gate e pagine. */
+/** Helper server per gate, pagine checkout e API entitlement. */
 export async function ensureBillingEntitlementForAuthUser(
   userId: string,
   email: string | null,
   options?: EnsureBillingEntitlementOptions,
 ): Promise<UserAccessEntitlement> {
-  const admin = createSupabaseAdminClient();
-  const cookieClient = createSupabaseCookieClient();
-  const db = admin ?? cookieClient;
+  const db = billingDb();
   if (!db) {
-    return {
-      hasOperatorAccess: false,
-      hasAthleteAccess: false,
-      source: "none",
-      validUntil: null,
-      label: "DB non configurato",
-    };
+    return noAccessEntitlement("DB non configurato");
   }
-  const baseEntitlement = await loadUserAccessEntitlementForAuthUserCached(userId);
-  if (baseEntitlement.hasAthleteAccess || baseEntitlement.hasOperatorAccess) {
-    return baseEntitlement;
-  }
-
-  if (options?.repairFromStripe === false) {
-    return baseEntitlement;
-  }
-
   return ensureBillingEntitlementForUser(db, userId, email, options);
+}
+
+/** Lettura DB-only — sicura nel layout shell (niente Stripe, niente cache). */
+export async function loadBillingEntitlementForAuthUser(userId: string): Promise<UserAccessEntitlement> {
+  const db = billingDb();
+  if (!db) {
+    return noAccessEntitlement("DB non configurato");
+  }
+  return loadUserAccessEntitlement(db, userId);
 }

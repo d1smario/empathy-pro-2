@@ -2,7 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import type { UserAccessEntitlement } from "@/lib/billing/access-entitlement";
-import { ensureBillingEntitlementForAuthUser } from "@/lib/billing/ensure-billing-entitlement";
+import { loadBillingEntitlementForAuthUser } from "@/lib/billing/ensure-billing-entitlement";
 import { ACCESS_PLAN_PATH, isPaywallEnforced } from "@/lib/billing/paywall-config";
 import { createSupabaseCookieClient } from "@/lib/supabase/server";
 
@@ -10,7 +10,7 @@ export { isPaywallEnforced };
 
 /**
  * Server-side gate per il layout (shell)/.
- * Loggato senza entitlement → sync Stripe (se pagato) → altrimenti `/access/plan`.
+ * Solo lettura DB — niente Stripe qui (evita crash/timeout al login).
  */
 export async function gateAuthenticatedShellAccessOrRedirect(): Promise<UserAccessEntitlement | null> {
   const cookieClient = createSupabaseCookieClient();
@@ -21,15 +21,11 @@ export async function gateAuthenticatedShellAccessOrRedirect(): Promise<UserAcce
   } = await cookieClient.auth.getUser();
   if (!user) return null;
 
-  if (!isPaywallEnforced()) {
-    return ensureBillingEntitlementForAuthUser(user.id, user.email ?? null, {
-      repairFromStripe: false,
-    });
-  }
+  const entitlement = await loadBillingEntitlementForAuthUser(user.id);
 
-  const entitlement = await ensureBillingEntitlementForAuthUser(user.id, user.email ?? null, {
-    repairFromStripe: true,
-  });
+  if (!isPaywallEnforced()) {
+    return entitlement;
+  }
 
   if (entitlement.hasAthleteAccess || entitlement.hasOperatorAccess) {
     return entitlement;
