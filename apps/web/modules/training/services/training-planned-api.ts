@@ -1,5 +1,6 @@
 import type { GeneratedSession } from "@/lib/training/engine";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import { invalidatePlannedWindowCacheForAthlete } from "@/lib/training/planned-window-client-cache";
 import { mapEngineSessionToPlannedRow } from "@/lib/training/planned/map-engine-session-to-planned";
 import type { TrainingPlannerCalendarReplaceInput, TrainingPlannerCalendarReplaceResult } from "@/api/training/contracts";
 
@@ -265,5 +266,7 @@ export async function replaceTrainingPlannerCalendar(
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(payload.error ?? "Replace VIRYA planned workouts failed");
   }
-  return (await response.json()) as TrainingPlannerCalendarReplaceResult;
+  const result = (await response.json()) as TrainingPlannerCalendarReplaceResult;
+  invalidatePlannedWindowCacheForAthlete(input.athleteId.trim());
+  return result;
 }

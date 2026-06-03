@@ -240,6 +240,9 @@ export type TrainingPlannerCalendarReplaceInput = {
 
 export type TrainingPlannerCalendarReplaceResult = {
   status: "ok";
+  insertedCount?: number;
+  dedupeSkippedCount?: number;
+  replacedSameTypeCount?: number;
   athleteMemory?: AthleteMemory | null;
 };
 

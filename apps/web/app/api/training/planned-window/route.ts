@@ -13,6 +13,7 @@ import { firstWindowQueryError, executedWorkoutsWindowSelect, PLANNED_WORKOUTS_W
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { twinContextStripFromMemory } from "@/lib/twin/twin-context-strip-from-memory";
+import { ServerTiming, serverTimingNow } from "@/lib/http/server-timing";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -74,6 +75,8 @@ function addDays(isoDate: string, delta: number): string {
  * Auth: cookie o `Authorization: Bearer` (parity V1); letture con service role se configurato.
  */
 export async function GET(req: NextRequest) {
+  const timing = new ServerTiming();
+  const t0 = serverTimingNow();
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     let from = (req.nextUrl.searchParams.get("from") ?? "").trim();
@@ -91,14 +94,21 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const tAuth = serverTimingNow();
     const { db } = await requireAthleteReadContext(req, athleteId);
+    timing.mark("auth", tAuth, "athlete read context");
     const includeAthleteContext = wantsAthleteContextFromQuery(req);
     const includeWellness = wantsWellnessFromQuery(req);
     const includeTraceSummary = wantsTraceSummaryFromQuery(req);
 
-    const windowPromise = queryPlannedExecutedWindow(db, athleteId, from, to, undefined, {
-      includeTraceSummary,
-    });
+    const windowPromise = (async () => {
+      const tWindow = serverTimingNow();
+      const result = await queryPlannedExecutedWindow(db, athleteId, from, to, undefined, {
+        includeTraceSummary,
+      });
+      timing.mark("window", tWindow, "planned executed window");
+      return result;
+    })();
     const wellnessPromise = includeWellness
       ? buildWellnessWindowSummary({ db, athleteId, from, to }).catch(() => ({ wellnessByDate: {} as WellnessByDateMap, rowCount: 0 }))
       : Promise.resolve(null);
@@ -194,7 +204,8 @@ export async function GET(req: NextRequest) {
     const twinContextStrip = includeAthleteContext ? twinContextStripFromMemory(athleteMemory?.twin ?? null) : null;
     const physiologyState = includeAthleteContext ? (athleteMemory?.physiology ?? null) : null;
 
-    return NextResponse.json(
+    timing.mark("total", t0, "planned-window");
+    const res = NextResponse.json(
       {
         ok: true as const,
         from,
@@ -213,6 +224,8 @@ export async function GET(req: NextRequest) {
       },
       { headers: NO_STORE },
     );
+    timing.applyTo(res.headers);
+    return res;
   } catch (err) {
     if (err instanceof AthleteReadContextError) {
       return NextResponse.json(

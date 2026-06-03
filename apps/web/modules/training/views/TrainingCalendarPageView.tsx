@@ -499,32 +499,39 @@ export default function TrainingCalendarPageView() {
     if (!athleteId || ctxLoading || !selectedDate) return;
     const fetchGen = ++selectedDayFetchGenRef.current;
     const isStale = () => fetchGen !== selectedDayFetchGenRef.current;
-    void (async () => {
-      try {
-        const q = new URLSearchParams({
-          athleteId,
-          from: selectedDate,
-          to: selectedDate,
-          includeAthleteContext: "0",
-          includeTraceSummary: "1",
-        });
-        const res = await fetch(`/api/training/planned-window?${q}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: await buildSupabaseAuthHeaders(),
-        });
-        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
-        if (isStale()) return;
-        if (!res.ok || !json.ok) return;
-        const day = json as TrainingPlannedWindowOkViewModel;
-        setExecuted((prev) => mergeExecutedForDay(prev, selectedDate, day.executed ?? []));
-        if ((day.planned ?? []).length > 0) {
-          setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const q = new URLSearchParams({
+            athleteId,
+            from: selectedDate,
+            to: selectedDate,
+            includeAthleteContext: "0",
+            includeTraceSummary: "1",
+          });
+          const url = `/api/training/planned-window?${q}`;
+          const cached = await fetchPlannedWindowCached<
+            TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+          >(url, {
+            cache: "no-store",
+            credentials: "same-origin",
+            headers: await buildSupabaseAuthHeaders(),
+          });
+          if (isStale()) return;
+          if (!cached.ok || !cached.json.ok) return;
+          const day = cached.json as TrainingPlannedWindowOkViewModel;
+          setExecuted((prev) => mergeExecutedForDay(prev, selectedDate, day.executed ?? []));
+          if ((day.planned ?? []).length > 0) {
+            setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
+          }
+        } catch {
+          /* best-effort: la finestra mensile resta fallback */
         }
-      } catch {
-        /* best-effort: la finestra mensile resta fallback */
-      }
-    })();
+      })();
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [athleteId, ctxLoading, selectedDate, selectedDayRefreshTick]);
 
   const movePlannedWorkoutToDate = useCallback(

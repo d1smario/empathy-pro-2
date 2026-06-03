@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Pro2SectionCard } from "@/components/shell/Pro2SectionCard";
 import { cn } from "@/lib/cn";
+import { addIsoDays, mondayOfIsoWeek } from "@/lib/dates/iso-day-arithmetic";
 import { COACH_APPLICATION_EVIDENCE_SOURCE } from "@/lib/memory/coach-application-traces";
 import type { TrainingPlannerContextViewModel } from "@/api/training/contracts";
 import {
@@ -395,9 +396,7 @@ function isoToday(): string {
 }
 
 function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  return addIsoDays(dateStr, days);
 }
 
 function weeksBetween(a: string, b: string): number {
@@ -1941,8 +1940,9 @@ export function ViryaAnnualPlanOrchestrator({
 
     for (const phase of effectivePhases) {
       const weekCount = weeksBetween(phase.start, phase.end);
+      const phaseMonday = mondayOfIsoWeek(phase.start);
       for (let w = 0; w < weekCount; w += 1) {
-        const weekStart = addDays(phase.start, w * 7);
+        const weekStart = addIsoDays(phaseMonday, w * 7);
         if (onlyWeekStart && weekStart !== onlyWeekStart) continue;
         const wm = resolveWeekMetrics(phase, w, weekStart);
         const objNote = wm.objectives.length ? `week_focus=${wm.objectives.join("+")}` : "";
@@ -2267,7 +2267,7 @@ export function ViryaAnnualPlanOrchestrator({
               viryaRetuneMode: viryaRetuneProposalVm?.recommendedMode ?? viryaRetuneDirective?.recommendedMode ?? null,
             }
           : undefined;
-      await replaceTrainingPlannerCalendar({
+      const result = await replaceTrainingPlannerCalendar({
         athleteId: selectedAthleteId,
         replaceTag: replacePrevious ? tag : undefined,
         rows,
@@ -2289,7 +2289,13 @@ export function ViryaAnnualPlanOrchestrator({
           : sportFamily === "strength"
             ? ` Schede palestra Builder: ${gymSchedaSessions}/${rows.length}.`
             : "";
-      setSuccess(`Piano «${planName.trim() || "Annual"}» (${tag}): ${rows.length} sessioni su Calendar.${gymHint}${rangeHint}`);
+      const dedupeHint =
+        (result.dedupeSkippedCount ?? 0) > 0
+          ? ` Attenzione: ${result.dedupeSkippedCount} righe saltate (già presenti stesso giorno/fingerprint) — apri Calendar e verifica tutte le date.`
+          : "";
+      setSuccess(
+        `Piano «${planName.trim() || "Annual"}» (${tag}): ${rows.length} sessioni generate.${dedupeHint}${gymHint}${rangeHint}`,
+      );
       void refreshViryaCalendarPlans();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Errore inatteso durante la generazione.";

@@ -34,6 +34,7 @@ import { buildNutritionModuleDailyEnergyModel } from "@/lib/nutrition/nutrition-
 import { firstWindowQueryError, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
 import { resolveEmpathyInterrogationBundle } from "@/lib/interpretation/resolve-empathy-interrogation-bundle";
 import type { EmpathyInterrogationBundle } from "@empathy/contracts";
+import { ServerTiming, serverTimingNow } from "@/lib/http/server-timing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,6 +101,8 @@ function buildNutritionApplicationDirective(
 }
 
 export async function GET(req: NextRequest) {
+  const timing = new ServerTiming();
+  const t0 = serverTimingNow();
   try {
     const athleteId = (req.nextUrl.searchParams.get("athleteId") ?? "").trim();
     if (!athleteId) {
@@ -111,7 +114,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Missing from/to", profile: null, physio: null, executed: [], planned: [] }, { status: 400 });
     }
 
+    const tAuth = serverTimingNow();
     const { db } = await requireAthleteReadContext(req, athleteId);
+    timing.mark("auth", tAuth, "athlete read context");
     const mode = resolveModuleMode(req);
     const includeHeavy = wantsHeavyModuleSections(req);
     const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
@@ -132,7 +137,14 @@ export async function GET(req: NextRequest) {
     const [athleteMemory, trainingWindow, recoverySummary, profileAnthroRes, researchTraceSummaries] =
       await Promise.all([
         resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }),
-        queryPlannedExecutedWindow(db, athleteId, windowFrom, windowTo),
+        (async () => {
+          const tWindow = serverTimingNow();
+          const result = await queryPlannedExecutedWindow(db, athleteId, windowFrom, windowTo, undefined, {
+            includeTraceSummary: mode === "pathway" && windowFrom === windowTo,
+          });
+          timing.mark("window", tWindow, "planned executed window");
+          return result;
+        })(),
         resolveLatestRecoverySummary(athleteId),
         db
           .from("athlete_profiles")
@@ -359,6 +371,7 @@ export async function GET(req: NextRequest) {
     }
 
     if (mode === "pathway") {
+      timing.mark("total", t0, "nutrition module pathway");
       const res = NextResponse.json({
         athleteId,
         from,
@@ -391,6 +404,7 @@ export async function GET(req: NextRequest) {
         error: null,
       });
       res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+      timing.applyTo(res.headers);
       return res;
     }
 
@@ -462,6 +476,7 @@ export async function GET(req: NextRequest) {
         })
       : null;
 
+    timing.mark("total", t0, "nutrition module");
     const res = NextResponse.json({
       athleteId,
       from,
@@ -519,6 +534,7 @@ export async function GET(req: NextRequest) {
       error,
     });
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    timing.applyTo(res.headers);
     return res;
   } catch (err) {
     if (err instanceof AthleteReadContextError) {

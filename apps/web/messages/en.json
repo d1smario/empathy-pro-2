@@ -53,7 +53,8 @@
     "ctaApp": "Go to the app",
     "backHome": "Back to home",
     "pricingLinkDirect": "Direct link /pricing",
-    "devPortNote": "Dev: default port {port} when using {cmd}."
+    "devPortNotePrefix": "Dev: default port",
+    "devPortNoteJoin": "when using"
   },
   "Access": {
     "eyebrow": "Access",

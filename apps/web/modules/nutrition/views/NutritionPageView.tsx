@@ -32,6 +32,14 @@ import {
   fetchNutritionModuleContext,
   type NutritionPlannedWorkoutRow,
 } from "@/modules/nutrition/services/nutrition-module-api";
+import {
+  mergeNutritionTrainingRowsById,
+  nutritionModuleWindowKeys,
+} from "@/modules/nutrition/services/nutrition-module-window-merge";
+import {
+  fetchOperationalDayHub,
+  isOperationalDayHubEnabled,
+} from "@/modules/nutrition/services/operational-day-hub-api";
 import type {
   ApprovedApplicationPatch,
   FunctionalFoodRecommendationsViewModel,
@@ -826,6 +834,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
   const lastNutritionHydrationKey = useRef<string>("");
   /** Finestra `from`…`to` dell’ultimo `fetchNutritionModuleContext` completo (per pathwayDate incrementale). */
   const nutritionModuleWindowRef = useRef<{ from: string; to: string } | null>(null);
+  const nutritionModuleFullWindowRef = useRef<{ from: string; to: string } | null>(null);
+  const nutritionModuleExpandInFlightRef = useRef(false);
   /** Ultima data per cui `functionalMealSelector` è stato allineato al server (evita fetch doppi). */
   const serverSelectorPathwayDateRef = useRef<string | null>(null);
   /** Incrementato al ritorno sul tab: ricarica profilo/fisiologia se aggiornati altrove (altra scheda / profilo). */
@@ -972,6 +982,29 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     let cancelled = false;
     void (async () => {
       try {
+        let hubEnergyApplied = false;
+        if (isOperationalDayHubEnabled()) {
+          const hub = await fetchOperationalDayHub({ athleteId, date: selectedPlanDate });
+          if (cancelled) return;
+          if (hub.ok) {
+            if (hub.dailyEnergyModel) {
+              setServerDailyEnergyModel(hub.dailyEnergyModel);
+              serverDailyEnergyDateRef.current = selectedPlanDate;
+              hubEnergyApplied = true;
+            }
+            if (hub.planned.length > 0) {
+              setPlanned((prev) =>
+                mergeNutritionTrainingRowsById(prev, hub.planned as PlannedRow[]),
+              );
+            }
+            if (Array.isArray(hub.executed) && hub.executed.length > 0) {
+              setExecuted((prev) =>
+                mergeNutritionTrainingRowsById(prev, hub.executed as ExecutedRow[]),
+              );
+            }
+          }
+        }
+
         const snap = await fetchNutritionModuleContext({
           athleteId,
           from: selectedPlanDate,
@@ -984,10 +1017,49 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setFunctionalMealSelector(snap.functionalMealSelector ?? null);
         setPathwayModulation(snap.pathwayModulation ?? null);
         setApplicationPlaybook(snap.applicationPlaybook ?? null);
-        setServerDailyEnergyModel(snap.dailyEnergyModel ?? null);
-        serverDailyEnergyDateRef.current = selectedPlanDate;
+        if (!hubEnergyApplied) {
+          setServerDailyEnergyModel(snap.dailyEnergyModel ?? null);
+          serverDailyEnergyDateRef.current = snap.dailyEnergyModel ? selectedPlanDate : null;
+        }
       } catch {
         /* rete: mantieni selettore client-side */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPlanDate, athleteId, loading]);
+
+  /** Se l'utente sceglie una data fuori dalla finestra caricata, espandi a ±30 (on-demand). */
+  useEffect(() => {
+    if (!athleteId || loading) return;
+    const w = nutritionModuleWindowRef.current;
+    const full = nutritionModuleFullWindowRef.current;
+    if (!w || !full) return;
+    if (selectedPlanDate >= w.from && selectedPlanDate <= w.to) return;
+    if (w.from === full.from && w.to === full.to) return;
+
+    let cancelled = false;
+    void (async () => {
+      if (nutritionModuleExpandInFlightRef.current) return;
+      nutritionModuleExpandInFlightRef.current = true;
+      try {
+        const expanded = await fetchNutritionModuleContext({
+          athleteId,
+          from: full.from,
+          to: full.to,
+          mode: "light",
+        });
+        if (cancelled || expanded.error) return;
+        setPlanned((prev) =>
+          mergeNutritionTrainingRowsById(prev, (expanded.planned as PlannedRow[]) ?? []),
+        );
+        setExecuted((prev) =>
+          mergeNutritionTrainingRowsById(prev, (expanded.executed as ExecutedRow[]) ?? []),
+        );
+        nutritionModuleWindowRef.current = { from: full.from, to: full.to };
+      } finally {
+        nutritionModuleExpandInFlightRef.current = false;
       }
     })();
     return () => {
@@ -1049,6 +1121,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setExecuted([]);
         setPlanned([]);
         nutritionModuleWindowRef.current = null;
+        nutritionModuleFullWindowRef.current = null;
+        nutritionModuleExpandInFlightRef.current = false;
         serverSelectorPathwayDateRef.current = null;
         setLoading(false);
         return;
@@ -1056,29 +1130,22 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       setLoading(true);
       setError(null);
       const today = new Date();
-      const start = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
-      const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 12, 0, 0);
-      // Finestra operativa ±30 giorni (bonifica performance); estendibile on-demand se serve.
-      start.setDate(start.getDate() - 30);
-      end.setDate(end.getDate() + 30);
-      const startKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
-      const endKey = `${end.getFullYear()}-${String(end.getMonth() + 1).padStart(2, "0")}-${String(end.getDate()).padStart(2, "0")}`;
+      const fullWindow = nutritionModuleWindowKeys(30, 30, today);
+      const initialWindow = nutritionModuleWindowKeys(7, 7, today);
+      const { from: fullStartKey, to: fullEndKey } = fullWindow;
+      const { from: initialStartKey, to: initialEndKey } = initialWindow;
+      nutritionModuleFullWindowRef.current = fullWindow;
       const todayKey = new Date().toISOString().slice(0, 10);
       const clampIsoDay = (d: string) => {
-        if (d < startKey) return startKey;
-        if (d > endKey) return endKey;
+        if (d < fullStartKey) return fullStartKey;
+        if (d > fullEndKey) return fullEndKey;
         return d;
       };
-      const persistedGuess = readPersistedNutritionPlanDate(athleteId);
-      const pathwayDateGuess = clampIsoDay(
-        persistedGuess && isIsoDateKey(persistedGuess) ? persistedGuess : todayKey,
-      );
 
       let moduleData = await fetchNutritionModuleContext({
         athleteId,
-        from: startKey,
-        to: endKey,
-        pathwayDate: pathwayDateGuess,
+        from: initialStartKey,
+        to: initialEndKey,
         mode: "light",
       });
       if (moduleData.error) {
@@ -1092,6 +1159,8 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         setNutritionApprovedPatches([]);
         setNutritionPerformanceIntegration(null);
         nutritionModuleWindowRef.current = null;
+        nutritionModuleFullWindowRef.current = null;
+        nutritionModuleExpandInFlightRef.current = false;
         serverSelectorPathwayDateRef.current = null;
         setLoading(false);
         return;
@@ -1136,15 +1205,43 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
       const persisted = readPersistedNutritionPlanDate(athleteId);
       const finalPlanDate = clampIsoDay(persisted ?? nextDate);
-      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
-      setPathwayModulation(moduleData.pathwayModulation ?? null);
-      setApplicationPlaybook(moduleData.applicationPlaybook ?? null);
-      setServerDailyEnergyModel(moduleData.dailyEnergyModel ?? null);
-      serverDailyEnergyDateRef.current = moduleData.dailyEnergyModel ? finalPlanDate : null;
-      nutritionModuleWindowRef.current = { from: startKey, to: endKey };
-      serverSelectorPathwayDateRef.current = moduleData.pathwayModulation ? finalPlanDate : null;
+      setFunctionalMealSelector(null);
+      setPathwayModulation(null);
+      setApplicationPlaybook(null);
+      setServerDailyEnergyModel(null);
+      serverDailyEnergyDateRef.current = null;
+      serverSelectorPathwayDateRef.current = null;
+      nutritionModuleWindowRef.current = { from: initialStartKey, to: initialEndKey };
       setSelectedPlanDate(finalPlanDate);
       setLoading(false);
+
+      const expandToFullWindow = async () => {
+        if (nutritionModuleExpandInFlightRef.current) return;
+        const w = nutritionModuleWindowRef.current;
+        const full = nutritionModuleFullWindowRef.current;
+        if (!w || !full || (w.from === full.from && w.to === full.to)) return;
+        nutritionModuleExpandInFlightRef.current = true;
+        try {
+          const expanded = await fetchNutritionModuleContext({
+            athleteId,
+            from: full.from,
+            to: full.to,
+            mode: "light",
+          });
+          if (expanded.error) return;
+          setPlanned((prev) =>
+            mergeNutritionTrainingRowsById(prev, (expanded.planned as PlannedRow[]) ?? []),
+          );
+          setExecuted((prev) =>
+            mergeNutritionTrainingRowsById(prev, (expanded.executed as ExecutedRow[]) ?? []),
+          );
+          nutritionModuleWindowRef.current = { from: full.from, to: full.to };
+        } finally {
+          nutritionModuleExpandInFlightRef.current = false;
+        }
+      };
+
+      void expandToFullWindow();
     }
     loadData();
   }, [athleteId, pathname, nutritionContextVersion]);

@@ -118,10 +118,9 @@ export async function EmpathyPublicHome({ billingFlash, variant = "landing" }: E
                 {t("pricingLinkDirect")}
               </Link>
               {" · "}
-              {t.rich("devPortNote", {
-                port: () => <code className="text-gray-500">3020</code>,
-                cmd: () => <code className="text-gray-500">npm run dev</code>,
-              })}
+              {t("devPortNotePrefix")}{" "}
+              <code className="text-gray-500">3020</code> {t("devPortNoteJoin")}{" "}
+              <code className="text-gray-500">npm run dev</code>.
             </p>
           ) : null}
         </div>
