@@ -38,9 +38,10 @@ import type { EmpathyInterrogationBundle } from "@empathy/contracts";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function resolveModuleMode(req: NextRequest): "full" | "pathway" {
+function resolveModuleMode(req: NextRequest): "full" | "pathway" | "light" {
   const raw = (req.nextUrl.searchParams.get("mode") ?? "").trim().toLowerCase();
   if (raw === "pathway") return "pathway";
+  if (raw === "light") return "light";
   return "full";
 }
 
@@ -115,10 +116,23 @@ export async function GET(req: NextRequest) {
     const includeHeavy = wantsHeavyModuleSections(req);
     const pathwayDateParam = (req.nextUrl.searchParams.get("pathwayDate") ?? "").trim();
 
+    /** `pathway`: query solo il giorno pathway (non tutta la finestra from…to). */
+    let windowFrom = from;
+    let windowTo = to;
+    if (
+      mode === "pathway" &&
+      pathwayDateParam &&
+      pathwayDateParam >= from &&
+      pathwayDateParam <= to
+    ) {
+      windowFrom = pathwayDateParam;
+      windowTo = pathwayDateParam;
+    }
+
     const [athleteMemory, trainingWindow, recoverySummary, profileAnthroRes, researchTraceSummaries] =
       await Promise.all([
         resolveAthleteMemorySlice(athleteId, { slice: "nutrition" }),
-        queryPlannedExecutedWindow(db, athleteId, from, to),
+        queryPlannedExecutedWindow(db, athleteId, windowFrom, windowTo),
         resolveLatestRecoverySummary(athleteId),
         db
           .from("athlete_profiles")
@@ -187,7 +201,7 @@ export async function GET(req: NextRequest) {
     let nutritionApprovedPatches: Awaited<ReturnType<typeof resolveOperationalSignalsBundle>>["approvedApplicationPatches"] = [];
     let nutritionApplicationDirective: ReturnType<typeof buildNutritionApplicationDirective> | null = null;
 
-    if (mode !== "pathway") {
+    if (mode === "full") {
       const bundle = await resolveOperationalSignalsBundle({
         athleteId,
         athleteMemory,

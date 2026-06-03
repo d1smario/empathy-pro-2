@@ -13,7 +13,7 @@ function messageOf(error: Error): string {
 }
 
 /** Riconosce errori tipici post-deploy PWA o rete instabile (non sono redirect auth). */
-export function classifyClientError(error: Error): ClassifiedClientError {
+export function classifyClientError(error: Error & { digest?: string }): ClassifiedClientError {
   const msg = messageOf(error);
   const digest = typeof error.digest === "string" ? error.digest : "";
 

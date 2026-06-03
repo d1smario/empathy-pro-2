@@ -255,7 +255,14 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
          * esporre altri atleti → contesto UI sbagliato). Solo email dell’account o riga già collegata.
          */
         let rawList: AthleteOption[] = [];
-        if (user.email) {
+        if (profile?.athlete_id) {
+          const { data: oneRow } = await supabase
+            .from("athlete_profiles")
+            .select(ATHLETE_SELECT)
+            .eq("id", profile.athlete_id)
+            .maybeSingle();
+          rawList = oneRow ? ([oneRow] as AthleteOption[]) : [];
+        } else if (user.email) {
           const { data: listData } = await supabase
             .from("athlete_profiles")
             .select(ATHLETE_SELECT)
@@ -263,13 +270,6 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
             .order("created_at", { ascending: false })
             .limit(50);
           rawList = (listData as AthleteOption[]) ?? [];
-        } else if (profile?.athlete_id) {
-          const { data: oneRow } = await supabase
-            .from("athlete_profiles")
-            .select(ATHLETE_SELECT)
-            .eq("id", profile.athlete_id)
-            .maybeSingle();
-          rawList = oneRow ? ([oneRow] as AthleteOption[]) : [];
         }
         const list = dedupeAthletesByEmail(rawList);
         if (!active) return;
@@ -360,7 +360,8 @@ function useActiveAthleteState(): ActiveAthleteContextValue {
     const handleStorage = (event: StorageEvent) => {
       if (!active) return;
       if (event.key !== "empathy_active_athlete_id") return;
-      setAthleteId(event.newValue);
+      /** Rivalida roster / `app_user_profiles.athlete_id` — evita id stale da altro tab (coach). */
+      void load();
     };
     window.addEventListener("storage", handleStorage);
 

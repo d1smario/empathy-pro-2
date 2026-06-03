@@ -18,7 +18,8 @@ export async function fetchNutritionModuleContext(input: {
   /** Research traces, metabolic model, cross-domain roadmap (default off per latenza). */
   includeHeavy?: boolean;
   /** Riduce payload/calcolo lato server per casi specifici. */
-  mode?: "light" | "pathway";
+  /** `light` = profilo + finestra planned/executed senza operational bundle; `pathway` = solo giorno pathway. */
+  mode?: "light" | "pathway" | "full";
 }): Promise<NutritionModuleContext> {
   const cacheKey = JSON.stringify({
     athleteId: input.athleteId,

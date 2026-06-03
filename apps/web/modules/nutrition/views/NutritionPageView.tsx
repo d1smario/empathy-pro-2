@@ -1078,6 +1078,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         athleteId,
         from: startKey,
         to: endKey,
+        pathwayDate: pathwayDateGuess,
         mode: "light",
       });
       if (moduleData.error) {
@@ -1135,13 +1136,13 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const nextDate = availableDates.find((d) => d >= todayKey) ?? availableDates[0] ?? todayKey;
       const persisted = readPersistedNutritionPlanDate(athleteId);
       const finalPlanDate = clampIsoDay(persisted ?? nextDate);
-      setFunctionalMealSelector(null);
-      setPathwayModulation(null);
-      setApplicationPlaybook(null);
-      setServerDailyEnergyModel(null);
-      serverDailyEnergyDateRef.current = null;
+      setFunctionalMealSelector(moduleData.functionalMealSelector ?? null);
+      setPathwayModulation(moduleData.pathwayModulation ?? null);
+      setApplicationPlaybook(moduleData.applicationPlaybook ?? null);
+      setServerDailyEnergyModel(moduleData.dailyEnergyModel ?? null);
+      serverDailyEnergyDateRef.current = moduleData.dailyEnergyModel ? finalPlanDate : null;
       nutritionModuleWindowRef.current = { from: startKey, to: endKey };
-      serverSelectorPathwayDateRef.current = null;
+      serverSelectorPathwayDateRef.current = moduleData.pathwayModulation ? finalPlanDate : null;
       setSelectedPlanDate(finalPlanDate);
       setLoading(false);
     }

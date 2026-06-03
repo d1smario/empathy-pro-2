@@ -34,6 +34,7 @@ import { useIsMobileApp, useProductHref } from "@/lib/shell/use-product-href";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
+import { fetchPlannedWindowCached } from "@/lib/training/planned-window-client-cache";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
 import {
@@ -375,17 +376,20 @@ export default function TrainingCalendarPageView() {
         if (includeWellness) q.set("includeWellness", "1");
         if (!includeAthleteContext) q.set("includeAthleteContext", "0");
         if (!includeTraceSummary) q.set("includeTraceSummary", "0");
-        const res = await fetch(`/api/training/planned-window?${q}`, {
+        const url = `/api/training/planned-window?${q}`;
+        const cached = await fetchPlannedWindowCached<
+          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+        >(url, {
           cache: "no-store",
           credentials: "same-origin",
           headers: authHeaders,
         });
-        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false; error?: string };
-        return { res, json };
+        const res = { ok: cached.ok, status: cached.status } as Response;
+        return { res, json: cached.json };
       };
 
-      /** Fase 1 — griglia: metadati eseguito senza trace_summary (payload leggero). */
-      const { res, json } = await fetchPlannedWindow(false, false, false);
+      /** Griglia + wellness in un solo round-trip (trace_summary off, no athlete memory). */
+      const { res, json } = await fetchPlannedWindow(true, false, false);
       if (isStale()) return;
 
       if (!res.ok || !json.ok) {
@@ -422,6 +426,7 @@ export default function TrainingCalendarPageView() {
       setPlanned(p.filter((row) => !removed.has(row.id)));
       setExecuted(ex);
       setPlannedProvenanceSummary(core.plannedProvenanceSummary ?? null);
+      setWellnessByDate(core.wellnessByDate ?? {});
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
@@ -432,34 +437,6 @@ export default function TrainingCalendarPageView() {
         resFrom: core.from,
         resTo: core.to,
       });
-
-      /**
-       * Fase 2 — wellness celle (finestra leggera, SENZA `resolveAthleteMemory`).
-       * Il contesto atleta pesante (read-spine / twin strip) è caricato una volta per atleta
-       * in un effect dedicato, non ad ogni cambio mese (perf calendario).
-       */
-      void (async () => {
-        try {
-          const enrich = await fetchPlannedWindow(true, false, false);
-          if (isStale()) return;
-          if (!enrich.res.ok || !enrich.json.ok) return;
-          const full = enrich.json as TrainingPlannedWindowOkViewModel;
-          setWellnessByDate(full.wellnessByDate ?? {});
-          setFetchDiag((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  executedFallback: full.executedAdminFallbackUsed ?? prev.executedFallback,
-                  executedHiddenByPreference:
-                    full.executedHiddenBySourcePreference ?? prev.executedHiddenByPreference,
-                  sampleDates: Array.isArray(full.executedSampleDates) ? full.executedSampleDates : prev.sampleDates,
-                }
-              : prev,
-          );
-        } catch {
-          /* badge sonno/HRV opzionali — griglia già utilizzabile */
-        }
-      })();
     } catch {
       if (isStale()) return;
       setErr("Errore di rete.");
@@ -529,6 +506,7 @@ export default function TrainingCalendarPageView() {
           from: selectedDate,
           to: selectedDate,
           includeAthleteContext: "0",
+          includeTraceSummary: "1",
         });
         const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",
@@ -591,31 +569,30 @@ export default function TrainingCalendarPageView() {
   );
 
   useEffect(() => {
+    const urlDay = normalizeIsoDateParam(searchParams.get("date")) ?? undefined;
+    void loadMonth(urlDay ? { anchorDay: urlDay } : undefined);
+    if (!athleteId) return;
     void (async () => {
-      if (athleteId) {
-        const tombs = activeViryaCalendarTombstones(athleteId);
-        if (tombs.length) {
-          try {
-            const plans = await fetchViryaCalendarPlans(athleteId);
-            for (const t of tombs) {
-              if (plans.some((p) => p.tag === t.tag)) {
-                await deleteViryaCalendarPlan({ athleteId, tag: t.tag });
-              } else {
-                clearViryaCalendarTombstone(athleteId, t.tag);
-              }
-            }
-          } catch (e) {
-            setViryaReappearWarning(
-              e instanceof Error
-                ? `Piano VIRYA eliminato in precedenza ma ancora presente sul server: ${e.message}`
-                : "Piano VIRYA eliminato in precedenza ma ancora presente sul server.",
-            );
+      const tombs = activeViryaCalendarTombstones(athleteId);
+      if (!tombs.length) return;
+      try {
+        const plans = await fetchViryaCalendarPlans(athleteId);
+        for (const t of tombs) {
+          if (plans.some((p) => p.tag === t.tag)) {
+            await deleteViryaCalendarPlan({ athleteId, tag: t.tag });
+          } else {
+            clearViryaCalendarTombstone(athleteId, t.tag);
           }
         }
+      } catch (e) {
+        setViryaReappearWarning(
+          e instanceof Error
+            ? `Piano VIRYA eliminato in precedenza ma ancora presente sul server: ${e.message}`
+            : "Piano VIRYA eliminato in precedenza ma ancora presente sul server.",
+        );
       }
-      await loadMonth();
     })();
-  }, [athleteId, loadMonth]);
+  }, [athleteId, loadMonth, searchParams]);
 
   /** Dopo salvataggio in Builder (altra tab) o ritorno alla pagina: ricarica finestra planned. */
   useEffect(() => {
@@ -632,9 +609,9 @@ export default function TrainingCalendarPageView() {
     };
   }, [athleteId, ctxLoading, selectedDate, loadMonth]);
 
-  /** Arrivo da Builder con `?date=` o cambio query: ricarica planned (post-salvataggio). */
+  /** Cambio `?date=` dopo primo paint (es. navigazione da Builder): ricarica finestra. */
   useEffect(() => {
-    if (!athleteId || ctxLoading) return;
+    if (!athleteId || ctxLoading || !calendarReadyRef.current) return;
     const q = normalizeIsoDateParam(searchParams.get("date"));
     if (!q) return;
     void loadMonth({ anchorDay: q });
