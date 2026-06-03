@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { DataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
 import { executedWorkoutSourceMatchesPreference, loadDataSourcePreferenceMap } from "@/lib/integrations/data-source-preference";
-import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
+import {
+  dedupePlannedWorkoutDbRows,
+  type PlannedWorkoutDbDedupeRow,
+} from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 
 /**
  * Select e filtri condivisi tra `GET /api/training/planned-window` e `GET /api/nutrition/module`
@@ -36,6 +39,22 @@ export function executedWorkoutsWindowSelect(includeTraceSummary: boolean): stri
 
 /** PostgREST default cap = 1000 righe: alza il tetto per finestre calendario ampie. */
 const EXECUTED_WINDOW_ROW_LIMIT = 5000;
+
+function plannedRowsForDedupe(raw: unknown[]): PlannedWorkoutDbDedupeRow[] {
+  return raw.map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      id: typeof r.id === "string" ? r.id : undefined,
+      date: typeof r.date === "string" ? r.date : undefined,
+      type: String(r.type ?? "session"),
+      duration_minutes: Number(r.duration_minutes ?? 0),
+      tss_target: Number(r.tss_target ?? 0),
+      kcal_target: r.kcal_target == null || r.kcal_target === "" ? null : Number(r.kcal_target),
+      notes: typeof r.notes === "string" ? r.notes : null,
+      created_at: typeof r.created_at === "string" ? r.created_at : null,
+    };
+  });
+}
 
 type WindowQueryResult = {
   data: unknown[] | null;
@@ -91,7 +110,7 @@ export async function queryPlannedExecutedWindow(
 
   return {
     planned: {
-      data: dedupePlannedWorkoutDbRows((planned.data ?? []) as Parameters<typeof dedupePlannedWorkoutDbRows>[0]),
+      data: dedupePlannedWorkoutDbRows(plannedRowsForDedupe(planned.data ?? [])),
       error: planned.error,
     },
     executed: { data: filteredExec, error: executed.error },
