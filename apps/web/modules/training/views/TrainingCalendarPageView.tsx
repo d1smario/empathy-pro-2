@@ -45,6 +45,7 @@ import {
   deleteViryaCalendarPlan,
   fetchViryaCalendarPlans,
   patchPlannedWorkout,
+  type ViryaCalendarPlanSummary,
 } from "@/modules/training/services/training-planned-api";
 import {
   activeViryaCalendarTombstones,
@@ -226,7 +227,8 @@ function SportGlyph({ type }: { type: string }) {
 export default function TrainingCalendarPageView() {
   const searchParams = useSearchParams();
   const { athleteId, loading: ctxLoading } = useActiveAthlete();
-  const athleteFtpWatts = useAthleteFtpWatts(athleteId);
+  const [calendarReady, setCalendarReady] = useState(false);
+  const athleteFtpWatts = useAthleteFtpWatts(calendarReady ? athleteId : null);
 
   const [monthCursor, setMonthCursor] = useState(() => {
     const d = new Date();
@@ -253,7 +255,6 @@ export default function TrainingCalendarPageView() {
   const daysInMonth = monthEnd.getDate();
 
   const [loading, setLoading] = useState(true);
-  const [calendarReady, setCalendarReady] = useState(false);
   const [monthRefreshing, setMonthRefreshing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -308,6 +309,15 @@ export default function TrainingCalendarPageView() {
   const [dragPlannedId, setDragPlannedId] = useState<string | null>(null);
   const [dropTargetDate, setDropTargetDate] = useState<string | null>(null);
   const [movePlannedBusyId, setMovePlannedBusyId] = useState<string | null>(null);
+  /** Blocca merge stale del fetch giorno (250ms) durante drag/PATCH — evita revert su swap 05↔06. */
+  const plannedMoveInFlightRef = useRef(0);
+  const selectedDateRef = useRef(selectedDate);
+  selectedDateRef.current = selectedDate;
+  const calendarEnrichmentGenRef = useRef(0);
+  const [belowFoldReady, setBelowFoldReady] = useState(false);
+  const [viryaPlans, setViryaPlans] = useState<ViryaCalendarPlanSummary[] | null>(null);
+  const [viryaPlansLoadErr, setViryaPlansLoadErr] = useState<string | null>(null);
+  const [viryaPlansLoading, setViryaPlansLoading] = useState(false);
 
   useEffect(() => {
     setDayDeleteAllConfirm(false);
@@ -323,6 +333,11 @@ export default function TrainingCalendarPageView() {
     setReadSpineCoverage(null);
     setTwinContextStrip(null);
     setFetchDiag(null);
+    setBelowFoldReady(false);
+    setViryaPlans(null);
+    setViryaPlansLoadErr(null);
+    setViryaPlansLoading(false);
+    postGridEnrichedDayRef.current = null;
   }, [athleteId]);
   /** Evita doppio POST import (doppio click / StrictMode) che crea righe PLAN duplicate. */
   const trainingImportInFlightRef = useRef(false);
@@ -331,6 +346,147 @@ export default function TrainingCalendarPageView() {
    *  non cambia (es. import su stesso giorno gia' selezionato → la cella mostrava ancora
    *  i dati Fase 1 senza trace_summary aggiornato). */
   const [selectedDayRefreshTick, setSelectedDayRefreshTick] = useState(0);
+  /** Giorno già arricchito dal pipeline post-griglia (evita doppio fetch trace al first paint). */
+  const postGridEnrichedDayRef = useRef<string | null>(null);
+
+  const mergeSelectedDayFromWindow = useCallback(
+    async (dayKey: string, fetchGen: number, scope: "grid" | "selected") => {
+      const isStale = () =>
+        scope === "grid"
+          ? fetchGen !== plannedWindowFetchGenRef.current
+          : fetchGen !== selectedDayFetchGenRef.current;
+      if (!athleteId || plannedMoveInFlightRef.current > 0) return;
+      try {
+        const q = new URLSearchParams({
+          athleteId,
+          from: dayKey,
+          to: dayKey,
+          includeAthleteContext: "0",
+          includeTraceSummary: "1",
+          includePlannedNotes: "1",
+        });
+        const url = `/api/training/planned-window?${q}`;
+        const cached = await fetchPlannedWindowCached<
+          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+        >(url, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        if (isStale()) return;
+        if (!cached.ok || !cached.json.ok) return;
+        if (plannedMoveInFlightRef.current > 0) return;
+        const day = cached.json as TrainingPlannedWindowOkViewModel;
+        setExecuted((prev) => mergeExecutedForDay(prev, dayKey, day.executed ?? []));
+        setPlanned((prev) => mergePlannedForDay(prev, dayKey, day.planned ?? []));
+      } catch {
+        /* best-effort */
+      }
+    },
+    [athleteId],
+  );
+
+  /**
+   * Dopo la griglia lite: arricchimento sequenziale (importanza decrescente).
+   * Tier 1 giorno selezionato → wellness → twin/context → VIRYA (unica chiamata) → below-fold.
+   */
+  const runPostGridEnrichment = useCallback(
+    async (gridFetchGen: number, dayKey: string) => {
+      const enrichGen = ++calendarEnrichmentGenRef.current;
+      const isEnrichStale = () => enrichGen !== calendarEnrichmentGenRef.current;
+      const isGridStale = () => gridFetchGen !== plannedWindowFetchGenRef.current;
+      if (!athleteId) return;
+
+      setBelowFoldReady(false);
+      setViryaPlansLoading(true);
+      setViryaPlansLoadErr(null);
+
+      await mergeSelectedDayFromWindow(dayKey, gridFetchGen, "grid");
+      if (isEnrichStale() || isGridStale()) return;
+      postGridEnrichedDayRef.current = dayKey;
+
+      try {
+        const authHeaders = await buildSupabaseAuthHeaders();
+        const q = new URLSearchParams({
+          athleteId,
+          from: fetchFrom,
+          to: fetchTo,
+          includeWellness: "1",
+          includeAthleteContext: "0",
+          includeTraceSummary: "0",
+          includePlannedNotes: "0",
+        });
+        const url = `/api/training/planned-window?${q}`;
+        const cached = await fetchPlannedWindowCached<
+          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+        >(url, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders,
+        });
+        if (isEnrichStale() || isGridStale()) return;
+        if (cached.ok && cached.json.ok) {
+          setWellnessByDate((cached.json as TrainingPlannedWindowOkViewModel).wellnessByDate ?? {});
+        }
+      } catch {
+        /* wellness opzionale */
+      }
+
+      if (isEnrichStale() || isGridStale()) return;
+
+      try {
+        const now = new Date();
+        const dayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+        const q = new URLSearchParams({ athleteId, from: dayIso, to: dayIso });
+        q.set("includeTraceSummary", "0");
+        const res = await fetch(`/api/training/planned-window?${q}`, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: await buildSupabaseAuthHeaders(),
+        });
+        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false };
+        if (isEnrichStale() || isGridStale()) return;
+        if (res.ok && json.ok) {
+          const full = json as TrainingPlannedWindowOkViewModel;
+          setReadSpineCoverage(full.readSpineCoverage ?? null);
+          setTwinContextStrip(full.twinContextStrip ?? null);
+        }
+      } catch {
+        /* contesto opzionale */
+      }
+
+      if (isEnrichStale() || isGridStale()) return;
+
+      try {
+        const plans = await fetchViryaCalendarPlans(athleteId);
+        if (isEnrichStale() || isGridStale()) return;
+        setViryaPlans(plans);
+        const tombs = activeViryaCalendarTombstones(athleteId);
+        for (const t of tombs) {
+          if (plans.some((p) => p.tag === t.tag)) {
+            await deleteViryaCalendarPlan({ athleteId, tag: t.tag });
+          } else {
+            clearViryaCalendarTombstone(athleteId, t.tag);
+          }
+        }
+      } catch (e) {
+        if (!isEnrichStale()) {
+          setViryaPlansLoadErr(e instanceof Error ? e.message : "Errore piani VIRYA");
+          setViryaReappearWarning(
+            e instanceof Error
+              ? `Piano VIRYA eliminato in precedenza ma ancora presente sul server: ${e.message}`
+              : "Piano VIRYA eliminato in precedenza ma ancora presente sul server.",
+          );
+        }
+      } finally {
+        if (!isEnrichStale()) setViryaPlansLoading(false);
+      }
+
+      if (isEnrichStale() || isGridStale()) return;
+      setBelowFoldReady(true);
+    },
+    [athleteId, fetchFrom, fetchTo, mergeSelectedDayFromWindow],
+  );
 
   const loadMonth = useCallback(
     async (opts?: { anchorDay?: string }) => {
@@ -358,6 +514,7 @@ export default function TrainingCalendarPageView() {
       setLoading(true);
     }
     setErr(null);
+    setBelowFoldReady(false);
     if (opts?.anchorDay?.trim()) {
       invalidatePlannedWindowCacheForAthlete(athleteId);
     }
@@ -461,121 +618,25 @@ export default function TrainingCalendarPageView() {
         setMonthRefreshing(false);
         calendarReadyRef.current = true;
         setCalendarReady(true);
+        void runPostGridEnrichment(fetchGen, selectedDateRef.current);
       }
     }
   },
-  [athleteId, ctxLoading, fetchFrom, fetchTo],
+  [athleteId, ctxLoading, fetchFrom, fetchTo, runPostGridEnrichment],
 );
 
-  /** Badge sonno/HRV in cella: dopo la griglia, senza bloccare PLAN/EXEC. */
+  /** Cambio giorno / refresh tick: solo fetch trace del giorno (il pipeline post-griglia copre il first paint). */
   useEffect(() => {
-    if (!athleteId || ctxLoading || !calendarReady) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const authHeaders = await buildSupabaseAuthHeaders();
-        const q = new URLSearchParams({
-          athleteId,
-          from: fetchFrom,
-          to: fetchTo,
-          includeWellness: "1",
-          includeAthleteContext: "0",
-          includeTraceSummary: "0",
-          includePlannedNotes: "0",
-        });
-        const url = `/api/training/planned-window?${q}`;
-        const cached = await fetchPlannedWindowCached<
-          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
-        >(url, {
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: authHeaders,
-        });
-        if (cancelled || !cached.ok || !cached.json.ok) return;
-        const core = cached.json as TrainingPlannedWindowOkViewModel;
-        setWellnessByDate(core.wellnessByDate ?? {});
-      } catch {
-        /* wellness opzionale */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [athleteId, ctxLoading, calendarReady, fetchFrom, fetchTo]);
-
-  /**
-   * Contesto atleta (read-spine coverage + twin strip) = `resolveAthleteMemory` (~20 query, pesante).
-   * Caricato UNA volta per atleta su una finestra di 1 giorno (planned/executed minimi), NON ad ogni
-   * cambio mese: toglie il collo di bottiglia che rallentava/bloccava la griglia calendario.
-   */
-  useEffect(() => {
-    if (!athleteId || ctxLoading) return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const now = new Date();
-        const dayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const q = new URLSearchParams({ athleteId, from: dayIso, to: dayIso });
-        q.set("includeTraceSummary", "0");
-        const res = await fetch(`/api/training/planned-window?${q}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: await buildSupabaseAuthHeaders(),
-        });
-        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false };
-        if (cancelled || !res.ok || !json.ok) return;
-        const full = json as TrainingPlannedWindowOkViewModel;
-        setReadSpineCoverage(full.readSpineCoverage ?? null);
-        setTwinContextStrip(full.twinContextStrip ?? null);
-      } catch {
-        /* contesto opzionale: la griglia resta utilizzabile */
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [athleteId, ctxLoading]);
-
-  /** Giorno selezionato: fetch mirato con trace pieno → chip griglia + Analyzer allineati subito.
-   *  `selectedDayRefreshTick` permette di forzare il rifetch anche quando `selectedDate` non cambia
-   *  (es. import su stesso giorno gia' aperto: la cella resterebbe sui dati Fase 1 leggeri). */
-  useEffect(() => {
-    if (!athleteId || ctxLoading || !selectedDate) return;
+    if (!athleteId || ctxLoading || !calendarReady || !selectedDate) return;
+    if (postGridEnrichedDayRef.current === selectedDate && selectedDayRefreshTick === 0) return;
     const fetchGen = ++selectedDayFetchGenRef.current;
-    const isStale = () => fetchGen !== selectedDayFetchGenRef.current;
     const timer = window.setTimeout(() => {
-      void (async () => {
-        try {
-          const q = new URLSearchParams({
-            athleteId,
-            from: selectedDate,
-            to: selectedDate,
-            includeAthleteContext: "0",
-            includeTraceSummary: "1",
-            includePlannedNotes: "1",
-          });
-          const url = `/api/training/planned-window?${q}`;
-          const cached = await fetchPlannedWindowCached<
-            TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
-          >(url, {
-            cache: "no-store",
-            credentials: "same-origin",
-            headers: await buildSupabaseAuthHeaders(),
-          });
-          if (isStale()) return;
-          if (!cached.ok || !cached.json.ok) return;
-          const day = cached.json as TrainingPlannedWindowOkViewModel;
-          setExecuted((prev) => mergeExecutedForDay(prev, selectedDate, day.executed ?? []));
-          setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
-        } catch {
-          /* best-effort: la finestra mensile resta fallback */
-        }
-      })();
+      void mergeSelectedDayFromWindow(selectedDate, fetchGen, "selected");
     }, 250);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [athleteId, ctxLoading, selectedDate, selectedDayRefreshTick]);
+  }, [athleteId, ctxLoading, calendarReady, selectedDate, selectedDayRefreshTick, mergeSelectedDayFromWindow]);
 
   const movePlannedWorkoutToDate = useCallback(
     async (workoutId: string, fromDate: string, toDate: string) => {
@@ -583,7 +644,12 @@ export default function TrainingCalendarPageView() {
       const sourceDate = normalizeDateKey(fromDate);
       if (!athleteId || !targetDate || !sourceDate || workoutId.trim() === "") return;
       if (targetDate === sourceDate) return;
+      if (plannedMoveInFlightRef.current > 0) {
+        setErr("Attendi il termine dello spostamento precedente, poi riprova.");
+        return;
+      }
 
+      plannedMoveInFlightRef.current += 1;
       setMovePlannedBusyId(workoutId);
       setErr(null);
       setSuccess(null);
@@ -604,12 +670,17 @@ export default function TrainingCalendarPageView() {
           patch: { date: targetDate },
         });
         setSuccess(`Seduta spostata al ${targetDate}.`);
+        invalidatePlannedWindowCacheForAthlete(athleteId);
         await loadMonth({ anchorDay: targetDate });
+        setSelectedDayRefreshTick((t) => t + 1);
       } catch (e) {
         setPlanned(previous);
         setErr(e instanceof Error ? e.message : "Spostamento seduta non riuscito");
+        invalidatePlannedWindowCacheForAthlete(athleteId);
         await loadMonth({ anchorDay: sourceDate });
+        setSelectedDayRefreshTick((t) => t + 1);
       } finally {
+        plannedMoveInFlightRef.current = Math.max(0, plannedMoveInFlightRef.current - 1);
         setMovePlannedBusyId(null);
         setDragPlannedId(null);
         setDropTargetDate(null);
@@ -620,28 +691,8 @@ export default function TrainingCalendarPageView() {
 
   useEffect(() => {
     const urlDay = normalizeIsoDateParam(searchParams.get("date")) ?? undefined;
+    postGridEnrichedDayRef.current = null;
     void loadMonth(urlDay ? { anchorDay: urlDay } : undefined);
-    if (!athleteId) return;
-    void (async () => {
-      const tombs = activeViryaCalendarTombstones(athleteId);
-      if (!tombs.length) return;
-      try {
-        const plans = await fetchViryaCalendarPlans(athleteId);
-        for (const t of tombs) {
-          if (plans.some((p) => p.tag === t.tag)) {
-            await deleteViryaCalendarPlan({ athleteId, tag: t.tag });
-          } else {
-            clearViryaCalendarTombstone(athleteId, t.tag);
-          }
-        }
-      } catch (e) {
-        setViryaReappearWarning(
-          e instanceof Error
-            ? `Piano VIRYA eliminato in precedenza ma ancora presente sul server: ${e.message}`
-            : "Piano VIRYA eliminato in precedenza ma ancora presente sul server.",
-        );
-      }
-    })();
   }, [athleteId, loadMonth, searchParams]);
 
   /** Dopo salvataggio in Builder (altra tab) o ritorno alla pagina: ricarica finestra (debounced). */
@@ -1165,7 +1216,13 @@ export default function TrainingCalendarPageView() {
 
       {!ctxLoading && calendarReady && !err ? (
         <Fragment>
-          <TrainingViryaActivePlanStrip athleteId={athleteId} selectedDate={selectedDate} />
+          <TrainingViryaActivePlanStrip
+            athleteId={athleteId}
+            selectedDate={selectedDate}
+            plans={viryaPlans}
+            loadErr={viryaPlansLoadErr}
+            plansLoading={viryaPlansLoading}
+          />
           <section className="tc2-calendar-shell mb-10 rounded-2xl border border-violet-500/20 bg-gradient-to-b from-slate-950/80 to-black/50 shadow-inner shadow-violet-950/25">
             <p className="border-b border-white/10 px-4 py-3 text-xs leading-relaxed text-slate-400">
               Trascina una chip <strong className="text-violet-200">PLAN</strong> su un altro giorno per spostare la seduta
@@ -1533,7 +1590,9 @@ export default function TrainingCalendarPageView() {
                           await loadMonth();
                         }}
                         onCalendarMutated={async () => {
-                          await loadMonth();
+                          if (athleteId) invalidatePlannedWindowCacheForAthlete(athleteId);
+                          await loadMonth({ anchorDay: selectedDate });
+                          setSelectedDayRefreshTick((t) => t + 1);
                         }}
                       />
                     </li>
@@ -1555,9 +1614,11 @@ export default function TrainingCalendarPageView() {
           </div>
 
           <div className="mb-8 w-full min-w-0">
-            <TrainingPeriodVolumeSummary athleteId={athleteId} />
+            <TrainingPeriodVolumeSummary athleteId={athleteId} deferUntilVisible />
           </div>
 
+          {belowFoldReady ? (
+          <>
           <div className="mb-8 w-full min-w-0">
             <CalendarDaySessionDetail
               selectedDate={selectedDate}
@@ -1587,6 +1648,8 @@ export default function TrainingCalendarPageView() {
               }}
             />
           </div>
+          </>
+          ) : null}
 
           <div className="grid gap-8 lg:grid-cols-[1fr_minmax(0,420px)]">
             <div className="space-y-6">

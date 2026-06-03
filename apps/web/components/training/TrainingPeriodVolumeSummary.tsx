@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useDeferredVisible } from "@/lib/ui/use-deferred-visible";
 import type {
   TrainingExecutedVolumeRollupViewModel,
   TrainingRecoveryContinuousRollupViewModel,
@@ -109,7 +110,16 @@ function asTrace(row: Record<string, unknown>): Record<string, unknown> | null {
   return t && typeof t === "object" ? (t as Record<string, unknown>) : null;
 }
 
-export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string | null }) {
+export function TrainingPeriodVolumeSummary({
+  athleteId,
+  deferUntilVisible = false,
+}: {
+  athleteId: string | null;
+  /** Ritarda il fetch analytics finché la sezione non è vicina al viewport. */
+  deferUntilVisible?: boolean;
+}) {
+  const { ref: visibilityRef, visible: nearViewport } = useDeferredVisible();
+  const fetchEnabled = Boolean(athleteId) && (!deferUntilVisible || nearViewport);
   const [preset, setPreset] = useState<PresetId>("28");
   const [loading, setLoading] = useState(false);
   const [fetchErr, setFetchErr] = useState<string | null>(null);
@@ -123,18 +133,20 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
   }, [preset]);
 
   useEffect(() => {
-    if (!athleteId) {
-      setRollup(null);
-      setRecoveryRollup(null);
-      setAnalyticsVm(null);
-      setFetchErr(null);
-      setLoading(false);
+    if (!fetchEnabled) {
+      if (!athleteId) {
+        setRollup(null);
+        setRecoveryRollup(null);
+        setAnalyticsVm(null);
+        setFetchErr(null);
+        setLoading(false);
+      }
       return;
     }
     let cancelled = false;
     setLoading(true);
     setFetchErr(null);
-    void fetchTrainingAnalyticsRows({ athleteId, from: bounds.from, to: bounds.to }).then((vm) => {
+    void fetchTrainingAnalyticsRows({ athleteId: athleteId!, from: bounds.from, to: bounds.to }).then((vm) => {
       if (cancelled) return;
       setRollup(vm.executedVolumeRollup ?? null);
       setRecoveryRollup(vm.recoveryContinuousRollup ?? null);
@@ -145,7 +157,7 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
     return () => {
       cancelled = true;
     };
-  }, [athleteId, bounds.from, bounds.to]);
+  }, [athleteId, bounds.from, bounds.to, fetchEnabled]);
 
   const f = formatRollup(rollup);
 
@@ -244,6 +256,7 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
   }, [sleepSeries]);
 
   return (
+    <div ref={deferUntilVisible ? visibilityRef : undefined} className="w-full min-w-0">
     <Pro2SectionCard
       accent="cyan"
       title="Volume aggregato · Analyzer"
@@ -397,5 +410,6 @@ export function TrainingPeriodVolumeSummary({ athleteId }: { athleteId: string |
         </>
       )}
     </Pro2SectionCard>
+    </div>
   );
 }

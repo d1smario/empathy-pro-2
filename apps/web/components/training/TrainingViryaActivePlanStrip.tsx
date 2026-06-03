@@ -11,10 +11,7 @@ import {
   resolveDefaultActiveViryaPlan,
   writeActiveViryaPlanTag,
 } from "@/lib/training/virya/virya-active-plan-preference";
-import {
-  fetchViryaCalendarPlans,
-  type ViryaCalendarPlanSummary,
-} from "@/modules/training/services/training-planned-api";
+import type { ViryaCalendarPlanSummary } from "@/modules/training/services/training-planned-api";
 
 function glyphForViryaPlanLabel(label: string): SportGlyphId {
   switch (label) {
@@ -35,45 +32,38 @@ function glyphForViryaPlanLabel(label: string): SportGlyphId {
   }
 }
 
+/**
+ * Piano VIRYA attivo — i piani arrivano dal parent (un solo fetch condiviso con tombstone sync).
+ */
 export function TrainingViryaActivePlanStrip({
   athleteId,
   selectedDate,
+  plans,
+  loadErr,
+  plansLoading,
 }: {
   athleteId: string | null;
   selectedDate: string;
+  plans: ViryaCalendarPlanSummary[] | null;
+  loadErr: string | null;
+  plansLoading?: boolean;
 }) {
-  const [plans, setPlans] = useState<ViryaCalendarPlanSummary[]>([]);
-  const [loadErr, setLoadErr] = useState<string | null>(null);
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!athleteId?.trim()) {
-      setPlans([]);
+    if (!athleteId?.trim() || !plans?.length) {
       setActiveTag(null);
       return;
     }
-    let cancelled = false;
-    setLoadErr(null);
-    void fetchViryaCalendarPlans(athleteId)
-      .then((list) => {
-        if (cancelled) return;
-        setPlans(list);
-        const persisted = readActiveViryaPlanTag(athleteId);
-        const resolved = resolveDefaultActiveViryaPlan(list, selectedDate, persisted);
-        const tag = resolved?.tag ?? null;
-        setActiveTag(tag);
-        if (tag && tag !== persisted) writeActiveViryaPlanTag(athleteId, tag);
-      })
-      .catch((e) => {
-        if (!cancelled) setLoadErr(e instanceof Error ? e.message : "Errore piani VIRYA");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [athleteId, selectedDate]);
+    const persisted = readActiveViryaPlanTag(athleteId);
+    const resolved = resolveDefaultActiveViryaPlan(plans, selectedDate, persisted);
+    const tag = resolved?.tag ?? null;
+    setActiveTag(tag);
+    if (tag && tag !== persisted) writeActiveViryaPlanTag(athleteId, tag);
+  }, [athleteId, plans, selectedDate]);
 
   const activePlan = useMemo(
-    () => plans.find((p) => p.tag === activeTag) ?? null,
+    () => plans?.find((p) => p.tag === activeTag) ?? null,
     [plans, activeTag],
   );
 
@@ -89,8 +79,9 @@ export function TrainingViryaActivePlanStrip({
           <Sparkles className="h-4 w-4 shrink-0" aria-hidden />
           <span className="text-[0.65rem] font-bold uppercase tracking-[0.14em]">Piano VIRYA attivo</span>
         </div>
+        {plansLoading ? <span className="text-xs text-slate-500">Caricamento piani…</span> : null}
         {loadErr ? <span className="text-xs text-amber-300/90">{loadErr}</span> : null}
-        {!loadErr && plans.length === 0 ? (
+        {!plansLoading && !loadErr && plans && plans.length === 0 ? (
           <span className="text-sm text-slate-500">
             Nessun piano VIRYA su Calendar —{" "}
             <Pro2Link href="/training/vyria" variant="ghost" className="!inline text-cyan-200/90">
@@ -98,7 +89,7 @@ export function TrainingViryaActivePlanStrip({
             </Pro2Link>
           </span>
         ) : null}
-        {!loadErr && plans.length > 0 ? (
+        {!plansLoading && !loadErr && plans && plans.length > 0 ? (
           <>
             {glyph ? (
               <SportDisciplineGlyph glyph={glyph} className="h-9 w-9 shrink-0 text-fuchsia-200" />
@@ -144,7 +135,7 @@ export function TrainingViryaActivePlanStrip({
             </Pro2Link>
           </>
         ) : null}
-        {activeTag && !plans.some((p) => p.tag === activeTag) ? (
+        {activeTag && plans && !plans.some((p) => p.tag === activeTag) ? (
           <p className="mt-2 w-full text-xs text-amber-200/90">
             Il piano VIRYA preferito non ha più sedute in calendario (es. sostituito da Builder). Scegli un altro piano o
             ripubblica da VIRYA.
