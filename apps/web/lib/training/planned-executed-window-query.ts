@@ -15,6 +15,14 @@ import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-worko
 export const PLANNED_WORKOUTS_WINDOW_SELECT =
   "id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, notes, created_at" as const;
 
+/** Griglia calendario: metadati senza `notes` (BUILDER_SESSION_JSON può pesare decine di KB per seduta). */
+export const PLANNED_WORKOUTS_WINDOW_SELECT_LITE =
+  "id, athlete_id, date, type, duration_minutes, tss_target, kj_target, kcal_target, created_at" as const;
+
+export function plannedWorkoutsWindowSelect(includeNotes: boolean): string {
+  return includeNotes ? PLANNED_WORKOUTS_WINDOW_SELECT : PLANNED_WORKOUTS_WINDOW_SELECT_LITE;
+}
+
 export const EXECUTED_WORKOUTS_WINDOW_SELECT =
   "id, athlete_id, date, started_at, ended_at, duration_minutes, tss, planned_workout_id, source, kcal, kj, trace_summary, lactate_mmoll, glucose_mmol, smo2, subjective_notes, external_id" as const;
 
@@ -40,7 +48,7 @@ export async function queryPlannedExecutedWindow(
   from: string,
   to: string,
   dataSourcePreferences?: DataSourcePreferenceMap | null,
-  options?: { includeTraceSummary?: boolean },
+  options?: { includeTraceSummary?: boolean; includePlannedNotes?: boolean },
 ): Promise<{
   planned: WindowQueryResult;
   executed: WindowQueryResult;
@@ -52,12 +60,14 @@ export async function queryPlannedExecutedWindow(
       : (dataSourcePreferences ?? {});
 
   const includeTraceSummary = options?.includeTraceSummary !== false;
+  const includePlannedNotes = options?.includePlannedNotes !== false;
   const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
+  const plannedSelect = plannedWorkoutsWindowSelect(includePlannedNotes);
 
   const [planned, executed] = await Promise.all([
     db
       .from("planned_workouts")
-      .select(PLANNED_WORKOUTS_WINDOW_SELECT)
+      .select(plannedSelect)
       .eq("athlete_id", athleteId)
       .gte("date", from)
       .lte("date", to)

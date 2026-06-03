@@ -34,7 +34,10 @@ import { useIsMobileApp, useProductHref } from "@/lib/shell/use-product-href";
 import type { TrainingPlannedWindowOkViewModel, TrainingTwinContextStripViewModel } from "@/api/training/contracts";
 import type { WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
-import { fetchPlannedWindowCached } from "@/lib/training/planned-window-client-cache";
+import {
+  fetchPlannedWindowCached,
+  invalidatePlannedWindowCacheForAthlete,
+} from "@/lib/training/planned-window-client-cache";
 import type { ReadSpineCoverageSummary } from "@/lib/platform/read-spine-coverage";
 import { importExecutedWorkoutFile, importPlannedProgramFile } from "@/modules/training/services/training-import-api";
 import {
@@ -296,6 +299,7 @@ export default function TrainingCalendarPageView() {
   const plannedWindowFetchGenRef = useRef(0);
   const selectedDayFetchGenRef = useRef(0);
   const calendarReadyRef = useRef(false);
+  const lastVisibilityRefreshAtRef = useRef(0);
   /** Id eliminati in-sessione: filtra fetch stale che ripresentano la riga prima che il DB sia allineato. */
   const locallyRemovedPlannedIdsRef = useRef<Set<string>>(new Set());
   const [viryaReappearWarning, setViryaReappearWarning] = useState<string | null>(null);
@@ -354,6 +358,9 @@ export default function TrainingCalendarPageView() {
       setLoading(true);
     }
     setErr(null);
+    if (opts?.anchorDay?.trim()) {
+      invalidatePlannedWindowCacheForAthlete(athleteId);
+    }
     try {
       let from = fetchFrom;
       let to = fetchTo;
@@ -371,11 +378,13 @@ export default function TrainingCalendarPageView() {
         includeWellness: boolean,
         includeAthleteContext: boolean,
         includeTraceSummary: boolean,
+        includePlannedNotes: boolean,
       ) => {
         const q = new URLSearchParams({ athleteId, from, to });
         if (includeWellness) q.set("includeWellness", "1");
         if (!includeAthleteContext) q.set("includeAthleteContext", "0");
         if (!includeTraceSummary) q.set("includeTraceSummary", "0");
+        if (!includePlannedNotes) q.set("includePlannedNotes", "0");
         const url = `/api/training/planned-window?${q}`;
         const cached = await fetchPlannedWindowCached<
           TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
@@ -388,8 +397,8 @@ export default function TrainingCalendarPageView() {
         return { res, json: cached.json };
       };
 
-      /** Griglia + wellness in un solo round-trip (trace_summary off, no athlete memory). */
-      const { res, json } = await fetchPlannedWindow(true, false, false);
+      /** Griglia veloce: no wellness, no notes builder, no trace (wellness in background). */
+      const { res, json } = await fetchPlannedWindow(false, false, false, false);
       if (isStale()) return;
 
       if (!res.ok || !json.ok) {
@@ -426,7 +435,6 @@ export default function TrainingCalendarPageView() {
       setPlanned(p.filter((row) => !removed.has(row.id)));
       setExecuted(ex);
       setPlannedProvenanceSummary(core.plannedProvenanceSummary ?? null);
-      setWellnessByDate(core.wellnessByDate ?? {});
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
@@ -458,6 +466,42 @@ export default function TrainingCalendarPageView() {
   },
   [athleteId, ctxLoading, fetchFrom, fetchTo],
 );
+
+  /** Badge sonno/HRV in cella: dopo la griglia, senza bloccare PLAN/EXEC. */
+  useEffect(() => {
+    if (!athleteId || ctxLoading || !calendarReady) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const authHeaders = await buildSupabaseAuthHeaders();
+        const q = new URLSearchParams({
+          athleteId,
+          from: fetchFrom,
+          to: fetchTo,
+          includeWellness: "1",
+          includeAthleteContext: "0",
+          includeTraceSummary: "0",
+          includePlannedNotes: "0",
+        });
+        const url = `/api/training/planned-window?${q}`;
+        const cached = await fetchPlannedWindowCached<
+          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+        >(url, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders,
+        });
+        if (cancelled || !cached.ok || !cached.json.ok) return;
+        const core = cached.json as TrainingPlannedWindowOkViewModel;
+        setWellnessByDate(core.wellnessByDate ?? {});
+      } catch {
+        /* wellness opzionale */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [athleteId, ctxLoading, calendarReady, fetchFrom, fetchTo]);
 
   /**
    * Contesto atleta (read-spine coverage + twin strip) = `resolveAthleteMemory` (~20 query, pesante).
@@ -508,6 +552,7 @@ export default function TrainingCalendarPageView() {
             to: selectedDate,
             includeAthleteContext: "0",
             includeTraceSummary: "1",
+            includePlannedNotes: "1",
           });
           const url = `/api/training/planned-window?${q}`;
           const cached = await fetchPlannedWindowCached<
@@ -521,9 +566,7 @@ export default function TrainingCalendarPageView() {
           if (!cached.ok || !cached.json.ok) return;
           const day = cached.json as TrainingPlannedWindowOkViewModel;
           setExecuted((prev) => mergeExecutedForDay(prev, selectedDate, day.executed ?? []));
-          if ((day.planned ?? []).length > 0) {
-            setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
-          }
+          setPlanned((prev) => mergePlannedForDay(prev, selectedDate, day.planned ?? []));
         } catch {
           /* best-effort: la finestra mensile resta fallback */
         }
@@ -601,11 +644,15 @@ export default function TrainingCalendarPageView() {
     })();
   }, [athleteId, loadMonth, searchParams]);
 
-  /** Dopo salvataggio in Builder (altra tab) o ritorno alla pagina: ricarica finestra planned. */
+  /** Dopo salvataggio in Builder (altra tab) o ritorno alla pagina: ricarica finestra (debounced). */
   useEffect(() => {
     if (!athleteId || ctxLoading) return;
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      if (now - lastVisibilityRefreshAtRef.current < 12_000) return;
+      lastVisibilityRefreshAtRef.current = now;
+      invalidatePlannedWindowCacheForAthlete(athleteId);
       void loadMonth({ anchorDay: selectedDate });
     };
     document.addEventListener("visibilitychange", refresh);

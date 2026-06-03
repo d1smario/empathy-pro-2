@@ -9,7 +9,12 @@ import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/a
 import { resolveAthleteMemorySlice } from "@/lib/memory/athlete-memory-resolver";
 import { summarizeReadSpineCoverage } from "@/lib/platform/read-spine-coverage";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { firstWindowQueryError, executedWorkoutsWindowSelect, PLANNED_WORKOUTS_WINDOW_SELECT, queryPlannedExecutedWindow } from "@/lib/training/planned-executed-window-query";
+import {
+  firstWindowQueryError,
+  executedWorkoutsWindowSelect,
+  plannedWorkoutsWindowSelect,
+  queryPlannedExecutedWindow,
+} from "@/lib/training/planned-executed-window-query";
 import { inferPlannedProvenance, summarizeProvenanceCounts } from "@/lib/training/planned-provenance";
 import { buildWellnessWindowSummary, type WellnessByDateMap } from "@/lib/physiology/wellness-window-summary";
 import { twinContextStripFromMemory } from "@/lib/twin/twin-context-strip-from-memory";
@@ -51,6 +56,13 @@ function wantsWellnessFromQuery(req: NextRequest): boolean {
 /** Default: trace_summary incluso. Disattiva con `0|false|no|off|skip` (griglia calendario). */
 function wantsTraceSummaryFromQuery(req: NextRequest): boolean {
   const raw = (req.nextUrl.searchParams.get("includeTraceSummary") ?? "").trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "skip") return false;
+  return true;
+}
+
+/** Default: `notes` inclusi. Disattiva con `0|false|no|off|skip` (griglia mese — payload leggero). */
+function wantsPlannedNotesFromQuery(req: NextRequest): boolean {
+  const raw = (req.nextUrl.searchParams.get("includePlannedNotes") ?? "").trim().toLowerCase();
   if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "skip") return false;
   return true;
 }
@@ -100,11 +112,14 @@ export async function GET(req: NextRequest) {
     const includeAthleteContext = wantsAthleteContextFromQuery(req);
     const includeWellness = wantsWellnessFromQuery(req);
     const includeTraceSummary = wantsTraceSummaryFromQuery(req);
+    const includePlannedNotes = wantsPlannedNotesFromQuery(req);
+    const plannedSelect = plannedWorkoutsWindowSelect(includePlannedNotes);
 
     const windowPromise = (async () => {
       const tWindow = serverTimingNow();
       const result = await queryPlannedExecutedWindow(db, athleteId, from, to, undefined, {
         includeTraceSummary,
+        includePlannedNotes,
       });
       timing.mark("window", tWindow, "planned executed window");
       return result;
@@ -178,7 +193,7 @@ export async function GET(req: NextRequest) {
       if (admin) {
         const forcedPlanned = await admin
           .from("planned_workouts")
-          .select(PLANNED_WORKOUTS_WINDOW_SELECT)
+          .select(plannedSelect)
           .eq("athlete_id", athleteId)
           .gte("date", from)
           .lte("date", to)
