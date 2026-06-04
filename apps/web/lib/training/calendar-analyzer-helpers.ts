@@ -446,6 +446,29 @@ export function parseRoute(trace: Record<string, unknown> | null): Array<[number
   return [];
 }
 
+/** GPS da `trace_summary` già nel payload calendario (anche 1 punto Garmin summary). */
+export function geoPointsFromWorkoutTrace(w: ExecutedWorkout): Array<{ lat: number; lon: number }> {
+  const trace = traceRecord(w);
+  if (!trace) return [];
+  const candidates = ["route_points", "route", "gps_points", "track"];
+  for (const key of candidates) {
+    const raw = trace[key];
+    if (!Array.isArray(raw)) continue;
+    const points = raw
+      .map((item) => {
+        if (typeof item !== "object" || item == null) return null;
+        const row = item as Record<string, unknown>;
+        const lat = n(row.lat ?? row.latitude);
+        const lon = n(row.lng ?? row.lon ?? row.longitude);
+        if (lat == null || lon == null) return null;
+        return { lat, lon };
+      })
+      .filter((p): p is { lat: number; lon: number } => p != null);
+    if (points.length >= 1) return points;
+  }
+  return [];
+}
+
 export function pickRouteElevationSeries(trace: Record<string, unknown> | null): number[] {
   if (!trace) return [];
   const candidates = ["route_points", "route", "gps_points", "track"];

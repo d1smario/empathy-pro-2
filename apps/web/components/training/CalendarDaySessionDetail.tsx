@@ -8,7 +8,11 @@ import { SessionRouteMap } from "@/components/training/SessionRouteMap";
 import { SportDisciplineGlyph } from "@/components/training/SportDisciplineGlyph";
 import { TrainingSingleTraceChart } from "@/components/training/TrainingSingleTraceChart";
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
-import { formatElapsedLabel, pickPrimaryExecutedWorkout } from "@/lib/training/calendar-analyzer-helpers";
+import {
+  formatElapsedLabel,
+  geoPointsFromWorkoutTrace,
+  pickPrimaryExecutedWorkout,
+} from "@/lib/training/calendar-analyzer-helpers";
 import {
   buildSessionDetailVM,
   type SessionDetailViewModel,
@@ -69,6 +73,8 @@ const SERIES_COLOR: Record<ChartChannel, string> = {
   vertical_speed_mps: "#fb923c",
 };
 
+const SESSION_SERIES_CHART_CHANNELS = Array.from(CHART_CHANNELS).join(",");
+
 const SERIES_LABEL: Record<ChartChannel, string> = {
   power: "Potenza",
   hr: "FC",
@@ -116,23 +122,34 @@ function KpiTile({ tile }: { tile: SessionKpiTile }) {
 
 function SessionDetailCard({
   vm,
+  workout,
   dayExecutedDuration,
   athleteId,
 }: {
   vm: SessionDetailViewModel;
+  workout: ExecutedWorkout;
   dayExecutedDuration: number | null;
   athleteId: string | null | undefined;
 }) {
+  const traceRoutePoints = useMemo(() => geoPointsFromWorkoutTrace(workout), [workout]);
   const [dbSeries, setDbSeries] = useState<ExtendedSeriesBundle[]>([]);
   const [routeBundle, setRouteBundle] = useState<RouteBundle | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
 
   useEffect(() => {
+    setRouteBundle(traceRoutePoints.length > 0 ? { points: traceRoutePoints } : null);
+  }, [traceRoutePoints]);
+
+  useEffect(() => {
     if (!athleteId || !vm.workoutId) return;
     let cancelled = false;
+    const needsRouteFromDb = traceRoutePoints.length < 2;
+    const channels = needsRouteFromDb
+      ? `${SESSION_SERIES_CHART_CHANNELS},route`
+      : SESSION_SERIES_CHART_CHANNELS;
     (async () => {
       try {
-        const q = new URLSearchParams({ athleteId, executedId: vm.workoutId });
+        const q = new URLSearchParams({ athleteId, executedId: vm.workoutId, channels });
         const res = await fetch(`/api/training/session-series?${q}`, {
           cache: "no-store",
           credentials: "same-origin",
@@ -156,7 +173,11 @@ function SessionDetailCard({
         for (const c of json.channels) {
           if (c.channel === "route") {
             const pts = (Array.isArray(c.samples) ? c.samples : []).filter(isGeoPoint) as GeoPoint[];
-            if (pts.length >= 1) setRouteBundle({ points: pts });
+            if (pts.length >= 1) {
+              setRouteBundle((prev) =>
+                !prev || pts.length > prev.points.length ? { points: pts } : prev,
+              );
+            }
             continue;
           }
           if (!CHART_CHANNELS.has(c.channel as ChartChannel)) continue;
@@ -184,7 +205,7 @@ function SessionDetailCard({
     return () => {
       cancelled = true;
     };
-  }, [athleteId, vm.workoutId]);
+  }, [athleteId, vm.workoutId, traceRoutePoints.length]);
 
   const allSeries = useMemo<ExtendedSeriesBundle[]>(() => {
     /**
@@ -401,7 +422,12 @@ export function CalendarDaySessionDetail({ selectedDate, dayExecuted, athleteId 
             subtitle={idx === 0 ? subtitle : `${vm.sport ?? "Sessione"} · ${vm.sourceLabel}`}
             icon={idx === 0 ? Activity : Gauge}
           >
-            <SessionDetailCard vm={vm} dayExecutedDuration={duration} athleteId={athleteId} />
+            <SessionDetailCard
+              vm={vm}
+              workout={w}
+              dayExecutedDuration={duration}
+              athleteId={athleteId}
+            />
           </Pro2SectionCard>
         );
       })}
