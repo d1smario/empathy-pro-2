@@ -9,9 +9,9 @@
  * Quando una key NON è mappata:
  * - Fallback al `CANONICAL_FOOD_TABLE` TS (compatibilità a iso-funzionalità con la versione attuale).
  *
- * Estendere questo file man mano che `nutrition_fdc_foods` viene popolata con nuovi alimenti
- * italiani comuni. Lo script `apps/web/scripts/warm-usda-bulk.ts` (~120 alimenti) ha precaricato la
- * cache; lo snapshot di `fdcId` verificati è in `apps/web/scripts/usda-bulk-aliases.json`.
+ * Estendere questo file man mano che `nutrition_fdc_foods` viene popolata (dump USDA Foundation+SR
+ * via `import-usda-fdc-dump.ts`, oppure warm `warm-usda-bulk.ts`). Report alias: `usda-bulk-aliases.json`.
+ * Meal plan legge la cache in batch (`loadFdcFoodsByIds`); con `FDC_CACHE_ONLY=1` niente USDA live.
  *
  * IMPORTANTE: quando aggiungi una mappatura, verifica che la `description` del `fdcId` sia
  * davvero coerente con il nome canonicalKey. USDA `foods/search` può restituire match per parole

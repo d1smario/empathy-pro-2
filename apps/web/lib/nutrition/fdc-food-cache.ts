@@ -1,12 +1,10 @@
 import "server-only";
 
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import {
-  scaleMacrosFromPer100g,
-  summarizePer100gFromFdcNutrientRows,
-  type FdcPer100gMacros,
-} from "@/lib/nutrition/usda-fdc-food-detail";
+import { buildNutritionFdcFoodUpsertPayloadFromUsdaRaw } from "@/lib/nutrition/fdc-import-row";
+import { isFdcCacheOnly } from "@/lib/nutrition/fdc-runtime-config";
 import { partitionFdcNutrientsFromCompact, type FdcMicroPer100g } from "@/lib/nutrition/fdc-micronutrient-extract";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { scaleMacrosFromPer100g, type FdcPer100gMacros } from "@/lib/nutrition/usda-fdc-food-detail";
 
 export type FdcCachedFood = FdcPer100gMacros & {
   publicationDate: string | null;
@@ -33,6 +31,10 @@ export type ScaledMicronutrientSnapshot = {
   otherNutrients: FdcMicroPer100g[];
 };
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 function toNumber(v: unknown): number | null {
   if (typeof v === "number" && Number.isFinite(v)) return v;
   if (typeof v === "string" && v.trim()) {
@@ -42,105 +44,7 @@ function toNumber(v: unknown): number | null {
   return null;
 }
 
-function nutrientName(row: Record<string, unknown>): string {
-  const nested = row.nutrient as Record<string, unknown> | undefined;
-  return String(nested?.name ?? row.nutrientName ?? "").trim();
-}
-
-function nutrientUnit(row: Record<string, unknown>): string {
-  const nested = row.nutrient as Record<string, unknown> | undefined;
-  return String(nested?.unitName ?? row.unitName ?? "").trim() || "—";
-}
-
-function nutrientId(row: Record<string, unknown>): number | null {
-  const nested = row.nutrient as Record<string, unknown> | undefined;
-  const raw = nested?.id ?? row.nutrientId;
-  const id = toNumber(raw);
-  return id != null && id > 0 ? Math.round(id) : null;
-}
-
-function nutrientAmount(row: Record<string, unknown>): number | null {
-  const amount = toNumber(row.amount ?? row.value);
-  return amount != null && amount >= 0 ? amount : null;
-}
-
-function pickNutrientByName(nutrients: Array<Record<string, unknown>>, names: string[]): number | null {
-  const targets = names.map((n) => n.toLowerCase());
-  for (const row of nutrients) {
-    const name = nutrientName(row).toLowerCase();
-    if (!name) continue;
-    if (targets.some((target) => name === target || name.includes(target))) {
-      const amount = nutrientAmount(row);
-      if (amount != null) return amount;
-    }
-  }
-  return null;
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function estimateMetabolicIndices(input: {
-  carbsPer100g: number | null;
-  proteinPer100g: number | null;
-  fatPer100g: number | null;
-  fiberPer100g: number | null;
-  sugarsPer100g: number | null;
-}) {
-  const carbs = Math.max(0, input.carbsPer100g ?? 0);
-  const protein = Math.max(0, input.proteinPer100g ?? 0);
-  const fat = Math.max(0, input.fatPer100g ?? 0);
-  const fiber = Math.max(0, input.fiberPer100g ?? 0);
-  const sugars = Math.max(0, input.sugarsPer100g ?? 0);
-  const availableCarbs = Math.max(0, carbs - fiber);
-  const carbEnergy = availableCarbs * 4;
-  const proteinEnergy = protein * 4;
-  const fatEnergy = fat * 9;
-  const energy = Math.max(1, carbEnergy + proteinEnergy + fatEnergy);
-  const carbEnergyPct = carbEnergy / energy;
-  const sugarShare = availableCarbs > 0 ? sugars / availableCarbs : 0;
-  const fiberDampening = Math.min(18, fiber * 1.2);
-
-  const glycemicIndex = Math.min(92, Math.max(18, 28 + carbEnergyPct * 58 + sugarShare * 18 - fiberDampening - Math.min(10, fat * 0.45)));
-  const insulinIndex = Math.min(
-    115,
-    Math.max(18, glycemicIndex * 0.72 + Math.min(28, protein * 1.25) + Math.min(12, fat * 0.35)),
-  );
-  const glycemicLoad = (glycemicIndex * availableCarbs) / 100;
-  const insulinLoad = (insulinIndex * (availableCarbs + protein * 0.45)) / 100;
-
-  return {
-    glycemicIndexEstimate: round2(glycemicIndex),
-    insulinIndexEstimate: round2(insulinIndex),
-    glycemicLoadPer100g: round2(glycemicLoad),
-    insulinLoadPer100g: round2(insulinLoad),
-    metabolicIndices: {
-      method: "macro_profile_estimate_v1",
-      source: "derived_from_usda_fdc_cache",
-      caveat: "Estimated from USDA macro profile; not a measured glycemic or insulin index.",
-      availableCarbsPer100g: round2(availableCarbs),
-      sugarShare: round2(sugarShare),
-    },
-  };
-}
-
-function compactRawNutrients(nutrients: Array<Record<string, unknown>>): FdcMicroPer100g[] {
-  return nutrients
-    .map((row) => {
-      const id = nutrientId(row);
-      const name = nutrientName(row);
-      const amount = nutrientAmount(row);
-      if (!id || !name || amount == null) return null;
-      return {
-        nutrientId: id,
-        name,
-        amountPer100g: amount,
-        unit: nutrientUnit(row),
-      };
-    })
-    .filter((row): row is FdcMicroPer100g => Boolean(row));
-}
+const FDC_BATCH_SELECT_CHUNK = 80;
 
 function asMicroArray(v: unknown): FdcMicroPer100g[] {
   if (!Array.isArray(v)) return [];
@@ -158,7 +62,7 @@ function asMicroArray(v: unknown): FdcMicroPer100g[] {
     .filter((row): row is FdcMicroPer100g => Boolean(row));
 }
 
-function rowToCachedFood(row: Record<string, unknown>): FdcCachedFood {
+export function cachedFoodFromDbRow(row: Record<string, unknown>): FdcCachedFood {
   const base = {
     fdcId: Number(row.fdc_id),
     description: String(row.description ?? "Alimento FDC"),
@@ -251,83 +155,75 @@ export function scaleMacrosFromCachedFdcFood(food: FdcCachedFood, quantityG: num
   return scaleMacrosFromPer100g(food, quantityG);
 }
 
+function chunkNumericIds(ids: number[], size: number): number[][] {
+  const out: number[][] = [];
+  for (let i = 0; i < ids.length; i += size) out.push(ids.slice(i, i + size));
+  return out;
+}
+
+/** Lettura batch da `nutrition_fdc_foods` (nessuna chiamata USDA). */
+export async function loadFdcFoodsByIds(fdcIds: number[]): Promise<Map<number, FdcCachedFood>> {
+  const ids = [
+    ...new Set(
+      fdcIds
+        .map((v) => Math.round(Number(v)))
+        .filter((id) => Number.isFinite(id) && id >= 1),
+    ),
+  ];
+  const out = new Map<number, FdcCachedFood>();
+  if (ids.length === 0) return out;
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return out;
+
+  for (const chunk of chunkNumericIds(ids, FDC_BATCH_SELECT_CHUNK)) {
+    const { data, error } = await admin.from("nutrition_fdc_foods").select("*").in("fdc_id", chunk);
+    if (error && error.code !== "42P01") break;
+    if (!Array.isArray(data)) continue;
+    for (const row of data) {
+      const r = row as Record<string, unknown>;
+      const id = Math.round(Number(r.fdc_id));
+      if (Number.isFinite(id) && id >= 1) out.set(id, cachedFoodFromDbRow(r));
+    }
+  }
+  return out;
+}
+
+/** Singola riga cache locale; non importa da USDA. */
+export async function getFdcFoodFromCacheOnly(fdcId: number): Promise<FdcCachedFood | null> {
+  const map = await loadFdcFoodsByIds([fdcId]);
+  return map.get(Math.round(fdcId)) ?? null;
+}
+
 export async function getOrImportFdcFood(fdcId: number): Promise<FdcCachedFood | { error: string }> {
   const id = Math.round(Number(fdcId));
   if (!Number.isFinite(id) || id < 1) return { error: "fdcId non valido" };
 
+  const cached = await getFdcFoodFromCacheOnly(id);
+  if (cached) return cached;
+
+  if (isFdcCacheOnly()) {
+    return { error: "fdc_not_in_local_cache" };
+  }
+
   const admin = createSupabaseAdminClient();
   if (!admin) return { error: "service_role_unconfigured: SUPABASE_SERVICE_ROLE_KEY richiesta per cache USDA FDC." };
-
-  const { data: existing, error: selectError } = await admin
-    .from("nutrition_fdc_foods")
-    .select("*")
-    .eq("fdc_id", id)
-    .maybeSingle();
-  if (selectError && selectError.code !== "42P01") return { error: selectError.message };
-  if (existing) return rowToCachedFood(existing as Record<string, unknown>);
 
   const apiKey = process.env.USDA_API_KEY?.trim();
   if (!apiKey) return { error: "USDA_API_KEY non configurata: impossibile importare alimento FDC." };
 
   try {
     const raw = await fetchFdcFoodRaw(apiKey, id);
-    const nutrients = (Array.isArray(raw.foodNutrients) ? raw.foodNutrients : []) as Array<Record<string, unknown>>;
-    const macros = summarizePer100gFromFdcNutrientRows(nutrients);
-    if (macros.kcalPer100g == null && macros.carbsPer100g == null && macros.proteinPer100g == null && macros.fatPer100g == null) {
-      return { error: "Nessun nutriente per 100 g riconosciuto nella risposta FDC" };
-    }
-
-    const rawCompact = compactRawNutrients(nutrients);
-    const parts = partitionFdcNutrientsFromCompact(rawCompact);
-    const fiberPer100g = pickNutrientByName(nutrients, ["fiber, total dietary", "fiber"]);
-    const sugarsPer100g = pickNutrientByName(nutrients, ["sugars, total including", "sugars, total"]);
-    const metabolic = estimateMetabolicIndices({
-      carbsPer100g: macros.carbsPer100g,
-      proteinPer100g: macros.proteinPer100g,
-      fatPer100g: macros.fatPer100g,
-      fiberPer100g,
-      sugarsPer100g,
-    });
-    const payload = {
-      fdc_id: id,
-      description: String(raw.description ?? "Alimento FDC"),
-      data_type: raw.dataType != null ? String(raw.dataType) : null,
-      publication_date: raw.publicationDate != null ? String(raw.publicationDate) : null,
-      food_category: raw.foodCategory != null ? String(raw.foodCategory) : null,
-      kcal_100g: Math.max(0, macros.kcalPer100g ?? 0),
-      carbs_100g: Math.max(0, macros.carbsPer100g ?? 0),
-      protein_100g: Math.max(0, macros.proteinPer100g ?? 0),
-      fat_100g: Math.max(0, macros.fatPer100g ?? 0),
-      fiber_100g: fiberPer100g,
-      sugars_100g: sugarsPer100g,
-      sodium_mg_100g: macros.sodiumMgPer100g,
-      glycemic_index_estimate: metabolic.glycemicIndexEstimate,
-      insulin_index_estimate: metabolic.insulinIndexEstimate,
-      glycemic_load_100g: metabolic.glycemicLoadPer100g,
-      insulin_load_100g: metabolic.insulinLoadPer100g,
-      metabolic_indices: metabolic.metabolicIndices,
-      vitamins: parts.vitamins,
-      minerals: parts.minerals,
-      amino_acids: parts.aminoAcids,
-      fatty_acids: parts.fattyAcids,
-      other_nutrients: parts.other,
-      nutrients_raw: rawCompact,
-      source_payload: {
-        fdcId: raw.fdcId ?? id,
-        dataType: raw.dataType ?? null,
-        description: raw.description ?? null,
-        foodClass: raw.foodClass ?? null,
-      },
-      refreshed_at: new Date().toISOString(),
-    };
+    const built = buildNutritionFdcFoodUpsertPayloadFromUsdaRaw(raw, { sourceTag: "get_or_import_fdc_food" });
+    if ("error" in built) return built;
 
     const { data, error } = await admin
       .from("nutrition_fdc_foods")
-      .upsert(payload, { onConflict: "fdc_id" })
+      .upsert(built, { onConflict: "fdc_id" })
       .select("*")
       .single();
     if (error) return { error: error.message };
-    return rowToCachedFood(data as Record<string, unknown>);
+    return cachedFoodFromDbRow(data as Record<string, unknown>);
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Import USDA FDC fallito." };
   }

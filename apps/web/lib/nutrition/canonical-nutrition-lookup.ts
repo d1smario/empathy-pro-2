@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isFdcCacheOnly } from "@/lib/nutrition/fdc-runtime-config";
 import { summarizePer100gFromFdcNutrientRows } from "@/lib/nutrition/usda-fdc-food-detail";
 
 /** Risposta unica lookup: USDA da cache FDC o discovery API; integratori/fueling da catalogo dichiarazioni fornitore. */
@@ -232,7 +233,8 @@ export async function runCanonicalNutritionLookup(input: {
   ]);
 
   const usdaKey = input.usdaApiKey?.trim();
-  const discovery = usdaKey ? await searchUsdaFdcDiscovery(q, usdaKey, max).catch(() => []) : [];
+  const discovery =
+    usdaKey && !isFdcCacheOnly() ? await searchUsdaFdcDiscovery(q, usdaKey, max).catch(() => []) : [];
 
   const merged = dedupeCanonical([...catalogHits, ...fdcHits, ...discovery]);
   return merged.slice(0, max);

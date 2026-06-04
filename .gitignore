@@ -9,6 +9,9 @@ out/
 dist/
 .turbo/
 
+# USDA bulk JSON (download locale; vedi docs/NUTRITION_FDC_LOCAL_CACHE.md)
+data/usda-fdc/
+
 # Env
 .env
 .env.local
