@@ -21,3 +21,12 @@ test("mergeNutritionTrainingRowsById dedupes by id and prefers next row", () => 
   assert.equal((merged[0] as { type?: string }).type, "new");
   assert.equal(merged[1].id, "b");
 });
+
+test("mergeNutritionTrainingRowsById keeps builderSession when hub row is raw DB", () => {
+  const bs = { version: 1, blocks: [{ id: "b1" }] };
+  const merged = mergeNutritionTrainingRowsById(
+    [{ id: "a", date: "2026-06-04", builderSession: bs }],
+    [{ id: "a", date: "2026-06-04", notes: "BUILDER_SESSION_JSON::..." }],
+  );
+  assert.equal((merged[0] as { builderSession?: unknown }).builderSession, bs);
+});

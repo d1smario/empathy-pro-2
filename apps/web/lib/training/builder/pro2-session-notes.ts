@@ -117,6 +117,15 @@ function asFiniteNumber(value: unknown): number | null {
   return null;
 }
 
+/** Contratto builder da riga calendario: campo arricchito dal modulo, altrimenti parse da `notes`. */
+export function resolveBuilderSessionForPlannedRow(input: {
+  builderSession?: Pro2BuilderSessionContract | null;
+  notes?: string | null;
+}): Pro2BuilderSessionContract | null {
+  if (input.builderSession) return input.builderSession;
+  return parsePro2BuilderSessionFromNotes(input.notes ?? null);
+}
+
 /**
  * Allinea durata / TSS / kcal del giorno al **contratto builder in notes** quando le colonne
  * `planned_workouts` sono vuote o stale (stesso problema del calendario training).

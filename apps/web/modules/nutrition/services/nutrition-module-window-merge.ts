@@ -1,11 +1,27 @@
+type RowWithOptionalBuilderSession = {
+  id: string;
+  date?: string | null;
+  builderSession?: unknown;
+};
+
 /** Merge planned/executed rows by id (background window expansion). */
-export function mergeNutritionTrainingRowsById<T extends { id: string; date?: string | null }>(
+export function mergeNutritionTrainingRowsById<T extends RowWithOptionalBuilderSession>(
   prev: T[],
   next: T[],
 ): T[] {
   const byId = new Map<string, T>();
   for (const row of prev) byId.set(String(row.id), row);
-  for (const row of next) byId.set(String(row.id), row);
+  for (const row of next) {
+    const id = String(row.id);
+    const existing = byId.get(id);
+    const prevBs = existing && "builderSession" in existing ? existing.builderSession : undefined;
+    const nextBs = "builderSession" in row ? row.builderSession : undefined;
+    if (existing && prevBs && !nextBs) {
+      byId.set(id, { ...row, builderSession: prevBs } as T);
+    } else {
+      byId.set(id, row);
+    }
+  }
   return Array.from(byId.values()).sort((a, b) => {
     const da = String(a.date ?? "").slice(0, 10);
     const db = String(b.date ?? "").slice(0, 10);

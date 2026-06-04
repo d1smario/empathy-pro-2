@@ -200,6 +200,16 @@ function deriveBmr(input: NutritionDailyEnergySolverInput): {
   };
 }
 
+/** When `planned_workouts.kcal_target` is null and contract kcal cannot be resolved (FTP missing), still budget training from TSS. */
+function estimateTrainingKcalFromTss(totalTss: number, durationMin: number): number {
+  if (totalTss <= 0) return 0;
+  const hours = Math.max(0.25, durationMin / 60);
+  const tssPerHour = totalTss / hours;
+  // ~10 kcal per TSS for endurance load (order of magnitude vs mechanical estimate at IF from TSS).
+  const scale = clamp(tssPerHour / 80, 0.85, 1.15);
+  return round(totalTss * 10 * scale);
+}
+
 function deriveTrainingSummary(plannedTraining: PlannedTrainingEnergyInput[] = []) {
   const sessions = plannedTraining.filter((session) => {
     const duration = asFinite(session.durationMinutes) ?? 0;
@@ -210,10 +220,13 @@ function deriveTrainingSummary(plannedTraining: PlannedTrainingEnergyInput[] = [
   const durationMin = round(
     sessions.reduce((sum, session) => sum + Math.max(0, asFinite(session.durationMinutes) ?? 0), 0),
   );
-  const kcal = round(
+  let kcal = round(
     sessions.reduce((sum, session) => sum + Math.max(0, asFinite(session.kcalTarget) ?? 0), 0),
   );
   const totalTss = sessions.reduce((sum, session) => sum + Math.max(0, asFinite(session.tssTarget) ?? 0), 0);
+  if (kcal === 0 && totalTss > 0) {
+    kcal = estimateTrainingKcalFromTss(totalTss, durationMin);
+  }
   const totalWeightedPower = sessions.reduce((sum, session) => {
     const avgPowerW = asFinite(session.avgPowerW);
     const durationMinutes = Math.max(0, asFinite(session.durationMinutes) ?? 0);

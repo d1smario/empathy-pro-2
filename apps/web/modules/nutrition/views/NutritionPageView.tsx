@@ -84,7 +84,10 @@ import {
 import type { TrainingDayOperationalContext } from "@/lib/training/day-operational-context";
 import type { Pro2BuilderSessionContract } from "@/lib/training/builder/pro2-session-contract";
 import { dedupePlannedWorkoutDbRows } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
-import { effectivePlannedWorkoutNutritionMetrics } from "@/lib/training/builder/pro2-session-notes";
+import {
+  effectivePlannedWorkoutNutritionMetrics,
+  resolveBuilderSessionForPlannedRow,
+} from "@/lib/training/builder/pro2-session-notes";
 import { Pro2GymSchedaBlockList } from "@/components/training/Pro2GymSchedaBlockList";
 import { analyzePlannedSessionsForFueling } from "@/lib/nutrition/fueling-planned-session-analysis";
 import {
@@ -967,6 +970,9 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     setIntelligentMealError(null);
     setCoachMealRemovalKeys(new Set());
     setCoachSessionFoodExclusions([]);
+    setServerDailyEnergyModel(null);
+    serverDailyEnergyDateRef.current = null;
+    serverSelectorPathwayDateRef.current = null;
   }, [selectedPlanDate]);
 
   /** Allinea `functionalMealSelector` server al giorno scelto (senza ricaricare tutto il modulo). */
@@ -1277,7 +1283,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     () =>
       buildEffectiveDayTrainingContext({
         planned: selectedPlanSessions.map((session) => {
-          const bs = (session.builderSession as Pro2BuilderSessionContract | null | undefined) ?? null;
+          const bs = resolveBuilderSessionForPlannedRow({
+            builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
+            notes: session.notes,
+          });
           const m = effectivePlannedWorkoutNutritionMetrics({
             durationMinutesDb: session.duration_minutes as number | null | undefined,
             tssTargetDb: session.tss_target as number | null | undefined,
@@ -1634,7 +1643,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       };
     };
     const plannedSources: PlannedFuelSrc[] = selectedPlanSessions.map((session) => {
-      const builder = (session.builderSession as Pro2BuilderSessionContract | null | undefined) ?? null;
+      const builder = resolveBuilderSessionForPlannedRow({
+        builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
+        notes: session.notes,
+      });
       return {
         kind: "planned",
         session,
@@ -1712,7 +1724,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
 
     return sources.map((src) => {
       const session = src.session;
-        const builder = (session.builderSession as Pro2BuilderSessionContract | null | undefined) ?? null;
+        const builder = resolveBuilderSessionForPlannedRow({
+          builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
+          notes: session.notes,
+        });
         const blocks = builder?.blocks ?? [];
         const blockLabels = blocks
           .slice(0, 3)
@@ -3516,7 +3531,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
                 dateLabel={selectedPlanDateLabel}
                 hydrationMinDailyMl={hydrationPlan.minDailyMl}
                 selectedExecutedKj={selectedExecutedKj}
-                sessionLoadKcalEstimate={nutritionDayModel?.training.kcal ?? effectiveDayContext.summary.totalKcal}
+                sessionLoadKcalEstimate={Math.max(
+                  nutritionDayModel?.training.kcal ?? 0,
+                  effectiveDayContext.summary.totalKcal,
+                )}
                 round={round}
                 energyLedger={mealPlanEnergyLedger}
               />

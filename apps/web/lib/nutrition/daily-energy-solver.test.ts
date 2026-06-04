@@ -110,3 +110,12 @@ test("daily-energy-solver: dietDayMealsScalePct è l'unico moltiplicatore consen
   /** fuelingKcal non è scalato da day_type_pct (è composizione pre/intra/post, non quota giornaliera). */
   assert.equal(deficit.totals.fuelingKcal, normo.totals.fuelingKcal);
 });
+
+test("daily-energy-solver: TSS fallback when kcal_target null (builder row senza kcal in DB)", () => {
+  const model = computeNutritionDailyEnergyModel({
+    ...ATHLETE_INPUT,
+    plannedTraining: [{ durationMinutes: 100, kcalTarget: 0, tssTarget: 106 }],
+  });
+  assert.ok(model.training.kcal >= 800, `training kcal from TSS, got ${model.training.kcal}`);
+  assert.ok(model.totals.mealsKcal > 2500, `meals budget should include training, got ${model.totals.mealsKcal}`);
+});

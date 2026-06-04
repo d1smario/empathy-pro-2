@@ -43,14 +43,7 @@ function record(v: unknown): Record<string, unknown> {
   return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
 }
 
-/** Server-first daily energy; fallback client solver se module API non ha ancora risposto. */
-export function resolveNutritionDayModel(input: ResolveNutritionDayModelInput): NutritionDailyEnergyModel | null {
-  if (
-    input.serverDailyEnergyModel &&
-    input.serverDailyEnergyDate === input.selectedPlanDate
-  ) {
-    return input.serverDailyEnergyModel;
-  }
+function buildClientNutritionDayModel(input: ResolveNutritionDayModelInput): NutritionDailyEnergyModel | null {
   if (!input.profile) return null;
   const routine = record(input.profile.routine_config);
   return computeNutritionDailyEnergyModel({
@@ -80,4 +73,32 @@ export function resolveNutritionDayModel(input: ResolveNutritionDayModelInput): 
     performanceIntegration: input.nutritionPerformanceIntegration,
     dietDayMealsScalePct: input.dietDayMealsScalePct,
   });
+}
+
+/**
+ * Server-first daily energy; fallback client solver se module API non ha ancora risposto.
+ * Se il server sottostima il training (es. kcal_target null senza bridge TSS) ma il calendario
+ * client ha TSS/durata, resta il modello client per evitare flicker meal plan.
+ */
+export function resolveNutritionDayModel(input: ResolveNutritionDayModelInput): NutritionDailyEnergyModel | null {
+  const clientModel = buildClientNutritionDayModel(input);
+  if (
+    input.serverDailyEnergyModel &&
+    input.serverDailyEnergyDate === input.selectedPlanDate
+  ) {
+    const server = input.serverDailyEnergyModel;
+    const clientTrain = clientModel?.training.kcal ?? 0;
+    const serverTrain = server.training.kcal;
+    const plannedTss = input.plannedTraining.reduce((s, row) => s + Math.max(0, row.tss), 0);
+    const plannedDuration = input.plannedTraining.reduce((s, row) => s + Math.max(0, row.durationMinutes), 0);
+    const serverUnderReportsTraining =
+      plannedDuration > 0 &&
+      plannedTss > 0 &&
+      serverTrain + 80 < clientTrain;
+    if (serverUnderReportsTraining && clientModel) {
+      return clientModel;
+    }
+    return server;
+  }
+  return clientModel;
 }
