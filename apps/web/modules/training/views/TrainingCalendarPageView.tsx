@@ -640,9 +640,12 @@ export default function TrainingCalendarPageView() {
   [athleteId, ctxLoading, fetchFrom, fetchTo, runPostGridEnrichment],
 );
 
-  /** Cambio giorno: notes builder + trace eseguito solo per il pannello sotto (non per la griglia). */
+  /**
+   * Dettaglio giorno (notes builder + trace): solo dopo la coda EXEC → wellness → VIRYA,
+   * così non compete con la griglia né duplica il primo paint.
+   */
   useEffect(() => {
-    if (!athleteId || ctxLoading || !calendarReady || !selectedDate) return;
+    if (!athleteId || ctxLoading || !calendarReady || !selectedDate || !belowFoldReady) return;
     const fetchGen = ++selectedDayFetchGenRef.current;
     const timer = window.setTimeout(() => {
       void mergeSelectedDayFromWindow(selectedDate, fetchGen, "selected").then(() => {
@@ -654,7 +657,15 @@ export default function TrainingCalendarPageView() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [athleteId, ctxLoading, calendarReady, selectedDate, selectedDayRefreshTick, mergeSelectedDayFromWindow]);
+  }, [
+    athleteId,
+    ctxLoading,
+    calendarReady,
+    belowFoldReady,
+    selectedDate,
+    selectedDayRefreshTick,
+    mergeSelectedDayFromWindow,
+  ]);
 
   const movePlannedWorkoutToDate = useCallback(
     async (workoutId: string, fromDate: string, toDate: string) => {
@@ -731,14 +742,6 @@ export default function TrainingCalendarPageView() {
       window.removeEventListener("focus", refresh);
     };
   }, [athleteId, ctxLoading, selectedDate, loadMonth]);
-
-  /** Cambio `?date=` dopo primo paint (es. navigazione da Builder): ricarica finestra. */
-  useEffect(() => {
-    if (!athleteId || ctxLoading || !calendarReadyRef.current) return;
-    const q = normalizeIsoDateParam(searchParams.get("date"));
-    if (!q) return;
-    void loadMonth({ anchorDay: q });
-  }, [searchParams, athleteId, ctxLoading, loadMonth]);
 
   const plannedByDate = useMemo(() => {
     const m = new Map<string, PlannedWorkout[]>();

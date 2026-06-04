@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUILDER_SESSION_JSON_TAG } from "@/lib/training/builder/pro2-session-contract";
 import { clampPlannedWorkoutRow, type PlannedWorkoutInsertPayload } from "@/lib/training/planned/clamp-planned-row";
 import {
-  isPro2BuilderPlannedNotes,
+  isPro2BuilderPlannedRow,
   plannedWorkoutDedupeFingerprint,
 } from "@/lib/training/planned/planned-workout-dedupe-fingerprint";
 
@@ -75,7 +75,7 @@ async function replaceBuilderPlannedSameTypeOnDay(
   row: PlannedWorkoutInsertPayload,
 ): Promise<number> {
   const clamped = clampPlannedWorkoutRow(row);
-  if (!isPro2BuilderPlannedNotes(clamped.notes)) return 0;
+  if (!isPro2BuilderPlannedRow(clamped)) return 0;
   const { data, error } = await db
     .from("planned_workouts")
     .delete()
@@ -99,7 +99,7 @@ export async function insertSinglePlannedWorkout(
   }
 
   let replacedSameTypeCount = 0;
-  if (isPro2BuilderPlannedNotes(clamped.notes)) {
+  if (isPro2BuilderPlannedRow(clamped)) {
     replacedSameTypeCount = await replaceBuilderPlannedSameTypeOnDay(db, clamped);
   }
 

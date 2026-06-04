@@ -19,7 +19,7 @@ import {
   Timer,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoachWorkoutLibraryPanel } from "@/components/training/CoachWorkoutLibraryPanel";
 import { BuilderCalendarSaveConfirm } from "@/components/training/BuilderCalendarSaveConfirm";
 import { BuilderGymManualComposer } from "@/components/training/BuilderGymManualComposer";
@@ -82,6 +82,7 @@ import {
 } from "@/lib/training/engine";
 import { sessionBlocksToChartSegments } from "@/lib/training/engine/block-chart-segments";
 import { generateBuilderSession } from "@/modules/training/services/training-engine-api";
+import { invalidatePlannedWindowCacheForAthlete } from "@/lib/training/planned-window-client-cache";
 import {
   deletePlannedWorkout,
   insertPlannedWorkoutFromEngineSession,
@@ -476,6 +477,8 @@ export default function TrainingBuilderRichPageView() {
           from,
           to,
           includeAthleteContext: "0",
+          includePlannedNotes: "0",
+          includeTraceSummary: "0",
         });
         const res = await fetch(`/api/training/planned-window?${q}`, {
           cache: "no-store",
@@ -690,6 +693,24 @@ export default function TrainingBuilderRichPageView() {
     setWahooPushOk(null);
   }, [genResult]);
 
+  /** Cambio giorno / atleta / replace: non mostrare la seduta generata per un altro giorno. */
+  const builderDayScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const scope = `${athleteId ?? ""}|${plannedDate}|${replacePlannedIdFromQuery ?? ""}`;
+    if (builderDayScopeRef.current === scope) return;
+    builderDayScopeRef.current = scope;
+    setGenResult(null);
+    setGenErr(null);
+    setGenBusy(false);
+    setSaveOkId(null);
+    setSaveErr(null);
+    setSaveBusy(false);
+    setWahooPushErr(null);
+    setWahooPushOk(null);
+    setManualSaveOkId(null);
+    setManualSaveErr(null);
+  }, [athleteId, plannedDate, replacePlannedIdFromQuery]);
+
   useEffect(() => {
     setManualActiveIndex((i) => Math.min(i, Math.max(0, manualPlanBlocks.length - 1)));
   }, [manualPlanBlocks.length]);
@@ -874,6 +895,7 @@ export default function TrainingBuilderRichPageView() {
     }) => {
       if (!athleteId) return;
       const day = input.date.trim().slice(0, 10);
+      invalidatePlannedWindowCacheForAthlete(athleteId);
       const verify = await verifyPlannedWorkoutReadable({
         athleteId,
         date: day,

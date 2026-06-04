@@ -61,3 +61,4 @@ Default **off** in produzione finché la baseline post-Fase-1 è stabile.
 - `nutrition/module`: `trace_summary` solo su `mode=pathway` finestra 1 giorno.
 - Calendario: cache client + debounce 250 ms sul fetch trace del giorno selezionato.
 - Calendario griglia (sequenziale, una chiamata alla volta): (1) `includePlanned=1` `includeExecuted=0` `includePlannedNotes=0` → chip PLAN; (2) `includePlanned=0` `includeExecuted=1` → device EXEC; (3) wellness; (4) VIRYA. `includePlannedNotes=1` solo sul giorno selezionato (pannello Builder sotto, non griglia).
+- Builder → Calendario dopo save: `verifyPlannedWorkoutReadable` usa la stessa query lite (±2 gg, solo id planned); `insertPlannedWorkout` invalida cache planned-window per `athleteId` (tutti gli atleti, nessun ramo per utente).

@@ -46,6 +46,18 @@ export function isPro2BuilderPlannedNotes(notes: string | null | undefined): boo
   return t.includes("[PRO2_BUILDER") || t.includes(BUILDER_SESSION_JSON_TAG);
 }
 
+/** Griglia calendario lite (senza `notes` in SELECT): riconosce builder da `type` (`pro2_builder_*`). */
+export function isPro2BuilderPlannedRow(row: {
+  notes?: string | null;
+  type?: string | null;
+}): boolean {
+  if (isPro2BuilderPlannedNotes(row.notes)) return true;
+  return String(row.type ?? "")
+    .trim()
+    .toLowerCase()
+    .startsWith("pro2_builder");
+}
+
 function pickLatestPlannedWorkoutRow<T extends PlannedWorkoutDbDedupeRow>(rows: T[]): T {
   return [...rows].sort((a, b) => {
     const ca = String(a.created_at ?? "");
@@ -92,7 +104,7 @@ function dedupePlannedWorkoutDbRowsForSingleDay<T extends PlannedWorkoutDbDedupe
   const builderByType = new Map<string, T[]>();
   const nonBuilder: T[] = [];
   for (const row of kept) {
-    if (!isPro2BuilderPlannedNotes(row.notes)) {
+    if (!isPro2BuilderPlannedRow(row)) {
       nonBuilder.push(row);
       continue;
     }

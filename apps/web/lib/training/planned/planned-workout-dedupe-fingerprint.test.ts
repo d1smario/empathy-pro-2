@@ -79,3 +79,30 @@ test("dedupePlannedWorkoutDbRows collapses builder same type same day", () => {
   assert.equal(out.length, 1);
   assert.equal(out[0]?.id, "b");
 });
+
+test("dedupePlannedWorkoutDbRows collapses pro2_builder type without notes (calendar lite select)", () => {
+  const out = dedupePlannedWorkoutDbRows([
+    {
+      id: "old",
+      date: "2026-06-05",
+      type: "pro2_builder_mitochondrial_density",
+      duration_minutes: 60,
+      tss_target: 50,
+      kcal_target: null,
+      notes: null,
+      created_at: "2026-06-04T10:00:00+00:00",
+    },
+    {
+      id: "new",
+      date: "2026-06-05",
+      type: "pro2_builder_mitochondrial_density",
+      duration_minutes: 75,
+      tss_target: 55,
+      kcal_target: null,
+      notes: null,
+      created_at: "2026-06-04T18:00:00+00:00",
+    },
+  ]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0]?.id, "new");
+});

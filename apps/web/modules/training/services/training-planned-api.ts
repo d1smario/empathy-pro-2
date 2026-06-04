@@ -30,6 +30,11 @@ export async function verifyPlannedWorkoutReadable(input: {
     athleteId: input.athleteId.trim(),
     from: shiftIsoCalendarDay(day, -2),
     to: shiftIsoCalendarDay(day, 2),
+    includePlanned: "1",
+    includeExecuted: "0",
+    includePlannedNotes: "0",
+    includeTraceSummary: "0",
+    includeAthleteContext: "0",
   });
   const res = await fetch(`/api/training/planned-window?${q}`, {
     cache: "no-store",
@@ -84,9 +89,11 @@ export async function insertPlannedWorkoutFromEngineSession(input: {
   if (!res.ok || json.ok !== true) {
     return { ok: false, error: json.error ?? "Insert planned failed" };
   }
+  const athleteId = String(json.athleteId ?? input.athleteId);
+  invalidatePlannedWindowCacheForAthlete(athleteId);
   return {
     ok: true,
-    athleteId: String(json.athleteId ?? input.athleteId),
+    athleteId,
     plannedWorkoutId: json.plannedWorkoutId ?? null,
   };
 }
