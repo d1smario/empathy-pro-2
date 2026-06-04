@@ -1,5 +1,6 @@
 -- Pro 2 — estende `admin_athlete_activity_rollups` con metriche ingest / integrazioni (solo lettura).
 -- PG non consente CREATE OR REPLACE con cambio tipo di ritorno: DROP + CREATE.
+-- Idempotente: se 058 non è mai passata, questa definizione è già quella canonica.
 
 drop function if exists public.admin_athlete_activity_rollups(uuid[]);
 

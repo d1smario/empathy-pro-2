@@ -1,7 +1,10 @@
 -- Pro 2 — aggregati lettura-only per console admin (service_role).
 -- Evita N+1 query da Next: un solo round-trip RPC su un array di athlete_id.
+-- DROP prima di CREATE: su DB condivisi la firma può già essere quella estesa da 059.
 
-create or replace function public.admin_athlete_activity_rollups(p_athlete_ids uuid[])
+drop function if exists public.admin_athlete_activity_rollups(uuid[]);
+
+create function public.admin_athlete_activity_rollups(p_athlete_ids uuid[])
 returns table (
   athlete_id uuid,
   executed_workouts_count bigint,
