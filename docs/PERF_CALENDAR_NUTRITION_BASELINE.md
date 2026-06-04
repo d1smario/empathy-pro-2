@@ -60,4 +60,4 @@ Default **off** in produzione finché la baseline post-Fase-1 è stabile.
 - Nutrition: fetch iniziale `mode=light` senza `pathwayDate`; finestra ±7 + espansione background ±30.
 - `nutrition/module`: `trace_summary` solo su `mode=pathway` finestra 1 giorno.
 - Calendario: cache client + debounce 250 ms sul fetch trace del giorno selezionato.
-- Calendario griglia: `GET planned-window` con `includePlannedNotes=0` + `includeWellness=0` (primo paint); wellness in secondo fetch; `includePlannedNotes=1` solo sul giorno selezionato (dettaglio Builder).
+- Calendario griglia (sequenziale, una chiamata alla volta): (1) `includePlanned=1` `includeExecuted=0` `includePlannedNotes=0` → chip PLAN; (2) `includePlanned=0` `includeExecuted=1` → device EXEC; (3) wellness; (4) VIRYA. `includePlannedNotes=1` solo sul giorno selezionato (pannello Builder sotto, non griglia).

@@ -67,6 +67,13 @@ function wantsPlannedNotesFromQuery(req: NextRequest): boolean {
   return true;
 }
 
+/** Default: entrambe le tabelle. Disattiva `includePlanned` o `includeExecuted` per fetch calendario a step. */
+function wantsTableFromQuery(req: NextRequest, key: "includePlanned" | "includeExecuted"): boolean {
+  const raw = (req.nextUrl.searchParams.get(key) ?? "").trim().toLowerCase();
+  if (raw === "0" || raw === "false" || raw === "no" || raw === "off" || raw === "skip") return false;
+  return true;
+}
+
 function addDays(isoDate: string, delta: number): string {
   const base = new Date(`${isoDate}T12:00:00`);
   if (Number.isNaN(base.getTime())) return isoDate;
@@ -113,6 +120,8 @@ export async function GET(req: NextRequest) {
     const includeWellness = wantsWellnessFromQuery(req);
     const includeTraceSummary = wantsTraceSummaryFromQuery(req);
     const includePlannedNotes = wantsPlannedNotesFromQuery(req);
+    const includePlanned = wantsTableFromQuery(req, "includePlanned");
+    const includeExecuted = wantsTableFromQuery(req, "includeExecuted");
     const plannedSelect = plannedWorkoutsWindowSelect(includePlannedNotes);
 
     const windowPromise = (async () => {
@@ -120,6 +129,8 @@ export async function GET(req: NextRequest) {
       const result = await queryPlannedExecutedWindow(db, athleteId, from, to, undefined, {
         includeTraceSummary,
         includePlannedNotes,
+        includePlanned,
+        includeExecuted,
       });
       timing.mark("window", tWindow, "planned executed window");
       return result;
@@ -169,7 +180,7 @@ export async function GET(req: NextRequest) {
      */
     const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
     const rlsExecutedCount = executedRes.data?.length ?? 0;
-    if (rlsExecutedCount === 0) {
+    if (includeExecuted && rlsExecutedCount === 0) {
       const admin = createSupabaseAdminClient();
       if (admin) {
         const forcedExecuted = await admin
@@ -188,7 +199,7 @@ export async function GET(req: NextRequest) {
     }
 
     let plannedAdminFallbackUsed = false;
-    if ((plannedRes.data?.length ?? 0) === 0) {
+    if (includePlanned && (plannedRes.data?.length ?? 0) === 0) {
       const admin = createSupabaseAdminClient();
       if (admin) {
         const forcedPlanned = await admin

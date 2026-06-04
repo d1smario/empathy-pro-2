@@ -67,14 +67,22 @@ export async function queryPlannedExecutedWindow(
   from: string,
   to: string,
   dataSourcePreferences?: DataSourcePreferenceMap | null,
-  options?: { includeTraceSummary?: boolean; includePlannedNotes?: boolean },
+  options?: {
+    includeTraceSummary?: boolean;
+    includePlannedNotes?: boolean;
+    /** Calendario: prima solo PLAN in cella, poi fetch EXEC device (default entrambi). */
+    includePlanned?: boolean;
+    includeExecuted?: boolean;
+  },
 ): Promise<{
   planned: WindowQueryResult;
   executed: WindowQueryResult;
   executedHiddenBySourcePreference: number;
 }> {
+  const includePlanned = options?.includePlanned !== false;
+  const includeExecuted = options?.includeExecuted !== false;
   const prefs =
-    dataSourcePreferences === undefined
+    includeExecuted && dataSourcePreferences === undefined
       ? await loadDataSourcePreferenceMap(db, athleteId)
       : (dataSourcePreferences ?? {});
 
@@ -83,38 +91,45 @@ export async function queryPlannedExecutedWindow(
   const executedSelect = executedWorkoutsWindowSelect(includeTraceSummary);
   const plannedSelect = plannedWorkoutsWindowSelect(includePlannedNotes);
 
-  const [planned, executed] = await Promise.all([
-    db
-      .from("planned_workouts")
-      .select(plannedSelect)
-      .eq("athlete_id", athleteId)
-      .gte("date", from)
-      .lte("date", to)
-      .order("date", { ascending: true })
-      .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1),
-    db
-      .from("executed_workouts")
-      .select(executedSelect)
-      .eq("athlete_id", athleteId)
-      .gte("date", from)
-      .lte("date", to)
-      .order("date", { ascending: true })
-      .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1),
-  ]);
+  const plannedPromise = includePlanned
+    ? db
+        .from("planned_workouts")
+        .select(plannedSelect)
+        .eq("athlete_id", athleteId)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1)
+    : Promise.resolve({ data: [] as unknown[], error: null });
+
+  const executedPromise = includeExecuted
+    ? db
+        .from("executed_workouts")
+        .select(executedSelect)
+        .eq("athlete_id", athleteId)
+        .gte("date", from)
+        .lte("date", to)
+        .order("date", { ascending: true })
+        .range(0, EXECUTED_WINDOW_ROW_LIMIT - 1)
+    : Promise.resolve({ data: [] as unknown[], error: null });
+
+  const [planned, executed] = await Promise.all([plannedPromise, executedPromise]);
 
   const rawExec = (executed.data ?? []) as unknown[];
-  const filteredExec = rawExec.filter((row) => {
-    const src = (row as { source?: unknown }).source;
-    return executedWorkoutSourceMatchesPreference(prefs, typeof src === "string" ? src : null);
-  });
+  const filteredExec = includeExecuted
+    ? rawExec.filter((row) => {
+        const src = (row as { source?: unknown }).source;
+        return executedWorkoutSourceMatchesPreference(prefs, typeof src === "string" ? src : null);
+      })
+    : [];
 
   return {
     planned: {
-      data: dedupePlannedWorkoutDbRows(plannedRowsForDedupe(planned.data ?? [])),
+      data: includePlanned ? dedupePlannedWorkoutDbRows(plannedRowsForDedupe(planned.data ?? [])) : [],
       error: planned.error,
     },
     executed: { data: filteredExec, error: executed.error },
-    executedHiddenBySourcePreference: Math.max(0, rawExec.length - filteredExec.length),
+    executedHiddenBySourcePreference: includeExecuted ? Math.max(0, rawExec.length - filteredExec.length) : 0,
   };
 }
 

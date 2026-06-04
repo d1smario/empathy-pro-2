@@ -387,11 +387,11 @@ export default function TrainingCalendarPageView() {
   );
 
   /**
-   * Dopo la griglia lite: arricchimento sequenziale (importanza decrescente).
-   * Tier 1 giorno selezionato → wellness → twin/context → VIRYA (unica chiamata) → below-fold.
+   * Dopo la griglia PLAN visibile: una chiamata alla volta (EXEC device → wellness → VIRYA).
+   * Notes builder del giorno: solo al cambio data / pannello sotto (mergeSelectedDayFromWindow).
    */
   const runPostGridEnrichment = useCallback(
-    async (gridFetchGen: number, dayKey: string) => {
+    async (gridFetchGen: number) => {
       const enrichGen = ++calendarEnrichmentGenRef.current;
       const isEnrichStale = () => enrichGen !== calendarEnrichmentGenRef.current;
       const isGridStale = () => gridFetchGen !== plannedWindowFetchGenRef.current;
@@ -401,9 +401,47 @@ export default function TrainingCalendarPageView() {
       setViryaPlansLoading(true);
       setViryaPlansLoadErr(null);
 
-      await mergeSelectedDayFromWindow(dayKey, gridFetchGen, "grid");
+      try {
+        const authHeaders = await buildSupabaseAuthHeaders();
+        const qExec = new URLSearchParams({
+          athleteId,
+          from: fetchFrom,
+          to: fetchTo,
+          includePlanned: "0",
+          includeExecuted: "1",
+          includeAthleteContext: "0",
+          includeTraceSummary: "0",
+          includePlannedNotes: "0",
+        });
+        const execUrl = `/api/training/planned-window?${qExec}`;
+        const execCached = await fetchPlannedWindowCached<
+          TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
+        >(execUrl, {
+          cache: "no-store",
+          credentials: "same-origin",
+          headers: authHeaders,
+        });
+        if (isEnrichStale() || isGridStale()) return;
+        if (execCached.ok && execCached.json.ok) {
+          const core = execCached.json as TrainingPlannedWindowOkViewModel;
+          setExecuted(core.executed ?? []);
+          setFetchDiag((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  executedN: core.executed?.length ?? 0,
+                  executedFallback: core.executedAdminFallbackUsed ?? false,
+                  executedHiddenByPreference: core.executedHiddenBySourcePreference ?? 0,
+                  sampleDates: Array.isArray(core.executedSampleDates) ? core.executedSampleDates : prev.sampleDates,
+                }
+              : prev,
+          );
+        }
+      } catch {
+        /* eseguiti opzionali */
+      }
+
       if (isEnrichStale() || isGridStale()) return;
-      postGridEnrichedDayRef.current = dayKey;
 
       try {
         const authHeaders = await buildSupabaseAuthHeaders();
@@ -412,6 +450,8 @@ export default function TrainingCalendarPageView() {
           from: fetchFrom,
           to: fetchTo,
           includeWellness: "1",
+          includePlanned: "0",
+          includeExecuted: "0",
           includeAthleteContext: "0",
           includeTraceSummary: "0",
           includePlannedNotes: "0",
@@ -430,29 +470,6 @@ export default function TrainingCalendarPageView() {
         }
       } catch {
         /* wellness opzionale */
-      }
-
-      if (isEnrichStale() || isGridStale()) return;
-
-      try {
-        const now = new Date();
-        const dayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const q = new URLSearchParams({ athleteId, from: dayIso, to: dayIso });
-        q.set("includeTraceSummary", "0");
-        const res = await fetch(`/api/training/planned-window?${q}`, {
-          cache: "no-store",
-          credentials: "same-origin",
-          headers: await buildSupabaseAuthHeaders(),
-        });
-        const json = (await res.json()) as TrainingPlannedWindowOkViewModel | { ok: false };
-        if (isEnrichStale() || isGridStale()) return;
-        if (res.ok && json.ok) {
-          const full = json as TrainingPlannedWindowOkViewModel;
-          setReadSpineCoverage(full.readSpineCoverage ?? null);
-          setTwinContextStrip(full.twinContextStrip ?? null);
-        }
-      } catch {
-        /* contesto opzionale */
       }
 
       if (isEnrichStale() || isGridStale()) return;
@@ -485,7 +502,7 @@ export default function TrainingCalendarPageView() {
       if (isEnrichStale() || isGridStale()) return;
       setBelowFoldReady(true);
     },
-    [athleteId, fetchFrom, fetchTo, mergeSelectedDayFromWindow],
+    [athleteId, fetchFrom, fetchTo],
   );
 
   const loadMonth = useCallback(
@@ -531,17 +548,7 @@ export default function TrainingCalendarPageView() {
         to = maxIsoDay(to, padTo);
       }
       const authHeaders = await buildSupabaseAuthHeaders();
-      const fetchPlannedWindow = async (
-        includeWellness: boolean,
-        includeAthleteContext: boolean,
-        includeTraceSummary: boolean,
-        includePlannedNotes: boolean,
-      ) => {
-        const q = new URLSearchParams({ athleteId, from, to });
-        if (includeWellness) q.set("includeWellness", "1");
-        if (!includeAthleteContext) q.set("includeAthleteContext", "0");
-        if (!includeTraceSummary) q.set("includeTraceSummary", "0");
-        if (!includePlannedNotes) q.set("includePlannedNotes", "0");
+      const fetchPlannedWindow = async (q: URLSearchParams) => {
         const url = `/api/training/planned-window?${q}`;
         const cached = await fetchPlannedWindowCached<
           TrainingPlannedWindowOkViewModel | { ok: false; error?: string }
@@ -554,8 +561,14 @@ export default function TrainingCalendarPageView() {
         return { res, json: cached.json };
       };
 
-      /** Griglia veloce: no wellness, no notes builder, no trace (wellness in background). */
-      const { res, json } = await fetchPlannedWindow(false, false, false, false);
+      /** Step 1 — chip PLAN in cella (solo `planned_workouts`, lite). */
+      const qPlan = new URLSearchParams({ athleteId, from, to });
+      qPlan.set("includePlanned", "1");
+      qPlan.set("includeExecuted", "0");
+      qPlan.set("includeAthleteContext", "0");
+      qPlan.set("includeTraceSummary", "0");
+      qPlan.set("includePlannedNotes", "0");
+      const { res, json } = await fetchPlannedWindow(qPlan);
       if (isStale()) return;
 
       if (!res.ok || !json.ok) {
@@ -576,7 +589,6 @@ export default function TrainingCalendarPageView() {
       }
       const core = json as TrainingPlannedWindowOkViewModel;
       const p = core.planned ?? [];
-      const ex = core.executed ?? [];
       const removed = locallyRemovedPlannedIdsRef.current;
       const stillPresent = p.filter((row) => removed.has(row.id));
       if (stillPresent.length > 0) {
@@ -590,15 +602,15 @@ export default function TrainingCalendarPageView() {
         }
       }
       setPlanned(p.filter((row) => !removed.has(row.id)));
-      setExecuted(ex);
+      setExecuted([]);
       setPlannedProvenanceSummary(core.plannedProvenanceSummary ?? null);
       setFetchDiag({
         status: res.status,
         plannedN: p.length,
-        executedN: ex.length,
-        executedFallback: core.executedAdminFallbackUsed ?? false,
-        executedHiddenByPreference: core.executedHiddenBySourcePreference ?? 0,
-        sampleDates: Array.isArray(core.executedSampleDates) ? core.executedSampleDates : [],
+        executedN: 0,
+        executedFallback: false,
+        executedHiddenByPreference: 0,
+        sampleDates: [],
         resFrom: core.from,
         resTo: core.to,
       });
@@ -618,20 +630,26 @@ export default function TrainingCalendarPageView() {
         setMonthRefreshing(false);
         calendarReadyRef.current = true;
         setCalendarReady(true);
-        void runPostGridEnrichment(fetchGen, selectedDateRef.current);
+        const gridGen = fetchGen;
+        window.setTimeout(() => {
+          void runPostGridEnrichment(gridGen);
+        }, 0);
       }
     }
   },
   [athleteId, ctxLoading, fetchFrom, fetchTo, runPostGridEnrichment],
 );
 
-  /** Cambio giorno / refresh tick: solo fetch trace del giorno (il pipeline post-griglia copre il first paint). */
+  /** Cambio giorno: notes builder + trace eseguito solo per il pannello sotto (non per la griglia). */
   useEffect(() => {
     if (!athleteId || ctxLoading || !calendarReady || !selectedDate) return;
-    if (postGridEnrichedDayRef.current === selectedDate && selectedDayRefreshTick === 0) return;
     const fetchGen = ++selectedDayFetchGenRef.current;
     const timer = window.setTimeout(() => {
-      void mergeSelectedDayFromWindow(selectedDate, fetchGen, "selected");
+      void mergeSelectedDayFromWindow(selectedDate, fetchGen, "selected").then(() => {
+        if (fetchGen === selectedDayFetchGenRef.current) {
+          postGridEnrichedDayRef.current = selectedDate;
+        }
+      });
     }, 250);
     return () => {
       window.clearTimeout(timer);
