@@ -1285,7 +1285,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
         planned: selectedPlanSessions.map((session) => {
           const bs = resolveBuilderSessionForPlannedRow({
             builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
-            notes: session.notes,
+            notes: typeof session.notes === "string" ? session.notes : null,
           });
           const m = effectivePlannedWorkoutNutritionMetrics({
             durationMinutesDb: session.duration_minutes as number | null | undefined,
@@ -1645,7 +1645,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     const plannedSources: PlannedFuelSrc[] = selectedPlanSessions.map((session) => {
       const builder = resolveBuilderSessionForPlannedRow({
         builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
-        notes: session.notes,
+        notes: typeof session.notes === "string" ? session.notes : null,
       });
       return {
         kind: "planned",
@@ -1726,7 +1726,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
       const session = src.session;
         const builder = resolveBuilderSessionForPlannedRow({
           builderSession: session.builderSession as Pro2BuilderSessionContract | null | undefined,
-          notes: session.notes,
+          notes: typeof session.notes === "string" ? session.notes : null,
         });
         const blocks = builder?.blocks ?? [];
         const blockLabels = blocks
