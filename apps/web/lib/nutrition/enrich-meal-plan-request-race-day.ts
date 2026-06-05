@@ -132,10 +132,14 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
     });
   }
 
+  const mealTimesFinal = Object.fromEntries(
+    slots.map((s) => [s.slot, s.scheduledTimeLocal] as const),
+  ) as Partial<Record<MealSlotKey, string>>;
   const raceSuppressed = computeRaceDaySuppressedSlots({
     ctx: racePreLunch,
     activeSlots,
-    mealTimesBySlot,
+    mealTimesBySlot: mealTimesFinal,
+    postRecoveryMealSlot: racePostRecovery?.mealSlot ?? null,
   });
   const suppressedSlots = [...new Set([...(input.request.suppressedSlots ?? []), ...raceSuppressed])];
 

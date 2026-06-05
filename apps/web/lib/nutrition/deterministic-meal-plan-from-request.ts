@@ -98,7 +98,7 @@ function pickItemsForSlot(
     proteinG: slot.targetProteinG,
     fatG: slot.targetFatG,
   };
-  const isRacePreLunch = slot.slot === "lunch" && Boolean(dayCtx?.racePreLunch);
+  const isRacePreLunch = isRacePreRaceMealSlot(slot.slot, dayCtx?.racePreLunch);
   const meal = composeMediterraneanMeal(slot.slot, slotMacros, dayCtx);
   const pathway = isRacePreLunch
     ? { meal, adviceNotes: [] as string[] }

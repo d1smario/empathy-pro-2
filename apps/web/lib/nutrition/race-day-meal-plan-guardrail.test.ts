@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { enrichIntelligentMealPlanRequestWithRaceDay } from "./enrich-meal-plan-request-race-day";
 import {
   buildRacePreLunchDayContext,
+  computeRaceDaySuppressedSlots,
   resolvePreRaceMealSlot,
 } from "./race-day-pre-race-lunch";
 import { composeMediterraneanMeal, createMediterraneanDayContext } from "./mediterranean-meal-composer";
@@ -108,6 +109,75 @@ test("guardrail: gara mattutina 10:00 → pre-gara in colazione alle 07:00", () 
   assert.ok(ctx);
   assert.equal(ctx!.mealSlot, "breakfast");
   assert.equal(ctx!.lunchTimeLocal, "07:00");
+});
+
+test("computeRaceDaySuppressedSlots: gara 13:00 — colazione classica, pranzo pre-gara 10:00, snack_am fueling", () => {
+  const ctx = buildRacePreLunchDayContext({
+    weightKg: 70,
+    planDate: "2026-06-05",
+    routineConfig: {
+      week_plan: { Fri: { day_mode: "race", training1_start_time: "13:00", training1_duration_minutes: 180 } },
+    },
+    plannedSessions: [],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_evening"],
+  });
+  assert.ok(ctx);
+  assert.equal(ctx!.mealSlot, "lunch");
+  assert.equal(ctx!.lunchTimeLocal, "10:00");
+  const suppressed = computeRaceDaySuppressedSlots({
+    ctx: ctx!,
+    activeSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner", "snack_evening"],
+    mealTimesBySlot: {
+      breakfast: "08:00",
+      snack_am: "12:00",
+      lunch: "10:00",
+      snack_pm: "16:30",
+      dinner: "20:00",
+      snack_evening: "22:00",
+    },
+    postRecoveryMealSlot: "snack_pm",
+  });
+  assert.ok(!suppressed.includes("breakfast"), `Colazione deve restare classica, got: ${suppressed.join(", ")}`);
+  assert.ok(!suppressed.includes("lunch"), `Pranzo pre-gara deve restare classico, got: ${suppressed.join(", ")}`);
+  assert.ok(suppressed.includes("snack_am"), `Spuntino 12:00 in finestra fueling, got: ${suppressed.join(", ")}`);
+  assert.ok(!suppressed.includes("snack_pm"), `Recovery post-gara non soppresso, got: ${suppressed.join(", ")}`);
+  assert.ok(!suppressed.includes("dinner"), `Cena classica, got: ${suppressed.join(", ")}`);
+  assert.ok(!suppressed.includes("snack_evening"), `Spuntino serale classico, got: ${suppressed.join(", ")}`);
+});
+
+test("guardrail: gara 13:00 — colazione composer normale (no in-ride placeholder)", () => {
+  const ctx = buildRacePreLunchDayContext({
+    weightKg: 70,
+    planDate: "2026-06-05",
+    routineConfig: {
+      week_plan: { Fri: { day_mode: "race", training1_start_time: "13:00", training1_duration_minutes: 180 } },
+    },
+    plannedSessions: [],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
+  });
+  assert.ok(ctx);
+  const suppressed = computeRaceDaySuppressedSlots({
+    ctx: ctx!,
+    activeSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
+    mealTimesBySlot: { breakfast: "08:00", snack_am: "12:00", lunch: "10:00", snack_pm: "16:30", dinner: "20:00" },
+    postRecoveryMealSlot: "snack_pm",
+  });
+  const dayCtx = createMediterraneanDayContext(
+    "2026-06-05",
+    undefined,
+    undefined,
+    "omnivore",
+    undefined,
+    suppressed,
+    ctx!,
+  );
+  const breakfast = composeMediterraneanMeal(
+    "breakfast",
+    { kcal: 550, carbsG: 70, proteinG: 25, fatG: 15 },
+    dayCtx,
+  );
+  assert.ok(!breakfast.items.some((i) => /in-ride fueling/i.test(i.name)));
+  assert.ok(breakfast.items.length > 1);
 });
 
 test("guardrail: enrich + composer — recovery post-gara su slot dedicato", () => {

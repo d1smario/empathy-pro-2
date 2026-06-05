@@ -126,15 +126,6 @@ export function buildIntelligentMealPlanRequest(input: {
       )
     : mealRows;
 
-  const raceSuppressed = racePreLunch
-    ? computeRaceDaySuppressedSlots({
-        ctx: racePreLunch,
-        activeSlots: mealRowsResolved.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k)),
-        mealTimesBySlot: Object.fromEntries(
-          mealRowsResolved.map((r) => [r.key, r.timeLocal] as const),
-        ) as Partial<Record<MealSlotKey, string>>,
-      })
-    : [];
   const mealTimesBySlot = Object.fromEntries(
     mealRowsResolved.map((r) => [r.key, r.timeLocal] as const),
   ) as Partial<Record<MealSlotKey, string>>;
@@ -149,6 +140,17 @@ export function buildIntelligentMealPlanRequest(input: {
   const mealRowsFinal = racePostRecovery
     ? rebalanceMealRowsForRacePostRecovery(mealRowsResolved, racePostRecovery)
     : mealRowsResolved;
+  const mealTimesFinal = Object.fromEntries(
+    mealRowsFinal.map((r) => [r.key, r.timeLocal] as const),
+  ) as Partial<Record<MealSlotKey, string>>;
+  const raceSuppressed = racePreLunch
+    ? computeRaceDaySuppressedSlots({
+        ctx: racePreLunch,
+        activeSlots: mealRowsFinal.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k)),
+        mealTimesBySlot: mealTimesFinal,
+        postRecoveryMealSlot: racePostRecovery?.mealSlot ?? null,
+      })
+    : [];
 
   /**
    * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai

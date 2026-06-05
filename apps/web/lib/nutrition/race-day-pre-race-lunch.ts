@@ -377,23 +377,36 @@ export function resolvePreRaceMealSlot(
   return activeSlots[0] ?? "lunch";
 }
 
-/** Pasti prima della gara (e in finestra gara) → placeholder Fueling; solo post-gara restano solidi. */
+/** Finestra Fueling in giorno gara: da 1 h prima dello start a 1 h dopo la fine (incluso post-workout). */
+export const RACE_DAY_FUELING_LEAD_MINUTES = 60;
+export const RACE_DAY_FUELING_TAIL_MINUTES = 60;
+
+export function computeRaceDayFuelingWindow(ctx: RacePreLunchDayContext): { startMinutes: number; endMinutes: number } {
+  return {
+    startMinutes: ctx.raceStartMinutes - RACE_DAY_FUELING_LEAD_MINUTES,
+    endMinutes: ctx.raceEndMinutes + RACE_DAY_FUELING_TAIL_MINUTES,
+  };
+}
+
+/**
+ * Slot nel meal plan che cadono nella finestra Fueling → placeholder in-ride (gel/idratazione).
+ * Restano classici: colazione/pranzo pre-gara (mealSlot), cena/spuntino serale fuori finestra,
+ * e lo slot recovery post-gara (pasto solido dedicato, non placeholder).
+ */
 export function computeRaceDaySuppressedSlots(input: {
   ctx: RacePreLunchDayContext;
   activeSlots: readonly MealSlotKey[];
   mealTimesBySlot: Partial<Record<MealSlotKey, string>>;
+  postRecoveryMealSlot?: MealSlotKey | null;
 }): MealSlotKey[] {
+  const { startMinutes, endMinutes } = computeRaceDayFuelingWindow(input.ctx);
   const out: MealSlotKey[] = [];
-  const { mealSlot, raceStartMinutes, raceEndMinutes } = input.ctx;
   for (const slot of input.activeSlots) {
-    if (slot === mealSlot) continue;
+    if (slot === input.ctx.mealSlot) continue;
+    if (input.postRecoveryMealSlot && slot === input.postRecoveryMealSlot) continue;
     const t = parseLocalTimeToMinutes(input.mealTimesBySlot[slot] ?? "");
-    if (t == null) {
-      if (slot === "breakfast" || slot === "snack_am") out.push(slot);
-      continue;
-    }
-    if (t < raceStartMinutes + 20) out.push(slot);
-    else if (t >= raceStartMinutes && t < raceEndMinutes + 15) out.push(slot);
+    if (t == null) continue;
+    if (t >= startMinutes && t <= endMinutes) out.push(slot);
   }
   return [...new Set(out)];
 }
