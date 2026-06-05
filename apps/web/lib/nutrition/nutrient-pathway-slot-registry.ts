@@ -184,13 +184,13 @@ export function uncoveredNutrientTargetsForSlot(
   const uncovered: Array<{ nutrientId: NutrientTargetId; displayNameIt: string }> = [];
   for (const id of targetIds) {
     if (listNutrientPathwaySwapsForSlot(id, slot, dietType).length === 0) {
-      uncovered.push({ nutrientId: id, displayNameIt: nutrientDisplayLabel(id) });
+      uncovered.push({ nutrientId: id, displayNameIt: nutrientDisplayLabelIt(id) });
     }
   }
   return uncovered;
 }
 
-function nutrientDisplayLabel(id: NutrientTargetId): string {
+export function nutrientDisplayLabelIt(id: NutrientTargetId): string {
   const labels: Partial<Record<NutrientTargetId, string>> = {
     folate_mcg: "Folati (B9)",
     vitC_mg: "Vitamina C",
@@ -228,7 +228,7 @@ const INTEGRATION_ACTION_BY_TARGET: Partial<Record<NutrientTargetId, string>> = 
   fiberG: "Fibre: aumentare verdure/legumi/cereali integrali nei pasti principali.",
 };
 
-function integrationHintForTarget(nutrientId: string, displayNameIt: string): string {
+export function integrationActionForTarget(nutrientId: string, displayNameIt: string): string {
   const action =
     INTEGRATION_ACTION_BY_TARGET[nutrientId as NutrientTargetId] ??
     `Valuta integrazione mirata per ${displayNameIt} con medico/nutrizionista.`;
@@ -252,7 +252,7 @@ export function buildIntegrationHintItemsForSlot(
     }));
   }
   return uncovered.slice(0, maxLines).map((t) => {
-    const hint = integrationHintForTarget(t.nutrientId, t.displayNameIt);
+    const hint = integrationActionForTarget(t.nutrientId, t.displayNameIt);
     return {
       name: `Integrazione suggerita: ${t.displayNameIt}`,
       portionHint: hint.slice(0, 160),

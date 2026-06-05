@@ -35,6 +35,30 @@ const B1_HINT: PathwayAbsorptionHint = {
   rationaleIt: "Tiamina (PDH/glicolisi): distribuzione su colazione/pranzo regolari (enzyme-linked v3).",
 };
 
+const FOLATE_HINT: PathwayAbsorptionHint = {
+  nutrientId: "folate_mcg",
+  slotPreference: ["lunch", "dinner"],
+  avoidWith: [],
+  pairWith: ["verdure a foglia", "legumi"],
+  rationaleIt: "Folati: preferenza pranzo/cena; integrazione orale una sola volta al giorno se non coperto dal menu.",
+};
+
+const ZN_HINT: PathwayAbsorptionHint = {
+  nutrientId: "zn_mg",
+  slotPreference: ["lunch", "dinner"],
+  avoidWith: ["ferro contemporaneo", "fibre molto alte nello stesso momento"],
+  pairWith: ["proteine", "pasto misto"],
+  rationaleIt: "Zinco: assorbimento migliore lontano da ferro e fibre concentrate.",
+};
+
+const VIT_C_HINT: PathwayAbsorptionHint = {
+  nutrientId: "vitC_mg",
+  slotPreference: ["breakfast", "snack_am"],
+  avoidWith: [],
+  pairWith: ["frutta", "pasto leggero"],
+  rationaleIt: "Vitamina C idrosolubile: colazione/spuntino; non ripetere integrazione su più pasti.",
+};
+
 const MG_HINT: PathwayAbsorptionHint = {
   nutrientId: "mg_mg",
   slotPreference: ["lunch", "snack_pm"],
@@ -63,6 +87,9 @@ const STATIC_HINTS: PathwayAbsorptionHint[] = [
   IRON_HINT,
   B12_HINT,
   B1_HINT,
+  FOLATE_HINT,
+  ZN_HINT,
+  VIT_C_HINT,
   MG_HINT,
   VIT_D_HINT,
   FAT_SOLUBLE_HINT,
@@ -102,6 +129,9 @@ export function buildPathwayAbsorptionHints(
   if (/ferr|iron|ferro|eritropo/i.test(haystack)) out.push(IRON_HINT);
   if (/b12|cobalam/i.test(haystack)) out.push(B12_HINT);
   if (/tiamin|thiamin|\bb1\b|pdh|piruvato/i.test(haystack)) out.push(B1_HINT);
+  if (/folat|folic|b9|b-9/i.test(haystack)) out.push(FOLATE_HINT);
+  if (/zinc|\bzn\b/i.test(haystack)) out.push(ZN_HINT);
+  if (/vit\s*c|vitamina c|ascorb/i.test(haystack)) out.push(VIT_C_HINT);
   if (/magnes|\bmg\b|pfk|chinasi/i.test(haystack)) out.push(MG_HINT);
   if (/vit\s*d|vitamina d|colecalcif/i.test(haystack)) out.push(VIT_D_HINT);
   if (/vit\s*a|vit\s*e|vit\s*k|liposolub/i.test(haystack)) out.push(FAT_SOLUBLE_HINT);

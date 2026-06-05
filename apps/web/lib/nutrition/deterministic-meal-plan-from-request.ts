@@ -16,10 +16,7 @@ import {
   composeMediterraneanMeal,
   createMediterraneanDayContext,
 } from "@/lib/nutrition/mediterranean-meal-composer";
-import {
-  buildIntegrationHintItemsForSlot,
-  uncoveredNutrientTargetsForSlot,
-} from "@/lib/nutrition/nutrient-pathway-slot-registry";
+import { buildDailySupplementIntegrationPlan } from "@/lib/nutrition/meal-plan-daily-supplement-scheduler";
 import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profile-food-filter";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
@@ -91,6 +88,7 @@ function pickItemsForSlot(
   slot: IntelligentMealPlanRequestSlot,
   dayCtx: MediterraneanDayContext,
   boostTargetIds: readonly NutrientTargetId[] = [],
+  dailyIntegrationItems: IntelligentMealPlanItemOut[] = [],
 ): SlotPickResult {
   const slotMacros = {
     kcal: slot.targetKcal,
@@ -105,12 +103,7 @@ function pickItemsForSlot(
     : applyPathwayAdvice(meal, slot.slot, boostTargetIds, dayCtx);
   registerMealCanonicalKeys(dayCtx, pathway.meal);
   const composed = pathway.meal;
-  const uncovered = isRacePreLunch
-    ? []
-    : uncoveredNutrientTargetsForSlot(boostTargetIds, slot.slot, dayCtx.dietType);
-  const integrationItems = isRacePreLunch
-    ? []
-    : buildIntegrationHintItemsForSlot(slot.slot, uncovered, 2);
+  const integrationItems = isRacePreLunch ? [] : dailyIntegrationItems;
   const groupTitles = slot.functionalFoodGroups.map((g) => g.displayNameIt).join(" · ");
   const bridgePrefix = groupTitles
     ? `Target funzionali (solver): ${groupTitles.slice(0, 180)}${groupTitles.length > 180 ? "…" : ""}. `
@@ -159,12 +152,25 @@ export async function buildDeterministicMealPlanFromRequest(
    */
   const validBoostTargets = req.nutrientBoostTargets ? selectValidBoostTargets(req.nutrientBoostTargets) : [];
 
+  const dailyIntegrationPlan = buildDailySupplementIntegrationPlan({
+    boostTargets: validBoostTargets,
+    slots: orderedSlots,
+    suppressedSlots: suppressed,
+    pathwayModulation: req.pathwayModulation,
+    dietType,
+  });
+
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const isSuppressed = suppressed.includes(slot.slot);
     const slotBoostIds = validBoostTargets
       .filter((t) => nutrientBoostAppliesToSlot(t.nutrientId, slot.slot, req.pathwayModulation))
       .map((t) => t.nutrientId);
-    const { items: pickedItems, pathwayAdviceNotes } = pickItemsForSlot(slot, dayCtx, slotBoostIds);
+    const { items: pickedItems, pathwayAdviceNotes } = pickItemsForSlot(
+      slot,
+      dayCtx,
+      slotBoostIds,
+      dailyIntegrationPlan[slot.slot] ?? [],
+    );
     let items = pickedItems;
     if (!isSuppressed && slot.targetKcal > 0) {
       items = rescaleSlotKcalToTarget(
@@ -231,8 +237,9 @@ export async function buildDeterministicMealPlanFromRequest(
           activeMicronutrientLabels
             ? `Cofactors attivi: ${activeMicronutrientLabels.slice(0, 220)}.`
             : null,
-          `Pranzo/cena: sostituzione contorno o integrazione mirata — niente stack automatico di alimenti pathway.`,
-          `Integratori / checklist operativa: scheda Nutrition · Integrazione.`,
+          `Pranzo/cena: sostituzione contorno — niente stack automatico di alimenti pathway.`,
+          `Integratori: una sola assunzione giornaliera per nutriente, nello slot migliore (prima/durante/dopo/lontano dal pasto).`,
+          `Checklist operativa: scheda Nutrition · Integrazione.`,
         ]
           .filter((s): s is string => Boolean(s?.trim()))
           .join(" ")

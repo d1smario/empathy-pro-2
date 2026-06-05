@@ -5,11 +5,7 @@
 
 import type { IntelligentMealPlanFunctionalFoodGroup, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { composeMediterraneanMeal } from "@/lib/nutrition/mediterranean-meal-composer";
-import {
-  pathwayTargetsMissingFoodCoverage,
-  pruneSnackDryLineConflicts,
-  supplementHintLinesForUncoveredTargets,
-} from "@/lib/nutrition/meal-slot-food-rules";
+import { pruneSnackDryLineConflicts } from "@/lib/nutrition/meal-slot-food-rules";
 
 export type DryMealSlotMacros = {
   kcal: number;
@@ -129,9 +125,9 @@ export function buildDryMealPlanLinesForSlot(
   const composed = composeMediterraneanMeal(mealSlotKey, slot);
   let out = [...composed.lines];
 
-  const targets = pathwayTargets ?? [];
-  const uncovered = pathwayTargetsMissingFoodCoverage(targets, groups);
-  out = [...out, ...supplementHintLinesForUncoveredTargets(mealSlotKey, uncovered, 2).map((r) => r.hint)];
+  /** Integrazione: schedulata 1×/giorno nel meal plan deterministico (`meal-plan-daily-supplement-scheduler`). */
+  void pathwayTargets;
+  void groups;
 
   if (mealSlotKey === "snack_am" || mealSlotKey === "snack_pm") out = pruneSnackDryLineConflicts(out);
 
