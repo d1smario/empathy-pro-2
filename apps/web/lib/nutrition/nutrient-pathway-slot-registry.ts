@@ -48,16 +48,11 @@ const NUTRIENT_PATHWAY_SLOT_POOL: Partial<
   vitC_mg: {
     main: [
       { nutrientId: "vitC_mg", canonicalKey: "bell_pepper_red", name: "Peperone rosso (vit C)", noun: "peperone rosso crudo", bridge: "Vitamina C densa (pathway redox).", defaultGrams: 120, macroRole: "veg", mode: "add", fromKeys: [] },
-      { nutrientId: "vitC_mg", canonicalKey: "kiwi_raw", name: "Kiwi (vit C)", noun: "kiwi", bridge: "Vitamina C e antiossidanti.", defaultGrams: 120, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
-      { nutrientId: "vitC_mg", canonicalKey: "orange_raw", name: "Arancia (vit C)", noun: "arancia", bridge: "Vitamina C al pasto.", defaultGrams: 150, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
-      { nutrientId: "vitC_mg", canonicalKey: "strawberries_raw", name: "Fragole (vit C)", noun: "fragole", bridge: "Vitamina C e polifenoli.", defaultGrams: 100, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
-      { nutrientId: "vitC_mg", canonicalKey: "mixed_fruit", name: "Frutta fresca (vit C)", noun: "frutta fresca mista", bridge: "Vitamina C (pathway redox).", defaultGrams: 150, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
     ],
     light: [
-      { nutrientId: "vitC_mg", canonicalKey: "kiwi_raw", name: "Kiwi (vit C)", noun: "kiwi", bridge: "Vitamina C colazione/spuntino.", defaultGrams: 100, macroRole: "cho_heavy", mode: "replace", fromKeys: ["oat_dry", "crackers_whole", "bread_white"] },
-      { nutrientId: "vitC_mg", canonicalKey: "orange_raw", name: "Arancia (vit C)", noun: "arancia", bridge: "Vitamina C colazione/spuntino.", defaultGrams: 130, macroRole: "cho_heavy", mode: "replace", fromKeys: ["oat_dry", "crackers_whole", "bread_white"] },
-      { nutrientId: "vitC_mg", canonicalKey: "strawberries_raw", name: "Fragole (vit C)", noun: "fragole", bridge: "Vitamina C spuntino.", defaultGrams: 90, macroRole: "cho_heavy", mode: "replace", fromKeys: ["oat_dry", "crackers_whole", "bread_white"] },
-      { nutrientId: "vitC_mg", canonicalKey: "mixed_fruit", name: "Frutta fresca (vit C)", noun: "frutta fresca mista", bridge: "Vitamina C colazione/spuntino (pathway redox).", defaultGrams: 120, macroRole: "cho_heavy", mode: "replace", fromKeys: ["oat_dry", "crackers_whole", "bread_white"] },
+      { nutrientId: "vitC_mg", canonicalKey: "kiwi_raw", name: "Kiwi (vit C)", noun: "kiwi", bridge: "Vitamina C complementare (non sostituisce cereali).", defaultGrams: 100, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
+      { nutrientId: "vitC_mg", canonicalKey: "orange_raw", name: "Arancia (vit C)", noun: "arancia", bridge: "Vitamina C complementare colazione/spuntino.", defaultGrams: 130, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
+      { nutrientId: "vitC_mg", canonicalKey: "strawberries_raw", name: "Fragole (vit C)", noun: "fragole", bridge: "Vitamina C complementare spuntino.", defaultGrams: 90, macroRole: "cho_heavy", mode: "add", fromKeys: [] },
     ],
   },
   fe_mg: {
@@ -76,7 +71,6 @@ const NUTRIENT_PATHWAY_SLOT_POOL: Partial<
     ],
     light: [
       { nutrientId: "mg_mg", canonicalKey: "almonds_raw", name: "Mandorle (magnesio)", noun: "mandorle", bridge: "Magnesio in colazione/spuntino.", defaultGrams: 25, macroRole: "fat", mode: "add", fromKeys: [] },
-      { nutrientId: "mg_mg", canonicalKey: "mixed_fruit", name: "Frutta (magnesio)", noun: "frutta fresca (banana/agrumi)", bridge: "Magnesio leggero in colazione/spuntino.", defaultGrams: 120, macroRole: "cho_heavy", mode: "replace", fromKeys: ["oat_dry", "crackers_whole"] },
     ],
   },
   zn_mg: {

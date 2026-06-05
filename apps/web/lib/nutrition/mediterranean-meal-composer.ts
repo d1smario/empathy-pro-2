@@ -7,14 +7,15 @@
  */
 
 import type { IntelligentMealPlanItemOut, MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { composeBreakfastWithArchetypes } from "@/lib/nutrition/breakfast-meal-archetypes";
+import {
+  ROTATION_MAX_WEEK_USES,
+  ROTATION_TARGET_WEEK_USES,
+} from "@/lib/nutrition/meal-composition-rules";
 import type { RacePostRecoveryContext, RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { composeRacePostRecoveryMeal, composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { CANONICAL_FOOD_TABLE, inferCanonicalFoodKeyPreferName, scaleCanonicalNutrientsToGrams } from "@/lib/nutrition/canonical-food-composition";
-import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
-import {
-  listNutrientPathwaySwapsForSlot,
-  type NutrientPathwaySwapSpec,
-} from "@/lib/nutrition/nutrient-pathway-slot-registry";
+import { canUseCanonicalKey } from "@/lib/nutrition/meal-rotation-guard";
 
 /** Allineato a `DryMealSlotMacros` in dry-meal-plan-lines (evita import circolare). */
 export type MealMacroTargets = {
@@ -50,10 +51,9 @@ export type MediterraneanDayContext = {
   racePreLunch?: RacePreLunchDayContext;
   /** Giorno gara: snack recovery post-gara (CHO/PRO/MCT g/kg) con quota energetica dedicata. */
   racePostRecovery?: RacePostRecoveryContext;
+  /** Canonical keys già usate oggi (zero ripetizioni tra slot dello stesso giorno). */
+  dayUsedCanonicalKeys?: Set<string>;
 };
-
-/** Max utilizzi/settimana per stesso amido o stessa famiglia proteica principale (latte/olio/ zucchero non sono in questa lista). */
-const MAX_STAPLE_USES_PER_WEEK = 3;
 
 export function createMediterraneanDayContext(
   planDate: string,
@@ -89,7 +89,23 @@ export function createMediterraneanDayContext(
     suppressedSlots: supp,
     racePreLunch,
     racePostRecovery,
+    dayUsedCanonicalKeys: new Set(),
   };
+}
+
+function filterWeekRotationPool<T>(base: T[], countFor: (item: T) => number): T[] {
+  const targetOk = base.filter((item) => countFor(item) < ROTATION_TARGET_WEEK_USES);
+  if (targetOk.length) return targetOk;
+  const maxOk = base.filter((item) => countFor(item) < ROTATION_MAX_WEEK_USES);
+  return maxOk.length ? maxOk : base;
+}
+
+function filterByDayRotation<T extends { canonicalKey: string }>(
+  specs: readonly T[],
+  ctx?: MediterraneanDayContext,
+): T[] {
+  if (!ctx?.dayUsedCanonicalKeys?.size) return [...specs];
+  return specs.filter((s) => canUseCanonicalKey(ctx, s.canonicalKey));
 }
 
 /** Match deterministico (case-insensitive, sostringa) tra una keyword e i fragments di blocco. */
@@ -454,8 +470,7 @@ function pickCarbKey(
   const order = carbOrderOverride ?? allowedCarbOrder(ctx);
   const sameDayOk = order.filter((k) => !used.has(stapleCarb(k)));
   const base = sameDayOk.length ? sameDayOk : order;
-  const weekOk = base.filter((k) => weekCountFor(stapleCarb(k), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
-  const pool = weekOk.length ? weekOk : base;
+  const pool = filterWeekRotationPool(base, (k) => weekCountFor(stapleCarb(k), weekCounts));
   /**
    * Alternanza settimanale: preferisci sempre il tier di staple MENO usati nella
    * settimana. Senza questo, il composer prendeva lo stesso indice ogni giorno
@@ -489,8 +504,7 @@ function pickProtAndFish(
   const order = allowedProtOrder(ctx);
   const sameDayOk = order.filter((pk) => protAllowedWithCarb(carbKey, pk) && !used.has(stapleProt(pk)));
   const base = sameDayOk.length ? sameDayOk : order.filter((pk) => protAllowedWithCarb(carbKey, pk));
-  const weekOk = base.filter((pk) => weekCountFor(stapleProt(pk), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
-  const pool = weekOk.length ? weekOk : base;
+  const pool = filterWeekRotationPool(base, (pk) => weekCountFor(stapleProt(pk), weekCounts));
   /** Alternanza settimanale: tier meno usato in settimana, tiebreak su seed (planDate-aware). */
   const minCount = Math.min(...pool.map((pk) => weekCountFor(stapleProt(pk), weekCounts)));
   const leastUsed = pool.filter((pk) => weekCountFor(stapleProt(pk), weekCounts) === minCount);
@@ -535,6 +549,30 @@ function pickMainVegSpec(seed: number, offset: number, deny?: readonly string[])
   });
   const use = pool.length > 0 ? pool : MAIN_VEG_POOL;
   return use[Math.abs(seed + offset * 3) % use.length]!;
+}
+
+/** Verdure per pasto principale: max 2, chiavi distinte, mai già usate oggi. */
+function pickMainVegSpecsForSlot(
+  seed: number,
+  offset: number,
+  deny?: readonly string[],
+  ctx?: MediterraneanDayContext,
+): MainVegSpec[] {
+  const denyFiltered = MAIN_VEG_POOL.filter((v) => {
+    if (!deny?.length) return true;
+    return !denyHit([v.name.toLowerCase(), v.noun.toLowerCase(), v.canonicalKey.replace(/_/g, " ")], deny);
+  });
+  const dayFresh = filterByDayRotation(denyFiltered, ctx);
+  const pool = dayFresh.length > 0 ? dayFresh : denyFiltered;
+  const start = Math.abs(seed + offset * 3) % pool.length;
+  const picks: MainVegSpec[] = [];
+  for (let j = 0; j < pool.length && picks.length < 2; j++) {
+    const v = pool[(start + j) % pool.length]!;
+    if (picks.some((p) => p.canonicalKey === v.canonicalKey)) continue;
+    if (ctx?.dayUsedCanonicalKeys?.size && !canUseCanonicalKey(ctx, v.canonicalKey)) continue;
+    picks.push(v);
+  }
+  return picks.length > 0 ? picks : denyFiltered.slice(0, 2);
 }
 
 function composeMainMeal(
@@ -598,11 +636,11 @@ function composeMainMeal(
       const canRiso =
         carbOrder.includes("riso") &&
         !used.has(stapleCarb("riso")) &&
-        weekCountFor(stapleCarb("riso"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+        weekCountFor(stapleCarb("riso"), weekCounts) < ROTATION_MAX_WEEK_USES;
       const canPatate =
         carbOrder.includes("patate") &&
         !used.has(stapleCarb("patate")) &&
-        weekCountFor(stapleCarb("patate"), weekCounts) < MAX_STAPLE_USES_PER_WEEK;
+        weekCountFor(stapleCarb("patate"), weekCounts) < ROTATION_MAX_WEEK_USES;
       if (canRiso && (seed % 2 !== 0 || !canPatate)) {
         carbKey = "riso";
       } else if (canPatate) {
@@ -677,19 +715,21 @@ function composeMainMeal(
 
   const foods: SolveFoodSpec[] = [carbSpec, protSpec];
 
-  const veg = pickMainVegSpec(seed, offset, ctx?.denyFragments);
-  foods.push({
-    canonicalKey: veg.canonicalKey,
-    name: veg.name,
-    noun: veg.noun,
-    role: "fixed",
-    macroRole: "veg",
-    minG: 130,
-    maxG: 300,
-    stepG: 10,
-    fixedG: clampStep(160 + (seed % 3) * 25, 150, 250, 10),
-    bridge: "Fibre, minerali, volume; condisci con parte dell'olio del pasto.",
-  });
+  const mainVegs = pickMainVegSpecsForSlot(seed, offset, ctx?.denyFragments, ctx);
+  for (const [idx, veg] of mainVegs.entries()) {
+    foods.push({
+      canonicalKey: veg.canonicalKey,
+      name: `Condimento: ${veg.name}`,
+      noun: veg.noun,
+      role: "fixed",
+      macroRole: "veg",
+      minG: 100,
+      maxG: 280,
+      stepG: 10,
+      fixedG: clampStep(140 + (seed % 3) * 20 + idx * 15, 120, 220, 10),
+      bridge: "Contorno/condimento (verdura); condisci con parte dell'olio EVO.",
+    });
+  }
 
   // Pane SECONDARIO (2ª fonte CHO) solo se target CHO alto e carb principale non è pane.
   if (carbKey !== "pane" && m.carbsG >= 130) {
@@ -712,7 +752,7 @@ function composeMainMeal(
   const cheeseAllowed =
     ctx?.dietType !== "vegan" &&
     !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], ctx?.denyFragments);
-  if (cheeseAllowed && seed % 5 === 0) {
+  if (cheeseAllowed && seed % 5 === 0 && (!ctx?.dayUsedCanonicalKeys?.size || canUseCanonicalKey(ctx, "cheese_hard"))) {
     foods.push({
       canonicalKey: "cheese_hard",
       name: "Grana / formaggio stagionato",
@@ -727,18 +767,29 @@ function composeMainMeal(
     });
   }
 
-  // Olio EVO: leva grassi (pranzo/cena, a crudo).
-  foods.push({
-    canonicalKey: "olive_oil",
-    name: "Condimento olio EVO",
-    noun: "olio extravergine d'oliva (a crudo)",
-    role: "fat",
-    macroRole: "fat",
-    minG: 5,
-    maxG: 35,
-    stepG: 1,
-    bridge: "Grassi insaturi; grammi sul target lipidico del pasto.",
-  });
+  // Olio EVO: leva grassi (pranzo/cena, a crudo) — max 1 volta al giorno.
+  if (!ctx?.dayUsedCanonicalKeys?.size || canUseCanonicalKey(ctx, "olive_oil")) {
+    foods.push({
+      canonicalKey: "olive_oil",
+      name: "Condimento olio EVO",
+      noun: "olio extravergine d'oliva (a crudo)",
+      role: "fat",
+      macroRole: "fat",
+      minG: 5,
+      maxG: 35,
+      stepG: 1,
+      bridge: "Grassi insaturi; grammi sul target lipidico del pasto.",
+    });
+  } else {
+    const altFat = filterByDayRotation(
+      [
+        { canonicalKey: "avocado", name: "Avocado", noun: "avocado", role: "fat" as const, macroRole: "fat" as const, minG: 20, maxG: 80, stepG: 5, bridge: "Grasso alternativo se olio già usato oggi." },
+        { canonicalKey: "almonds_raw", name: "Mandorle", noun: "mandorle", role: "fat" as const, macroRole: "fat" as const, minG: 15, maxG: 40, stepG: 5, bridge: "Grasso alternativo (frutta secca)." },
+      ],
+      ctx,
+    );
+    if (altFat.length > 0) foods.push(altFat[0]!);
+  }
 
   const grams = solvePortionsByMacros(foods, { kcal: K, carbsG: m.carbsG, proteinG: P, fatG: F });
   const composed = buildMealFromSolved(foods, grams);
@@ -793,30 +844,100 @@ function composeSnack(
   const foods: SolveFoodSpec[] = [];
 
   if (sweet) {
-    // CHO leva: cereali/muesli; proteina leva: yogurt (vegetale se vegan/deny lattosio); frutta fissa.
-    foods.push({ canonicalKey: "oat_dry", name: "Cereali / muesli", noun: "cereali o muesli (sul yogurt)", role: "cho", macroRole: "cho_heavy", minG: 15, maxG: 80, stepG: 5, bridge: postSlot ? "Spuntino post-rientro: più cereali sul target CHO (refeed leggero)." : "Carboidrati spuntino; grammi sul target CHO." });
-    if (skipDairyYogurt) {
-      foods.push({ canonicalKey: "plant_drink_generic", name: "Yogurt vegetale", noun: "yogurt vegetale (soia/cocco) non zuccherato", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt vegetale); grammi sul target proteico." });
-    } else {
-      foods.push({ canonicalKey: "yogurt_plain", name: "Yogurt", noun: "yogurt", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt); grammi sul target proteico." });
+    const choCandidates = filterByDayRotation(
+      [
+        { canonicalKey: "oat_dry", name: "Cereali / muesli", noun: "cereali o muesli (sul yogurt)", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 15, maxG: 80, stepG: 5, bridge: postSlot ? "Spuntino post-rientro: più cereali sul target CHO (refeed leggero)." : "Carboidrati spuntino; grammi sul target CHO." },
+        { canonicalKey: "crackers_whole", name: "Gallette integrali", noun: "gallette integrali", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 15, maxG: 80, stepG: 5, bridge: "Base croccante spuntino; grammi sul target CHO." },
+        { canonicalKey: "banana", name: "Banana", noun: "banana", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 60, maxG: 150, stepG: 10, bridge: "CHO rapidi spuntino." },
+        { canonicalKey: "bread_white", name: "Pane tostato", noun: "pane integrale tostato", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 20, maxG: 80, stepG: 5, bridge: "CHO spuntino alternativo." },
+      ],
+      ctx,
+    );
+    if (choCandidates.length > 0) {
+      foods.push(chooseLeverByCapacity(choCandidates, "c", m.carbsG, seed));
     }
+
+    const proPool: SolveFoodSpec[] = skipDairyYogurt
+      ? [
+          { canonicalKey: "plant_drink_generic", name: "Yogurt vegetale", noun: "yogurt vegetale (soia/cocco) non zuccherato", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt vegetale); grammi sul target proteico." },
+          { canonicalKey: "tofu_firm", name: "Tofu", noun: "tofu", role: "protein", macroRole: "protein", minG: 60, maxG: 180, stepG: 10, bridge: "Proteina vegetale spuntino." },
+        ]
+      : [
+          { canonicalKey: "yogurt_plain", name: "Yogurt", noun: "yogurt", role: "protein", macroRole: "protein", minG: 100, maxG: 300, stepG: 10, bridge: "Proteina spuntino (yogurt); grammi sul target proteico." },
+          { canonicalKey: "egg_whole", name: "Uova", noun: "uova", role: "protein", macroRole: "protein", minG: 50, maxG: 120, stepG: 25, bridge: "Proteina spuntino (uova).", formatPortion: (g: number) => `${Math.max(1, Math.round(g / 50))} uova (≈${g} g)` },
+          { canonicalKey: "whey_powder", name: "Proteine whey", noun: "proteine whey in polvere", role: "protein", macroRole: "protein", minG: 15, maxG: 45, stepG: 5, bridge: "Proteina spuntino (whey) se altre fonti già usate oggi." },
+        ];
+    const proCandidates = filterByDayRotation(proPool, ctx);
+    if (proCandidates.length > 0) {
+      foods.push(chooseLeverByCapacity(proCandidates, "p", m.proteinG, seed + 1));
+    }
+
     if (!denyHit(["frutta", "frutti"], deny)) {
-      foods.push({ canonicalKey: "mixed_fruit", name: "Frutta", noun: "frutta fresca o frutti di bosco", role: "fixed", macroRole: "cho_heavy", minG: 60, maxG: 200, stepG: 10, fixedG: postSlot ? 120 : 90, bridge: "CHO e fibre." });
+      const fruitCandidates = filterByDayRotation(
+        [
+          { canonicalKey: "mixed_fruit", name: "Frutta", noun: "frutta fresca o frutti di bosco", role: "fixed" as const, macroRole: "cho_heavy" as const, minG: 60, maxG: 200, stepG: 10, fixedG: postSlot ? 120 : 90, bridge: "CHO e fibre." },
+          { canonicalKey: "kiwi_raw", name: "Kiwi", noun: "kiwi", role: "fixed" as const, macroRole: "cho_heavy" as const, minG: 60, maxG: 150, stepG: 10, fixedG: postSlot ? 120 : 90, bridge: "CHO e vitamina C." },
+          { canonicalKey: "orange_raw", name: "Arancia", noun: "arancia", role: "fixed" as const, macroRole: "cho_heavy" as const, minG: 80, maxG: 180, stepG: 10, fixedG: postSlot ? 130 : 100, bridge: "CHO e vitamina C." },
+          { canonicalKey: "strawberries_raw", name: "Fragole", noun: "fragole", role: "fixed" as const, macroRole: "cho_heavy" as const, minG: 60, maxG: 150, stepG: 10, fixedG: 90, bridge: "CHO e fibre." },
+        ],
+        ctx,
+      );
+      if (fruitCandidates.length > 0) foods.push(fruitCandidates[Math.abs(seed) % fruitCandidates.length]!);
     }
   } else {
-    // CHO leva: gallette/pane; proteina leva: affettato magro; un solo grasso aggiunto.
-    foods.push({ canonicalKey: "crackers_whole", name: "Gallette / pane tostato", noun: "gallette integrali o pane tostato", role: "cho", macroRole: "cho_heavy", minG: 15, maxG: 80, stepG: 5, bridge: "Base croccante; grammi sul target CHO." });
-    foods.push({ canonicalKey: "deli_lean", name: "Affettato magro", noun: "bresaola o prosciutto cotto magro", role: "protein", macroRole: "protein", minG: 30, maxG: 120, stepG: 5, bridge: postSlot ? "Proteina magra (variante meno grassa dopo spostamento orari); grammi sul target proteico." : "Proteina magra spuntino salato; grammi sul target proteico." });
-    const cheeseAllowed = !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], deny);
-    if (seed % 2 === 0 || !cheeseAllowed) {
-      foods.push({ canonicalKey: "avocado", name: "Grasso spuntino (avocado)", noun: "avocado", role: "fat", macroRole: "fat", minG: 15, maxG: 80, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." });
-    } else {
-      foods.push({ canonicalKey: "cheese_hard", name: "Grasso spuntino (grana)", noun: "grana grattugiato", role: "fat", macroRole: "fat", minG: 10, maxG: 40, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." });
+    const choCandidates = filterByDayRotation(
+      [
+        { canonicalKey: "crackers_whole", name: "Gallette / pane tostato", noun: "gallette integrali o pane tostato", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 15, maxG: 80, stepG: 5, bridge: "Base croccante; grammi sul target CHO." },
+        { canonicalKey: "bread_white", name: "Pane tostato", noun: "pane integrale tostato", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 20, maxG: 80, stepG: 5, bridge: "Base croccante; grammi sul target CHO." },
+      ],
+      ctx,
+    );
+    if (choCandidates.length > 0) {
+      foods.push(chooseLeverByCapacity(choCandidates, "c", m.carbsG, seed));
     }
+    const proCandidates = filterByDayRotation(
+      [{ canonicalKey: "deli_lean", name: "Affettato magro", noun: "bresaola o prosciutto cotto magro", role: "protein" as const, macroRole: "protein" as const, minG: 30, maxG: 120, stepG: 5, bridge: postSlot ? "Proteina magra (variante meno grassa dopo spostamento orari); grammi sul target proteico." : "Proteina magra spuntino salato; grammi sul target proteico." }],
+      ctx,
+    );
+    if (proCandidates.length > 0) {
+      foods.push(chooseLeverByCapacity(proCandidates, "p", m.proteinG, seed + 1));
+    }
+    const cheeseAllowed = !denyHit(["latte", "lattosio", "latticino", "formaggio", "grana", "parmigiano"], deny);
+    const fatCandidates = filterByDayRotation(
+      seed % 2 === 0 || !cheeseAllowed
+        ? [{ canonicalKey: "avocado", name: "Grasso spuntino (avocado)", noun: "avocado", role: "fat" as const, macroRole: "fat" as const, minG: 15, maxG: 80, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." }]
+        : [{ canonicalKey: "cheese_hard", name: "Grasso spuntino (grana)", noun: "grana grattugiato", role: "fat" as const, macroRole: "fat" as const, minG: 10, maxG: 40, stepG: 5, bridge: "Una sola fonte di grasso aggiunto; grammi sul target lipidico." }],
+      ctx,
+    );
+    if (fatCandidates.length > 0) foods.push(fatCandidates[0]!);
   }
 
-  const grams = solvePortionsByMacros(foods, { kcal: K, carbsG: m.carbsG, proteinG: m.proteinG, fatG: m.fatG });
-  return buildMealFromSolved(foods, grams);
+  if (foods.length === 0) {
+    const emergency = filterByDayRotation(
+      [
+        { canonicalKey: "crackers_whole", name: "Gallette integrali", noun: "gallette integrali", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 20, maxG: 60, stepG: 5, bridge: "Spuntino minimo (CHO)." },
+        { canonicalKey: "mixed_fruit", name: "Frutta", noun: "frutta fresca", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 80, maxG: 150, stepG: 10, bridge: "Spuntino minimo (frutta)." },
+        { canonicalKey: "plant_drink_generic", name: "Bevanda vegetale", noun: "bevanda vegetale", role: "cho" as const, macroRole: "cho_heavy" as const, minG: 150, maxG: 250, stepG: 10, bridge: "Spuntino minimo (vegan)." },
+      ],
+      ctx,
+    );
+    if (emergency.length > 0) foods.push(emergency[0]!);
+  }
+  if (!foods.some((f) => f && f.role === "protein")) {
+    const proEmergency = filterByDayRotation(
+      [
+        { canonicalKey: "whey_powder", name: "Proteine whey", noun: "proteine whey in polvere", role: "protein" as const, macroRole: "protein" as const, minG: 15, maxG: 40, stepG: 5, bridge: "Proteina spuntino di riserva." },
+        { canonicalKey: "yogurt_plain", name: "Yogurt", noun: "yogurt", role: "protein" as const, macroRole: "protein" as const, minG: 100, maxG: 200, stepG: 10, bridge: "Proteina spuntino di riserva." },
+        { canonicalKey: "tofu_firm", name: "Tofu", noun: "tofu", role: "protein" as const, macroRole: "protein" as const, minG: 60, maxG: 150, stepG: 10, bridge: "Proteina vegetale spuntino di riserva." },
+      ],
+      ctx,
+    );
+    if (proEmergency.length > 0) foods.push(proEmergency[0]!);
+  }
+
+  const safeFoods = foods.filter((f): f is SolveFoodSpec => Boolean(f));
+  const grams = solvePortionsByMacros(safeFoods, { kcal: K, carbsG: m.carbsG, proteinG: m.proteinG, fatG: m.fatG });
+  return buildMealFromSolved(safeFoods, grams);
 }
 
 /**
@@ -858,7 +979,7 @@ export function composeMediterraneanMeal(
   }
   const seed = hashSeed(slot, macros.kcal, ctx?.planDate);
   const breakfastCtx = ctx ?? createMediterraneanDayContext("");
-  if (slot === "breakfast") return composeBreakfast(macros, seed, breakfastCtx);
+  if (slot === "breakfast") return composeBreakfastWithArchetypes(macros, seed, breakfastCtx);
   if (slot === "snack_am") return composeSnack(macros, seed, "snack_am", ctx);
   if (slot === "snack_pm" || slot === "snack_evening") {
     return composeSnack(macros, seed, "snack_pm", ctx);
@@ -872,100 +993,4 @@ export function composeMediterraneanMeal(
   return composeMainMeal(slot, macros, seed, ctx);
 }
 
-function mealHasCanonicalKey(meal: MediterraneanComposedMeal, canonicalKey: string): boolean {
-  return meal.items.some((it) => inferCanonicalFoodKeyPreferName(it.name, it.portionHint) === canonicalKey);
-}
-
-function applyPathwaySwapSpecToMeal(
-  meal: MediterraneanComposedMeal,
-  spec: NutrientPathwaySwapSpec,
-): MediterraneanComposedMeal {
-  const toRow = CANONICAL_FOOD_TABLE[spec.canonicalKey];
-  if (!toRow) return meal;
-
-  if (spec.mode === "add") {
-    if (mealHasCanonicalKey(meal, spec.canonicalKey)) return meal;
-    const grams = spec.defaultGrams;
-    const approxKcal = Math.max(15, Math.round((toRow.kcalPer100g * grams) / 100));
-    const portion = `${grams} g ${spec.noun}`.slice(0, 160);
-    const newItem = item(spec.name, portion, approxKcal, spec.macroRole, spec.bridge);
-    const items = [...meal.items, newItem];
-    const lines = [...meal.lines, portion];
-    return {
-      ...meal,
-      items,
-      lines,
-      totalApproxKcal: items.reduce((a, i) => a + i.approxKcal, 0),
-    };
-  }
-
-  let swapped = false;
-  const items = meal.items.map((it) => {
-    const key = inferCanonicalFoodKeyPreferName(it.name, it.portionHint);
-    if (!spec.fromKeys.includes(key)) return it;
-    swapped = true;
-    const gramsMatch = it.portionHint.match(/(\d+)\s*g/i);
-    const grams = gramsMatch ? Math.max(30, Number(gramsMatch[1])) : spec.defaultGrams;
-    const approxKcal = Math.max(15, Math.round((toRow.kcalPer100g * grams) / 100));
-    return {
-      ...it,
-      name: spec.name,
-      portionHint: `${grams} g ${spec.noun}`.slice(0, 160),
-      approxKcal,
-      macroRole: spec.macroRole,
-      functionalBridge: `${spec.bridge} ${it.functionalBridge}`.slice(0, 500),
-    };
-  });
-
-  if (!swapped) return meal;
-  return {
-    ...meal,
-    items,
-    totalApproxKcal: items.reduce((a, i) => a + i.approxKcal, 0),
-  };
-}
-
-/**
- * Post-compose: pathway cofactors → registro unico slot×nutriente (`nutrient-pathway-slot-registry`).
- * Solo alimenti ammessi per lo slot; pasti principali aggiungono verdure/legumi senza sostituire il contorno.
- */
-const MAX_PATHWAY_ADDS_PER_NUTRIENT: Partial<Record<MealSlotKey, number>> = {
-  lunch: 2,
-  dinner: 2,
-  breakfast: 1,
-  snack_am: 1,
-  snack_pm: 1,
-  snack_evening: 1,
-};
-
-export function applyNutrientBoostSwaps(
-  meal: MediterraneanComposedMeal,
-  slot: MealSlotKey,
-  targetIds: readonly NutrientTargetId[],
-  ctx?: MediterraneanDayContext,
-): MediterraneanComposedMeal {
-  if (!targetIds.length || ctx?.suppressedSlots?.includes(slot)) return meal;
-
-  const addCap = MAX_PATHWAY_ADDS_PER_NUTRIENT[slot] ?? 1;
-  let current = meal;
-  for (const id of targetIds) {
-    const specs = listNutrientPathwaySwapsForSlot(id, slot, ctx?.dietType);
-    let addsApplied = 0;
-    for (const spec of specs) {
-      if (spec.mode === "add") {
-        if (addsApplied >= addCap) break;
-        if (mealHasCanonicalKey(current, spec.canonicalKey)) continue;
-      }
-      const next = applyPathwaySwapSpecToMeal(current, spec);
-      if (next === current) continue;
-      current = next;
-      if (spec.mode === "add") {
-        addsApplied += 1;
-      } else {
-        break;
-      }
-    }
-  }
-  return current;
-}
-
+export { applyNutrientBoostSwaps } from "@/lib/nutrition/meal-pathway-advisor";

@@ -1,12 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { applyPathwayAdvice } from "./meal-pathway-advisor";
 import {
-  applyNutrientBoostSwaps,
   composeMediterraneanMeal,
   createMediterraneanDayContext,
   type MealMacroTargets,
   type MediterraneanDietType,
 } from "./mediterranean-meal-composer";
+import { isFruitCanonicalKey } from "./meal-composition-rules";
 import type { MealSlotKey } from "./intelligent-meal-plan-types";
 import { inferCanonicalFoodKeyPreferName, nutrientsForMealPlanItem } from "./canonical-food-composition";
 import { buildHealthLabPathwayBridge } from "./health-lab-pathway-bridge";
@@ -382,25 +383,21 @@ test("guardrail composizione CHO colazione: cho >= 130 g -> 2 fonti CHO solide d
   );
 });
 
-test("pathway folato: lunch aggiunge legumi folato-densi mantenendo verdure", () => {
+test("pathway folato: lunch non stacka legumi — solo consiglio sostituzione", () => {
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 900, carbsG: 110, proteinG: 45, fatG: 28 };
-  const meal = applyNutrientBoostSwaps(
-    composeMediterraneanMeal("lunch", macros, ctx),
-    "lunch",
-    ["folate_mcg"],
-    ctx,
-  );
+  const base = composeMediterraneanMeal("lunch", macros, ctx);
+  const { meal, adviceNotes } = applyPathwayAdvice(base, "lunch", ["folate_mcg"], ctx);
+  assert.equal(meal.items.length, base.items.length);
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
-  assert.ok(keys.includes("legumes_cooked"), `Atteso legumi_cooked, got: ${keys.join(", ")}`);
-  const vegKeys = ["mixed_veg", "spinach_raw", "broccoli_raw", "zucchini_raw", "bell_pepper_red", "carrot_raw", "tomato_raw", "asparagus_raw", "arugula_raw", "lettuce_romaine"];
-  assert.ok(keys.some((k) => vegKeys.includes(k)), `Atteso contorno verdura, got: ${keys.join(", ")}`);
+  assert.ok(!keys.includes("legumes_cooked"), `Legumi non devono essere aggiunti a pranzo, got: ${keys.join(", ")}`);
+  assert.ok(adviceNotes.length > 0, "Atteso almeno una nota pathway");
 });
 
 test("pathway folato: colazione non usa legumi — integrazione se non coperto", () => {
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 550, carbsG: 70, proteinG: 28, fatG: 16 };
-  const meal = applyNutrientBoostSwaps(
+  const { meal } = applyPathwayAdvice(
     composeMediterraneanMeal("breakfast", macros, ctx),
     "breakfast",
     ["folate_mcg"],
@@ -410,18 +407,17 @@ test("pathway folato: colazione non usa legumi — integrazione se non coperto",
   assert.ok(!keys.includes("legumes_cooked"), `Legumi non ammessi a colazione, got: ${keys.join(", ")}`);
 });
 
-test("pathway redox vit C: lunch aggiunge fonte vit C densa", () => {
+test("pathway redox vit C: lunch non aggiunge frutta — solo peperone come consiglio", () => {
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 850, carbsG: 100, proteinG: 42, fatG: 26 };
-  const meal = applyNutrientBoostSwaps(
-    composeMediterraneanMeal("lunch", macros, ctx),
-    "lunch",
-    ["vitC_mg"],
-    ctx,
-  );
+  const base = composeMediterraneanMeal("lunch", macros, ctx);
+  const { meal, adviceNotes } = applyPathwayAdvice(base, "lunch", ["vitC_mg"], ctx);
   const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
-  const vitCKeys = new Set(["bell_pepper_red", "kiwi_raw", "orange_raw", "strawberries_raw", "mixed_fruit"]);
-  assert.ok(keys.some((k) => vitCKeys.has(k)), `Atteso alimento vit C-denso, got: ${keys.join(", ")}`);
+  assert.ok(!keys.some((k) => isFruitCanonicalKey(k)), `Nessuna frutta a pranzo, got: ${keys.join(", ")}`);
+  assert.ok(
+    adviceNotes.some((n) => n.toLowerCase().includes("peperone") || n.toLowerCase().includes("pathway")),
+    `Atteso consiglio pathway, got: ${adviceNotes.join(" | ")}`,
+  );
 });
 
 test("pathway lab ferro: ferritina bassa → lunch aggiunge ferro vegetale (fe_mg)", () => {
@@ -436,13 +432,8 @@ test("pathway lab ferro: ferritina bassa → lunch aggiunge ferro vegetale (fe_m
 
   const ctx = createMediterraneanDayContext("2026-05-30", undefined, undefined, "omnivore", undefined, undefined);
   const macros = { kcal: 900, carbsG: 110, proteinG: 45, fatG: 28 };
-  const meal = applyNutrientBoostSwaps(
-    composeMediterraneanMeal("lunch", macros, ctx),
-    "lunch",
-    targetIds,
-    ctx,
-  );
-  const keys = meal.items.map((i) => inferCanonicalFoodKeyPreferName(i.name, i.portionHint));
-  const feKeys = new Set(["spinach_raw", "chickpeas_cooked", "legumes_cooked"]);
-  assert.ok(keys.some((k) => feKeys.has(k)), `Atteso fonte ferro vegetale, got: ${keys.join(", ")}`);
+  const base = composeMediterraneanMeal("lunch", macros, ctx);
+  const { meal, adviceNotes } = applyPathwayAdvice(base, "lunch", targetIds, ctx);
+  assert.equal(meal.items.length, base.items.length, "Pathway non deve aggiungere voci a pranzo");
+  assert.ok(adviceNotes.length > 0, "Atteso consiglio integrazione/sostituzione ferro");
 });

@@ -10,8 +10,9 @@ import { rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-t
 import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
+import { applyPathwayAdvice } from "@/lib/nutrition/meal-pathway-advisor";
+import { registerMealCanonicalKeys } from "@/lib/nutrition/meal-rotation-guard";
 import {
-  applyNutrientBoostSwaps,
   composeMediterraneanMeal,
   createMediterraneanDayContext,
 } from "@/lib/nutrition/mediterranean-meal-composer";
@@ -23,9 +24,7 @@ import { buildMealPlanFoodDenyFragments } from "@/lib/nutrition/meal-plan-profil
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
 import type { NutrientTargetId } from "@/lib/nutrition/pathway-cofactors-to-nutrient-targets";
 import { nutrientBoostAppliesToSlot } from "@/lib/nutrition/pathway-absorption-hints";
-import { rankUsdaCacheForTargets, type UsdaRankedFood } from "@/lib/nutrition/usda-nutrient-density-ranker";
 import { isRacePreRaceMealSlot, racePreLunchContextLine } from "@/lib/nutrition/race-day-pre-race-lunch";
-import { disambiguatedShortFoodLabel } from "@/lib/nutrition/usda-food-label";
 
 /** Validi `NutrientTargetId` (subset di chiavi del CanonicalFoodNutrients) — keys statiche per filtro di sicurezza. */
 const VALID_NUTRIENT_TARGET_IDS = new Set<NutrientTargetId>([
@@ -61,16 +60,6 @@ function selectValidBoostTargets(
     .map((t) => ({ nutrientId: t.nutrientId as NutrientTargetId, labelIt: t.labelIt }));
 }
 
-/** Costruisce 1 riga sintetica per UI: "Vitamina B12 → top 3: Fish, salmon · Cheese, parmesan · Egg, whole" (compatta). */
-function formatBoostLineForNutrient(label: string, items: UsdaRankedFood[]): string | null {
-  if (items.length === 0) return null;
-  /** `disambiguatedShortFoodLabel` evita "Seeds, Seeds, Seeds": mostra "Seeds, sesame", "Seeds, sunflower", … */
-  const names = items.slice(0, 3).map((i) => disambiguatedShortFoodLabel(i.description, 44)).join(" · ");
-  const lead = items[0]!;
-  const headDose = `${lead.amountPer100g.toFixed(lead.amountPer100g >= 10 ? 0 : 1)} ${lead.unit}/100g`;
-  return `${label} → ${names} (top1 ~${headDose})`.slice(0, 260);
-}
-
 /** Mappa la stringa libera `req.dietType` (profilo Supabase) sull'enum forte del composer. */
 function normalizeDietTypeForComposer(raw: string | null | undefined): MediterraneanDietType | undefined {
   const d = (raw ?? "").trim().toLowerCase();
@@ -93,11 +82,16 @@ function syncItemsApproxKcalFromCanonical(items: IntelligentMealPlanItemOut[]): 
   });
 }
 
+type SlotPickResult = {
+  items: IntelligentMealPlanItemOut[];
+  pathwayAdviceNotes: string[];
+};
+
 function pickItemsForSlot(
   slot: IntelligentMealPlanRequestSlot,
   dayCtx: MediterraneanDayContext,
   boostTargetIds: readonly NutrientTargetId[] = [],
-): IntelligentMealPlanItemOut[] {
+): SlotPickResult {
   const slotMacros = {
     kcal: slot.targetKcal,
     carbsG: slot.targetCarbsG,
@@ -106,9 +100,11 @@ function pickItemsForSlot(
   };
   const isRacePreLunch = slot.slot === "lunch" && Boolean(dayCtx?.racePreLunch);
   const meal = composeMediterraneanMeal(slot.slot, slotMacros, dayCtx);
-  const composed = isRacePreLunch
-    ? meal
-    : applyNutrientBoostSwaps(meal, slot.slot, boostTargetIds, dayCtx);
+  const pathway = isRacePreLunch
+    ? { meal, adviceNotes: [] as string[] }
+    : applyPathwayAdvice(meal, slot.slot, boostTargetIds, dayCtx);
+  registerMealCanonicalKeys(dayCtx, pathway.meal);
+  const composed = pathway.meal;
   const uncovered = isRacePreLunch
     ? []
     : uncoveredNutrientTargetsForSlot(boostTargetIds, slot.slot, dayCtx.dietType);
@@ -123,7 +119,10 @@ function pickItemsForSlot(
     ...it,
     functionalBridge: `${bridgePrefix}Composizione mediterranea semplice: ${it.functionalBridge}`.slice(0, 500),
   }));
-  return syncItemsApproxKcalFromCanonical(bridged);
+  return {
+    items: syncItemsApproxKcalFromCanonical(bridged),
+    pathwayAdviceNotes: pathway.adviceNotes,
+  };
 }
 
 /**
@@ -155,38 +154,18 @@ export async function buildDeterministicMealPlanFromRequest(
   );
 
   /**
-   * Bridge pathway → generatore unico (`nutrient-pathway-slot-registry` + composer):
-   * cofactors attivi applicano swap/add solo se ammessi per slot; altrimenti integrazione nel piano.
-   * Ranking USDA top-3 = note testuali complementari (non sostituisce la composizione).
+   * Bridge pathway → generatore unico (`nutrient-pathway-slot-registry` + composer + advisor):
+   * cofactors attivi → add solo colazione/spuntini (max 1); pranzo/cena → note sostituzione/integrazione.
    */
   const validBoostTargets = req.nutrientBoostTargets ? selectValidBoostTargets(req.nutrientBoostTargets) : [];
-  const boostTargetIds = validBoostTargets.map((t) => t.nutrientId);
-  const boostRanking: Partial<Record<NutrientTargetId, UsdaRankedFood[]>> = {};
-  if (validBoostTargets.length > 0) {
-    try {
-      const ids = validBoostTargets.map((t) => t.nutrientId);
-      const ranked = await rankUsdaCacheForTargets(ids, 3);
-      Object.assign(boostRanking, ranked);
-    } catch {
-      /** Fail-soft: se la cache USDA non è disponibile (RLS, service role, ecc.) il piano resta valido senza note boost. */
-    }
-  }
-  /** Linee compatte per la UI: "B12 → top 3: salmone, uova, yogurt". Solo nutrienti con almeno 1 alimento ranked. */
-  const boostLines: string[] = [];
-  for (const t of validBoostTargets) {
-    const rows = boostRanking[t.nutrientId];
-    if (!rows || rows.length === 0) continue;
-    const line = formatBoostLineForNutrient(t.labelIt, rows);
-    if (line) boostLines.push(line);
-  }
 
-  /** Slot in cui applicare swap pathway (PK v3: per nutriente se prefs, altrimenti main+snack). */
   const slots: IntelligentMealPlanSlotOut[] = orderedSlots.map((slot) => {
     const isSuppressed = suppressed.includes(slot.slot);
     const slotBoostIds = validBoostTargets
       .filter((t) => nutrientBoostAppliesToSlot(t.nutrientId, slot.slot, req.pathwayModulation))
       .map((t) => t.nutrientId);
-    let items = pickItemsForSlot(slot, dayCtx, slotBoostIds);
+    const { items: pickedItems, pathwayAdviceNotes } = pickItemsForSlot(slot, dayCtx, slotBoostIds);
+    let items = pickedItems;
     if (!isSuppressed && slot.targetKcal > 0) {
       items = rescaleSlotKcalToTarget(
         {
@@ -214,18 +193,9 @@ export async function buildDeterministicMealPlanFromRequest(
           ? `Combinazione solver + funzionale: target da meal plan (${slot.targetKcal} kcal, macro come in griglia) con priorità a ${groupTitles.slice(0, 260)}${groupTitles.length > 260 ? "…" : ""}`
           : `Pasto strutturato su target solver: ${slot.targetKcal} kcal e macro CHO/PRO/grassi dello slot; porzioni e kcal per voce da fonti e quantità, non da ripartizione uniforme.`;
 
-    const slotBoostLines: string[] = [];
-    for (const t of validBoostTargets) {
-      if (!nutrientBoostAppliesToSlot(t.nutrientId, slot.slot, req.pathwayModulation)) continue;
-      const rows = boostRanking[t.nutrientId];
-      if (!rows || rows.length === 0) continue;
-      const line = formatBoostLineForNutrient(t.labelIt, rows);
-      if (line) slotBoostLines.push(line);
-    }
-
     const slotBoostNote =
-      !isSuppressed && slotBoostLines.length > 0
-        ? `Suggerimenti complementari (sistema intelligente · cofactors pathway): ${slotBoostLines.slice(0, 4).join(" | ")}`
+      !isSuppressed && pathwayAdviceNotes.length > 0
+        ? `Suggerimenti pathway (sostituzione/integrazione): ${pathwayAdviceNotes.slice(0, 3).join(" | ")}`
         : undefined;
 
     const slotBoostSuffix = slotBoostNote ? ` · ${slotBoostNote}` : "";
@@ -250,15 +220,18 @@ export async function buildDeterministicMealPlanFromRequest(
 
   const pathwayTransparency =
     req.pathwayModulationActiveLabels?.trim()
-      ? `Pathway modulation attivi oggi: ${req.pathwayModulationActiveLabels.trim().slice(0, 280)} — i suggerimenti micronutrienti (top USDA) dipendono da questi pathway + dai loro cofactors, NON dalla lista alimenti scelta dal composer mediterraneo.`
+      ? `Pathway modulation attivi oggi: ${req.pathwayModulationActiveLabels.trim().slice(0, 280)} — i suggerimenti micronutrienti dipendono da questi pathway + cofactors, NON dalla lista alimenti scelta dal composer mediterraneo.`
       : null;
 
+  const activeMicronutrientLabels = validBoostTargets.map((t) => t.labelIt).join(", ");
   const boostSummary =
-    boostLines.length > 0
+    validBoostTargets.length > 0
       ? [
           pathwayTransparency,
-          `Micronutrienti suggeriti (cache USDA, densità per 100 g): ${boostLines.join(" | ")}.`,
-          `Son VARIANTI complementari da preferire/aggiungere (porzioni) nei pasti principali — il piano sopra resta sul solver deterministico.`,
+          activeMicronutrientLabels
+            ? `Cofactors attivi: ${activeMicronutrientLabels.slice(0, 220)}.`
+            : null,
+          `Pranzo/cena: sostituzione contorno o integrazione mirata — niente stack automatico di alimenti pathway.`,
           `Integratori / checklist operativa: scheda Nutrition · Integrazione.`,
         ]
           .filter((s): s is string => Boolean(s?.trim()))
@@ -266,23 +239,12 @@ export async function buildDeterministicMealPlanFromRequest(
           .slice(0, 820)
       : pathwayTransparency;
 
-  const pathwayBoostStatus =
-    validBoostTargets.length === 0
-      ? undefined
-      : boostLines.length === 0
-        ? ("usda_cache_miss" as const)
-        : ("applied" as const);
-
-  const usdaCacheMissNote =
-    pathwayBoostStatus === "usda_cache_miss"
-      ? "Cache USDA alimenti ricchi non disponibile: il generatore usa il registro slot×nutriente canonico; ranking top-3 USDA non mostrato finché la cache FDC non è popolata."
-      : null;
+  const pathwayBoostStatus = validBoostTargets.length > 0 ? ("applied" as const) : undefined;
 
   const dayBits = [
     `Σ pasti solver: ${req.mealPlanSolverMeta.dailyMealsKcalTotal} kcal/giorno (${orderedSlots.length} slot)`,
     suppressedNote,
     typeof boostSummary === "string" && boostSummary.trim() ? boostSummary : null,
-    usdaCacheMissNote,
     ...req.mealPlanSolverMeta.integrationLeverLines.slice(0, 8),
     ...req.pathwayTimingLines.slice(0, 4),
     ...req.trainingDayLines.slice(0, 3),

@@ -4,6 +4,7 @@
  */
 
 import type { IntelligentMealPlanItemOut } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { ROTATION_MAX_WEEK_USES, ROTATION_TARGET_WEEK_USES } from "@/lib/nutrition/meal-composition-rules";
 
 export type BreakfastArchetype =
   | "cereals_milk"
@@ -53,8 +54,6 @@ const BREAKFAST_ARCHETYPE_DENY: Record<BreakfastArchetype, readonly string[]> = 
   yogurt_bowl: ["yogurt", "latticino", "lattosio", "kefir"],
   smoothie: ["smoothie", "frullat"],
 };
-
-const MAX_STAPLE_USES_PER_WEEK = 3;
 
 type BreakfastBeverage = {
   label: string;
@@ -159,7 +158,10 @@ export function pickBreakfastArchetype(seed: number, ctx: MediterraneanDayContex
   const order = allowedBreakfastArchetypes(ctx);
   const used = ctx.usedStaples;
   const weekCounts = ctx.weekStapleCounts;
-  const weekOk = order.filter((k) => weekCountFor(stapleBreakfast(k), weekCounts) < MAX_STAPLE_USES_PER_WEEK);
+  const targetOk = order.filter((k) => weekCountFor(stapleBreakfast(k), weekCounts) < ROTATION_TARGET_WEEK_USES);
+  const weekOk = targetOk.length
+    ? targetOk
+    : order.filter((k) => weekCountFor(stapleBreakfast(k), weekCounts) < ROTATION_MAX_WEEK_USES);
   const pool = weekOk.length ? weekOk : order;
   const dateOff = planDateHash(ctx.planDate);
   const idx = Math.abs(seed + dateOff * 3) % pool.length;
@@ -276,11 +278,19 @@ function appendBreakfastProteinTopUp(
   const P = Math.max(12, proteinG);
   const isVegan = ctx.dietType === "vegan";
   const skipDairy = breakfastDairyBlocked(ctx);
+  const denyEgg = denyHit(["uov", "ovo", "egg", "album"], ctx.denyFragments);
   let yogurtG = seed % 4 === 0 ? 0 : clamp(P * 0.2 / D.yogurtProtPerG, 0, 160);
+  let eggG = 0;
   let wheyG = 0;
   if (yogurtG * D.yogurtProtPerG < P * 0.35 && yogurtG < 120) yogurtG += 40;
-  if (yogurtG * D.yogurtProtPerG + wheyG * D.wheyProtPerG < P * 0.75) {
-    wheyG = clamp((P * 0.75 - yogurtG * D.yogurtProtPerG) / D.wheyProtPerG, 0, 28);
+  const eggProtPerG = 0.13;
+  const eggKcalPerG = 1.55;
+  const protSoFar = () => yogurtG * D.yogurtProtPerG + eggG * eggProtPerG + wheyG * D.wheyProtPerG;
+  if (!isVegan && !denyEgg && protSoFar() < P * 0.75) {
+    eggG = clamp((P * 0.75 - protSoFar()) / eggProtPerG, 50, 150);
+  }
+  if (protSoFar() < P * 0.75) {
+    wheyG = clamp((P * 0.75 - protSoFar()) / D.wheyProtPerG, 0, 28);
   }
 
   if (yogurtG >= 50) {
@@ -294,6 +304,14 @@ function appendBreakfastProteinTopUp(
       items.push(item("Yogurt o kefir", ygLabel, yk, "protein", "Fermentato lattiero sul target proteico."));
       lines.push(ygLabel);
     }
+  }
+
+  if (eggG >= 50) {
+    const eg = clamp(eggG, 50, 150);
+    const count = Math.max(1, Math.round(eg / 50));
+    const label = `${count} uova (≈${eg} g)`;
+    items.push(item("Uova", label, eg * eggKcalPerG, "protein", "Proteina colazione (uova) prima della polvere."));
+    lines.push(label);
   }
 
   if (wheyG >= 8) {
