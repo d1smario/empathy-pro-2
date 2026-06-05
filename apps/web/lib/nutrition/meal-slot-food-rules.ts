@@ -213,7 +213,7 @@ export function pathwayTargetsMissingFoodCoverage(
 const SUPPLEMENT_HINT_BY_NUTRIENT_PREFIX: Array<{ test: (id: string) => boolean; line: string }> = [
   {
     test: (id) => id.includes("folate") || id.includes("folic") || id === "folate_b9",
-    line: "Integrazione (se concordata): acido folico o multivitaminico con B9 — a pranzo/cena copri con verdure a foglia e legumi.",
+    line: "Acido folico (B9): integrazione o multivitaminico se concordato; alimenti: verdure a foglia, legumi a pranzo/cena.",
   },
   {
     test: (id) => id.includes("nitrate") || id.includes("dietary_nitrate"),
@@ -240,8 +240,20 @@ const SUPPLEMENT_HINT_BY_NUTRIENT_PREFIX: Array<{ test: (id: string) => boolean;
     line: "Potassio: banana/yogurt a colazione; patate e legumi solo pranzo/cena.",
   },
   {
-    test: (id) => id.includes("zinc") || id.includes("selen") || id.includes("seleno"),
+    test: (id) => id.includes("zinc") || id.includes("zn_") || id.includes("selen") || id.includes("seleno") || id.includes("se_mcg"),
     line: "Zinco/selenio: pasti principali (carne, pesce, frutta secca controllata); oppure integrazione mirata.",
+  },
+  {
+    test: (id) => id.includes("b12") || id.includes("vitb12") || id.includes("cobalam"),
+    line: "Vitamina B12: integrazione orale/IM se concordata; fonti: uova, pesce, latticini tollerati.",
+  },
+  {
+    test: (id) => id.includes("fe_mg") || id.includes("ferro") || id === "fe_mg",
+    line: "Ferro: integrazione (es. bisglicinato) se ferritina bassa; abbinare vitamina C.",
+  },
+  {
+    test: (id) => id.includes("vitc") || id.includes("vit_c") || id.includes("ascorb"),
+    line: "Vitamina C: agrumi o frutti di bosco a colazione/spuntino; altrimenti integrazione idrosolubile.",
   },
   {
     test: (id) => id.includes("thiamine") || id.includes("b1"),
@@ -257,20 +269,24 @@ const SUPPLEMENT_HINT_BY_NUTRIENT_PREFIX: Array<{ test: (id: string) => boolean;
   },
 ];
 
+export type SupplementHintLine = { label: string; hint: string; nutrientId: string };
+
+/** Hint integrazione per nutrienti pathway non copribili nello slot (colazione/spuntini). */
 export function supplementHintLinesForUncoveredTargets(
   slot: MealSlotKey,
   uncovered: Array<{ nutrientId: string; displayNameIt: string }>,
   maxLines = 3,
-): string[] {
+): SupplementHintLine[] {
   if (!LIGHT_SLOTS.has(slot) || uncovered.length === 0) return [];
-  const lines: string[] = [];
+  const lines: SupplementHintLine[] = [];
   const seen = new Set<string>();
   for (const t of uncovered) {
-    const row = SUPPLEMENT_HINT_BY_NUTRIENT_PREFIX.find((r) => r.test(t.nutrientId));
-    if (row && !seen.has(row.line)) {
-      seen.add(row.line);
-      lines.push(row.line);
-    }
+    const id = t.nutrientId.toLowerCase();
+    const row = SUPPLEMENT_HINT_BY_NUTRIENT_PREFIX.find((r) => r.test(id) || r.test(t.displayNameIt.toLowerCase()));
+    const hint = row?.line ?? `Integrazione mirata per ${t.displayNameIt} — valuta con il referente sanitario.`;
+    if (seen.has(hint)) continue;
+    seen.add(hint);
+    lines.push({ label: t.displayNameIt, hint, nutrientId: t.nutrientId });
     if (lines.length >= maxLines) break;
   }
   return lines;

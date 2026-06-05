@@ -198,9 +198,41 @@ function nutrientDisplayLabel(id: NutrientTargetId): string {
     mg_mg: "Magnesio",
     zn_mg: "Zinco",
     vitB12_mcg: "Vitamina B12",
+    thiamineB1_mg: "Tiamina (B1)",
+    riboflavinB2_mg: "Riboflavina (B2)",
+    niacinB3_mg: "Niacina (B3)",
+    vitB6_mg: "Vitamina B6",
+    vitD_mcg: "Vitamina D",
+    vitE_mg: "Vitamina E",
+    se_mcg: "Selenio",
     omega3G: "Omega-3 EPA/DHA",
+    fiberG: "Fibre",
   };
   return labels[id] ?? id;
+}
+
+const INTEGRATION_ACTION_BY_TARGET: Partial<Record<NutrientTargetId, string>> = {
+  folate_mcg: "Acido folico (B9) o multivitaminico con folati — oppure più verdure a foglia/legumi a pranzo/cena.",
+  vitB12_mcg: "Vitamina B12 (cobalamina): integrazione orale o IM solo se concordata; alimenti: uova, pesce, latticini tollerati.",
+  fe_mg: "Ferro (es. bisglicinato) se ferritina bassa; abbinare vitamina C lontano da pasti ricchi di calcio.",
+  zn_mg: "Zinco (pidolato/bisglicinato) se deficit; fonti alimentari: semi, legumi, pesce.",
+  mg_mg: "Magnesio (citrato/glicinato) la sera se necessario; fonti: verdure, semi, mandorle.",
+  vitC_mg: "Vitamina C idrosolubile o agrumi/kiwi a colazione/spuntino.",
+  thiamineB1_mg: "Tiamina (B1): cereali integrali a colazione o B-complex se indicato.",
+  riboflavinB2_mg: "Riboflavina (B2): latticini/uova/pesce o integrazione B-complex.",
+  niacinB3_mg: "Niacina (B3): fonti dense a pranzo/cena o B-complex se concordato.",
+  vitB6_mg: "Vitamina B6: pesce, legumi o integrazione mirata se deficit.",
+  vitD_mcg: "Vitamina D3 (colecalciferolo) se livelli bassi — dosaggio da medico.",
+  se_mcg: "Selenio: integrazione mirata o pesce/noci se tollerati.",
+  omega3G: "Omega-3 EPA/DHA: pesce a pranzo/cena o capsula se concordata.",
+  fiberG: "Fibre: aumentare verdure/legumi/cereali integrali nei pasti principali.",
+};
+
+function integrationHintForTarget(nutrientId: string, displayNameIt: string): string {
+  const action =
+    INTEGRATION_ACTION_BY_TARGET[nutrientId as NutrientTargetId] ??
+    `Valuta integrazione mirata per ${displayNameIt} con medico/nutrizionista.`;
+  return action;
 }
 
 /** Voce integrazione nel piano quando il nutriente non ha alimenti ammessi nello slot. */
@@ -210,11 +242,23 @@ export function buildIntegrationHintItemsForSlot(
   maxLines = 2,
 ): IntelligentMealPlanItemOut[] {
   const lines = supplementHintLinesForUncoveredTargets(slot, uncovered, maxLines);
-  return lines.map((line) => ({
-    name: "Integrazione (se concordata)",
-    portionHint: line.slice(0, 160),
-    approxKcal: 0,
-    macroRole: "mixed" as const,
-    functionalBridge: line.slice(0, 500),
-  }));
+  if (lines.length > 0) {
+    return lines.map((row) => ({
+      name: `Integrazione suggerita: ${row.label}`,
+      portionHint: row.hint.slice(0, 160),
+      approxKcal: 12,
+      macroRole: "mixed" as const,
+      functionalBridge: row.hint.slice(0, 500),
+    }));
+  }
+  return uncovered.slice(0, maxLines).map((t) => {
+    const hint = integrationHintForTarget(t.nutrientId, t.displayNameIt);
+    return {
+      name: `Integrazione suggerita: ${t.displayNameIt}`,
+      portionHint: hint.slice(0, 160),
+      approxKcal: 12,
+      macroRole: "mixed" as const,
+      functionalBridge: hint.slice(0, 500),
+    };
+  });
 }

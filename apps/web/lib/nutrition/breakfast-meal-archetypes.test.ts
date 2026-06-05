@@ -91,6 +91,20 @@ test("composeBreakfastByArchetype('smoothie'): include un cereale solido (avena)
   }
 });
 
+test("yogurt_bowl: una sola fonte yogurt greco (no doppio kefir)", () => {
+  const ctx = createMediterraneanDayContext("2026-06-05", undefined, undefined, "omnivore");
+  const meal = composeBreakfastByArchetype(
+    "yogurt_bowl",
+    { kcal: 550, carbsG: 70, proteinG: 28, fatG: 16 },
+    42,
+    ctx,
+  );
+  const yogurtItems = meal.items.filter((i) => /yogurt/i.test(i.name));
+  assert.equal(yogurtItems.length, 1, `Attesa 1 voce yogurt, got: ${yogurtItems.map((i) => i.name).join(", ")}`);
+  assert.match(yogurtItems[0]!.name, /greco/i);
+  assert.ok(!meal.items.some((i) => /kefir/i.test(i.name)));
+});
+
 test("composeBreakfastByArchetype('porridge' | 'yogurt_bowl'): item singoli, niente compose", () => {
   const ctx = createMediterraneanDayContext("2026-08-16");
   for (const archetype of ["porridge", "yogurt_bowl"] as const) {

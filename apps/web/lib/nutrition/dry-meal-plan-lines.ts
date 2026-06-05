@@ -131,7 +131,7 @@ export function buildDryMealPlanLinesForSlot(
 
   const targets = pathwayTargets ?? [];
   const uncovered = pathwayTargetsMissingFoodCoverage(targets, groups);
-  out = [...out, ...supplementHintLinesForUncoveredTargets(mealSlotKey, uncovered, 2)];
+  out = [...out, ...supplementHintLinesForUncoveredTargets(mealSlotKey, uncovered, 2).map((r) => r.hint)];
 
   if (mealSlotKey === "snack_am" || mealSlotKey === "snack_pm") out = pruneSnackDryLineConflicts(out);
 

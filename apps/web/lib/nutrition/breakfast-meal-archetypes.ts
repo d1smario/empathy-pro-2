@@ -4,7 +4,9 @@
  */
 
 import type { IntelligentMealPlanItemOut } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { inferCanonicalFoodKeyPreferName } from "@/lib/nutrition/canonical-food-composition";
 import { ROTATION_MAX_WEEK_USES, ROTATION_TARGET_WEEK_USES } from "@/lib/nutrition/meal-composition-rules";
+import { appendProteinShakeLiquidIfNeeded } from "@/lib/nutrition/meal-protein-shake-pair";
 
 export type BreakfastArchetype =
   | "cereals_milk"
@@ -268,6 +270,30 @@ function item(
   };
 }
 
+function itemHasYogurt(it: IntelligentMealPlanItemOut): boolean {
+  const key = inferCanonicalFoodKeyPreferName(it.name, it.portionHint);
+  return key === "yogurt_plain" || /yogurt\s*greco|yogurt vegetale/i.test(it.name);
+}
+
+function boostExistingYogurt(
+  items: IntelligentMealPlanItemOut[],
+  lines: string[],
+  proteinG: number,
+  skipDairy: boolean,
+): boolean {
+  const idx = items.findIndex(itemHasYogurt);
+  if (idx < 0) return false;
+  const targetG = clamp(Math.max(12, proteinG) * 0.55 / D.yogurtProtPerG, 150, 280);
+  const label = skipDairy
+    ? `${targetG} g yogurt vegetale (soia/cocco) non zuccherato`
+    : `${targetG} g yogurt greco`;
+  const name = skipDairy ? "Yogurt vegetale" : "Yogurt greco";
+  items[idx] = item(name, label, targetG * D.yogurtKcalPerG, "protein", "Unica fonte yogurt: quantità aumentata sul target proteico.");
+  if (lines.length > idx) lines[idx] = label;
+  else lines.push(label);
+  return true;
+}
+
 function appendBreakfastProteinTopUp(
   ctx: MediterraneanDayContext,
   seed: number,
@@ -279,13 +305,25 @@ function appendBreakfastProteinTopUp(
   const isVegan = ctx.dietType === "vegan";
   const skipDairy = breakfastDairyBlocked(ctx);
   const denyEgg = denyHit(["uov", "ovo", "egg", "album"], ctx.denyFragments);
-  let yogurtG = seed % 4 === 0 ? 0 : clamp(P * 0.2 / D.yogurtProtPerG, 0, 160);
+  const hasYogurt = items.some(itemHasYogurt);
+  let yogurtG = hasYogurt || seed % 4 === 0 ? 0 : clamp(P * 0.2 / D.yogurtProtPerG, 0, 160);
   let eggG = 0;
   let wheyG = 0;
-  if (yogurtG * D.yogurtProtPerG < P * 0.35 && yogurtG < 120) yogurtG += 40;
+  if (!hasYogurt && yogurtG * D.yogurtProtPerG < P * 0.35 && yogurtG < 120) yogurtG += 40;
   const eggProtPerG = 0.13;
   const eggKcalPerG = 1.55;
-  const protSoFar = () => yogurtG * D.yogurtProtPerG + eggG * eggProtPerG + wheyG * D.wheyProtPerG;
+  const gramsFromHint = (hint: string): number => {
+    const m = hint.match(/(\d+)\s*g\b/i);
+    return m ? Number(m[1]) : 0;
+  };
+  const protSoFar = () => {
+    const yogurtProt = hasYogurt
+      ? items.filter(itemHasYogurt).reduce((a, it) => a + (gramsFromHint(it.portionHint) || 150) * D.yogurtProtPerG, 0)
+      : yogurtG * D.yogurtProtPerG;
+    return yogurtProt + eggG * eggProtPerG + wheyG * D.wheyProtPerG;
+  };
+  if (hasYogurt) boostExistingYogurt(items, lines, P, skipDairy);
+
   if (!isVegan && !denyEgg && protSoFar() < P * 0.75) {
     eggG = clamp((P * 0.75 - protSoFar()) / eggProtPerG, 50, 150);
   }
@@ -293,15 +331,15 @@ function appendBreakfastProteinTopUp(
     wheyG = clamp((P * 0.75 - protSoFar()) / D.wheyProtPerG, 0, 28);
   }
 
-  if (yogurtG >= 50) {
+  if (!hasYogurt && yogurtG >= 50) {
     const yk = yogurtG * D.yogurtKcalPerG;
     if (skipDairy) {
-      const ygLabel = `${clamp(yogurtG, 80, 200)} g yogurt vegetale (soia o cocco) non zuccherato`;
+      const ygLabel = `${clamp(yogurtG, 120, 220)} g yogurt vegetale (soia o cocco) non zuccherato`;
       items.push(item("Yogurt vegetale", ygLabel, yk, "protein", "Yogurt vegetale: quota proteica complementare."));
       lines.push(ygLabel);
     } else {
-      const ygLabel = `${clamp(yogurtG, 80, 200)} g yogurt greco o kefir`;
-      items.push(item("Yogurt o kefir", ygLabel, yk, "protein", "Fermentato lattiero sul target proteico."));
+      const ygLabel = `${clamp(yogurtG, 120, 220)} g yogurt greco`;
+      items.push(item("Yogurt greco", ygLabel, yk, "protein", "Yogurt greco sul target proteico (unica fonte fermentata)."));
       lines.push(ygLabel);
     }
   }
@@ -319,10 +357,10 @@ function appendBreakfastProteinTopUp(
     const isVeganProt = isVegan || denyHit(["whey", "siero"], ctx.denyFragments);
     const protLabel = isVeganProt
       ? `${clamp(wheyG, 10, 35)} g proteine vegetali in polvere (pisello/riso/soia)`
-      : `${clamp(wheyG, 10, 35)} g proteine in polvere (shake)`;
+      : `${clamp(wheyG, 10, 35)} g proteine whey in polvere`;
     items.push(
       item(
-        isVeganProt ? "Proteine vegetali in polvere" : "Proteine in polvere",
+        isVeganProt ? "Proteine vegetali in polvere" : "Proteine whey in polvere",
         protLabel,
         wk,
         "protein",
@@ -331,6 +369,7 @@ function appendBreakfastProteinTopUp(
     );
     lines.push(protLabel);
   }
+  appendProteinShakeLiquidIfNeeded(ctx, seed, items, lines);
 }
 
 function finalizeBreakfastMeal(

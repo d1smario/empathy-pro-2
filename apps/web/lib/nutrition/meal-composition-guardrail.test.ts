@@ -77,6 +77,13 @@ test("cap voci per slot rispettato su campione diete", () => {
           ["veg", "fiber"].includes(i.macroRole ?? ""),
         ).length;
         assert.ok(vegCount >= 2, `[${diet}/${slot}] attese >=2 verdure, got ${vegCount}`);
+        assert.ok(vegCount <= 2, `[${diet}/${slot}] max 2 verdure, got ${vegCount}`);
+        assert.ok(
+          !meal.items.some((i) => /condimento/i.test(i.name)),
+          `[${diet}/${slot}] verdure non devono essere etichettate Condimento`,
+        );
+        const verduraNamed = meal.items.filter((i) => /^Verdura:/i.test(i.name));
+        assert.ok(verduraNamed.length <= 2, `[${diet}/${slot}] max 2 voci Verdura:, got ${verduraNamed.length}`);
       }
     }
   }

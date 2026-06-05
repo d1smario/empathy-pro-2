@@ -15,6 +15,7 @@ import {
 import type { RacePostRecoveryContext, RacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { composeRacePostRecoveryMeal, composeRacePreLunchMainMeal } from "@/lib/nutrition/race-day-pre-race-lunch";
 import { CANONICAL_FOOD_TABLE, inferCanonicalFoodKeyPreferName, scaleCanonicalNutrientsToGrams } from "@/lib/nutrition/canonical-food-composition";
+import { appendProteinShakeLiquidIfNeeded } from "@/lib/nutrition/meal-protein-shake-pair";
 import { canUseCanonicalKey } from "@/lib/nutrition/meal-rotation-guard";
 
 /** Allineato a `DryMealSlotMacros` in dry-meal-plan-lines (evita import circolare). */
@@ -715,11 +716,11 @@ function composeMainMeal(
 
   const foods: SolveFoodSpec[] = [carbSpec, protSpec];
 
-  const mainVegs = pickMainVegSpecsForSlot(seed, offset, ctx?.denyFragments, ctx);
+  const mainVegs = pickMainVegSpecsForSlot(seed, offset, ctx?.denyFragments, ctx).slice(0, 2);
   for (const [idx, veg] of mainVegs.entries()) {
     foods.push({
       canonicalKey: veg.canonicalKey,
-      name: `Condimento: ${veg.name}`,
+      name: `Verdura: ${veg.name}`,
       noun: veg.noun,
       role: "fixed",
       macroRole: "veg",
@@ -727,7 +728,7 @@ function composeMainMeal(
       maxG: 280,
       stepG: 10,
       fixedG: clampStep(140 + (seed % 3) * 20 + idx * 15, 120, 220, 10),
-      bridge: "Contorno/condimento (verdura); condisci con parte dell'olio EVO.",
+      bridge: "Fonte fibre e micronutrienti (max 2 verdure per pasto); condisci con olio EVO.",
     });
   }
 
@@ -771,7 +772,7 @@ function composeMainMeal(
   if (!ctx?.dayUsedCanonicalKeys?.size || canUseCanonicalKey(ctx, "olive_oil")) {
     foods.push({
       canonicalKey: "olive_oil",
-      name: "Condimento olio EVO",
+      name: "Olio extravergine d'oliva",
       noun: "olio extravergine d'oliva (a crudo)",
       role: "fat",
       macroRole: "fat",
@@ -937,7 +938,12 @@ function composeSnack(
 
   const safeFoods = foods.filter((f): f is SolveFoodSpec => Boolean(f));
   const grams = solvePortionsByMacros(safeFoods, { kcal: K, carbsG: m.carbsG, proteinG: m.proteinG, fatG: m.fatG });
-  return buildMealFromSolved(safeFoods, grams);
+  const composed = buildMealFromSolved(safeFoods, grams);
+  if (ctx) {
+    appendProteinShakeLiquidIfNeeded(ctx, seed, composed.items, composed.lines);
+    composed.totalApproxKcal = composed.items.reduce((a, i) => a + i.approxKcal, 0);
+  }
+  return composed;
 }
 
 /**
