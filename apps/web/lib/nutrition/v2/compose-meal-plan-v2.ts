@@ -6,6 +6,8 @@ import type {
 } from "@empathy/contracts";
 import type { FdcFoodBrowseHit } from "@/lib/nutrition/v2/fdc-branch-query";
 import { filterFdcCandidates } from "@/lib/nutrition/v2/fdc-candidate-filter";
+import { fdcDescriptionToLabelIt } from "@/lib/nutrition/v2/fdc-food-label-it";
+import { pickBestFdcCandidate, type BranchPickContext } from "@/lib/nutrition/v2/fdc-healthy-meal-scoring";
 import { V2_SLOT_BRANCHES, type SlotBranchSpec } from "@/lib/nutrition/v2/fdc-pool-specs";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 
@@ -25,32 +27,15 @@ function macrosFromHit(c: FdcFoodBrowseHit, grams: number): Omit<MealPlanV2Compo
   };
 }
 
-function sortCandidates(candidates: FdcFoodBrowseHit[], sort: SlotBranchSpec["sort"]): FdcFoodBrowseHit[] {
-  const sorted = [...candidates];
-  if (sort === "pro") {
-    sorted.sort((a, b) => b.proteinPer100g - a.proteinPer100g || b.kcalPer100g - a.kcalPer100g);
-  } else if (sort === "veg") {
-    sorted.sort((a, b) => a.kcalPer100g - b.kcalPer100g || b.carbsPer100g - a.carbsPer100g);
-  } else if (sort === "kcal_low") {
-    sorted.sort((a, b) => a.kcalPer100g - b.kcalPer100g || b.carbsPer100g - a.carbsPer100g);
-  } else {
-    sorted.sort((a, b) => b.carbsPer100g - a.carbsPer100g || b.kcalPer100g - a.kcalPer100g);
-  }
-  return sorted;
-}
-
 function pickFromPool(
   pool: FdcFoodBrowseHit[],
-  sort: SlotBranchSpec["sort"],
+  ctx: BranchPickContext,
+  denyFragments: string[],
   usedFdcIds: Set<number>,
   staplePenalty: (description: string) => number,
 ): FdcFoodBrowseHit | null {
-  const sorted = sortCandidates(pool, sort);
-  for (const c of sorted) {
-    if (usedFdcIds.has(c.fdcId)) continue;
-    return c;
-  }
-  return sorted[0] ?? null;
+  const filtered = filterFdcCandidates(pool, denyFragments);
+  return pickBestFdcCandidate(filtered, ctx, denyFragments, usedFdcIds, staplePenalty);
 }
 
 function composeSlotMultiBranch(
@@ -76,15 +61,20 @@ function composeSlotMultiBranch(
 
     const targetKcal = Math.max(40, Math.round(slot.kcal * share));
     const rawPool = pools.get(branch.poolKey) ?? [];
-    const pool = filterFdcCandidates(rawPool, denyFragments);
-    const pick = pickFromPool(pool, branch.sort, usedFdcIds, staplePenalty);
+    const pickCtx: BranchPickContext = {
+      slot: slot.key as MealSlotKey,
+      poolKey: branch.poolKey,
+      branch,
+      targetKcal,
+    };
+    const pick = pickFromPool(rawPool, pickCtx, denyFragments, usedFdcIds, staplePenalty);
     if (!pick || pick.kcalPer100g <= 0) continue;
 
     const grams = Math.max(25, Math.min(400, Math.round((targetKcal / pick.kcalPer100g) * 100)));
     usedFdcIds.add(pick.fdcId);
     items.push({
       fdcId: pick.fdcId,
-      description: pick.description,
+      description: fdcDescriptionToLabelIt(pick.description),
       grams,
       ...macrosFromHit(pick, grams),
     });

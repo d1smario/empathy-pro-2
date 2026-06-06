@@ -45,8 +45,9 @@ function inferMacroDominant(row: MacroRow): FdcMacroDominantTag[] {
 function inferFoodFamily(desc: string): FdcFoodFamilyTag[] {
   const d = desc.toLowerCase();
   const out: FdcFoodFamilyTag[] = [];
-  if (has(/\b(pasta|spaghetti|rice|riso|quinoa|farro|barley|oat|cereal)\b/i, d)) out.push("pasta_riso", "cereale");
-  if (has(/\b(bread|pane|toast|cracker)\b/i, d)) out.push("pane", "cereale");
+  if (has(/\b(pasta|spaghetti|rice\b|riso|quinoa|farro|barley|bulgur|couscous|macaroni)\b/i, d)) out.push("pasta_riso");
+  if (has(/\b(bread|pane|toast|cracker|bagel|roll)\b/i, d)) out.push("pane", "cereale");
+  if (has(/\b(oat|cereal|muesli|granola|corn flakes|bran flakes|wheat, cream|grits)\b/i, d)) out.push("cereale");
   if (has(/\b(chicken|pollo|turkey|beef|pork|lamb|meat|bresaola)\b/i, d)) out.push("carne");
   if (has(/\b(fish|salmon|tuna|cod|sardine|pesce|sgombro)\b/i, d)) out.push("pesce");
   if (has(/\b(egg|uova)\b/i, d)) out.push("uova");
@@ -80,15 +81,27 @@ function inferMealCourse(desc: string, families: FdcFoodFamilyTag[]): FdcMealCou
   return [...new Set(out)];
 }
 
-function inferSlotFit(courses: FdcMealCourseTag[], families: FdcFoodFamilyTag[]): FdcSlotFitTag[] {
+function inferSlotFit(courses: FdcMealCourseTag[], families: FdcFoodFamilyTag[], desc: string): FdcSlotFitTag[] {
+  const d = desc.toLowerCase();
   const out: FdcSlotFitTag[] = [];
+  const breakfastOnlyCarb =
+    families.includes("cereale") &&
+    !families.includes("pasta_riso") &&
+    has(/\b(oat|cereal|muesli|granola|corn flakes|bran|wheat, cream|grits)\b/i, d);
+  const junkSnack = has(/\b(chip|crisp|french fries|pretzel|popcorn|cookie|donut|doughnut|ice cream|candy|snack bar)\b/i, d);
+
   if (courses.includes("frutta") || courses.includes("bevanda") || courses.includes("preparato_polvere"))
     out.push("breakfast", "snack");
-  if (courses.includes("primo_carb") || courses.includes("secondo_protein") || courses.includes("contorno_veg"))
+  if (
+    (courses.includes("primo_carb") || courses.includes("secondo_protein") || courses.includes("contorno_veg")) &&
+    !breakfastOnlyCarb &&
+    !junkSnack
+  ) {
     out.push("main_meal");
+  }
   if (courses.includes("energetico_sport")) out.push("fueling");
-  if (courses.includes("dolce") || families.includes("latticino")) out.push("evening", "snack");
-  if (out.length === 0) out.push("main_meal");
+  if (courses.includes("dolce") || families.includes("latticino") || breakfastOnlyCarb) out.push("evening", "snack", "breakfast");
+  if (out.length === 0 && !junkSnack) out.push("main_meal");
   return [...new Set(out)];
 }
 
@@ -206,7 +219,7 @@ export function classifyFdcFoodRow(input: {
   const foodFamily = inferFoodFamily(desc);
   const mealCourse = inferMealCourse(desc, foodFamily);
   const macroDominant = inferMacroDominant(macroRow);
-  const slotFit = inferSlotFit(mealCourse, foodFamily);
+  const slotFit = inferSlotFit(mealCourse, foodFamily, desc);
   const dietExclude = inferDietExclude(desc, foodFamily);
   const dietProfile = inferDietProfile(desc, foodFamily, dietExclude);
   const mealRole = inferMealRole(mealCourse);

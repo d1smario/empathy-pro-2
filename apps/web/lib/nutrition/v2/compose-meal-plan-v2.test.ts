@@ -42,6 +42,26 @@ const lunchSlot: MealPlanV2DietSlotBudget = {
   fat: 15,
 };
 
+test("compose lunch: preferisce pasta/riso, esclude cereali e patatine", () => {
+  const pools: FdcPoolMap = new Map([
+    [
+      "lunch_carb",
+      [
+        hit(10, "Cereal, corn flakes, plain", 357, 84, 7),
+        hit(11, "Snacks, potato chips, plain, salted", 536, 53, 7),
+        hit(1, "Pasta, cooked, unenriched, without added salt", 160, 30, 5),
+        hit(12, "Rice, white, long-grain, regular, cooked", 130, 28, 3),
+      ],
+    ],
+    ["lunch_pro", [hit(2, "Chicken, broilers or fryers, breast, meat only, cooked, roasted", 165, 0, 31)]],
+    ["lunch_veg", [hit(3, "Spinach, raw", 23, 4, 3)]],
+  ]);
+  const out = composeMealPlanV2(requirements, [lunchSlot], pools);
+  const carbItem = out[0]!.items.find((i) => /pasta|riso/i.test(i.description));
+  assert.ok(carbItem, `carb item: ${out[0]!.items.map((i) => i.description).join(", ")}`);
+  assert.ok(!out[0]!.items.some((i) => /cereal|chip|patat/i.test(i.description)));
+});
+
 test("compose lunch: multi-item da branch carb+pro+veg", () => {
   const pools: FdcPoolMap = new Map([
     ["lunch_carb", [hit(1, "Pasta, cooked", 160, 30, 5)]],
@@ -51,6 +71,7 @@ test("compose lunch: multi-item da branch carb+pro+veg", () => {
   const out = composeMealPlanV2(requirements, [lunchSlot], pools);
   assert.equal(out.length, 1);
   assert.ok(out[0]!.items.length >= 2, `items ${out[0]!.items.length}`);
+  assert.equal(out[0]!.items[0]!.description, "Pasta di semola");
   assert.ok(out[0]!.totals.kcal > 200);
 });
 

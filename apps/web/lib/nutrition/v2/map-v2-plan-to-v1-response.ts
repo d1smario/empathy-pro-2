@@ -6,6 +6,7 @@ import type {
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
+import { dryPortionLineForFoodLabel } from "@/lib/nutrition/dry-meal-plan-lines";
 import type { MealPlanV2Production } from "@/lib/nutrition/v2/build-meal-plan-v2-production";
 
 function macroRoleFromItem(choG: number, proG: number, fatG: number): IntelligentMealPlanItemOut["macroRole"] {
@@ -22,11 +23,14 @@ function macroRoleFromItem(choG: number, proG: number, fatG: number): Intelligen
 
 function mapItem(
   item: MealPlanV2Production["composedMealPlan"][number]["items"][number],
+  itemIndex: number,
+  slotMacros: { kcal: number; carbsG: number; proteinG: number; fatG: number },
 ): IntelligentMealPlanItemOut {
+  const label = item.description;
   return {
-    name: item.description,
-    portionHint: `${Math.round(item.grams)} g`,
-    functionalBridge: "USDA FDC · Nutrition V2",
+    name: label,
+    portionHint: dryPortionLineForFoodLabel(label, slotMacros, itemIndex),
+    functionalBridge: "Alimentazione mediterranea · catalogo USDA",
     approxKcal: Math.round(item.kcal),
     macroRole: macroRoleFromItem(item.choG, item.proG, item.fatG),
     compositionKey: `fdc:${item.fdcId}`,
@@ -38,7 +42,7 @@ function slotCoherenceFor(slot: MealSlotKey, suppressed: boolean): string {
   if (suppressed) {
     return "Pasto soppresso: energia in finestra allenamento → modulo Fueling (substrati V2).";
   }
-  return "Composizione deterministica Nutrition V2 da pool USDA taggati.";
+  return "Composizione mediterranea: primo + secondo + contorno (V2).";
 }
 
 export function mapV2PlanToV1AssembledCore(
@@ -76,7 +80,14 @@ export function mapV2PlanToV1AssembledCore(
     return {
       slot: slotKey,
       targetKcalEcho: composed.targetKcal,
-      items: composed.items.map(mapItem),
+      items: composed.items.map((it, idx) =>
+        mapItem(it, idx, {
+          kcal: composed.targetKcal,
+          carbsG: composed.totals.choG,
+          proteinG: composed.totals.proG,
+          fatG: composed.totals.fatG,
+        }),
+      ),
       slotCoherence: slotCoherenceFor(slotKey, false),
       slotTimingRationale: meta?.scheduledTimeLocal
         ? `Pasto ${meta.labelIt} alle ${meta.scheduledTimeLocal} · target Diet ${composed.targetKcal} kcal.`
