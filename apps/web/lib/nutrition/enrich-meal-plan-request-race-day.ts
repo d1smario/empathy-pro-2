@@ -156,6 +156,9 @@ export function enrichIntelligentMealPlanRequestWithRaceDay(input: {
   return {
     ...input.request,
     slots,
+    postWorkoutMealBySlot: racePostRecovery
+      ? { [racePostRecovery.mealSlot]: true }
+      : input.request.postWorkoutMealBySlot,
     contextLines: [
       ...contextLines,
       ...(racePostRecovery ? [racePostRecoveryContextLine(racePostRecovery)] : []),

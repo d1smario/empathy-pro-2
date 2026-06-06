@@ -68,7 +68,10 @@ function pickFromPoolFallback(
   if (isMainMealSlot(ctx.slot) && ctx.spec.foodRole === "cho_complex") {
     for (const hit of filtered) {
       if (usedFdcIds.has(hit.fdcId) || hit.carbsPer100g < 12) continue;
-      if (/\b(pasta|rice|riso|potato|quinoa|spaghetti)\b/i.test(hit.description)) return hit;
+      if (/\b(rice cake|crackers?|cookie|cake|snack bar)\b/i.test(hit.description)) continue;
+      if (/\b(pasta|riso\b|potato|quinoa|spaghetti)\b/i.test(hit.description) && !/\brice cake\b/i.test(hit.description)) {
+        return hit;
+      }
     }
   }
   return null;
@@ -93,6 +96,9 @@ export function portionHintIt(
   }
   if (spec.foodRole === "protein_primary" && /uov/i.test(label)) {
     return `${Math.max(1, Math.round(g / 50))} uova medie (≈${g} g)`;
+  }
+  if (/grana|parmesan|pecorino|padano/i.test(label)) {
+    return `${g} g grana grattugiato`;
   }
   if (spec.foodRole === "fat" && /olio/i.test(label)) {
     return `${g} ml olio EVO`;
@@ -127,7 +133,8 @@ function pickLineForRole(
   });
 
   if (staplePick) {
-    if (staplePick.entry.carbFamily) ctx.usedCarbFamilies.add(staplePick.entry.carbFamily);
+    if (staplePick.entry.rotationKey) ctx.usedCarbFamilies.add(staplePick.entry.rotationKey);
+    else if (staplePick.entry.carbFamily) ctx.usedCarbFamilies.add(staplePick.entry.carbFamily);
     if (staplePick.hit.fdcId > 0) ctx.usedFdcIds.add(staplePick.hit.fdcId);
     ctx.dayCtx.dayUsedCanonicalKeys?.add(staplePick.entry.canonicalKey);
     return { spec, hit: staplePick.hit, staple: staplePick.entry };

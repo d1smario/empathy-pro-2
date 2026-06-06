@@ -106,13 +106,6 @@ export function buildIntelligentMealPlanRequest(input: {
     ...raceWeight,
   });
   const mealTimesFlat = routineMealTimesFlat(input.profile?.routine_config ?? null);
-  const postWorkoutMealBySlot = computePostWorkoutMealFlags({
-    routineConfig: input.profile?.routine_config ?? null,
-    planDate: input.planDate,
-    mealTimesFlatFromRoot: mealTimesFlat,
-    plannedSessions: plannedResolved,
-    ...raceWeight,
-  });
   const suppressedSlots = computeSnackSlotsSuppressedByTrainingWindow({
     routineConfig: input.profile?.routine_config ?? null,
     planDate: input.planDate,
@@ -151,6 +144,18 @@ export function buildIntelligentMealPlanRequest(input: {
         postRecoveryMealSlot: racePostRecovery?.mealSlot ?? null,
       })
     : [];
+
+  const postWorkoutMealBySlot = racePostRecovery?.mealSlot
+    ? { [racePostRecovery.mealSlot]: true as const }
+    : computePostWorkoutMealFlags({
+        routineConfig: input.profile?.routine_config ?? null,
+        planDate: input.planDate,
+        mealTimesFlatFromRoot: mealTimesFlat,
+        plannedSessions: plannedResolved,
+        activeMealSlots: mealRowsFinal.map((r) => r.key).filter((k): k is MealSlotKey => isMealSlotKey(k)),
+        mealTimesBySlot: mealTimesFinal,
+        ...raceWeight,
+      });
 
   /**
    * Bridge sistema intelligente (pathway modulation) → generatore: estrae nutrient target dai

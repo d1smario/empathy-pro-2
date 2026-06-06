@@ -11,10 +11,10 @@ export type RolePickContext = {
 };
 
 const MAIN_MEAL_FORBIDDEN =
-  /\b(cereal|corn flakes|bran flakes|muesli|granola|oat,?\s|oats,?\s|crisp|crisps|chip|chips|potato chips|french fries|snack bar|granola bar|cookie|babyfood|walrus|kraft foods|fast foods)\b/i;
+  /\b(cereal|corn flakes|bran flakes|muesli|granola|oat,?\s|oats,?\s|crisp|crisps|chip|chips|potato chips|french fries|snack bar|granola bar|cookie|babyfood|walrus|kraft foods|fast foods|rice cake|crackers?)\b/i;
 
 const MAIN_CARB_PREFERRED =
-  /\b(pasta|spaghetti|macaroni|rice\b|riso|quinoa|barley|lentil|chickpea|potato.*flesh|potato.*baked|sweet potato)\b/i;
+  /\b(pasta|spaghetti|macaroni|riso\b|quinoa|barley|lentil|chickpea|potato.*flesh|potato.*baked|sweet potato|rice,?\s+(white|brown|long-grain|cooked))\b/i;
 
 const BREAKFAST_CHO_PREFERRED =
   /\b(oats?|oatmeal|avena|bread|pane|muesli|cereal|corn flakes|bran|cracker|biscott|rusk|toast)\b/i;
@@ -38,6 +38,7 @@ export function isForbiddenForRole(hit: FdcFoodBrowseHit, ctx: RolePickContext, 
 
   if (isMainMealSlot(ctx.slot)) {
     if (MAIN_MEAL_FORBIDDEN.test(d)) return true;
+    if (/\b(rice cake|crackers?,?\s|mini rice cakes)\b/i.test(d)) return true;
     if (ctx.spec.foodRole === "cho_complex" && /\b(cereal|oat|muesli|bread,?\s*white)\b/i.test(d)) return true;
   }
 
@@ -63,7 +64,7 @@ export function scoreFdcForRole(
   const d = hit.description;
 
   if (ctx.spec.foodRole === "cho_complex") {
-    if (isMainMealSlot(ctx.slot) && MAIN_CARB_PREFERRED.test(d)) score += 200;
+    if (isMainMealSlot(ctx.slot) && MAIN_CARB_PREFERRED.test(d) && !/\brice cake\b/i.test(d)) score += 200;
     if (ctx.slot === "breakfast" && BREAKFAST_CHO_PREFERRED.test(d)) score += 200;
   }
   if (ctx.spec.foodRole === "protein_primary" || ctx.spec.foodRole === "protein_secondary") {

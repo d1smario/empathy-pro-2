@@ -236,6 +236,22 @@ export function resolvePostRaceRecoveryMealSlot(input: {
   mealTimesBySlot: Partial<Record<MealSlotKey, string>>;
 }): MealSlotKey {
   const targetMinutes = input.raceEndMinutes + 15;
+
+  /**
+   * Gara mattutina: lo spuntino AM (profilo ~10:30) cade in seduta → diventa post-gara
+   * con orario riprogrammato a fine gara + 15 min (non il pranzo alle 13:00).
+   */
+  if (input.activeSlots.includes("snack_am")) {
+    const snackAmMin = parseLocalTimeToMinutes(input.mealTimesBySlot.snack_am ?? "");
+    if (
+      snackAmMin != null &&
+      snackAmMin < targetMinutes &&
+      input.raceEndMinutes < 14 * 60
+    ) {
+      return "snack_am";
+    }
+  }
+
   const candidates = input.activeSlots
     .map((slot) => {
       const t = parseLocalTimeToMinutes(input.mealTimesBySlot[slot] ?? "");

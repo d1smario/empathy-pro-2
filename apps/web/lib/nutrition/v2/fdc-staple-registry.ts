@@ -238,7 +238,10 @@ export function pickStapleForPool(ctx: StaplePickContext): { entry: StapleRegist
       if (ctx.dayCtx && !canUseCanonicalKey(ctx.dayCtx as MediterraneanDayContext, e.canonicalKey, { allowWeekException: true })) {
         return { e, score: -5000, idx };
       }
-      if (e.carbFamily && ctx.usedCarbFamilies?.has(e.carbFamily)) return { e, score: -3000, idx };
+      if (e.rotationKey && ctx.usedCarbFamilies?.has(e.rotationKey)) return { e, score: -3000, idx };
+      else if (!e.rotationKey && e.carbFamily && ctx.usedCarbFamilies?.has(e.carbFamily)) {
+        return { e, score: -3000, idx };
+      }
       const hit = canonicalToHit(e);
       if (!hit) return { e, score: -8000, idx };
       if (ctx.usedFdcIds?.has(hit.fdcId) && hit.fdcId > 0) return { e, score: -4000, idx };

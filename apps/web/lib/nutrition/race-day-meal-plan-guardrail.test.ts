@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { enrichIntelligentMealPlanRequestWithRaceDay } from "./enrich-meal-plan-request-race-day";
 import {
+  buildRacePostRecoveryContext,
   buildRacePreLunchDayContext,
   computeRaceDaySuppressedSlots,
   resolvePreRaceMealSlot,
@@ -96,19 +97,42 @@ test("guardrail: enrich + composer — pasta/riso nello slot pre-gara (no spinac
   assert.ok(lunch.items.some((i) => /grana/i.test(i.name)));
 });
 
-test("guardrail: gara mattutina 10:00 → pre-gara in colazione alle 07:00", () => {
+test("guardrail: gara mattutina 09:00 2h30 — recovery su snack_am post-gara, merenda alle 16", () => {
   const ctx = buildRacePreLunchDayContext({
     weightKg: 70,
-    planDate: "2026-06-02",
+    planDate: "2026-06-06",
     routineConfig: {
-      week_plan: { Tue: { day_mode: "race", training1_start_time: "10:00", training1_duration_minutes: 90 } },
+      week_plan: {
+        Sat: { day_mode: "race", training1_start_time: "09:00", training1_duration_minutes: 150 },
+      },
+      meal_times: { breakfast: "07:00", snack_am: "10:30", lunch: "13:00", snack_pm: "16:00", dinner: "20:00" },
     },
-    plannedSessions: [],
-    activeMealSlots: ["breakfast", "lunch", "dinner"],
+    plannedSessions: [{ duration_minutes: 150, type: "race", notes: "Gara" }],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
   });
   assert.ok(ctx);
   assert.equal(ctx!.mealSlot, "breakfast");
-  assert.equal(ctx!.lunchTimeLocal, "07:00");
+  assert.equal(ctx!.lunchTimeLocal, "06:00");
+
+  const recovery = buildRacePostRecoveryContext({
+    weightKg: 70,
+    planDate: "2026-06-06",
+    routineConfig: ctx ? {
+      week_plan: { Sat: { day_mode: "race", training1_start_time: "09:00", training1_duration_minutes: 150 } },
+    } : null,
+    plannedSessions: [{ duration_minutes: 150, type: "race", notes: "Gara" }],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
+    mealTimesBySlot: {
+      breakfast: "06:00",
+      snack_am: "10:30",
+      lunch: "13:00",
+      snack_pm: "16:00",
+      dinner: "20:00",
+    },
+  });
+  assert.ok(recovery);
+  assert.equal(recovery!.mealSlot, "snack_am");
+  assert.equal(recovery!.recoveryTimeLocal, "11:45");
 });
 
 test("computeRaceDaySuppressedSlots: gara 13:00 — colazione classica, pranzo pre-gara 10:00, snack_am fueling", () => {

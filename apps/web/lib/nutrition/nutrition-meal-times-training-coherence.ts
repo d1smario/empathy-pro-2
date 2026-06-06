@@ -6,6 +6,7 @@
 import { MEAL_SLOT_ORDER, type MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
 import {
   buildRacePreLunchDayContext,
+  buildRacePostRecoveryContext,
   type PlannedSessionForRaceDetection,
 } from "@/lib/nutrition/race-day-pre-race-lunch";
 import {
@@ -301,15 +302,26 @@ export function computePostWorkoutMealFlags(input: {
   mealTimesFlatFromRoot: FlatMealTimes;
   plannedSessions: PlannedSessionForRaceDetection[];
   weightKg?: number | null;
+  activeMealSlots?: readonly MealSlotKey[];
+  mealTimesBySlot?: Partial<Record<MealSlotKey, string>>;
 }): Partial<Record<MealSlotKey, boolean>> {
-  if (
-    buildRacePreLunchDayContext({
+  const racePre = buildRacePreLunchDayContext({
+    weightKg: input.weightKg,
+    planDate: input.planDate,
+    routineConfig: input.routineConfig,
+    plannedSessions: input.plannedSessions,
+    activeMealSlots: input.activeMealSlots,
+  });
+  if (racePre) {
+    const recovery = buildRacePostRecoveryContext({
       weightKg: input.weightKg,
       planDate: input.planDate,
       routineConfig: input.routineConfig,
       plannedSessions: input.plannedSessions,
-    })
-  ) {
+      activeMealSlots: input.activeMealSlots ?? (MEAL_SLOT_ORDER as MealSlotKey[]),
+      mealTimesBySlot: input.mealTimesBySlot ?? (input.mealTimesFlatFromRoot as Partial<Record<MealSlotKey, string>>),
+    });
+    if (recovery?.mealSlot) return { [recovery.mealSlot]: true };
     return {};
   }
   const base = mealTimesFromRoutineWeekPlanForDate(input.routineConfig, input.planDate, input.mealTimesFlatFromRoot);

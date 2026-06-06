@@ -3,7 +3,11 @@ import test from "node:test";
 import type { MealPlanV2DietSlotBudget } from "@empathy/contracts";
 import type { IntelligentMealPlanRequest } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { composeMealPlanV2, type FdcPoolMap } from "@/lib/nutrition/v2/compose-meal-plan-v2";
-import { buildRacePreLunchDayContext } from "@/lib/nutrition/race-day-pre-race-lunch";
+import {
+  buildRacePreLunchDayContext,
+  composeRacePreLunchMainMeal,
+} from "@/lib/nutrition/race-day-pre-race-lunch";
+import { mediterraneanMealToV2Items } from "@/lib/nutrition/v2/v2-mediterranean-meal-adapter";
 
 const requirements = { energy: { mealsKcal: 3500 } } as import("@empathy/contracts").DailyNutritionRequirementsV2;
 
@@ -56,4 +60,32 @@ test("race pre-lunch: pasta/riso + grana + olio, no verdura voluminosa", () => {
   assert.ok(slot.items.some((i) => /pasta|riso/i.test(i.description)));
   assert.ok(slot.items.some((i) => /grana|formaggio/i.test(i.description)));
   assert.ok(!slot.items.some((i) => /spinac|insalat|broccoli/i.test(i.description)));
+});
+
+test("race pre-lunch adapter: grammi estratti da portionHint (no 0g in UI)", () => {
+  const raceCtx = buildRacePreLunchDayContext({
+    weightKg: 70,
+    planDate: "2026-06-15",
+    routineConfig: {
+      week_plan: {
+        sun: { day_mode: "race", training1_start_time: "09:00", training1_duration_minutes: 150 },
+      },
+    },
+    plannedSessions: [{ duration_minutes: 150, type: "race", notes: "Gara" }],
+    activeMealSlots: ["breakfast", "snack_am", "lunch", "snack_pm", "dinner"],
+  });
+  assert.ok(raceCtx);
+  assert.equal(raceCtx!.mealSlot, "breakfast");
+
+  const meal = composeRacePreLunchMainMeal(
+    "breakfast",
+    { kcal: 1200, carbsG: 210, proteinG: 45, fatG: 25 },
+    7,
+    raceCtx!,
+  );
+  const items = mediterraneanMealToV2Items(meal);
+  const pasta = items.find((i) => /pasta|riso/i.test(i.description));
+  assert.ok(pasta);
+  assert.ok(pasta!.grams >= 150, `pasta/riso grams=${pasta!.grams}`);
+  assert.ok(items.every((i) => i.grams > 0 || i.kcal <= 8));
 });

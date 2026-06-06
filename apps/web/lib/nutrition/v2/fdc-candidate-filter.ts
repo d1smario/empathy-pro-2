@@ -30,7 +30,9 @@ const DESCRIPTION_DENYLIST = [
   /ice cream/i,
   /cupcake/i,
   /doughnut/i,
-  /toaster pastry/i,
+  /rice cake/i,
+  /\bcrackers?\b/i,
+  /mini rice cakes/i,
   /^candies/i,
   /^candy,/i,
 ];

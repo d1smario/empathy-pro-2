@@ -39,12 +39,21 @@ test("pickStapleForPool: lunch carb non sceglie junk", () => {
   assert.ok(["pasta_dry", "rice_dry", "potato_cooked", "farro_dry", "quinoa_dry"].includes(pick.entry.canonicalKey));
 });
 
-test("pickStapleForPool: dedupe carb family stesso giorno", () => {
-  const used = new Set<string>(["carb_starch"]);
-  const pick = pickStapleForPool({
+test("pickStapleForPool: dedupe stesso carb (riso) pranzo+cena; pasta pranzo non blocca riso cena", () => {
+  const usedRiso = new Set<string>(["carb:riso"]);
+  const noRice = pickStapleForPool({
     poolKey: "dinner_carb",
     seed: 1,
-    usedCarbFamilies: used,
+    usedCarbFamilies: usedRiso,
   });
-  assert.equal(pick, null);
+  assert.ok(!noRice || noRice.entry.canonicalKey !== "rice_dry");
+
+  const usedPasta = new Set<string>(["carb:pasta"]);
+  const dinnerAfterPastaLunch = pickStapleForPool({
+    poolKey: "dinner_carb",
+    seed: 1,
+    usedCarbFamilies: usedPasta,
+  });
+  assert.ok(dinnerAfterPastaLunch);
+  assert.equal(dinnerAfterPastaLunch!.entry.canonicalKey, "rice_dry");
 });
