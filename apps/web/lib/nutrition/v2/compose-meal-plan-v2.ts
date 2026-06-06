@@ -6,10 +6,15 @@ import type {
 } from "@empathy/contracts";
 import type { FdcFoodBrowseHit } from "@/lib/nutrition/v2/fdc-branch-query";
 import { filterFdcCandidates } from "@/lib/nutrition/v2/fdc-candidate-filter";
+import {
+  branchMacroTargets,
+  gramsForBranchTarget,
+} from "@/lib/nutrition/v2/compose-meal-plan-v2-macro-scale";
 import { fdcDescriptionToLabelIt } from "@/lib/nutrition/v2/fdc-food-label-it";
 import { pickBestFdcCandidate, type BranchPickContext } from "@/lib/nutrition/v2/fdc-healthy-meal-scoring";
 import { V2_SLOT_BRANCHES, type SlotBranchSpec } from "@/lib/nutrition/v2/fdc-pool-specs";
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { isMainMealSlot } from "@/lib/nutrition/meal-composition-rules";
 
 export type FdcPoolMap = Map<string, FdcFoodBrowseHit[]>;
 
@@ -35,7 +40,36 @@ function pickFromPool(
   staplePenalty: (description: string) => number,
 ): FdcFoodBrowseHit | null {
   const filtered = filterFdcCandidates(pool, denyFragments);
-  return pickBestFdcCandidate(filtered, ctx, denyFragments, usedFdcIds, staplePenalty);
+  const pick = pickBestFdcCandidate(filtered, ctx, denyFragments, usedFdcIds, staplePenalty);
+  if (pick) return pick;
+
+  // Fallback: pool grezzo con solo denylist profilo (main meal carb obbligatorio).
+  if (isMainMealSlot(ctx.slot) && ctx.branch.macroRole === "cho_heavy") {
+    for (const hit of filtered) {
+      if (usedFdcIds.has(hit.fdcId) || hit.kcalPer100g <= 0 || hit.carbsPer100g < 12) continue;
+      if (/\b(pasta|rice|riso|potato|quinoa|barley|lentil|chickpea|spaghetti)\b/i.test(hit.description)) {
+        return hit;
+      }
+    }
+  }
+  return null;
+}
+
+function portionHintIt(label: string, grams: number, branch: SlotBranchSpec): string {
+  const g = Math.round(grams);
+  if (branch.macroRole === "cho_heavy" && /pasta|semola/i.test(label)) {
+    return `${g} g pasta di semola (peso a crudo)`;
+  }
+  if (branch.macroRole === "cho_heavy" && /riso/i.test(label)) {
+    return `${g} g riso (peso a crudo)`;
+  }
+  if (branch.macroRole === "protein" && /uov/i.test(label)) {
+    return `${Math.max(2, Math.round(g / 50))} uova medie (≈${g} g)`;
+  }
+  if (/latte/i.test(label)) {
+    return `${g} ml latte`;
+  }
+  return `${g} g ${label}`;
 }
 
 function composeSlotMultiBranch(
@@ -44,40 +78,56 @@ function composeSlotMultiBranch(
   denyFragments: string[],
   usedFdcIds: Set<number>,
   staplePenalty: (description: string) => number,
-  choTargetG?: number,
 ): MealPlanV2ComposedSlot {
   const branches = V2_SLOT_BRANCHES[slot.key as MealSlotKey] ?? [
     { poolKey: "snack", kcalShare: 1, macroRole: "mixed" as const, sort: "kcal_low" as const },
   ];
 
   const items: MealPlanV2ComposedItem[] = [];
-  const isBreakfast = slot.key === "breakfast";
-  const dualCho = isBreakfast && (choTargetG ?? slot.carbs) >= 130;
 
-  for (let i = 0; i < branches.length; i++) {
-    const branch = branches[i]!;
-    let share = branch.kcalShare;
-    if (dualCho && branch.sort === "cho" && i === 0) share *= 0.55;
-
-    const targetKcal = Math.max(40, Math.round(slot.kcal * share));
+  for (const branch of branches) {
+    const targets = branchMacroTargets(slot, branch);
     const rawPool = pools.get(branch.poolKey) ?? [];
     const pickCtx: BranchPickContext = {
       slot: slot.key as MealSlotKey,
       poolKey: branch.poolKey,
       branch,
-      targetKcal,
+      targetKcal: Math.max(40, Math.round(targets.kcal)),
     };
     const pick = pickFromPool(rawPool, pickCtx, denyFragments, usedFdcIds, staplePenalty);
     if (!pick || pick.kcalPer100g <= 0) continue;
 
-    const grams = Math.max(25, Math.min(400, Math.round((targetKcal / pick.kcalPer100g) * 100)));
+    const grams = gramsForBranchTarget(pick, branch, targets);
     usedFdcIds.add(pick.fdcId);
+    const label = fdcDescriptionToLabelIt(pick.description);
     items.push({
       fdcId: pick.fdcId,
-      description: fdcDescriptionToLabelIt(pick.description),
+      description: label,
       grams,
       ...macrosFromHit(pick, grams),
     });
+  }
+
+  // Main meal senza primo carb → errore composizione: forza riso/pasta dal pool lunch/dinner carb.
+  if (isMainMealSlot(slot.key as MealSlotKey)) {
+    const hasCarb = items.some((it) => it.choG >= slot.carbs * 0.25);
+    if (!hasCarb) {
+      const carbPool = pools.get(`${slot.key === "lunch" ? "lunch" : "dinner"}_carb`) ?? [];
+      for (const hit of filterFdcCandidates(carbPool, denyFragments)) {
+        if (usedFdcIds.has(hit.fdcId) || hit.carbsPer100g < 12) continue;
+        const branch: SlotBranchSpec = { poolKey: "carb_rescue", kcalShare: 0.4, macroRole: "cho_heavy", sort: "cho" };
+        const targets = branchMacroTargets(slot, branch);
+        const grams = gramsForBranchTarget(hit, branch, targets);
+        usedFdcIds.add(hit.fdcId);
+        items.unshift({
+          fdcId: hit.fdcId,
+          description: fdcDescriptionToLabelIt(hit.description),
+          grams,
+          ...macrosFromHit(hit, grams),
+        });
+        break;
+      }
+    }
   }
 
   const totals = items.reduce(
@@ -109,6 +159,7 @@ export function composeMealPlanV2(
     suppressedSlots?: MealSlotKey[];
   },
 ): MealPlanV2ComposedSlot[] {
+  void requirements;
   const denyFragments = options?.denyFragments ?? [];
   const suppressed = new Set(options?.suppressedSlots ?? []);
   const usedFdcIds = new Set<number>();
@@ -131,10 +182,11 @@ export function composeMealPlanV2(
       });
       continue;
     }
-    out.push(
-      composeSlotMultiBranch(slot, pools, denyFragments, usedFdcIds, staplePenalty, slot.carbs),
-    );
+    out.push(composeSlotMultiBranch(slot, pools, denyFragments, usedFdcIds, staplePenalty));
   }
 
   return out;
 }
+
+// Re-export for tests / map layer
+export { portionHintIt };

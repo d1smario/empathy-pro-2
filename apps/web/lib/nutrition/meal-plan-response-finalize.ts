@@ -22,8 +22,21 @@ import { buildPathwayTargetRollupComparison } from "@/lib/nutrition/pathway-targ
 
 function enrichSlot(slot: IntelligentMealPlanSlotOut, snapshot: FdcCanonicalSnapshot): IntelligentMealPlanSlotOut {
   const items = slot.items.map((it) => {
-    const { compositionKey, compositionStatus, nutrients } = nutrientsForMealPlanItemFromCache(it, snapshot);
-    return { ...it, compositionKey, compositionStatus, nutrients };
+    const { compositionKey, compositionStatus, nutrients } = nutrientsForMealPlanItemFromCache(
+      {
+        name: it.name,
+        portionHint: it.portionHint,
+        approxKcal: it.approxKcal,
+        compositionKey: it.compositionKey,
+      },
+      snapshot,
+    );
+    return {
+      ...it,
+      compositionKey: it.compositionKey ?? compositionKey,
+      compositionStatus,
+      nutrients,
+    };
   });
   return { ...slot, items };
 }

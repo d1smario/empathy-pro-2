@@ -117,6 +117,10 @@ export function pickBestFdcCandidate(
 
   for (const hit of pool) {
     if (usedFdcIds.has(hit.fdcId) || hit.kcalPer100g <= 0) continue;
+    if (ctx.branch.macroRole === "cho_heavy" && hit.carbsPer100g < 10) continue;
+    if (ctx.branch.macroRole === "protein" && hit.proteinPer100g < 8) continue;
+    if (/\b(kraft foods|general mills|pepsico|conagra|unilever)\b/i.test(hit.description)) continue;
+    if (/^[A-Za-z]+ Foods,? Inc/i.test(hit.description.trim())) continue;
     const score = scoreFdcCandidate(hit, ctx, denyFragments, staplePenalty);
     if (score <= -5000) continue;
     if (score > bestScore) {

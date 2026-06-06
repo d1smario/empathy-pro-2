@@ -6,8 +6,11 @@ import type {
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { finalizeIntelligentMealPlanCore } from "@/lib/nutrition/meal-plan-response-finalize";
-import { dryPortionLineForFoodLabel } from "@/lib/nutrition/dry-meal-plan-lines";
+import { buildFdcCanonicalSnapshotFromFdcIds } from "@/lib/nutrition/fdc-to-canonical-scaler";
+import { loadFdcFoodsByIds } from "@/lib/nutrition/fdc-food-cache";
 import type { MealPlanV2Production } from "@/lib/nutrition/v2/build-meal-plan-v2-production";
+import { portionHintIt } from "@/lib/nutrition/v2/compose-meal-plan-v2";
+import { V2_SLOT_BRANCHES } from "@/lib/nutrition/v2/fdc-pool-specs";
 
 function macroRoleFromItem(choG: number, proG: number, fatG: number): IntelligentMealPlanItemOut["macroRole"] {
   const choK = choG * 4;
@@ -23,13 +26,19 @@ function macroRoleFromItem(choG: number, proG: number, fatG: number): Intelligen
 
 function mapItem(
   item: MealPlanV2Production["composedMealPlan"][number]["items"][number],
+  slotKey: MealSlotKey,
   itemIndex: number,
-  slotMacros: { kcal: number; carbsG: number; proteinG: number; fatG: number },
 ): IntelligentMealPlanItemOut {
   const label = item.description;
+  const branch = V2_SLOT_BRANCHES[slotKey]?.[itemIndex] ?? {
+    poolKey: "snack",
+    kcalShare: 1,
+    macroRole: "mixed" as const,
+    sort: "kcal_low" as const,
+  };
   return {
     name: label,
-    portionHint: dryPortionLineForFoodLabel(label, slotMacros, itemIndex),
+    portionHint: portionHintIt(label, item.grams, branch),
     functionalBridge: "Alimentazione mediterranea · catalogo USDA",
     approxKcal: Math.round(item.kcal),
     macroRole: macroRoleFromItem(item.choG, item.proG, item.fatG),
@@ -80,14 +89,7 @@ export function mapV2PlanToV1AssembledCore(
     return {
       slot: slotKey,
       targetKcalEcho: composed.targetKcal,
-      items: composed.items.map((it, idx) =>
-        mapItem(it, idx, {
-          kcal: composed.targetKcal,
-          carbsG: composed.totals.choG,
-          proteinG: composed.totals.proG,
-          fatG: composed.totals.fatG,
-        }),
-      ),
+      items: composed.items.map((it, idx) => mapItem(it, slotKey, idx)),
       slotCoherence: slotCoherenceFor(slotKey, false),
       slotTimingRationale: meta?.scheduledTimeLocal
         ? `Pasto ${meta.labelIt} alle ${meta.scheduledTimeLocal} · target Diet ${composed.targetKcal} kcal.`
@@ -131,5 +133,8 @@ export async function mapV2PlanToV1Response(
   request: IntelligentMealPlanRequest,
 ): Promise<IntelligentMealPlanAssembledCore> {
   const core = mapV2PlanToV1AssembledCore(production, request);
-  return finalizeIntelligentMealPlanCore(core, request);
+  const fdcIds = production.composedMealPlan.flatMap((s) => s.items.map((i) => i.fdcId)).filter((id) => id > 0);
+  const foodsByFdcId = fdcIds.length > 0 ? await loadFdcFoodsByIds(fdcIds) : new Map();
+  const snapshot = buildFdcCanonicalSnapshotFromFdcIds(fdcIds, foodsByFdcId);
+  return finalizeIntelligentMealPlanCore(core, request, snapshot);
 }

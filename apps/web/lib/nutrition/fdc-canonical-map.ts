@@ -149,3 +149,19 @@ export function buildFdcCanonicalSnapshotFromFoods(
   }
   return out;
 }
+
+/** Snapshot keyed by `fdc:{id}` per meal plan V2 (nutrienti reali dal fdc_id scelto). */
+export function buildFdcCanonicalSnapshotFromFdcIds(
+  fdcIds: number[],
+  foodsByFdcId: Map<number, FdcCachedFood>,
+): FdcCanonicalSnapshot {
+  const out: FdcCanonicalSnapshot = {};
+  for (const id of new Set(fdcIds)) {
+    if (!Number.isFinite(id) || id < 1) continue;
+    const food = foodsByFdcId.get(id);
+    if (!food) continue;
+    const entry = snapshotEntryFromCachedFood(food, id);
+    if (entry) out[`fdc:${id}`] = entry;
+  }
+  return out;
+}
