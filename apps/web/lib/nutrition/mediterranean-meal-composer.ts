@@ -1,4 +1,7 @@
 /**
+ * @deprecated Motore V1 — sostituito gradualmente da Nutrition V2 (`compose-meal-plan-v2.ts`).
+ * Resta attivo con `NUTRITION_MEAL_PLAN_ENGINE=v1` o come fallback shadow fino a cutover completo.
+ *
  * Composizione deterministica “piano alimentare” stile mediterraneo:
  * per slot si fissano target kcal/macro (dal solver), poi si compone il pasto con
  * una fonte principale di CHO, una di proteine, grassi (olio / formaggio), fibre (verdura),

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AthleteReadContextError, requireAthleteReadContext } from "@/lib/auth/athlete-read-context";
 import { buildDeterministicMealPlanFromRequest } from "@/lib/nutrition/deterministic-meal-plan-from-request";
-import {
-  enrichIntelligentMealPlanRequestWithRaceDay,
-  plannedSessionsForRaceFromDbRows,
-} from "@/lib/nutrition/enrich-meal-plan-request-race-day";
-import { filterIntelligentMealPlanRequestFoods } from "@/lib/nutrition/meal-plan-profile-food-filter";
-import { applyMealSlotRulesToIntelligentMealPlanRequest } from "@/lib/nutrition/meal-slot-food-rules";
+import { prepareIntelligentMealPlanContext } from "@/lib/nutrition/intelligent-meal-plan-route-prep";
 import { attachSolverBasisToAssembled } from "@/lib/nutrition/meal-plan-solver-basis";
-import { reconcileMealPlanSlotsWithDiet } from "@/lib/nutrition/reconcile-meal-plan-slots-with-diet";
-import type { IntelligentMealPlanRequest, IntelligentMealPlanRequestSlot } from "@/lib/nutrition/intelligent-meal-plan-types";
+import { buildMealPlanV2Production } from "@/lib/nutrition/v2/build-meal-plan-v2-production";
+import { mapV2PlanToV1Response } from "@/lib/nutrition/v2/map-v2-plan-to-v1-response";
+import {
+  diffMealPlanEngines,
+  logMealPlanEngineShadowDiff,
+} from "@/lib/nutrition/v2/meal-plan-engine-shadow-log";
+import { resolveNutritionMealPlanEngine } from "@/lib/nutrition/v2/resolve-nutrition-meal-plan-engine";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,15 +18,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
 }
 
-function sanitizeWeeklyStapleCounts(raw: unknown): Record<string, number> | undefined {
-  if (!isRecord(raw)) return undefined;
-  const out: Record<string, number> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (typeof k !== "string" || k.length > 72) continue;
-    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 21) continue;
-    out[k] = Math.min(21, Math.floor(v));
-  }
-  return Object.keys(out).length ? out : undefined;
+function parseNutritionConfig(row: Record<string, unknown> | null): Record<string, unknown> | null {
+  const nc = row?.nutrition_config;
+  if (!nc || typeof nc !== "object" || Array.isArray(nc)) return null;
+  return nc as Record<string, unknown>;
 }
 
 export async function POST(req: NextRequest) {
@@ -41,110 +36,79 @@ export async function POST(req: NextRequest) {
     }
     const { db } = await requireAthleteReadContext(req, athleteId);
 
-    const planDate =
-      String((body.plan as Record<string, unknown> | undefined)?.planDate ?? "")
-        .slice(0, 10) || new Date().toISOString().slice(0, 10);
-
-    const [{ data: profileRow }, { data: plannedRows }] = await Promise.all([
-      db
-        .from("athlete_profiles")
-        .select("nutrition_config, routine_config, preferred_meal_count, weight_kg")
-        .eq("id", athleteId)
-        .maybeSingle(),
-      db
-        .from("planned_workouts")
-        .select("duration_minutes, type, notes")
-        .eq("athlete_id", athleteId)
-        .eq("date", planDate),
-    ]);
-
-    const plan = body.plan as unknown;
-    if (!isRecord(plan)) {
-      return NextResponse.json({ error: "Missing plan" }, { status: 400 });
+    const prepared = await prepareIntelligentMealPlanContext(db, body);
+    if ("error" in prepared) {
+      return NextResponse.json({ error: prepared.error }, { status: prepared.status });
     }
 
-    const weekly = sanitizeWeeklyStapleCounts(plan.weeklyStapleCounts);
-    const planMerged: IntelligentMealPlanRequest = {
-      ...(plan as IntelligentMealPlanRequest),
-      ...(weekly ? { weeklyStapleCounts: weekly } : {}),
-    };
+    const { request, profileRow, dietDay, plannedSessions, ftp, weightKg } = prepared;
+    const engine = resolveNutritionMealPlanEngine(parseNutritionConfig(profileRow));
 
-    const clientSlots = Array.isArray(planMerged.slots) ? planMerged.slots : [];
-    const dailyMealsKcalTotal =
-      typeof planMerged.mealPlanSolverMeta?.dailyMealsKcalTotal === "number"
-        ? planMerged.mealPlanSolverMeta.dailyMealsKcalTotal
-        : clientSlots.reduce((s, sl) => s + (Number.isFinite(sl.targetKcal) ? sl.targetKcal : 0), 0);
+    let responseCore;
 
-    const row = (profileRow ?? null) as Record<string, unknown> | null;
-
-    const reconciled = reconcileMealPlanSlotsWithDiet({
-      planDate,
-      nutritionConfig: row?.nutrition_config ?? null,
-      routineConfig: row?.routine_config ?? null,
-      dailyMealsKcalTotal,
-      clientSlots: clientSlots as IntelligentMealPlanRequestSlot[],
-      preferredMealCount:
-        typeof row?.preferred_meal_count === "number"
-          ? row.preferred_meal_count
-          : typeof row?.preferred_meal_count === "string"
-            ? Number(row.preferred_meal_count)
-            : null,
-    });
-
-    const planFromDiet: IntelligentMealPlanRequest = {
-      ...planMerged,
-      slots: reconciled.slots,
-      mealPlanSolverMeta: {
-        ...planMerged.mealPlanSolverMeta,
-        dailyMealsKcalTotal: Math.round(dailyMealsKcalTotal),
-        integrationLeverLines: [
-          ...(planMerged.mealPlanSolverMeta?.integrationLeverLines ?? []),
-          ...(reconciled.rebuiltFromDiet
-            ? [`Diet ${reconciled.mealCountMode} pasti (${reconciled.slots.length} slot) da athlete_profiles — payload client ignorato per conteggio slot.`]
-            : []),
-        ].slice(0, 16),
-      },
-    };
-
-    const routineConfig =
-      row?.routine_config && typeof row.routine_config === "object" && !Array.isArray(row.routine_config)
-        ? (row.routine_config as Record<string, unknown>)
-        : null;
-    const plannedSessions = plannedSessionsForRaceFromDbRows(
-      Array.isArray(plannedRows) ? plannedRows : [],
-    );
-
-    const withRace = enrichIntelligentMealPlanRequestWithRaceDay({
-      request: planFromDiet,
-      routineConfig,
-      weightKg: row?.weight_kg,
-      plannedSessions,
-    });
-
-    const request = applyMealSlotRulesToIntelligentMealPlanRequest(
-      filterIntelligentMealPlanRequestFoods(withRace),
-    );
-    if (request.athleteId !== athleteId) {
-      return NextResponse.json({ error: "athleteId mismatch" }, { status: 400 });
-    }
-    if (!Array.isArray(request.slots) || request.slots.length < 3 || request.slots.length > 6) {
-      return NextResponse.json(
-        { error: "plan.slots: da 3 a 6 pasti (da Profile Diet: meal_count_mode + caloric_distribution)" },
-        { status: 400 },
+    if (engine === "v2") {
+      const v2Production = await buildMealPlanV2Production(
+        {
+          request,
+          weightKg,
+          ftpWatts: ftp,
+          lifestyleActivityClass:
+            profileRow?.lifestyle_activity_class != null
+              ? String(profileRow.lifestyle_activity_class)
+              : null,
+          dietDayMealsScalePct: dietDay.dayTypePct,
+          plannedSessions,
+          dietDay,
+        },
+        db,
       );
-    }
-    if (
-      !request.mealPlanSolverMeta ||
-      typeof request.mealPlanSolverMeta.dailyMealsKcalTotal !== "number" ||
-      !Array.isArray(request.mealPlanSolverMeta.integrationLeverLines)
-    ) {
-      return NextResponse.json({ error: "plan.mealPlanSolverMeta obbligatorio (dailyMealsKcalTotal + integrationLeverLines)" }, { status: 400 });
+      responseCore = await mapV2PlanToV1Response(v2Production, request);
+    } else if (engine === "shadow") {
+      const [v1Core, v2Production] = await Promise.all([
+        buildDeterministicMealPlanFromRequest(request),
+        buildMealPlanV2Production(
+          {
+            request,
+            weightKg,
+            ftpWatts: ftp,
+            lifestyleActivityClass:
+              profileRow?.lifestyle_activity_class != null
+                ? String(profileRow.lifestyle_activity_class)
+                : null,
+            dietDayMealsScalePct: dietDay.dayTypePct,
+            plannedSessions,
+            dietDay,
+          },
+          db,
+        ),
+      ]);
+      const v2Core = await mapV2PlanToV1Response(v2Production, request);
+      logMealPlanEngineShadowDiff(
+        diffMealPlanEngines(v1Core, v2Core),
+        athleteId,
+        request.planDate,
+      );
+      responseCore = v1Core;
+    } else {
+      responseCore = await buildDeterministicMealPlanFromRequest(request);
     }
 
-    /** Solo assemblaggio deterministico: nessun LLM (generative core EMPATHY — AI non genera piani pasto).
-     *  Composizione preferita da cache USDA `nutrition_fdc_foods`; fallback al TS table per le voci non mappate. */
-    const assembled = await buildDeterministicMealPlanFromRequest(request);
-    const res = NextResponse.json(attachSolverBasisToAssembled(assembled, request));
+    const res = NextResponse.json(
+      attachSolverBasisToAssembled(responseCore, {
+        ...request,
+        mealPlanSolverMeta: {
+          ...request.mealPlanSolverMeta,
+          integrationLeverLines: [
+            ...request.mealPlanSolverMeta.integrationLeverLines,
+            engine === "v2"
+              ? "Motore Nutrition V2 (USDA FDC taggato + fueling substrati)."
+              : engine === "shadow"
+                ? "Shadow: V1 servito, V2 loggato."
+                : "Motore Nutrition V1 (Mediterranean composer).",
+          ].slice(0, 16),
+        },
+      }),
+    );
     res.headers.set("Cache-Control", "private, no-store, max-age=0, must-revalidate");
     return res;
   } catch (err) {

@@ -10,6 +10,7 @@ export * from "./physiology";
 export * from "./training";
 export * from "./empathy-load-metrics-v2";
 export * from "./nutrition";
+export * from "./nutrition-v2";
 export * from "./internal-load";
 export * from "./biomarkers";
 export * from "./twin";

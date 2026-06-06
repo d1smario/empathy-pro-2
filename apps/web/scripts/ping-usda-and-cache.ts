@@ -10,7 +10,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-function loadEnvFile(filePath: string) {
+function loadEnvFile(filePath: string, override = false) {
   if (!fs.existsSync(filePath)) return;
   const raw = fs.readFileSync(filePath, "utf8");
   for (const line of raw.split(/\r?\n/)) {
@@ -19,21 +19,22 @@ function loadEnvFile(filePath: string) {
     const eq = trimmed.indexOf("=");
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
+    if (!override && key in process.env) continue;
     let value = trimmed.slice(eq + 1).trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
     value = value.replace(/\\n/g, "").trim();
-    if (!(key in process.env)) process.env[key] = value;
+    process.env[key] = value;
   }
 }
 
 async function main() {
   const root = process.cwd();
-  loadEnvFile(path.join(root, "apps", "web", ".env.local"));
-  loadEnvFile(path.join(root, ".env.local"));
+  loadEnvFile(path.join(root, ".env.local"), false);
+  loadEnvFile(path.join(root, "apps", "web", ".env.local"), true);
   const apiKey = process.env.USDA_API_KEY?.trim();
-  const supabaseUrl = process.env.SUPABASE_URL?.trim() ?? process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? process.env.SUPABASE_URL?.trim() ?? "";
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!apiKey) throw new Error("USDA_API_KEY mancante");
   if (!supabaseUrl) throw new Error("SUPABASE_URL mancante");

@@ -38,6 +38,17 @@ Atleta 70 kg, BMR Cunningham ≈ 1900, lifestyle 20% ≈ 380. Seduta pianificata
 
 Se `trainingEnergyScale = 0,57` (atleta in stato protective): **non** entra nelle formule sopra; `mealTrainingFraction` può passare 0,40 → 0,48 (sposta energia dal fueling ai pasti), ma la somma resta 6459.
 
+## Nutrition V2 — fueling da substrati (cutover)
+
+Con `NUTRITION_MEAL_PLAN_ENGINE=v2` (o `nutrition_config.meal_plan_engine`):
+
+- **Fabbisogno totale** invariato: `dailyKcal = BMR + lifestyle + training` (× `day_type_pct` sui pasti).
+- **Fueling intra** = frazione del **CHO bruciato in seduta** (non % kcal training): alta intensità → replace ~75–85%; Z1/Z2 → ~45–55%.
+- `fuelingKcal = (pre + intra + post) CHO × 4`; `mealsKcal = dailyKcal − fuelingKcal`.
+- **% tra pasti** resta solo Profile Diet (`buildDietMealSlotBudgets`).
+- **Selezione alimenti** da `nutrition_fdc_foods` + `nutrition_fdc_food_tags` (GIN); canonical table solo fallback scaler.
+- Rollout: `v1` (default) → `shadow` (log diff) → `v2` (produzione).
+
 ## 6 pasti
 
 Con `meal_count_mode = 6`: colazione, spuntino mattina, pranzo, spuntino pomeriggio, cena, **spuntino serale** (`snack_evening`).

@@ -1,3 +1,4 @@
+/** Motore V1 — attivo con `NUTRITION_MEAL_PLAN_ENGINE=v1` (default). V2: `compose-meal-plan-v2.ts`. */
 import type {
   IntelligentMealPlanAssembledCore,
   IntelligentMealPlanItemOut,

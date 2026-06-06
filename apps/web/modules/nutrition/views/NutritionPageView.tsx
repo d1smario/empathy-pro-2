@@ -141,6 +141,8 @@ import {
 } from "@/modules/nutrition/views/NutritionMealPlanView";
 import type { MealPathwaySlotBundle } from "@/modules/nutrition/types/meal-pathway-slot-bundle";
 import { fetchIntelligentMealPlan } from "@/modules/nutrition/services/intelligent-meal-plan-api";
+import { isMealPlanV2PreviewUiEnabled } from "@/modules/nutrition/services/intelligent-meal-plan-v2-api";
+import { MealPlanV2PreviewPanel } from "@/modules/nutrition/components/MealPlanV2PreviewPanel";
 import { Pro2ModulePageShell } from "@/components/shell/Pro2ModulePageShell";
 import { updateProfilePayload } from "@/modules/profile/services/profile-api";
 import type { FoodDiaryComplianceRow } from "@/modules/nutrition/services/food-diary-api";
@@ -3547,6 +3549,10 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
               pathwayModulation={pathwayModulation}
               functionalFoodRecommendations={functionalFoodRecommendations}
             />
+          ) : null}
+
+          {subRoute === "meal-plan" && athleteId && isMealPlanV2PreviewUiEnabled() ? (
+            <MealPlanV2PreviewPanel athleteId={athleteId} planRequest={intelligentMealPlanRequest} />
           ) : null}
 
           {(subRoute === "meal-plan" ||

@@ -20,26 +20,26 @@ import {
   type NutritionFdcFoodUpsertPayload,
 } from "../lib/nutrition/fdc-import-row";
 
-function loadEnvFile(filePath: string) {
+function loadEnvFile(filePath: string, override = false) {
   if (!fs.existsSync(filePath)) return;
-  const raw = fs.readFileSync(filePath, "utf8");
-  for (const line of raw.split(/\r?\n/)) {
+  for (const line of fs.readFileSync(filePath, "utf8").split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith("#")) continue;
     const eq = trimmed.indexOf("=");
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
+    if (!override && key in process.env) continue;
     let value = trimmed.slice(eq + 1).trim();
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1);
     }
-    value = value.replace(/\r/g, "").replace(/\n/g, "").trim();
-    if (!(key in process.env)) process.env[key] = value;
+    process.env[key] = value.replace(/\\n/g, "").trim();
   }
 }
 
-const UPSERT_CHUNK = 8;
-const UPSERT_MAX_RETRIES = 4;
+const UPSERT_CHUNK = 25;
+const UPSERT_MAX_RETRIES = 5;
+const UPSERT_CHUNK_DELAY_MS = 120;
 
 /** `data/usda-fdc` vive nella root del monorepo, non in `apps/web`. */
 function resolveMonorepoRoot(startDir: string): string {
@@ -114,99 +114,77 @@ async function upsertBatches(
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const probe = await admin.from("nutrition_fdc_foods").select("fdc_id").limit(1);
-  if (probe.error?.code === "42P01" || probe.error?.message?.includes("does not exist")) {
-    throw new Error(
-      "Tabella nutrition_fdc_foods assente. Applica supabase/migrations/025_nutrition_fdc_food_cache.sql (SQL Editor o: npx supabase db query --linked -f supabase/migrations/025_nutrition_fdc_food_cache.sql).",
-    );
-  }
-
   let includeMetabolic = true;
-  const probeRow: DbUpsertRow = {
-    fdc_id: 999999990,
-    description: "EMPATHY USDA import probe",
-    data_type: "probe",
-    publication_date: null,
-    food_category: null,
-    kcal_100g: 1,
-    carbs_100g: 0,
-    protein_100g: 0,
-    fat_100g: 0,
-    fiber_100g: null,
-    sugars_100g: null,
-    sodium_mg_100g: null,
-    glycemic_index_estimate: 1,
-    insulin_index_estimate: 1,
-    glycemic_load_100g: 0,
-    insulin_load_100g: 0,
-    metabolic_indices: { probe: true },
-    vitamins: [],
-    minerals: [],
-    amino_acids: [],
-    fatty_acids: [],
-    other_nutrients: [],
-    nutrients_raw: [],
-    source_payload: { probe: true },
-    refreshed_at: new Date().toISOString(),
-  };
-  {
-    const { error } = await admin.from("nutrition_fdc_foods").upsert([probeRow], { onConflict: "fdc_id" });
-    if (error?.message?.includes("glycemic_index_estimate") || error?.code === "PGRST204") {
-      includeMetabolic = false;
-      console.log("▶ Colonne metaboliche assenti: upsert senza GI/II (applica migration 038 se le vuoi in DB).");
-      const { glycemic_index_estimate: _a, insulin_index_estimate: _b, glycemic_load_100g: _c, insulin_load_100g: _d, metabolic_indices: _e, ...probeBase } =
-        probeRow;
-      const retry = await admin.from("nutrition_fdc_foods").upsert([probeBase], { onConflict: "fdc_id" });
-      if (retry.error) {
-        return { ok: 0, fail: rows.length, lastError: errMsg(retry.error) };
-      }
-    } else if (error) {
-      return { ok: 0, fail: rows.length, lastError: errMsg(error) };
-    }
-    await admin.from("nutrition_fdc_foods").delete().eq("fdc_id", 999999990);
-  }
-
   let ok = 0;
   let fail = 0;
   let lastError: string | undefined;
   const totalChunks = Math.ceil(rows.length / UPSERT_CHUNK);
-
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   for (let i = 0; i < rows.length; i += UPSERT_CHUNK) {
-    const chunk = rows.slice(i, i + UPSERT_CHUNK).map((r) => toDbRow(r, includeMetabolic));
     const chunkIndex = Math.floor(i / UPSERT_CHUNK) + 1;
-    let done = false;
+    let chunk = rows.slice(i, i + UPSERT_CHUNK).map((r) => toDbRow(r, includeMetabolic));
+    let persisted = false;
+
     for (let attempt = 1; attempt <= UPSERT_MAX_RETRIES; attempt += 1) {
-      const { error } = await admin.from("nutrition_fdc_foods").upsert(chunk, { onConflict: "fdc_id" });
-      if (!error) {
-        done = true;
+      const res = await admin
+        .from("nutrition_fdc_foods")
+        .upsert(chunk, { onConflict: "fdc_id" })
+        .select("fdc_id");
+
+      if (res.error) {
+        lastError = errMsg(res.error);
+        if (
+          includeMetabolic &&
+          (res.error.message?.includes("glycemic_index_estimate") || res.error.code === "PGRST204")
+        ) {
+          includeMetabolic = false;
+          chunk = rows.slice(i, i + UPSERT_CHUNK).map((r) => toDbRow(r, false));
+          continue;
+        }
+        const retryable =
+          /network|connection|timeout|gateway|fetch failed|ECONNRESET/i.test(lastError) ||
+          res.error.code === "";
+        if (!retryable || attempt === UPSERT_MAX_RETRIES) {
+          fail += chunk.length;
+          console.error(`▶ Chunk ${chunkIndex}/${totalChunks} FAIL (attempt ${attempt}): ${lastError}`);
+          break;
+        }
+        await sleep(400 * attempt);
+        continue;
+      }
+
+      const returned = res.data?.length ?? 0;
+      if (returned > 0) {
+        persisted = true;
         break;
       }
-      lastError = errMsg(error);
-      const retryable =
-        /network|connection|timeout|gateway|fetch failed|ECONNRESET/i.test(lastError) || error.code === "";
-      if (!retryable || attempt === UPSERT_MAX_RETRIES) {
+
+      lastError = `upsert senza righe restituite (status ${res.status})`;
+      if (attempt === UPSERT_MAX_RETRIES) {
         fail += chunk.length;
-        console.error(`▶ Chunk ${chunkIndex}/${totalChunks} FAIL (attempt ${attempt}): ${lastError}`);
-        break;
+        console.error(`▶ Chunk ${chunkIndex}/${totalChunks} FAIL: ${lastError}`);
+      } else {
+        await sleep(500 * attempt);
       }
-      await sleep(400 * attempt);
     }
-    if (!done) break;
+
+    if (!persisted) continue;
     ok += chunk.length;
-    if (chunkIndex === 1 || chunkIndex % 25 === 0 || chunkIndex === totalChunks) {
+    if (chunkIndex === 1 || chunkIndex % 50 === 0 || chunkIndex === totalChunks) {
       console.log(`▶ Upsert progress: ${ok}/${rows.length} (${chunkIndex}/${totalChunks} chunk)`);
     }
-    await sleep(80);
+    await sleep(UPSERT_CHUNK_DELAY_MS);
   }
+
   return { ok, fail, lastError };
 }
 
 async function main() {
   const root = resolveMonorepoRoot(process.cwd());
-  loadEnvFile(path.join(root, "apps", "web", ".env.local"));
-  loadEnvFile(path.join(root, ".env.local"));
+  const envRoot = path.resolve(__dirname, "../../..");
+  loadEnvFile(path.join(envRoot, ".env.local"), false);
+  loadEnvFile(path.join(envRoot, "apps", "web", ".env.local"), true);
 
   const dryRun = parseArgFlag("--dry-run");
   const limit = parseArgNumber("--limit");
@@ -253,7 +231,7 @@ async function main() {
     return;
   }
 
-  const supabaseUrl = (process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "")
     .trim()
     .replace(/\/$/, "");
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
@@ -262,8 +240,40 @@ async function main() {
   }
 
   console.log(`▶ Supabase host: ${new URL(supabaseUrl).host}`);
+
+  const admin = createClient(supabaseUrl, serviceRole, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  const { count: beforeCount } = await admin
+    .from("nutrition_fdc_foods")
+    .select("fdc_id", { count: "exact", head: true });
+  console.log(`▶ Count prima import: ${beforeCount ?? "?"}`);
+
   const result = await upsertBatches(supabaseUrl, serviceRole, payloads);
   console.log(`▶ Upsert: ${result.ok} ok · ${result.fail} fail${result.lastError ? ` · ${result.lastError}` : ""}`);
+
+  const { count: afterCount, error: countErr } = await admin
+    .from("nutrition_fdc_foods")
+    .select("fdc_id", { count: "exact", head: true });
+  const probeId = payloads[0]?.fdc_id;
+  const { data: probeRow } =
+    probeId != null
+      ? await admin.from("nutrition_fdc_foods").select("fdc_id").eq("fdc_id", probeId).maybeSingle()
+      : { data: null };
+  const srLegacyProbe = 167512;
+  const { data: srRow } = await admin.from("nutrition_fdc_foods").select("fdc_id").eq("fdc_id", srLegacyProbe).maybeSingle();
+  console.log(`▶ Post-import count in DB: ${afterCount ?? "?"}${countErr ? ` (${countErr.message})` : ""}`);
+  if (probeId != null) {
+    console.log(`▶ Probe fdc_id ${probeId} presente: ${probeRow ? "sì" : "NO"}`);
+  }
+  console.log(`▶ Probe SR Legacy fdc_id ${srLegacyProbe}: ${srRow ? "sì" : "NO"}`);
+  const expectedMin = Math.max(7000, payloads.length - 50);
+  if (afterCount != null && afterCount < expectedMin) {
+    console.error(
+      `▶ ATTENZIONE: count DB ${afterCount} sotto atteso ~${payloads.length}. Verifica URL+SERVICE_ROLE stesso progetto Supabase.`,
+    );
+    process.exitCode = 1;
+  }
   if (result.fail > 0) process.exitCode = 1;
 }
 
