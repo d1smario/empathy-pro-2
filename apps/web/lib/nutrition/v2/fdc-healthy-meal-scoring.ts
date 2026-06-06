@@ -1,113 +1,84 @@
 import type { MealSlotKey } from "@/lib/nutrition/intelligent-meal-plan-types";
+import type { MealSlotAssemblyRole } from "@/lib/nutrition/v2/meal-slot-assembly-spec";
 import type { FdcFoodBrowseHit } from "@/lib/nutrition/v2/fdc-branch-query";
 import { isDeniedFdcDescription } from "@/lib/nutrition/v2/fdc-candidate-filter";
 import { isMainMealSlot } from "@/lib/nutrition/meal-composition-rules";
-import type { SlotBranchSpec } from "@/lib/nutrition/v2/fdc-pool-specs";
 
-export type BranchPickContext = {
+export type RolePickContext = {
   slot: MealSlotKey;
   poolKey: string;
-  branch: SlotBranchSpec;
-  targetKcal: number;
+  spec: MealSlotAssemblyRole;
 };
 
-/** Cibi ultraprocessati / snack — mai in pasti principali. */
 const MAIN_MEAL_FORBIDDEN =
-  /\b(cereal|corn flakes|bran flakes|muesli|granola|oat,?\s|oats,?\s|instant oat|grits|wheat, cream|crisp|crisps|chip|chips|potato chips|tortilla chip|pretzel|popcorn|snack bar|granola bar|cookie|biscuit|cake|donut|doughnut|pastry|pie,?\s|french fries|fried potato|hash brown|onion rings|pizza,?\s*cheese|fast food|restaurant|babyfood|infant|formula|walrus|navajo|alaska native|gelatin|dry powder|crust|ready-to-eat|prepared from recipe with|mix,?\s*dry|stuffing|breaded|battered|nugget|corn dog|hot dog|sausage roll|luncheon meat|spam|bologna|salami|pepperoni|frankfurter|cornbread|muffin|cupcake|brownie|candy|chocolate bar|ice cream|syrup|pancake|waffle|toaster pastry|fruit snack|fruit leather|energy bar|protein bar)\b/i;
+  /\b(cereal|corn flakes|bran flakes|muesli|granola|oat,?\s|oats,?\s|crisp|crisps|chip|chips|potato chips|french fries|snack bar|granola bar|cookie|babyfood|walrus|kraft foods|fast foods)\b/i;
 
-/** Primo piatto sano pranzo/cena — modello mediterraneo V1. */
 const MAIN_CARB_PREFERRED =
-  /\b(pasta|spaghetti|macaroni|penne|rice\b|riso|quinoa|barley|bulgur|farro|couscous|lentil|lenticch|chickpea|ceci|bean|cooked.*potato|potato.*flesh|potato.*baked|potato.*boiled|sweet potato|patat)\b/i;
+  /\b(pasta|spaghetti|macaroni|rice\b|riso|quinoa|barley|lentil|chickpea|potato.*flesh|potato.*baked|sweet potato)\b/i;
 
-const MAIN_PRO_PREFERRED =
-  /\b(chicken breast|turkey breast|salmon|tuna|cod|merluzzo|trout|sardine|mackerel|egg|uova|tofu|lean beef|beef.*loin|pork.*loin|white fish|fish,?\s*raw|fish,?\s*baked|fish,?\s*grilled|legume|lentil|chickpea)\b/i;
+const BREAKFAST_CHO_PREFERRED =
+  /\b(oats?|oatmeal|avena|bread|pane|muesli|cereal|corn flakes|bran|cracker|biscott|rusk|toast)\b/i;
 
-const MAIN_VEG_PREFERRED =
-  /\b(spinach|broccoli|zucchini|pepper|tomato|carrot|lettuce|kale|asparagus|green bean|cabbage|cauliflower|eggplant|cucumber|celery|chard|artichoke|fennel|radish|mushroom|verdur|insalat|salad)\b/i;
+const PROTEIN_PREFERRED =
+  /\b(chicken breast|turkey|salmon|tuna|cod|egg|uova|yogurt|tofu|lean beef|fish|legume|lentil|chickpea|cottage|ricotta)\b/i;
 
-const BREAKFAST_CARB_PREFERRED =
-  /\b(oats?|oatmeal|avena|bread|pane|muesli|cereal|corn flakes|bran|cracker|biscott|rusk|toast|yogurt|fiocchi)\b/i;
+const FAT_PREFERRED = /\b(almond|mandorl|walnut|noci|olive oil|olio|avocado|peanut|seed|semi)\b/i;
 
-const SNACK_PREFERRED =
-  /\b(yogurt|fruit|banana|apple|orange|berry|mirtill|mandorl|walnut|noci|semi|seed|dark chocolate|cioccolat|cracker|biscott|pane|hummus|ricotta|cottage)\b/i;
+const VEG_PREFERRED =
+  /\b(spinach|broccoli|zucchini|pepper|tomato|carrot|lettuce|kale|asparagus|green bean|salad|insalat|verdur)\b/i;
 
-const PROCESSED_MEAT =
-  /\b(sausage|salami|bologna|pepperoni|frankfurter|hot dog|luncheon|corned|pastrami|bacon|ham,?\s*cured|spam|meatball.*frozen|breaded.*chicken|nugget|patty,?\s*fast food)\b/i;
-
-export function isForbiddenForBranch(hit: FdcFoodBrowseHit, ctx: BranchPickContext, denyFragments: string[]): boolean {
+export function isForbiddenForRole(hit: FdcFoodBrowseHit, ctx: RolePickContext, denyFragments: string[]): boolean {
   const d = hit.description;
   if (isDeniedFdcDescription(d, denyFragments)) return true;
-  if (PROCESSED_MEAT.test(d)) return true;
+  if (/\b(kraft foods|general mills)\b/i.test(d)) return true;
 
-  const main = isMainMealSlot(ctx.slot);
-
-  if (main && MAIN_MEAL_FORBIDDEN.test(d)) return true;
-
-  if (main && ctx.branch.macroRole === "cho_heavy") {
-    if (/\b(bread|pane|cracker|toast|bagel|roll,?\s*white|bun,?\s*hamburger)\b/i.test(d) && !/\b(whole wheat|integrale|whole-grain)\b/i.test(d)) {
-      return true;
-    }
-    if (/\b(cereal|oat|muesli|granola|corn flakes|bran)\b/i.test(d)) return true;
-    if (/\b(french fries|fried|chips|crisp)\b/i.test(d)) return true;
+  if (ctx.slot === "breakfast" && ctx.spec.foodRole === "cho_complex") {
+    if (/\b(pasta|spaghetti|rice\b|riso|potato|lentil|chickpea|salmon|chicken)\b/i.test(d)) return true;
   }
 
-  if (ctx.slot === "breakfast" && ctx.branch.macroRole === "cho_heavy") {
-    if (/\b(pasta|spaghetti|rice\b|riso|potato|patat|lentil|chickpea)\b/i.test(d)) return true;
-  }
-
-  if (/snack/.test(ctx.poolKey) || ctx.slot.startsWith("snack")) {
-    if (/\b(pasta|spaghetti|rice\b|riso|potato|chicken breast|salmon|beef)\b/i.test(d) && !SNACK_PREFERRED.test(d)) {
-      return true;
-    }
+  if (isMainMealSlot(ctx.slot)) {
     if (MAIN_MEAL_FORBIDDEN.test(d)) return true;
+    if (ctx.spec.foodRole === "cho_complex" && /\b(cereal|oat|muesli|bread,?\s*white)\b/i.test(d)) return true;
   }
 
   return false;
 }
 
-function macroBonus(hit: FdcFoodBrowseHit, ctx: BranchPickContext): number {
-  const sort = ctx.branch.sort;
-  if (sort === "cho") return hit.carbsPer100g * 0.4 + hit.kcalPer100g * 0.05;
-  if (sort === "pro") return hit.proteinPer100g * 0.5 + hit.kcalPer100g * 0.03;
-  if (sort === "veg") return 120 - hit.kcalPer100g + hit.carbsPer100g * 0.2;
-  return 80 - hit.kcalPer100g;
+function macroBonus(hit: FdcFoodBrowseHit, spec: MealSlotAssemblyRole): number {
+  if (spec.lever === "cho") return hit.carbsPer100g * 0.5;
+  if (spec.lever === "protein") return hit.proteinPer100g * 0.55;
+  if (spec.lever === "fat") return hit.fatPer100g * 0.6;
+  return 100 - hit.kcalPer100g;
 }
 
-export function scoreFdcCandidate(
+export function scoreFdcForRole(
   hit: FdcFoodBrowseHit,
-  ctx: BranchPickContext,
+  ctx: RolePickContext,
   denyFragments: string[],
   staplePenalty: (description: string) => number,
 ): number {
-  if (isForbiddenForBranch(hit, ctx, denyFragments)) return -10_000;
+  if (isForbiddenForRole(hit, ctx, denyFragments)) return -10_000;
 
+  let score = macroBonus(hit, ctx.spec);
   const d = hit.description;
-  let score = macroBonus(hit, ctx);
 
-  if (isMainMealSlot(ctx.slot)) {
-    if (ctx.branch.macroRole === "cho_heavy" && MAIN_CARB_PREFERRED.test(d)) score += 180;
-    if (ctx.branch.macroRole === "protein" && MAIN_PRO_PREFERRED.test(d)) score += 180;
-    if (ctx.branch.macroRole === "veg" && MAIN_VEG_PREFERRED.test(d)) score += 160;
-    if (ctx.branch.macroRole === "cho_heavy" && /\b(bread|cracker|bagel)\b/i.test(d)) score -= 120;
+  if (ctx.spec.foodRole === "cho_complex") {
+    if (isMainMealSlot(ctx.slot) && MAIN_CARB_PREFERRED.test(d)) score += 200;
+    if (ctx.slot === "breakfast" && BREAKFAST_CHO_PREFERRED.test(d)) score += 200;
   }
-
-  if (ctx.slot === "breakfast") {
-    if (ctx.branch.macroRole === "cho_heavy" && BREAKFAST_CARB_PREFERRED.test(d)) score += 140;
-    if (ctx.branch.macroRole === "mixed" && /\b(frutta|fruit|banana|apple|berry|mirtill)\b/i.test(d)) score += 100;
+  if (ctx.spec.foodRole === "protein_primary" || ctx.spec.foodRole === "protein_secondary") {
+    if (PROTEIN_PREFERRED.test(d)) score += 180;
   }
+  if (ctx.spec.foodRole === "fat" && FAT_PREFERRED.test(d)) score += 160;
+  if (ctx.spec.foodRole === "veg_condiment" && VEG_PREFERRED.test(d)) score += 160;
 
-  if (ctx.slot.startsWith("snack") && SNACK_PREFERRED.test(d)) score += 100;
-
-  if (hit.tags.nutrientDensity?.length) score += 15;
-  if (hit.tags.macroDominant?.includes("fiber_dense")) score += 20;
-
-  score -= staplePenalty(d) * 45;
+  score -= staplePenalty(d) * 40;
   return score;
 }
 
-export function pickBestFdcCandidate(
+export function pickBestFdcForRole(
   pool: FdcFoodBrowseHit[],
-  ctx: BranchPickContext,
+  ctx: RolePickContext,
   denyFragments: string[],
   usedFdcIds: Set<number>,
   staplePenalty: (description: string) => number,
@@ -117,11 +88,11 @@ export function pickBestFdcCandidate(
 
   for (const hit of pool) {
     if (usedFdcIds.has(hit.fdcId) || hit.kcalPer100g <= 0) continue;
-    if (ctx.branch.macroRole === "cho_heavy" && hit.carbsPer100g < 10) continue;
-    if (ctx.branch.macroRole === "protein" && hit.proteinPer100g < 8) continue;
-    if (/\b(kraft foods|general mills|pepsico|conagra|unilever)\b/i.test(hit.description)) continue;
-    if (/^[A-Za-z]+ Foods,? Inc/i.test(hit.description.trim())) continue;
-    const score = scoreFdcCandidate(hit, ctx, denyFragments, staplePenalty);
+    if (ctx.spec.lever === "cho" && hit.carbsPer100g < 8) continue;
+    if (ctx.spec.lever === "protein" && hit.proteinPer100g < 6) continue;
+    if (ctx.spec.lever === "fat" && hit.fatPer100g < 3) continue;
+
+    const score = scoreFdcForRole(hit, ctx, denyFragments, staplePenalty);
     if (score <= -5000) continue;
     if (score > bestScore) {
       bestScore = score;

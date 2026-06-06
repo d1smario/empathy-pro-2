@@ -10,7 +10,7 @@ import { buildFdcCanonicalSnapshotFromFdcIds } from "@/lib/nutrition/fdc-to-cano
 import { loadFdcFoodsByIds } from "@/lib/nutrition/fdc-food-cache";
 import type { MealPlanV2Production } from "@/lib/nutrition/v2/build-meal-plan-v2-production";
 import { portionHintIt } from "@/lib/nutrition/v2/compose-meal-plan-v2";
-import { V2_SLOT_BRANCHES } from "@/lib/nutrition/v2/fdc-pool-specs";
+import { MEAL_SLOT_ASSEMBLY } from "@/lib/nutrition/v2/meal-slot-assembly-spec";
 
 function macroRoleFromItem(choG: number, proG: number, fatG: number): IntelligentMealPlanItemOut["macroRole"] {
   const choK = choG * 4;
@@ -30,15 +30,18 @@ function mapItem(
   itemIndex: number,
 ): IntelligentMealPlanItemOut {
   const label = item.description;
-  const branch = V2_SLOT_BRANCHES[slotKey]?.[itemIndex] ?? {
-    poolKey: "snack",
-    kcalShare: 1,
-    macroRole: "mixed" as const,
-    sort: "kcal_low" as const,
+  const roles = MEAL_SLOT_ASSEMBLY[slotKey] ?? [];
+  const spec = roles[itemIndex] ?? roles[roles.length - 1] ?? {
+    foodRole: "cho_simple" as const,
+    lever: "cho" as const,
+    poolKey: "snack_cho",
+    minG: 25,
+    maxG: 180,
+    stepG: 5,
   };
   return {
     name: label,
-    portionHint: portionHintIt(label, item.grams, branch),
+    portionHint: portionHintIt(label, item.grams, spec),
     functionalBridge: "Alimentazione mediterranea · catalogo USDA",
     approxKcal: Math.round(item.kcal),
     macroRole: macroRoleFromItem(item.choG, item.proG, item.fatG),
