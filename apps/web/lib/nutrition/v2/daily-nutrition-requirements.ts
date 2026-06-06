@@ -177,7 +177,7 @@ export function buildDailyNutritionRequirementsV2(input: BuildDailyRequirementsI
   return {
     athleteId: request.athleteId,
     planDate: request.planDate,
-    algorithmVersion: "nutrition_requirements_v2_preview",
+    algorithmVersion: "nutrition_requirements_v2_production",
     weightKg: w,
     strategyKind,
     dietProfileActive,

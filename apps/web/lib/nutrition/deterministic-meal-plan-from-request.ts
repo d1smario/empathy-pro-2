@@ -8,7 +8,7 @@ import type {
   MealSlotKey,
 } from "@/lib/nutrition/intelligent-meal-plan-types";
 import { rescaleSlotKcalToTarget } from "@/lib/nutrition/intelligent-meal-plan-types";
-import { inferCanonicalFoodKey, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
+import { inferCanonicalFoodKeyPreferName, nutrientsForMealPlanItem } from "@/lib/nutrition/canonical-food-composition";
 import { buildFdcCanonicalSnapshot } from "@/lib/nutrition/fdc-to-canonical-scaler";
 import type { MediterraneanDayContext, MediterraneanDietType } from "@/lib/nutrition/mediterranean-meal-composer";
 import { applyPathwayAdvice } from "@/lib/nutrition/meal-pathway-advisor";
@@ -277,7 +277,9 @@ export async function buildDeterministicMealPlanFromRequest(
    * Fail-soft: se il batch fallisce (no service role, USDA giù, ecc.) lo snapshot resta vuoto e il
    * finalizer cade automaticamente sul TS table item per item — comportamento identico al pre-Step3.
    */
-  const allKeys = slots.flatMap((s) => s.items.map((it) => inferCanonicalFoodKey(`${it.name} ${it.portionHint}`)));
+  const allKeys = slots.flatMap((s) =>
+    s.items.map((it) => inferCanonicalFoodKeyPreferName(it.name, it.portionHint)),
+  );
   const fdcSnapshot = await buildFdcCanonicalSnapshot(allKeys);
   return await finalizeIntelligentMealPlanCore(core, req, fdcSnapshot);
 }

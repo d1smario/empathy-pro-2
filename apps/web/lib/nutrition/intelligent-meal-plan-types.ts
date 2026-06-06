@@ -148,6 +148,8 @@ export type IntelligentMealPlanRequest = {
   racePreLunch?: RacePreLunchDayContext | null;
   /** Giorno gara: recovery post-gara (CHO/PRO/MCT g/kg) con slot dedicato e quota energetica target. */
   racePostRecovery?: RacePostRecoveryContext | null;
+  /** Leve integrazione performance (diario, bio, recovery) — modula fueling V2 lato server. */
+  performanceIntegration?: import("@/lib/nutrition/performance-integration-scaler").NutritionPerformanceIntegrationDials | null;
 };
 
 /** Eco del solver nella risposta: stesso “scheletro” usato per generare il piano combinato. */

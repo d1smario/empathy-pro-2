@@ -29,6 +29,10 @@ export const CANONICAL_FOOD_TO_FDC_ID: Record<string, number | undefined> = {
   rice_dry: 169756, // Rice, white, long-grain, regular, raw, unenriched
   oat_dry: 172989, // Cereals, QUAKER, Quick Oats, Dry (proxy SR Legacy per fiocchi avena secchi)
   farro_cooked: 169746, // Spelt, cooked (farro = spelt USDA)
+  farro_dry: 169746, // proxy spelt — macro da TS table se mismatch
+  quinoa_dry: 168874, // Quinoa, uncooked
+  tofu_firm: 172475,
+  tempeh: 174272,
   potato_cooked: 170093, // Potatoes, baked, flesh and skin, without salt
   crackers_whole: 174985, // Crackers, wheat, regular
 

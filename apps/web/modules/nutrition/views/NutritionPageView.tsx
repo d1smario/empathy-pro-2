@@ -2360,6 +2360,7 @@ export default function NutritionPageView({ subRoute }: { subRoute: NutritionSub
     return {
       ...withPlaybook,
       ...(Object.keys(weeklyStapleCounts).length ? { weeklyStapleCounts } : {}),
+      ...(nutritionPerformanceIntegration ? { performanceIntegration: nutritionPerformanceIntegration } : {}),
     };
   }, [
     athleteId,

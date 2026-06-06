@@ -1,5 +1,6 @@
 import type { FdcFoodTaxonomy } from "@empathy/contracts";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isPlausiblePer100gMacros } from "@/lib/nutrition/macro-plausibility";
 import {
   classifyFdcFoodRow,
   dietExcludeForActiveProfile,
@@ -161,6 +162,16 @@ export async function queryFdcBranchPool(
     const id = Math.round(Number(r.fdc_id));
     const hit = fdcRowToHit(r, tagMap.get(id) ?? null);
     if (!hit || hit.tagSource !== "db") continue;
+    if (
+      !isPlausiblePer100gMacros({
+        kcal_100: hit.kcalPer100g,
+        carbs_100: hit.carbsPer100g,
+        protein_100: hit.proteinPer100g,
+        fat_100: hit.fatPer100g,
+      })
+    ) {
+      continue;
+    }
     if (!taxonomyMatchesFilter(hit.tags, filter)) continue;
     hits.push(hit);
     if (hits.length >= limit) break;

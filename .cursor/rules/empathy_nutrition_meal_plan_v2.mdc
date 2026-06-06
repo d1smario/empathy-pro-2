@@ -1,0 +1,26 @@
+# Nutrition Meal Plan V2 — regole agente
+
+## Pipeline obbligatoria
+
+1. Prep condiviso (`intelligent-meal-plan-route-prep`)
+2. Compute V2 (`nutrition-day-model-v2`, substrati)
+3. Compose staple-first (`fdc-staple-registry` → `compose-meal-plan-v2`)
+4. Enrich condiviso (`enrich-meal-slots-after-compose`) — pathway, integrazione, boostNote
+5. Finalize (`meal-plan-response-finalize`)
+
+## Vietato
+
+- Insert diretto su pool FDC aperti senza staple registry + gate qualità
+- Secondo composer parallelo (Mediterranean + FDC indipendenti)
+- Patch cosmetiche solo colazione senza allineare crudo/cotto e finalize
+
+## Rollout
+
+- Shadow su Vercel finché parity test passa
+- Rollback: `NUTRITION_MEAL_PLAN_ENGINE=v1`
+
+## Riferimenti
+
+- `docs/NUTRITION_V2_MEAL_PLAN.md`
+- `apps/web/lib/nutrition/v2/fdc-staple-registry.ts`
+- `apps/web/lib/nutrition/enrich-meal-slots-after-compose.ts`

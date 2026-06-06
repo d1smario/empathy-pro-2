@@ -36,6 +36,7 @@ export type PreparedIntelligentMealPlanContext = {
   plannedSessions: Array<{ label: string; avgPowerW: number; durationMin: number }>;
   ftp: number;
   weightKg: number;
+  performanceIntegration?: import("@/lib/nutrition/performance-integration-scaler").NutritionPerformanceIntegrationDials | null;
 };
 
 export async function prepareIntelligentMealPlanContext(
@@ -167,6 +168,14 @@ export async function prepareIntelligentMealPlanContext(
   const sessions =
     plannedSessions.length > 0 ? plannedSessions : extractPlannedSessionsFromRequest(request, ftp);
 
+  const perfRaw =
+    (body.plan as Record<string, unknown> | undefined)?.performanceIntegration ??
+    (request as Record<string, unknown>).performanceIntegration;
+  const performanceIntegration =
+    perfRaw && typeof perfRaw === "object" && !Array.isArray(perfRaw)
+      ? (perfRaw as import("@/lib/nutrition/performance-integration-scaler").NutritionPerformanceIntegrationDials)
+      : null;
+
   return {
     request,
     athleteId,
@@ -176,5 +185,6 @@ export async function prepareIntelligentMealPlanContext(
     plannedSessions: sessions,
     ftp,
     weightKg,
+    performanceIntegration,
   };
 }

@@ -15,6 +15,7 @@ import {
   metabolicIndicesPer100gFromFdc,
   type FdcCanonicalSnapshot,
 } from "@/lib/nutrition/fdc-canonical-map";
+import { isPlausiblePer100gMacros } from "@/lib/nutrition/macro-plausibility";
 import { fdcIdForCanonicalKey } from "@/lib/nutrition/canonical-food-fdc-aliases";
 import { getOrImportFdcFood, loadFdcFoodsByIds } from "@/lib/nutrition/fdc-food-cache";
 
@@ -104,6 +105,55 @@ function parseGramsFromHint(hint: string, compositionKey: string): number | unde
  *     ...
  *   }
  */
+function reconcileScaledNutrients(
+  scaled: ScaledMealItemNutrients,
+  approxKcal: number,
+  canonical: CanonicalFoodNutrients,
+): ScaledMealItemNutrients {
+  if (approxKcal <= 0 || scaled.kcal <= 0) return scaled;
+  const deviation = Math.abs(scaled.kcal - approxKcal) / Math.max(approxKcal, 1);
+  if (deviation <= 0.2) return scaled;
+  return scaleCanonicalNutrientsToKcal(canonical, approxKcal);
+}
+
+function scaleFromCanonical(
+  canonical: CanonicalFoodNutrients,
+  item: { portionHint: string; name: string; approxKcal: number },
+  compositionKey: string,
+  giMeta?: { gi: number; ii: number; glPer100g: number },
+): ScaledMealItemNutrients {
+  if (
+    !isPlausiblePer100gMacros({
+      kcal_100: canonical.kcalPer100g,
+      carbs_100: canonical.carbsG,
+      protein_100: canonical.proteinG,
+      fat_100: canonical.fatG,
+    })
+  ) {
+    const tsFallback = CANONICAL_FOOD_TABLE[compositionKey.replace(/^fdc:\d+$/, "")];
+    if (tsFallback?.kcalPer100g) {
+      return scaleCanonicalNutrientsToKcal(tsFallback, item.approxKcal);
+    }
+    return scaleCanonicalNutrientsToKcal(canonical, item.approxKcal);
+  }
+
+  const hintForServing = `${item.portionHint} ${item.name}`.trim();
+  const grams = parseGramsFromHint(hintForServing, compositionKey);
+  let scaled =
+    grams != null
+      ? scaleCanonicalNutrientsToGrams(canonical, grams)
+      : scaleCanonicalNutrientsToKcal(canonical, item.approxKcal);
+  scaled = reconcileScaledNutrients(scaled, item.approxKcal, canonical);
+
+  if (giMeta) {
+    const massG = grams ?? (canonical.kcalPer100g > 0 ? (item.approxKcal * 100) / canonical.kcalPer100g : 0);
+    scaled.glycemicIndex = giMeta.gi;
+    scaled.insulinIndex = giMeta.ii;
+    scaled.glycemicLoad = Number(((giMeta.glPer100g * massG) / 100).toFixed(2));
+  }
+  return scaled;
+}
+
 export function nutrientsForMealPlanItemFromCache(
   item: { name: string; portionHint: string; approxKcal: number; compositionKey?: string },
   snapshot: FdcCanonicalSnapshot,
@@ -115,17 +165,11 @@ export function nutrientsForMealPlanItemFromCache(
   const fdcKey = item.compositionKey?.startsWith("fdc:") ? item.compositionKey : null;
   if (fdcKey && snapshot[fdcKey]) {
     const fdc = snapshot[fdcKey]!;
-    const canonical = fdc.canonical;
-    const hintForServing = `${item.portionHint} ${item.name}`.trim();
-    const grams = parseGramsFromHint(hintForServing, fdcKey);
-    const scaled =
-      grams != null
-        ? scaleCanonicalNutrientsToGrams(canonical, grams)
-        : scaleCanonicalNutrientsToKcal(canonical, item.approxKcal);
-    const massG = grams ?? (canonical.kcalPer100g > 0 ? (item.approxKcal * 100) / canonical.kcalPer100g : 0);
-    scaled.glycemicIndex = fdc.gi;
-    scaled.insulinIndex = fdc.ii;
-    scaled.glycemicLoad = Number(((fdc.glPer100g * massG) / 100).toFixed(2));
+    const scaled = scaleFromCanonical(fdc.canonical, item, fdcKey, {
+      gi: fdc.gi,
+      ii: fdc.ii,
+      glPer100g: fdc.glPer100g,
+    });
     return { compositionKey: fdcKey, compositionStatus: "fdc_cache", nutrients: scaled };
   }
 
@@ -151,18 +195,14 @@ export function nutrientsForMealPlanItemFromCache(
     };
   }
 
-  const hintForServing = `${item.portionHint} ${item.name}`.trim();
-  const grams = parseGramsFromHint(hintForServing, compositionKey);
-  const scaled =
-    grams != null
-      ? scaleCanonicalNutrientsToGrams(canonical, grams)
-      : scaleCanonicalNutrientsToKcal(canonical, item.approxKcal);
+  const scaled = scaleFromCanonical(
+    canonical,
+    item,
+    compositionKey,
+    fdc ? { gi: fdc.gi, ii: fdc.ii, glPer100g: fdc.glPer100g } : undefined,
+  );
 
   if (fdc) {
-    const massG = grams ?? (canonical.kcalPer100g > 0 ? (item.approxKcal * 100) / canonical.kcalPer100g : 0);
-    scaled.glycemicIndex = fdc.gi;
-    scaled.insulinIndex = fdc.ii;
-    scaled.glycemicLoad = Number(((fdc.glPer100g * massG) / 100).toFixed(2));
     return { compositionKey, compositionStatus: "fdc_cache", nutrients: scaled };
   }
 

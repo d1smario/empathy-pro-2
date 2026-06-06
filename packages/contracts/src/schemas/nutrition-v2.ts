@@ -185,7 +185,7 @@ export type DailyMacroGPerKgTargets = {
 export type DailyNutritionRequirementsV2 = {
   athleteId: string;
   planDate: IsoDate;
-  algorithmVersion: "nutrition_requirements_v2_preview";
+  algorithmVersion: "nutrition_requirements_v2_preview" | "nutrition_requirements_v2_production";
   weightKg: number;
   strategyKind: EmpathyNutritionStrategyKind;
   dietProfileActive: FdcDietProfileTag;
@@ -234,6 +234,8 @@ export type MealPlanV2FoodPoolPreview = {
   }>;
 };
 
+export type MealPlanV2ServingBasis = "dry_grams" | "cooked_grams" | "ml";
+
 export type MealPlanV2ComposedItem = {
   fdcId: number;
   description: string;
@@ -242,6 +244,10 @@ export type MealPlanV2ComposedItem = {
   choG: number;
   proG: number;
   fatG: number;
+  /** Chiave banca canonica (es. rice_dry) — fonte preferita nutrienti. */
+  canonicalKey?: string;
+  /** Base porzione per scaling USDA (allineato a portionHint). */
+  servingBasis?: MealPlanV2ServingBasis;
 };
 
 export type MealPlanV2ComposedSlot = {

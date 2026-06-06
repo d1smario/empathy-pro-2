@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: prepared.error }, { status: prepared.status });
     }
 
-    const { request, profileRow, dietDay, plannedSessions, ftp, weightKg } = prepared;
+    const { request, profileRow, dietDay, plannedSessions, ftp, weightKg, performanceIntegration } = prepared;
     const engine = resolveNutritionMealPlanEngine(parseNutritionConfig(profileRow));
 
     let responseCore;
@@ -59,6 +59,7 @@ export async function POST(req: NextRequest) {
           dietDayMealsScalePct: dietDay.dayTypePct,
           plannedSessions,
           dietDay,
+          performanceIntegration: performanceIntegration ?? null,
         },
         db,
       );
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
             dietDayMealsScalePct: dietDay.dayTypePct,
             plannedSessions,
             dietDay,
+            performanceIntegration: performanceIntegration ?? null,
           },
           db,
         ),

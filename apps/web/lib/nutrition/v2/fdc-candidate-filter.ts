@@ -2,11 +2,16 @@ import type { FdcFoodBrowseHit } from "@/lib/nutrition/v2/fdc-branch-query";
 
 /** Descrizioni SR Legacy / artefatti / junk food da escludere dal composer V2. */
 const DESCRIPTION_DENYLIST = [
+  /^beverage$/i,
+  /^beverages$/i,
+  /^snacks?,?\s/i,
+  /butter replacement/i,
+  /meal replacement/i,
+  /infant formula/i,
+  /babyfood/i,
   /walrus/i,
   /alaska native/i,
   /navajo/i,
-  /babyfood/i,
-  /infant formula/i,
   /graham cracker.*crust/i,
   /pie crust.*cookie/i,
   /restaurant,\s*chinese/i,
@@ -26,6 +31,8 @@ const DESCRIPTION_DENYLIST = [
   /cupcake/i,
   /doughnut/i,
   /toaster pastry/i,
+  /^candies/i,
+  /^candy,/i,
 ];
 
 export function isDeniedFdcDescription(description: string, denyFragments: string[]): boolean {

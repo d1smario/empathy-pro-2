@@ -67,15 +67,35 @@ async function loadFdcPools(
   return map;
 }
 
+function mealTimesFromRequest(
+  request: IntelligentMealPlanRequest,
+  fallback: FlatMealTimes & { snack_evening?: string },
+): FlatMealTimes & { snack_evening?: string } {
+  const out = { ...fallback };
+  for (const s of request.slots) {
+    const t = s.scheduledTimeLocal?.trim();
+    if (!t) continue;
+    const key = s.slot as keyof typeof out;
+    if (key in out) out[key] = t;
+  }
+  if (request.racePreLunch?.lunchTimeLocal) {
+    const slot = request.racePreLunch.mealSlot;
+    if (slot in out) out[slot as keyof typeof out] = request.racePreLunch.lunchTimeLocal;
+  }
+  return out;
+}
+
 function resolveDietSlots(
   requirements: DailyNutritionRequirementsV2,
   request: IntelligentMealPlanRequest,
   dietDay: ResolvedNutritionDietDay | null | undefined,
   mealTimes: FlatMealTimes & { snack_evening?: string },
 ): MealPlanV2DietSlotBudget[] {
+  let budgets: MealPlanV2DietSlotBudget[];
+
   if (dietDay?.configured && dietDay.caloricDistribution) {
     const macroSplit = dietDay.dailyMacros ?? DEFAULT_MACRO_SPLIT;
-    return buildDietMealSlotBudgets({
+    budgets = buildDietMealSlotBudgets({
       mealCountMode: dietDay.mealCountMode,
       caloricDistribution: dietDay.caloricDistribution,
       dailyKcal: requirements.energy.mealsKcal,
@@ -90,16 +110,34 @@ function resolveDietSlots(
       protein: b.protein,
       fat: b.fat,
     }));
+  } else {
+    budgets = request.slots.map((s) => ({
+      key: s.slot,
+      label: s.labelIt,
+      pct: 0,
+      kcal: s.targetKcal,
+      carbs: s.targetCarbsG,
+      protein: s.targetProteinG,
+      fat: s.targetFatG,
+    }));
   }
-  return request.slots.map((s) => ({
-    key: s.slot,
-    label: s.labelIt,
-    pct: 0,
-    kcal: s.targetKcal,
-    carbs: s.targetCarbsG,
-    protein: s.targetProteinG,
-    fat: s.targetFatG,
-  }));
+
+  if (request.racePostRecovery && request.slots.length > 0) {
+    const bySlot = new Map(request.slots.map((s) => [s.slot, s]));
+    budgets = budgets.map((b) => {
+      const r = bySlot.get(b.key as (typeof request.slots)[number]["slot"]);
+      if (!r) return b;
+      return {
+        ...b,
+        kcal: r.targetKcal,
+        carbs: r.targetCarbsG,
+        protein: r.targetProteinG,
+        fat: r.targetFatG,
+      };
+    });
+  }
+
+  return budgets;
 }
 
 export async function buildMealPlanV2Production(
@@ -111,7 +149,7 @@ export async function buildMealPlanV2Production(
     performanceIntegration: input.performanceIntegration,
   });
 
-  const mealTimes = input.mealTimes ?? DEFAULT_MEAL_TIMES;
+  const mealTimes = mealTimesFromRequest(input.request, input.mealTimes ?? DEFAULT_MEAL_TIMES);
   const dietMealSlotBudgets = resolveDietSlots(requirements, input.request, input.dietDay, mealTimes);
   const pools = await loadFdcPools(admin, requirements.dietProfileActive);
   const denyFragments = buildMealPlanFoodDenyFragments(input.request);
@@ -120,14 +158,15 @@ export async function buildMealPlanV2Production(
     denyFragments,
     weeklyStapleCounts: input.request.weeklyStapleCounts,
     suppressedSlots: input.request.suppressedSlots,
+    request: input.request,
   });
 
-  const session = requirements.substrateFueling?.sessions[0];
+  const sessions = requirements.substrateFueling?.sessions ?? [];
   const fuelingProtocolMeta =
-    session && requirements.substrateFueling
+    sessions.length > 0 && requirements.substrateFueling
       ? bridgeSubstrateFuelingToProtocolMeta({
           substrateFueling: requirements.substrateFueling,
-          durationMin: Math.round(session.durationH * 60),
+          durationMin: Math.round(sessions.reduce((m, s) => Math.max(m, s.durationH * 60), 0)),
           preferredBrands: input.preferredFuelingBrands ?? [],
         })
       : undefined;
