@@ -27,8 +27,8 @@ export function resolveNutritionMealPlanEngine(
   if (process.env.NODE_ENV === "development" && (process.env.NUTRITION_MEAL_PLAN_ENGINE_DEV ?? "").trim() === "shadow") {
     return "shadow";
   }
-  // Vercel: shadow finché parity QA passa (serve V1, log diff V2). Cutover: NUTRITION_MEAL_PLAN_ENGINE=v2.
-  if (process.env.VERCEL === "1") return "shadow";
+  // Vercel: v2 in produzione (QA). Rollback: NUTRITION_MEAL_PLAN_ENGINE=v1|shadow.
+  if (process.env.VERCEL === "1") return "v2";
   return "v1";
 }
 
