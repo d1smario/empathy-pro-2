@@ -1,0 +1,41 @@
+# Pacchetto export — Report valorizzazione Empathy 2026
+
+Cartella pronta da **copiare, inviare o caricare** (Drive, email, commercialista, investitori).
+
+## Contenuto
+
+| File | Formato | Uso |
+|------|---------|-----|
+| `EMPATHY_WORK_VALUATION_REPORT_2026.pdf` | PDF | Condivisione e stampa (report completo) |
+| `EMPATHY_WORK_VALUATION_REPORT_2026.md` | Markdown | Modifica testo / version control |
+| `EMPATHY_WORK_VALUATION_REPORT_2026_standalone.html` | HTML | Apri in Chrome/Edge → **Stampa → Salva come PDF** |
+| `EMPATHY_WORK_VALUATION_REPORT_2026.doc` | Word (RTF) | Apri in Microsoft Word, salva .docx se serve |
+| `01_repo_metrics.csv` | CSV | Metriche repository → Excel |
+| `02_hours_by_category.csv` | CSV | Ore per voce (bassa/media/alta) → Excel |
+| `03_totals_and_valuation.csv` | CSV | Totali ore + valorizzazione EUR → Excel |
+| `04_module_status.csv` | CSV | Stato moduli prodotto → Excel |
+
+## Export rapido
+
+### PDF (da browser)
+1. Apri `EMPATHY_WORK_VALUATION_REPORT_2026_standalone.html` con doppio clic.
+2. Pulsante **Stampa / Salva PDF** oppure Ctrl+P → destinazione **Salva come PDF**.
+
+### Excel / Google Fogli
+1. Apri i file `01` … `04` `.csv` con Excel.
+2. Se i caratteri accentati non sono corretti: **Dati → Da testo/CSV → UTF-8**.
+
+### Word
+1. Apri `EMPATHY_WORK_VALUATION_REPORT_2026.doc` con Word.
+2. **File → Salva con nome → Documento Word (.docx)**.
+
+### Zip (tutto in uno)
+Nella root del monorepo, da PowerShell:
+
+```powershell
+Compress-Archive -Path "docs\exports\EMPATHY_WORK_VALUATION_2026\*" -DestinationPath "$env:USERPROFILE\Desktop\EMPATHY_WORK_VALUATION_2026.zip" -Force
+```
+
+## Nota
+
+Le cifre sono **stime strutturate** (non timesheet). Vedi premessa nel PDF/markdown.

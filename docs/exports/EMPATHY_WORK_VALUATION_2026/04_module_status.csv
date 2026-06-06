@@ -1,0 +1,17 @@
+Area,Stato_consegna,Note
+Architettura / costituzione,Alta,"CONSTITUTION, blueprint, 4 piani generativi, L1-L10"
+Auth + contesto atleta/coach,Parziale,Policy stabile; edge case possibili
+Training Builder,Parziale,Pipeline canonica Pro 2 BUILDER_SESSION_JSON
+Training VIRYA / calendario,Parziale,Orchestrazione verso builder
+Motori carico CTL/ATL load v2,Ok,domain-training test golden
+Bioenergetics / curve giorno,Parziale,Simulatori v1 fusion curve
+Nutrition meal plan / fueling,Parziale,Solver deterministico dipende da calendario
+Health lab / staging,Parziale,Upload biomarker staging normalize
+Physiology / twin,Parziale,Coupling training vuoto senza eseguiti
+Biomechanics / Aerodynamics,Parziale,CV adapter staging scoring
+Longevity / EPI / Coin,Parziale,Motore deterministico check-in
+Integrazioni Garmin,Parziale-Ok,OAuth push pull wellness
+Altri device,Parziale,WHOOP Wahoo Strava Polar Suunto Karoo
+Knowledge PubMed multiscala,Parziale,Registry trace
+Billing Stripe coach grants,Parziale,Application layer presente
+UI Pro 2 canone generativo,Parziale,Shell palette GenerativeModuleSurface

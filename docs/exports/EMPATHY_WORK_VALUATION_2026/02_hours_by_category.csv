@@ -1,0 +1,56 @@
+Categoria,Voce,Ore_basse,Ore_medie,Ore_alte
+A - Progettazione,Visione prodotto (PRODUCT_VISION charter),40,80,120
+A - Progettazione,Costituzione invarianti generativi gate,60,120,200
+A - Progettazione,Blueprint tecnico mappe multilayer roadmap,80,160,280
+A - Progettazione,UI canon Pro 2 design system Figma,40,100,180
+A - Progettazione,Ruoli coach/atleta commercial billing,30,60,100
+A - Progettazione,SUBTOTALE A,250,520,880
+B - Ricerca,Letteratura carico/adattamento load v2,60,120,220
+B - Ricerca,Bioenergetics CGM BIA endocrino,80,180,350
+B - Ricerca,Nutrizione metabolica pathway L1-L10,50,110,200
+B - Ricerca,Health biomarkers causal graph,40,90,160
+B - Ricerca,Multiscala biologico knowledge ontology,40,80,150
+B - Ricerca,SUBTOTALE B,270,580,1080
+C - Motori,Training EWMA impulso load metrics v2,80,160,280
+C - Motori,Physiology energia meccanica metriche disciplina,40,90,160
+C - Motori,Bioenergetics simulator curve fusion CGM,120,260,450
+C - Motori,Twin adaptation score memoria,80,170,300
+C - Motori,Nutrition solver macro diet race-day,100,200,350
+C - Motori,EPI longevity human efficiency,40,90,160
+C - Motori,Biomechanics aerodynamics,60,130,240
+C - Motori,Test golden regression (~150 file),80,180,320
+C - Motori,SUBTOTALE C,600,1280,2260
+D - Backend,Contratti Zod/API packages/contracts,80,150,250
+D - Backend,Schema Supabase 74 migration RLS,120,240,400
+D - Backend,183 route API,350,650,1100
+D - Backend,Pipeline ingest reality,150,300,500
+D - Backend,Athlete memory coach grants billing,80,160,280
+D - Backend,Script operativi diagnostica,40,80,140
+D - Backend,SUBTOTALE D,820,1580,2670
+E - Frontend,Shell Pro 2 navigation auth active athlete,100,200,350
+E - Frontend,Training Builder Calendar Session VIRYA,200,420,700
+E - Frontend,Nutrition module meal plan fueling diary,120,260,450
+E - Frontend,Physiology Bioenergetics Health UI,100,220,380
+E - Frontend,Biomechanics Aerodynamics capture,80,170,300
+E - Frontend,Dashboard Profile Longevity Admin,80,180,320
+E - Frontend,Generative surfaces error boundary,60,120,200
+E - Frontend,SUBTOTALE E,740,1570,2700
+F - Integrazioni,Garmin OAuth push pull wellness FIT,120,280,480
+F - Integrazioni,WHOOP Wahoo Strava,80,180,320
+F - Integrazioni,Polar Suunto Karoo,60,120,220
+F - Integrazioni,Stripe LogMeal Spline,40,90,160
+F - Integrazioni,Knowledge APIs PubMed UniProt,50,110,200
+F - Integrazioni,SUBTOTALE F,350,780,1380
+G - AI interpretazione,Health document pipeline,60,130,240
+G - AI interpretazione,Playbook interrogation map,50,110,200
+G - AI interpretazione,Research traces multiscala,40,90,160
+G - AI interpretazione,Guardrail generativi policy Cursor,40,80,140
+G - AI interpretazione,SUBTOTALE G,190,410,740
+H - QA deploy,CI verify build Vercel,50,100,180
+H - QA deploy,Smoke perf debugging produzione,60,140,260
+H - QA deploy,Documentazione regole agent,80,180,320
+H - QA deploy,Sessioni Cursor agent stima,100,250,500
+H - QA deploy,SUBTOTALE H,290,670,1260
+I - Porting V1,Analisi V1 parity absorption,150,350,650
+I - Porting V1,Shared DB migration intent,40,90,160
+I - Porting V1,SUBTOTALE I,190,440,810

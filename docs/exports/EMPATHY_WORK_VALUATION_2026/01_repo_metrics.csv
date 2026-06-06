@@ -1,0 +1,14 @@
+Indicatore,Valore
+Periodo git tracciabile,29 mar 2026 - 3 giu 2026 (~66 giorni)
+Commit totali,479
+Autore principale,d1smario (475 commit)
+Intensità mensile,mar 4 | apr 129 | mag 326 | giu 20
+Righe TypeScript/TSX,~175800
+Route API,183
+Migration SQL,74 file (~12000 righe)
+Package dominio,15
+File test automatici,~150
+Documenti markdown,~82
+Moduli UI shell,29 pagine prodotto
+Deploy produzione,Vercel empathy-pro-2-web
+URL produzione,https://empathy-pro-2-web.vercel.app/

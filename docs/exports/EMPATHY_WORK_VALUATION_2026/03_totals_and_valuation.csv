@@ -1,0 +1,24 @@
+Tipo,Scenario,Valore,Unita,Note
+Ore totali,Conservativo,3710,ore,Solo deliverable hard minimo ricerca/porting
+Ore totali,Realistico (medio),7830,ore,Scope repo doc motori integrazioni
+Ore totali,Alto (completo),13780,ore,Ricerca hardening edge case V1 non in git
+FTE equivalente,Conservativo,2.3,anni FTE,1600 h/anno
+FTE equivalente,Realistico,4.9,anni FTE,1600 h/anno
+FTE equivalente,Alto,8.6,anni FTE,1600 h/anno
+Valorizzazione EUR,Freelance senior 65 EUR/h - Conservativo,241000,EUR,
+Valorizzazione EUR,Freelance senior 65 EUR/h - Realistico,509000,EUR,
+Valorizzazione EUR,Freelance senior 65 EUR/h - Alto,896000,EUR,
+Valorizzazione EUR,Product engineer 85 EUR/h - Conservativo,315000,EUR,
+Valorizzazione EUR,Product engineer 85 EUR/h - Realistico,666000,EUR,
+Valorizzazione EUR,Product engineer 85 EUR/h - Alto,1171000,EUR,
+Valorizzazione EUR,Consulenza 110 EUR/h - Conservativo,408000,EUR,
+Valorizzazione EUR,Consulenza 110 EUR/h - Realistico,861000,EUR,
+Valorizzazione EUR,Consulenza 110 EUR/h - Alto,1516000,EUR,
+Valore operativo oggi,Stato produzione sconto maturita 30%,350000-580000,EUR,A 85 EUR/h su scenario realistico
+Distribuzione ore,Backend + Frontend,40,percentuale,Scenario realistico
+Distribuzione ore,Motori matematica test,16,percentuale,
+Distribuzione ore,Integrazioni,10,percentuale,
+Distribuzione ore,Ricerca progettazione,14,percentuale,
+Distribuzione ore,AI interpretazione,5,percentuale,
+Distribuzione ore,QA deploy doc agent,9,percentuale,
+Distribuzione ore,Porting V1,6,percentuale,

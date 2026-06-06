@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Empathy — Report valorizzazione lavoro 2026</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card: #141414;
+      --text: #f4f4f5;
+      --muted: #a1a1aa;
+      --accent: #d946ef;
+      --accent2: #7c3aed;
+      --border: rgba(255,255,255,.12);
+    }
+    @media print {
+      :root { --bg: #fff; --card: #fff; --text: #111; --muted: #444; --border: #ccc; }
+      .no-print { display: none !important; }
+      body { background: #fff; }
+      .wrap { box-shadow: none; border: none; }
+      h1 { color: #111; }
+      h2 { color: #333; page-break-after: avoid; }
+      table { page-break-inside: avoid; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .toolbar {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 12px 20px;
+      background: rgba(10,10,10,.92);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(8px);
+    }
+    @media print { .toolbar { display: none; } }
+    .toolbar span { color: var(--muted); font-size: 13px; margin-right: 8px; }
+    .btn {
+      appearance: none; border: 1px solid var(--border);
+      background: var(--card); color: var(--text);
+      padding: 8px 14px; border-radius: 8px; cursor: pointer;
+      font-size: 13px; font-weight: 600;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none; color: #fff;
+    }
+    .wrap {
+      max-width: 920px; margin: 24px auto 48px; padding: 32px 36px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    }
+    @media (max-width: 640px) { .wrap { margin: 12px; padding: 20px; } }
+    h1 {
+      font-size: 1.75rem; margin: 0 0 4px;
+      background: linear-gradient(90deg, #f0abfc, #c084fc, #fb923c);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .subtitle { color: var(--muted); font-size: 1rem; margin-bottom: 16px; }
+    .meta {
+      font-size: 13px; color: var(--muted);
+      padding: 12px 14px; border-radius: 8px;
+      border-left: 4px solid var(--accent);
+      background: rgba(217,70,239,.08); margin-bottom: 24px;
+    }
+    h2 { font-size: 1.15rem; margin: 28px 0 10px; color: #e9d5ff; }
+    @media print { h2 { color: #333; } }
+    h3 { font-size: 1rem; margin: 18px 0 8px; color: var(--muted); }
+    p, li { font-size: 14px; color: var(--text); }
+    ul { padding-left: 20px; }
+    table {
+      width: 100%; border-collapse: collapse; margin: 10px 0 16px;
+      font-size: 13px;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 7px 9px; text-align: left; vertical-align: top;
+    }
+    th { background: rgba(124,58,237,.2); font-weight: 600; }
+    @media print { th { background: #eee; } }
+    .highlight {
+      border: 1px solid rgba(251,146,60,.4);
+      background: rgba(251,146,60,.08);
+      border-radius: 10px; padding: 14px 16px; margin: 16px 0;
+    }
+    .highlight strong { color: #fb923c; }
+    .footer {
+      margin-top: 32px; padding-top: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 12px; color: var(--muted); text-align: center;
+    }
+    .page-break { page-break-before: always; }
+  </style>
+</head>
+<body>
+
+<div class="toolbar no-print">
+  <span>Empathy — export report</span>
+  <button class="btn btn-primary" type="button" onclick="window.print()">Stampa / Salva PDF</button>
+  <button class="btn" type="button" onclick="downloadCsvBundle()">Scarica indice CSV</button>
+</div>
+
+<div class="wrap">
+  <h1>Report valorizzazione lavoro</h1>
+  <p class="subtitle">Empathy Pro 2.0 + eredità V1</p>
+
+  <div class="meta">
+    <strong>Data:</strong> 3 giugno 2026 &nbsp;·&nbsp;
+    <strong>Repo:</strong> empathy-pro-2 &nbsp;·&nbsp;
+    <strong>Produzione:</strong> empathy-pro-2-web.vercel.app<br>
+    Stime strutturate — non esiste timesheet nel repository. Non costituisce contabilità certificata.
+  </div>
+
+  <h2>1. Cosa misuriamo</h2>
+  <p>Piattaforma multilayer (ingest → motori → twin → interpretazione → applicazione): moduli prodotto, motori numerici proprietari, integrazioni device, AI interpretativa, schema Supabase, documentazione architetturale.</p>
+
+  <h2>2. Dati oggettivi — repository Pro 2</h2>
+  <table>
+    <tr><th>Indicatore</th><th>Valore</th></tr>
+    <tr><td>Periodo git</td><td>29 mar 2026 → 3 giu 2026 (~66 giorni)</td></tr>
+    <tr><td>Commit</td><td>479</td></tr>
+    <tr><td>Righe TS/TSX</td><td>~175.800</td></tr>
+    <tr><td>Route API</td><td>183</td></tr>
+    <tr><td>Migration SQL</td><td>74 file</td></tr>
+    <tr><td>Package dominio</td><td>15</td></tr>
+    <tr><td>Test automatici</td><td>~150 file</td></tr>
+    <tr><td>Documentazione</td><td>~82 markdown</td></tr>
+  </table>
+
+  <h2>3. Perimetro funzionale</h2>
+  <table>
+    <tr><th>Area</th><th>Stato</th></tr>
+    <tr><td>Architettura / costituzione</td><td>Alta</td></tr>
+    <tr><td>Motori carico (CTL/ATL, load v2)</td><td>Ok</td></tr>
+    <tr><td>Training, Nutrition, Health, Integrazioni</td><td>Parziale (operativo in evoluzione)</td></tr>
+  </table>
+
+  <h2>4. Totali ore</h2>
+  <table>
+    <tr><th>Scenario</th><th>Ore</th><th>FTE·anno (1.600 h)</th></tr>
+    <tr><td>Conservativo</td><td>~3.710 h</td><td>~2,3 anni</td></tr>
+    <tr><td><strong>Realistico</strong></td><td><strong>~7.830 h</strong></td><td><strong>~4,9 anni</strong></td></tr>
+    <tr><td>Alto</td><td>~13.780 h</td><td>~8,6 anni</td></tr>
+  </table>
+
+  <div class="page-break"></div>
+
+  <h2>5. Valorizzazione economica (EUR)</h2>
+  <table>
+    <tr><th>Profilo</th><th>€/h</th><th>Conservativo</th><th>Realistico</th><th>Alto</th></tr>
+    <tr><td>Freelance senior</td><td>65</td><td>€241.000</td><td>€509.000</td><td>€896.000</td></tr>
+    <tr><td>Product engineer</td><td>85</td><td>€315.000</td><td>€666.000</td><td>€1.171.000</td></tr>
+    <tr><td>Consulenza specializzata</td><td>110</td><td>€408.000</td><td>€861.000</td><td>€1.516.000</td></tr>
+  </table>
+
+  <div class="highlight">
+    <strong>Valore stato operativo oggi</strong> (sconto maturità ~30%, €85/h):<br>
+    <strong style="font-size:1.2rem">~€350.000 – €580.000</strong>
+  </div>
+
+  <h2>6. Distribuzione ore (scenario realistico)</h2>
+  <table>
+    <tr><th>Macro-area</th><th>%</th></tr>
+    <tr><td>Backend + frontend</td><td>~40%</td></tr>
+    <tr><td>Motori + matematica + test</td><td>~16%</td></tr>
+    <tr><td>Integrazioni</td><td>~10%</td></tr>
+    <tr><td>Ricerca + progettazione</td><td>~14%</td></tr>
+    <tr><td>AI interpretazione</td><td>~5%</td></tr>
+    <tr><td>QA, deploy, documentazione</td><td>~9%</td></tr>
+    <tr><td>Porting V1</td><td>~6%</td></tr>
+  </table>
+
+  <h2>7. Sintesi</h2>
+  <table>
+    <tr><th>Domanda</th><th>Risposta</th></tr>
+    <tr><td>Lavoro totale stimato</td><td>~4.000–8.000 ore-equivalenti</td></tr>
+    <tr><td>Valore attribuibile</td><td>~€350k – €860k</td></tr>
+    <tr><td>Differenziazione</td><td>Motori, ricerca, architettura generativa</td></tr>
+  </table>
+
+  <p style="font-size:13px;color:var(--muted);margin-top:20px">
+    Dettaglio completo ore per categoria: file <strong>02_hours_by_category.csv</strong> nella stessa cartella export.
+    Report completo testuale: <strong>EMPATHY_WORK_VALUATION_REPORT_2026.md</strong> o <strong>.pdf</strong>.
+  </p>
+
+  <div class="footer">
+    Empathy Pro 2.0 — Report valorizzazione lavoro — giugno 2026<br>
+    File standalone: apri in browser → Stampa → Salva come PDF · Oppure usa i CSV in Excel
+  </div>
+</div>
+
+<script>
+function downloadCsvBundle() {
+  alert(
+    "Nella cartella export trovi:\\n" +
+    "• 01_repo_metrics.csv\\n" +
+    "• 02_hours_by_category.csv\\n" +
+    "• 03_totals_and_valuation.csv\\n" +
+    "• 04_module_status.csv\\n\\n" +
+    "Apri con Excel o Google Fogli."
+  );
+}
+</script>
+</body>
+</html>

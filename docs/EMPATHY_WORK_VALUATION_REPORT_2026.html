@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Report valorizzazione lavoro — Empathy Pro 2.0</title>
+  <style>
+    @page { size: A4; margin: 18mm 16mm 20mm 16mm; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", Calibri, Arial, sans-serif;
+      font-size: 10.5pt;
+      line-height: 1.45;
+      color: #111;
+      max-width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-size: 20pt;
+      font-weight: 700;
+      margin: 0 0 6px;
+      color: #1a1a2e;
+      border-bottom: 3px solid #c026d3;
+      padding-bottom: 8px;
+    }
+    h2 {
+      font-size: 13pt;
+      margin: 22px 0 8px;
+      color: #5b21b6;
+      page-break-after: avoid;
+    }
+    h3 {
+      font-size: 11pt;
+      margin: 16px 0 6px;
+      color: #333;
+      page-break-after: avoid;
+    }
+    p, li { margin: 0 0 6px; }
+    ul { margin: 6px 0 10px 18px; padding: 0; }
+    .meta {
+      font-size: 9.5pt;
+      color: #444;
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      background: #f8f4ff;
+      border-left: 4px solid #9333ea;
+      border-radius: 4px;
+    }
+    .meta strong { color: #111; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 14px;
+      font-size: 9.5pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 5px 7px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #ede9fe;
+      font-weight: 600;
+      color: #4c1d95;
+    }
+    tr:nth-child(even) td { background: #fafafa; }
+    .highlight {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin: 12px 0;
+      page-break-inside: avoid;
+    }
+    .highlight strong { color: #9a3412; }
+    .footer {
+      margin-top: 24px;
+      padding-top: 10px;
+      border-top: 1px solid #ddd;
+      font-size: 8.5pt;
+      color: #666;
+      text-align: center;
+    }
+    .page-break { page-break-before: always; }
+    .totals td:last-child, .totals th:last-child { text-align: right; }
+  </style>
+</head>
+<body>
+
+<h1>Report valorizzazione lavoro<br><span style="font-size:14pt;font-weight:400;color:#555">Empathy Pro 2.0 + eredità V1</span></h1>
+
+<div class="meta">
+  <strong>Data report:</strong> 3 giugno 2026 &nbsp;|&nbsp;
+  <strong>Repository:</strong> empathy-pro-2-cursor / empathy-pro-2 &nbsp;|&nbsp;
+  <strong>Produzione:</strong> empathy-pro-2-web.vercel.app<br>
+  <strong>Nota:</strong> stime strutturate — non esiste timesheet nel repo; non costituisce contabilità certificata.
+</div>
+
+<h2>1. Cosa misuriamo</h2>
+<p>Empathy è una piattaforma multilayer (<em>ingest → motori → twin → interpretazione → applicazione</em>) con moduli prodotto, motori numerici proprietari, integrazioni device multi-vendor, AI interpretativa (non sostitutiva dei motori), schema Supabase con memoria atleta canonica e documentazione architetturale estesa.</p>
+
+<h2>2. Dati oggettivi — repository Pro 2</h2>
+<table>
+  <tr><th>Indicatore</th><th>Valore</th></tr>
+  <tr><td>Periodo git tracciabile</td><td>29 mar 2026 → 3 giu 2026 (~66 giorni)</td></tr>
+  <tr><td>Commit totali</td><td>479 (475 autore d1smario)</td></tr>
+  <tr><td>Intensità mensile</td><td>mar 4 · apr 129 · mag 326 · giu 20</td></tr>
+  <tr><td>Righe TypeScript/TSX</td><td>~175.800</td></tr>
+  <tr><td>Route API</td><td>183</td></tr>
+  <tr><td>Migration SQL</td><td>74 file · ~12.000 righe</td></tr>
+  <tr><td>Package dominio</td><td>15</td></tr>
+  <tr><td>File test automatici</td><td>~150</td></tr>
+  <tr><td>Documenti markdown</td><td>~82</td></tr>
+  <tr><td>Moduli UI shell</td><td>29 pagine prodotto</td></tr>
+</table>
+
+<h2>3. Perimetro funzionale (stato attuale)</h2>
+<table>
+  <tr><th>Area</th><th>Stato</th><th>Note</th></tr>
+  <tr><td>Architettura / costituzione</td><td>Alta</td><td>CONSTITUTION, 4 piani generativi, L1–L10</td></tr>
+  <tr><td>Auth + contesto atleta/coach</td><td>Parziale</td><td>Policy stabile</td></tr>
+  <tr><td>Training · Builder / VIRYA / Calendar</td><td>Parziale</td><td>Pipeline canonica Pro 2</td></tr>
+  <tr><td>Motori carico (CTL/ATL, load v2)</td><td>Ok</td><td>domain-training, test golden</td></tr>
+  <tr><td>Bioenergetics / Nutrition / Health</td><td>Parziale</td><td>Solver + pipeline staging</td></tr>
+  <tr><td>Integrazioni Garmin</td><td>Parziale–Ok</td><td>OAuth, push, pull, wellness</td></tr>
+  <tr><td>Altri device + Knowledge + Billing</td><td>Parziale</td><td>Maturità variabile</td></tr>
+</table>
+
+<h2>4. Metodologia di stima ore</h2>
+<ul>
+  <li><strong>Bottom-up per area</strong> — benchmark industria health/sport SaaS.</li>
+  <li><strong>Commit × ore</strong> — 479 commit × 1,5–3 h → 720–1.440 h (solo git Pro 2).</li>
+  <li><strong>LOC × produttività</strong> — 175k LOC ÷ 40–80 LOC/h → 2.200–4.400 h equivalenti.</li>
+</ul>
+
+<div class="page-break"></div>
+
+<h2>5. Stima ore per categoria</h2>
+
+<h3>A. Progettazione, product e architettura</h3>
+<table class="totals">
+  <tr><th>Voce</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>Visione prodotto, charter</td><td>40</td><td>80</td><td>120</td></tr>
+  <tr><td>Costituzione, invarianti, gate</td><td>60</td><td>120</td><td>200</td></tr>
+  <tr><td>Blueprint, mappe multilayer</td><td>80</td><td>160</td><td>280</td></tr>
+  <tr><td>UI canon, design system</td><td>40</td><td>100</td><td>180</td></tr>
+  <tr><td>Ruoli coach, commercial</td><td>30</td><td>60</td><td>100</td></tr>
+  <tr><td><strong>Subtotale A</strong></td><td><strong>250</strong></td><td><strong>520</strong></td><td><strong>880</strong></td></tr>
+</table>
+
+<h3>B. Ricerca scientifica e modellazione</h3>
+<table class="totals">
+  <tr><th>Voce</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>Carico/adattamento, load v2</td><td>60</td><td>120</td><td>220</td></tr>
+  <tr><td>Bioenergetics, CGM, BIA</td><td>80</td><td>180</td><td>350</td></tr>
+  <tr><td>Nutrizione, pathway, L1–L10</td><td>50</td><td>110</td><td>200</td></tr>
+  <tr><td>Health, biomarkers</td><td>40</td><td>90</td><td>160</td></tr>
+  <tr><td>Multiscala / knowledge</td><td>40</td><td>80</td><td>150</td></tr>
+  <tr><td><strong>Subtotale B</strong></td><td><strong>270</strong></td><td><strong>580</strong></td><td><strong>1.080</strong></td></tr>
+</table>
+
+<h3>C. Matematica e motori deterministici</h3>
+<table class="totals">
+  <tr><th>Voce</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>Training (EWMA, load v2)</td><td>80</td><td>160</td><td>280</td></tr>
+  <tr><td>Physiology, twin, adaptation</td><td>120</td><td>260</td><td>460</td></tr>
+  <tr><td>Bioenergetics simulatori</td><td>120</td><td>260</td><td>450</td></tr>
+  <tr><td>Nutrition solver</td><td>100</td><td>200</td><td>350</td></tr>
+  <tr><td>EPI, biomech, aero + test</td><td>180</td><td>400</td><td>720</td></tr>
+  <tr><td><strong>Subtotale C</strong></td><td><strong>600</strong></td><td><strong>1.280</strong></td><td><strong>2.260</strong></td></tr>
+</table>
+
+<h3>D. Backend e dati</h3>
+<table class="totals">
+  <tr><th>Voce</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>Contratti, schema, 183 API</td><td>550</td><td>1.040</td><td>1.750</td></tr>
+  <tr><td>Ingest, memoria, script</td><td>270</td><td>540</td><td>920</td></tr>
+  <tr><td><strong>Subtotale D</strong></td><td><strong>820</strong></td><td><strong>1.580</strong></td><td><strong>2.670</strong></td></tr>
+</table>
+
+<h3>E. Frontend e UX</h3>
+<table class="totals">
+  <tr><th>Voce</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>Shell, Training, Nutrition</td><td>420</td><td>880</td><td>1.500</td></tr>
+  <tr><td>Altri moduli + generative UI</td><td>320</td><td>690</td><td>1.200</td></tr>
+  <tr><td><strong>Subtotale E</strong></td><td><strong>740</strong></td><td><strong>1.570</strong></td><td><strong>2.700</strong></td></tr>
+</table>
+
+<h3>F–I. Integrazioni, AI, QA, Porting V1</h3>
+<table class="totals">
+  <tr><th>Area</th><th>Basse</th><th>Medie</th><th>Alte</th></tr>
+  <tr><td>F — Integrazioni device + Stripe + knowledge</td><td>350</td><td>780</td><td>1.380</td></tr>
+  <tr><td>G — AI interpretazione</td><td>190</td><td>410</td><td>740</td></tr>
+  <tr><td>H — QA, deploy, doc, agent</td><td>290</td><td>670</td><td>1.260</td></tr>
+  <tr><td>I — Eredità V1 e porting</td><td>190</td><td>440</td><td>810</td></tr>
+</table>
+
+<div class="page-break"></div>
+
+<h2>6. Totali ore</h2>
+<table>
+  <tr><th>Scenario</th><th>Ore totali</th><th>Equivalente FTE (1.600 h/anno)</th></tr>
+  <tr><td>Conservativo</td><td>~3.710 h</td><td>~2,3 anni (1 persona)</td></tr>
+  <tr><td><strong>Realistico (medio)</strong></td><td><strong>~7.830 h</strong></td><td><strong>~4,9 anni</strong></td></tr>
+  <tr><td>Alto (completo)</td><td>~13.780 h</td><td>~8,6 anni</td></tr>
+</table>
+
+<h2>7. Valorizzazione economica (EUR)</h2>
+<table>
+  <tr><th>Profilo tariffario</th><th>€/h</th><th>Conservativo</th><th>Realistico</th><th>Alto</th></tr>
+  <tr><td>Freelance senior</td><td>65</td><td>€241.000</td><td>€509.000</td><td>€896.000</td></tr>
+  <tr><td>Studio / product engineer</td><td>85</td><td>€315.000</td><td>€666.000</td><td>€1.171.000</td></tr>
+  <tr><td>Consulenza specializzata</td><td>110</td><td>€408.000</td><td>€861.000</td><td>€1.516.000</td></tr>
+</table>
+
+<div class="highlight">
+  <strong>Valore stato operativo oggi</strong> (sconto maturità ~30% sul realistico a €85/h):<br>
+  <strong>~€350.000 – €580.000</strong>
+</div>
+
+<h2>8. Distribuzione del valore (scenario realistico)</h2>
+<table>
+  <tr><th>Macro-area</th><th>% ore</th></tr>
+  <tr><td>Costruzione informatica (backend + frontend)</td><td>~40%</td></tr>
+  <tr><td>Motori + matematica + test</td><td>~16%</td></tr>
+  <tr><td>Integrazioni</td><td>~10%</td></tr>
+  <tr><td>Ricerca + progettazione</td><td>~14%</td></tr>
+  <tr><td>AI interpretazione</td><td>~5%</td></tr>
+  <tr><td>QA, deploy, documentazione, agent</td><td>~9%</td></tr>
+  <tr><td>Porting V1</td><td>~6%</td></tr>
+</table>
+
+<h2>9. Sintesi esecutiva</h2>
+<table>
+  <tr><th>Domanda</th><th>Risposta</th></tr>
+  <tr><td>Quanto lavoro c'è dentro Empathy?</td><td>~4.000–8.000 ore-equivalenti multidisciplinari</td></tr>
+  <tr><td>Valore attribuibile (solo lavoro)?</td><td>~€350k – €860k (65–110 €/h)</td></tr>
+  <tr><td>Cosa pesa di più?</td><td>Backend, UI moduli, motori; differenziazione in scienza + architettura generativa</td></tr>
+  <tr><td>Per audit certificato servono</td><td>Timesheet, git V1 completo, criterio sconto maturità concordato</td></tr>
+</table>
+
+<div class="footer">
+  Documento generato da analisi repository empathy-pro-2-cursor — giugno 2026<br>
+  File sorgente: docs/EMPATHY_WORK_VALUATION_REPORT_2026.md
+</div>
+
+</body>
+</html>
