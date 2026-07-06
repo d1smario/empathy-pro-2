@@ -14,7 +14,12 @@ export function scheduleGarminImmediatePullAfterPush(pullJobsQueued: number): vo
   if (pullJobsQueued <= 0) return;
   if (process.env.GARMIN_PUSH_DISABLE_IMMEDIATE_PULL === "1") return;
 
-  const limit = Math.min(25, Math.max(1, pullJobsQueued));
+  /**
+   * Floor > pullJobsQueued: il pull `activities` accoda in corsa i follow-up `activityFile`
+   * (percorso GPX/HD). `runGarminPullJobs` è multi-pass, ma serve headroom per batch così i FIT
+   * vengono scaricati nella stessa esecuzione invece di attendere il cron.
+   */
+  const limit = Math.min(25, Math.max(5, pullJobsQueued));
   const task = runGarminPullJobs(limit).catch((err) => {
     console.error("[garmin-push] immediate pull failed:", err instanceof Error ? err.message : err);
   });

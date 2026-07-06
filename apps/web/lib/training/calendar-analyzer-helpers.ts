@@ -425,9 +425,96 @@ export function buildDownsampleIndices(length: number, maxPoints: number): numbe
   return Array.from(new Set(idx)).sort((a, b) => a - b);
 }
 
+function geoPointsFromTraceRecord(trace: Record<string, unknown>): Array<{ lat: number; lon: number }> {
+  /** Allineato a `SERIES_CHANNEL_REGISTRY` route.traceKeys — Garmin usa `route_series_geo`. */
+  const candidates = ["route_series_geo", "route_points", "route", "gps_points", "track"];
+  for (const key of candidates) {
+    const raw = trace[key];
+    if (!Array.isArray(raw)) continue;
+    const points = raw
+      .map((item) => {
+        if (typeof item !== "object" || item == null) return null;
+        const row = item as Record<string, unknown>;
+        const lat = n(row.lat ?? row.latitude);
+        const lon = n(row.lng ?? row.lon ?? row.longitude);
+        if (lat == null || lon == null) return null;
+        return { lat, lon };
+      })
+      .filter((p): p is { lat: number; lon: number } => p != null);
+    if (points.length >= 1) return points;
+  }
+  return [];
+}
+
+/** Due punti coincidenti = marker Garmin summary (partenza), non un tracciato. */
+export function isGarminStartOnlyRouteMarker(points: Array<{ lat: number; lon: number }>): boolean {
+  if (points.length !== 2) return false;
+  const a = points[0];
+  const b = points[1];
+  if (!a || !b) return false;
+  return a.lat === b.lat && a.lon === b.lon;
+}
+
+export function countDistinctGeoPoints(points: Array<{ lat: number; lon: number }>): number {
+  const seen = new Set<string>();
+  for (const p of points) {
+    seen.add(`${p.lat.toFixed(5)},${p.lon.toFixed(5)}`);
+  }
+  return seen.size;
+}
+
+/** Tracciato reale = almeno 2 coordinate distinte (non marker partenza duplicato). */
+export function isSubstantialGpsRouteTuples(route: Array<[number, number]>): boolean {
+  if (route.length < 2) return false;
+  const seen = new Set<string>();
+  for (const [lat, lon] of route) {
+    seen.add(`${lat.toFixed(5)},${lon.toFixed(5)}`);
+    if (seen.size >= 2) return true;
+  }
+  return false;
+}
+
+export function geoTuplesFromGeoPoints(points: Array<{ lat: number; lon: number }>): Array<[number, number]> {
+  return points.map((p) => [p.lat, p.lon] as [number, number]);
+}
+
+export function pickParserEngineFromTrace(trace: Record<string, unknown> | null): string | null {
+  if (!trace) return null;
+  const v = trace.parser_engine;
+  return typeof v === "string" && v.trim().length > 0 ? v.trim() : null;
+}
+
+/** Route da trace solo se polyline reale (esclude marker Garmin summary 2× stesso punto). */
+export function parseRouteForDisplay(trace: Record<string, unknown> | null): Array<[number, number]> {
+  const tuples = parseRoute(trace);
+  return isSubstantialGpsRouteTuples(tuples) ? tuples : [];
+}
+
+export function pickBestGeoRoutePoints(
+  tracePoints: Array<{ lat: number; lon: number }>,
+  dbPoints: Array<{ lat: number; lon: number }>,
+): Array<{ lat: number; lon: number }> {
+  const traceDistinct = countDistinctGeoPoints(tracePoints);
+  const dbDistinct = countDistinctGeoPoints(dbPoints);
+  if (dbDistinct >= 2) return dbPoints;
+  if (dbPoints.length > tracePoints.length) return dbPoints;
+  if (traceDistinct >= 2) return tracePoints;
+  return dbPoints.length >= tracePoints.length ? dbPoints : tracePoints;
+}
+
+export function routeNeedsHdFetchFromDb(input: {
+  tracePoints: Array<{ lat: number; lon: number }>;
+  parserEngine: string | null;
+}): boolean {
+  if (input.tracePoints.length < 2) return true;
+  if (isGarminStartOnlyRouteMarker(input.tracePoints)) return true;
+  if (input.parserEngine === "garmin_wellness_api_summary" && input.tracePoints.length < 8) return true;
+  return false;
+}
+
 export function parseRoute(trace: Record<string, unknown> | null): Array<[number, number]> {
   if (!trace) return [];
-  const candidates = ["route_points", "route", "gps_points", "track"];
+  const candidates = ["route_series_geo", "route_points", "route", "gps_points", "track"];
   for (const key of candidates) {
     const raw = trace[key];
     if (!Array.isArray(raw)) continue;
@@ -450,28 +537,12 @@ export function parseRoute(trace: Record<string, unknown> | null): Array<[number
 export function geoPointsFromWorkoutTrace(w: ExecutedWorkout): Array<{ lat: number; lon: number }> {
   const trace = traceRecord(w);
   if (!trace) return [];
-  const candidates = ["route_points", "route", "gps_points", "track"];
-  for (const key of candidates) {
-    const raw = trace[key];
-    if (!Array.isArray(raw)) continue;
-    const points = raw
-      .map((item) => {
-        if (typeof item !== "object" || item == null) return null;
-        const row = item as Record<string, unknown>;
-        const lat = n(row.lat ?? row.latitude);
-        const lon = n(row.lng ?? row.lon ?? row.longitude);
-        if (lat == null || lon == null) return null;
-        return { lat, lon };
-      })
-      .filter((p): p is { lat: number; lon: number } => p != null);
-    if (points.length >= 1) return points;
-  }
-  return [];
+  return geoPointsFromTraceRecord(trace);
 }
 
 export function pickRouteElevationSeries(trace: Record<string, unknown> | null): number[] {
   if (!trace) return [];
-  const candidates = ["route_points", "route", "gps_points", "track"];
+  const candidates = ["route_series_geo", "route_points", "route", "gps_points", "track"];
   for (const key of candidates) {
     const raw = trace[key];
     if (!Array.isArray(raw)) continue;

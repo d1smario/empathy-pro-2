@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { readOptionalServiceRoleKey } from "@/lib/supabase-env";
 
@@ -58,11 +60,7 @@ async function safeJsonBody(text: string): Promise<unknown> {
   }
 }
 
-/**
- * Esegue fino a `limit` job in stato `pending`: OAuth1 (token push) oppure Bearer OAuth2 se token assente e `athlete_id` risolto.
- * Chiamare da `POST /api/integrations/garmin/pull/run` o `GET /api/integrations/garmin/pull/cron` (Vercel Cron) con segreto.
- */
-export async function runGarminPullJobs(limit: number): Promise<{
+export type GarminPullRunResult = {
   processed: number;
   completed: number;
   failed: number;
@@ -70,12 +68,71 @@ export async function runGarminPullJobs(limit: number): Promise<{
   activitiesUpserted: number;
   activityBlobsStored: number;
   wellnessExportsUpserted: number;
-}> {
+};
+
+/**
+ * Numero massimo di passaggi drenanti in una singola invocazione.
+ * Un pull `activities` **accoda** i job `activityFile`/`activityDetails` (percorso GPX/HD):
+ * senza multi-pass questi resterebbero in coda fino al prossimo tick cron, per cui tutte
+ * le sedute mostrerebbero solo il punto di partenza. Con più passaggi drenamo i follow-up
+ * appena creati **nella stessa esecuzione**, con un budget totale limitato per evitare timeout.
+ */
+const GARMIN_PULL_DEFAULT_MAX_PASSES = 6;
+
+/**
+ * Esegue fino a `limit` job in stato `pending`: OAuth1 (token push) oppure Bearer OAuth2 se token assente e `athlete_id` risolto.
+ * Chiamare da `POST /api/integrations/garmin/pull/run` o `GET /api/integrations/garmin/pull/cron` (Vercel Cron) con segreto.
+ *
+ * **Multi-pass:** dopo ogni batch, se sono stati accodati nuovi follow-up (`activityFile`/`activityDetails`)
+ * li elabora subito, così il tracciato GPX/HD non attende il cron. Il ciclo si ferma quando non ci sono
+ * più job pending o si esaurisce il budget (`limit * maxPasses`).
+ */
+export async function runGarminPullJobs(
+  limit: number,
+  options?: { maxPasses?: number },
+): Promise<GarminPullRunResult> {
   if (!readOptionalServiceRoleKey()) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY richiesta per la coda pull Garmin.");
   }
 
   const supabase = createServerSupabaseClient();
+  const maxPasses = Math.max(1, Math.floor(options?.maxPasses ?? GARMIN_PULL_DEFAULT_MAX_PASSES));
+
+  const acc: GarminPullRunResult = {
+    processed: 0,
+    completed: 0,
+    failed: 0,
+    errors: [],
+    activitiesUpserted: 0,
+    activityBlobsStored: 0,
+    wellnessExportsUpserted: 0,
+  };
+
+  for (let pass = 0; pass < maxPasses; pass += 1) {
+    const batch = await runGarminPullJobsBatch(supabase, limit);
+    acc.processed += batch.processed;
+    acc.completed += batch.completed;
+    acc.failed += batch.failed;
+    acc.errors.push(...batch.errors);
+    acc.activitiesUpserted += batch.activitiesUpserted;
+    acc.activityBlobsStored += batch.activityBlobsStored;
+    acc.wellnessExportsUpserted += batch.wellnessExportsUpserted;
+    /** Nessun job elaborato in questo passaggio → coda vuota, stop. */
+    if (batch.processed === 0) break;
+  }
+
+  return acc;
+}
+
+/**
+ * Un singolo batch: seleziona fino a `limit` job pending e li elabora. I nuovi follow-up
+ * eventualmente accodati durante il batch vengono raccolti dal passaggio successivo in
+ * {@link runGarminPullJobs}.
+ */
+async function runGarminPullJobsBatch(
+  supabase: SupabaseClient,
+  limit: number,
+): Promise<GarminPullRunResult> {
   const { data: jobs, error } = await supabase
     .from("garmin_pull_jobs")
     .select("id, callback_url, user_access_token, athlete_id, endpoint_kind, stream_key, receipt_id, query_snapshot")

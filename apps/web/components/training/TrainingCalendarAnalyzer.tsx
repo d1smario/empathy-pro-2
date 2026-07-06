@@ -5,14 +5,12 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import {
   buildDownsampleIndices,
-  buildSyntheticRoute,
   computeFitQuality,
   deriveSpeedKmh,
   formatElapsedLabel,
   mergeTraceChannelAvailability,
   pickPrimaryExecutedWorkout,
   n,
-  parseRoute,
   pickMetric,
   pickRouteElevationSeries,
   pickSeries,
@@ -25,6 +23,8 @@ import {
   sanitizeSeriesForPlot,
   traceRecord,
 } from "@/lib/training/calendar-analyzer-helpers";
+import { useExecutedWorkoutHdRoute } from "@/lib/training/use-executed-workout-hd-route";
+import { SessionRouteMap } from "@/components/training/SessionRouteMap";
 import { TrainingCalendarTelemetryChart } from "@/components/training/TrainingCalendarTelemetryChart";
 import { TrainingPowerProfileRadar } from "@/components/training/TrainingPowerProfileRadar";
 import { resolveExecutedTrainingLoad } from "@/lib/training/infer-executed-training-load";
@@ -103,6 +103,7 @@ export function TrainingCalendarAnalyzer({
   const [deletingPlannedId, setDeletingPlannedId] = useState<string | null>(null);
 
   const primaryExecuted = useMemo(() => pickPrimaryExecutedWorkout(dayExecuted), [dayExecuted]);
+  const hdRoute = useExecutedWorkoutHdRoute({ athleteId, workout: primaryExecuted });
 
   const dayMetrics = useMemo<SessionMetric[]>(() => {
     return dayExecuted.map((w) => {
@@ -492,18 +493,11 @@ export function TrainingCalendarAnalyzer({
     }));
   }, [hoverIdx, plottedAnalyzer]);
 
-  const gpsRoute = useMemo(() => {
-    const traced = primaryExecuted ? parseRoute(traceRecord(primaryExecuted)) : [];
-    if (traced && traced.length >= 2) return traced;
-    const fallbackDistance = Math.max(1, dayMetrics.reduce((s, m) => s + (m.km ?? 0), 0));
-    return buildSyntheticRoute(fallbackDistance);
-  }, [primaryExecuted, dayMetrics]);
-
   const gpsStats = useMemo(() => {
     const primaryIdx = primaryExecuted ? dayExecuted.findIndex((w) => w.id === primaryExecuted.id) : 0;
     const pm = dayMetrics[primaryIdx >= 0 ? primaryIdx : 0];
     const importedDistanceKm = pm?.km ?? 0;
-    const routeKm = routeDistanceKm(gpsRoute);
+    const routeKm = hdRoute.isSubstantial ? routeDistanceKm(hdRoute.routeTuples) : 0;
     const distanceKm =
       routeKm > 0 && (importedDistanceKm <= 0 || importedDistanceKm > routeKm * 3)
         ? routeKm
@@ -512,7 +506,7 @@ export function TrainingCalendarAnalyzer({
     const durationMin = pm?.duration ?? 0;
     const paceMinKm = distanceKm > 0 && durationMin > 0 ? durationMin / distanceKm : 0;
     return { distanceKm, elevGain, durationMin, paceMinKm };
-  }, [dayMetrics, dayExecuted, gpsRoute, primaryExecuted]);
+  }, [dayMetrics, dayExecuted, hdRoute.isSubstantial, hdRoute.routeTuples, primaryExecuted]);
 
   const fitQuality = useMemo(() => {
     const withFitTrace =
@@ -580,8 +574,25 @@ export function TrainingCalendarAnalyzer({
             <div className="flex h-[220px] items-center justify-center rounded-lg border border-white/10 bg-black/40 text-center text-sm text-slate-500">
               Mappa percorso dopo import di un workout eseguito (FIT/GPX/TCX).
             </div>
+          ) : hdRoute.loading ? (
+            <div className="flex h-[220px] items-center justify-center rounded-lg border border-white/10 bg-black/40 text-center text-sm text-slate-500">
+              Caricamento percorso GPS…
+            </div>
+          ) : hdRoute.isSubstantial ? (
+            <StravaStyleMap route={hdRoute.routeTuples} height={220} />
+          ) : hdRoute.points.length > 0 ? (
+            <div className="space-y-2">
+              <SessionRouteMap points={hdRoute.points} height={220} />
+              <p className="text-center font-mono text-[0.6rem] uppercase tracking-wider text-zinc-500">
+                {hdRoute.isGarminSummaryPending
+                  ? "Tracciato HD Garmin in elaborazione (FIT/GPX)"
+                  : "Solo punto di partenza — nessun tracciato nel file"}
+              </p>
+            </div>
           ) : (
-            <StravaStyleMap route={gpsRoute} height={220} />
+            <div className="flex h-[220px] items-center justify-center rounded-lg border border-white/10 bg-black/40 text-center text-sm text-slate-500">
+              Nessun dato GPS in questa sessione
+            </div>
           )}
         </div>
         <div className="flex flex-shrink-0 flex-wrap gap-2 text-xs font-semibold text-slate-300 lg:flex-col lg:justify-center">

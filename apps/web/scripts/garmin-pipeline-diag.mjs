@@ -158,8 +158,46 @@ async function main() {
     const w = workouts[0];
     const trace = w.trace_summary && typeof w.trace_summary === "object" ? w.trace_summary : {};
     const hasSamples = Object.keys(trace).some((k) => k.endsWith("_series_w") || k.endsWith("_series_bpm") || k.endsWith("_series_kmh") || k.endsWith("_series_rpm") || k.endsWith("_series_m") || k.endsWith("_series_c"));
+    const routeGeo = Array.isArray(trace.route_series_geo) ? trace.route_series_geo : [];
+    const routePts = Array.isArray(trace.route_points) ? trace.route_points : [];
+    const routeLen = Math.max(routeGeo.length, routePts.length);
     console.log(`    most recent: date=${w.date} dur=${w.duration_minutes}min tss=${w.tss} kcal=${w.kcal}`);
     console.log(`    parser_engine=${trace.parser_engine} parser_version=${trace.parser_version} hd_samples_in_trace=${hasSamples}`);
+    console.log(`    route_in_trace: route_series_geo=${routeGeo.length} route_points=${routePts.length} (effective=${routeLen})`);
+    if (routeLen === 2 && routeGeo.length === 2) {
+      const a = routeGeo[0];
+      const b = routeGeo[1];
+      const same =
+        a &&
+        b &&
+        typeof a === "object" &&
+        typeof b === "object" &&
+        a.lat === b.lat &&
+        (a.lon ?? a.lng) === (b.lon ?? b.lng);
+      if (same) {
+        console.log("    ⚠ route = solo marker partenza (summary Garmin) — serve enrich activityFile/activityDetails");
+      }
+    }
+  }
+
+  const followUpJobs = jobs.filter((j) => String(j.stream_key || "").includes("activity") || String(j.endpoint_kind || "").includes("follow_up"));
+  if (followUpJobs.length) {
+    console.log(`[3b] garmin activity follow-up jobs (last 72h): ${followUpJobs.length}`);
+    console.log("    by stream_key:", tally(followUpJobs, (r) => r.stream_key));
+    console.log("    by status:", tally(followUpJobs, (r) => r.status));
+    const afFailed = followUpJobs.filter((j) => j.status === "failed" && j.stream_key === "activityFile").slice(0, 5);
+    if (afFailed.length) {
+      console.log("    activityFile failed (sample):");
+      for (const f of afFailed) {
+        console.log(`      http=${f.http_status} err=${String(f.error_message || "").slice(0, 120)}`);
+      }
+    }
+    const afPending = followUpJobs.filter((j) => j.status === "pending" && j.stream_key === "activityFile");
+    if (afPending.length) {
+      console.log(`    activityFile pending: ${afPending.length} — cron /api/integrations/garmin/pull/cron deve elaborarli`);
+    }
+  } else {
+    console.log("[3b] nessun job follow-up activityFile/activityDetails nelle ultime 72h");
   }
 
   const idsCsv = workouts

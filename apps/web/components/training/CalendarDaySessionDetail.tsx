@@ -10,17 +10,15 @@ import { TrainingSingleTraceChart } from "@/components/training/TrainingSingleTr
 import { buildSupabaseAuthHeaders } from "@/lib/auth/client-session";
 import {
   formatElapsedLabel,
-  geoPointsFromWorkoutTrace,
   pickPrimaryExecutedWorkout,
 } from "@/lib/training/calendar-analyzer-helpers";
+import { useExecutedWorkoutHdRoute } from "@/lib/training/use-executed-workout-hd-route";
 import {
   buildSessionDetailVM,
   type SessionDetailViewModel,
   type SessionKpiTile,
 } from "@/lib/training/session-detail-summary";
 import {
-  type GeoPoint,
-  isGeoPoint,
   type SeriesChannelId,
 } from "@/lib/training/series-channel-registry";
 import { cn } from "@/lib/cn";
@@ -93,8 +91,6 @@ type ExtendedSeriesBundle = {
   values: number[];
 };
 
-type RouteBundle = { points: GeoPoint[] };
-
 function fmt(value: number | null, digits: number): string {
   if (value == null || !Number.isFinite(value)) return "—";
   return value.toFixed(digits);
@@ -131,25 +127,20 @@ function SessionDetailCard({
   dayExecutedDuration: number | null;
   athleteId: string | null | undefined;
 }) {
-  const traceRoutePoints = useMemo(() => geoPointsFromWorkoutTrace(workout), [workout]);
+  const hdRoute = useExecutedWorkoutHdRoute({ athleteId, workout });
   const [dbSeries, setDbSeries] = useState<ExtendedSeriesBundle[]>([]);
-  const [routeBundle, setRouteBundle] = useState<RouteBundle | null>(null);
   const [distanceMeters, setDistanceMeters] = useState<number | null>(null);
-
-  useEffect(() => {
-    setRouteBundle(traceRoutePoints.length > 0 ? { points: traceRoutePoints } : null);
-  }, [traceRoutePoints]);
 
   useEffect(() => {
     if (!athleteId || !vm.workoutId) return;
     let cancelled = false;
-    const needsRouteFromDb = traceRoutePoints.length < 2;
-    const channels = needsRouteFromDb
-      ? `${SESSION_SERIES_CHART_CHANNELS},route`
-      : SESSION_SERIES_CHART_CHANNELS;
     (async () => {
       try {
-        const q = new URLSearchParams({ athleteId, executedId: vm.workoutId, channels });
+        const q = new URLSearchParams({
+          athleteId,
+          executedId: vm.workoutId,
+          channels: SESSION_SERIES_CHART_CHANNELS,
+        });
         const res = await fetch(`/api/training/session-series?${q}`, {
           cache: "no-store",
           credentials: "same-origin",
@@ -171,15 +162,7 @@ function SessionDetailCard({
 
         const merged: ExtendedSeriesBundle[] = [];
         for (const c of json.channels) {
-          if (c.channel === "route") {
-            const pts = (Array.isArray(c.samples) ? c.samples : []).filter(isGeoPoint) as GeoPoint[];
-            if (pts.length >= 1) {
-              setRouteBundle((prev) =>
-                !prev || pts.length > prev.points.length ? { points: pts } : prev,
-              );
-            }
-            continue;
-          }
+          if (c.channel === "route") continue;
           if (!CHART_CHANNELS.has(c.channel as ChartChannel)) continue;
           const nums = Array.isArray(c.samples)
             ? (c.samples.filter((v) => typeof v === "number" && Number.isFinite(v)) as number[])
@@ -205,7 +188,7 @@ function SessionDetailCard({
     return () => {
       cancelled = true;
     };
-  }, [athleteId, vm.workoutId, traceRoutePoints.length]);
+  }, [athleteId, vm.workoutId]);
 
   const allSeries = useMemo<ExtendedSeriesBundle[]>(() => {
     /**
@@ -282,7 +265,7 @@ function SessionDetailCard({
         ) : null}
       </div>
 
-      {routeBundle && routeBundle.points.length > 0 ? (
+      {hdRoute.points.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <MapIcon className="h-3.5 w-3.5 text-fuchsia-300" />
@@ -290,17 +273,26 @@ function SessionDetailCard({
               Percorso GPS
             </p>
             <span className="font-mono text-[0.6rem] uppercase tracking-wider text-zinc-500">
-              {routeBundle.points.length} pt
-              {routeBundle.points.length === 2 &&
-              routeBundle.points[0]!.lat === routeBundle.points[1]!.lat &&
-              routeBundle.points[0]!.lon === routeBundle.points[1]!.lon
-                ? vm.parserEngine === "garmin_wellness_api_summary"
-                  ? " · solo punto di partenza (Activity Details Garmin non ancora ricevuto)"
-                  : " · solo un punto GPS — nessun tracciato interpolato"
-                : ""}
+              {hdRoute.isSubstantial
+                ? `${hdRoute.points.length} pt`
+                : hdRoute.isGarminSummaryPending
+                  ? "in attesa file Garmin (FIT/GPX)"
+                  : hdRoute.isStartOnlyMarker
+                    ? "solo punto di partenza"
+                    : `${hdRoute.points.length} pt`}
+              {hdRoute.isGarminSummaryPending
+                ? " · tracciato HD in elaborazione"
+                : hdRoute.isStartOnlyMarker && !hdRoute.isGarminSummaryPending
+                  ? " · nessun tracciato interpolato"
+                  : ""}
+              {hdRoute.loading ? " · caricamento…" : ""}
             </span>
           </div>
-          <SessionRouteMap points={routeBundle.points} />
+          <SessionRouteMap points={hdRoute.points} />
+        </div>
+      ) : hdRoute.loading ? (
+        <div className="rounded-2xl border border-white/10 bg-zinc-950 px-4 py-8 text-center font-mono text-[0.65rem] uppercase tracking-wider text-zinc-500">
+          Caricamento percorso GPS…
         </div>
       ) : null}
 
